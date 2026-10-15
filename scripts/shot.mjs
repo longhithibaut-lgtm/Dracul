@@ -79,9 +79,12 @@ for (let i = 0; i < 200 && !captured; i++) {
   if (Math.abs(dx) < 50) { await hold([dx > 0 ? 'a' : 'd'], 60); continue; } // back off for a run-up
   const pre = { x: s.hx, y: s.hy };
   await page.keyboard.down(dx > 0 ? 'd' : 'a');
-  await page.keyboard.press('Space');
+  // Space is held until the dash is over: Phaser drops a key pressed and released between two updates (slow frames
+  // in headless), and a slash during the dash is ignored.
+  await page.keyboard.down('Space');
+  await page.waitForFunction(() => { const r = window.game.scene.getScene('room'); return r.dashUntil > 0 && r.time.now >= r.dashUntil; });
+  await page.keyboard.up('Space');
   await page.keyboard.up(dx > 0 ? 'd' : 'a');
-  await page.waitForTimeout(140); // dash lasts 130 ms
   s = await state();
   const target = s.enemies.length ? s.enemies.reduce((a, b) => (dist(a) < dist(b) ? a : b)) : e;
   await page.mouse.click(target.x * X, target.y * X);
@@ -99,8 +102,8 @@ for (let i = 0; i < 200 && !captured; i++) {
 if (captured) {
   await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.health = 3; s.hud.health(3, 5); });
   await page.waitForTimeout(900); // let the lost-health animation settle
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(200);
+  await page.keyboard.press('Space', { delay: 100 }); // held across a couple of frames, see above
+  await page.waitForTimeout(100);
   await freeze(true);
   await shot('hud', { x: 0, y: 0, width: 400, height: 120 });
   await freeze(false);
