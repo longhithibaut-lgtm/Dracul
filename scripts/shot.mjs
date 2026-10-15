@@ -1,7 +1,8 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
 // Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
-// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, and hud.png (taken at 3/5 health, dash spent).
+// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (taken at 3/5 health, dash spent)
+// and light.png (a lit lantern, the hero at the edge of its holy light).
 // Exit code 1 if the page logged an error.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -123,7 +124,31 @@ if (captured) {
   await freeze(false);
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; state: ${JSON.stringify(await state())}`);
+// A sacred lantern, lit, with the hero just inside the edge of its holy light, smoking before the first burn lands.
+// The fight is cleared away first so the frame only holds the two of them.
+let lit = false;
+if (captured) {
+  const l = await page.evaluate(() => {
+    const s = window.game.scene.getScene('room');
+    if (s.dead) return null;
+    s.enemies.clear(true, true);
+    const l = s.addLantern();
+    return l ? { x: l.x, y: l.y } : null;
+  });
+  if (l) {
+    await page.waitForFunction(() => window.game.scene.getScene('room').lanterns[0]?.lit);
+    await page.waitForTimeout(300); // all bands up
+    const hx = l.x + (l.x > 240 ? -34 : 34); // toward the middle of the hall; feet 0.85 of the radius out
+    await page.evaluate(({ x, y }) => window.game.scene.getScene('room').hero.body.reset(x, y), { x: hx, y: l.y - 8 }); // feet 8 px below
+    await page.waitForFunction(() => window.game.scene.getScene('room').litMs > 200); // smoking, inside the burn's grace
+    await freeze(true);
+    await shot('light', clip((l.x + hx) / 2, l.y - 8, 240, 200));
+    await freeze(false);
+    lit = true;
+  }
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();

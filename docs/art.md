@@ -18,6 +18,7 @@ Référence : Hyper Light Drifter, sauf pour les salles : leur barre est la cryp
 | Sol (dalles cobalt) | `#1b2b60` `#21346f` `#293e80` |
 | Abîme hors des murs | `#1f0520` `#3d0a3a` `#5e1256` |
 | Robe des serviteurs | `#33102a` `#521030` `#7a1a3e` `#b03a5e` |
+| Ordre / lumière sacrée | `#fff6d8` `#ffd75e` `#c8902a` `#7a4a1c` (or, du blanc au bronze) ; au sol : couche multiplicative `#ff9830` (absorbe le bleu) puis or additif, en 3 paliers nets à bord jaune franc |
 
 ## Règles
 

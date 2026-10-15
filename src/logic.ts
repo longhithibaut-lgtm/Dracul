@@ -32,3 +32,21 @@ export function dashStopsAt(at: P, v: P, left: number, target: P, contact: numbe
   const ahead = v.x * (target.x - at.x) + v.y * (target.y - at.y) > 0;
   return ahead && d2(at.x, at.y) <= contact ** 2 && d2(at.x + v.x * left, at.y + v.y * left) < contact ** 2;
 }
+
+/** Normalised distance from the centre of an ellipse to `p`: 1 on its edge. Pools of light on the floor are ellipses
+ *  (the ground is seen at an angle). */
+export function ellipseDist(c: P, p: P, rx: number, ry: number): number {
+  return Math.hypot((p.x - c.x) / rx, (p.y - c.y) / ry);
+}
+
+/** Burns landed after `ms` spent in holy light: none during a grace on stepping in, then one every `everyMs`. */
+export function burnsAfter(ms: number, graceMs: number, everyMs: number): number {
+  return ms < graceMs ? 0 : 1 + Math.floor((ms - graceMs) / everyMs);
+}
+
+/** Where the next lantern goes: the free spot nearest the hero whose light, stretched by `clear`, leaves him out. */
+export function pickSpot(spots: P[], hero: P, taken: P[], rx: number, ry: number, clear: number): P | undefined {
+  const d = (s: P) => Math.hypot(s.x - hero.x, s.y - hero.y);
+  return spots.filter((s) => !taken.some((t) => t.x === s.x && t.y === s.y) && ellipseDist(s, hero, rx, ry) > clear)
+    .sort((a, b) => d(a) - d(b))[0];
+}

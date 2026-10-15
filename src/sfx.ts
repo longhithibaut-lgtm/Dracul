@@ -117,6 +117,29 @@ export const recipes = {
     voice(o, { src: 'noise', filter: 'bandpass', ff: 2500, ff2: 300, q: 0.7, gain: 0.35, attack: 0.2, dur: 1.2 });
     voice(o, { src: 'sine', f: 90, f2: 30, gain: 0.8, dur: 0.5 });
   },
+  // A sacred lantern kindles: a small bright bell (inharmonic partials) over a shimmering hum, the mix's only pure,
+  // high and sweet sound.
+  holy(o: Play) {
+    for (const [r, gain, dur] of [[1, 0.4, 0.9], [2.76, 0.16, 0.5], [5.4, 0.08, 0.25]]) voice(o, { src: 'sine', f: 784 * r, gain, attack: 0.004, dur });
+    voice(o, { src: 'triangle', f: 392, gain: 0.25, attack: 0.25, dur: 0.8 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 6000, ff2: 9000, q: 5, trem: 12, gain: 0.35, attack: 0.3, dur: 0.75 });
+  },
+  // Holy light sears the hero: a crackling hiss, like fat on a fire.
+  burn(o: Play) {
+    voice(o, { src: 'noise', filter: 'highpass', ff: 2500, ff2: 6000, trem: 38, gain: 0.7, attack: 0.01, dur: 0.38 });
+    bursts(o, [0, 0.04, 0.09, 0.13, 0.2, 0.27], { src: 'noise', filter: 'bandpass', ff: 4500, q: 3, gain: 0.5, attack: 0.001, dur: 0.02 });
+  },
+  // A lantern struck: a glass tink and an iron clank. Broken (arg 1): glass bursts, shards tinkle, its light dies down.
+  shatter(o: Play, broken: number) {
+    voice(o, { src: 'triangle', f: 2100, gain: 0.4, dur: 0.14 });
+    voice(o, { src: 'square', f: 330, f2: 300, filter: 'bandpass', ff: 1400, q: 4, gain: 0.35, dur: 0.1 });
+    voice(o, { src: 'noise', filter: 'highpass', ff: 4000, gain: 0.5, attack: 0.001, dur: 0.05 });
+    if (!broken) return;
+    voice(o, { src: 'noise', filter: 'highpass', ff: 2500, ff2: 7000, gain: 0.7, attack: 0.002, dur: 0.28 });
+    voice(o, { src: 'sine', f: 120, f2: 40, gain: 0.6, dur: 0.18 });
+    voice(o, { src: 'sine', f: 1568, f2: 196, gain: 0.25, attack: 0.01, dur: 0.55 }); // the light going out
+    for (let i = 0; i < 6; i++) voice(o, { src: 'sine', f: 2600 + Math.random() * 2400, gain: 0.18, dur: 0.06, delay: 0.05 + i * 0.05 + Math.random() * 0.03 });
+  },
 };
 export type SfxName = keyof typeof recipes;
 
