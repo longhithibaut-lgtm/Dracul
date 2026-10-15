@@ -86,10 +86,10 @@ export const recipes = {
     voice(o, { src: 'sine', f: 110, f2: 40, gain: 0.8, dur: 0.15 });
     voice(o, { src: 'noise', filter: 'bandpass', ff: 900, gain: 0.4, dur: 0.08 });
   },
-  // Audio telegraph: a swelling hiss over a growling snarl, the only sustained, rising sound in the mix.
+  // Audio telegraph: two teeth snaps, then a short rising growl; a rhythm no other sound in the mix has.
   windup(o: Play) {
-    voice(o, { src: 'noise', filter: 'bandpass', ff: 3500, ff2: 6500, q: 3, gain: 0.9, attack: 0.3, dur: 0.4 });
-    voice(o, { src: 'sawtooth', f: 85, f2: 120, filter: 'lowpass', ff: 600, ff2: 1500, q: 4, trem: 26, gain: 0.7, attack: 0.15, dur: 0.4 });
+    bursts(o, [0, 0.09], { src: 'noise', filter: 'bandpass', ff: 2200, q: 5, gain: 0.7, attack: 0.001, dur: 0.035 });
+    voice(o, { src: 'sawtooth', f: 90, f2: 140, filter: 'lowpass', ff: 500, ff2: 1100, q: 3, trem: 14, gain: 0.55, attack: 0.08, dur: 0.26, delay: 0.16 });
   },
   // The lunge: a low rush with a short bark.
   lunge(o: Play) {
