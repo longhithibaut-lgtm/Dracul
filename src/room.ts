@@ -12,7 +12,8 @@ export type Room = {
 // A crypt hall seen in HLD's three-quarter view: a back wall with lancets, ossuaries and a portcullis
 // the moon blazes through, a carved ritual medallion in the middle, braziers, pillars, coffins.
 // Everything is painted pixel by pixel into canvas textures once, then reused on scene restarts.
-// Floor light is one quantised level field (near-black blue at the walls up to a pale warm nave), never an alpha gradient.
+// Floor light is one quantised level field built only from real sources (gate wedge pooling on the circle, lancets,
+// fire pools stepped on a 4 px grid) over one dark blue-violet; never an alpha gradient.
 
 // Palette "Nuit de sang" (docs/art.md) plus crimson walls, a moonlit blue floor and the magenta dark beyond.
 const P = {
@@ -591,7 +592,7 @@ const LANCETS = [CX - 100, CX + 100];
 // ---------- light: one quantised level field, no gradients ----------
 
 /** Visible floor colour per light level: near-black blue against the walls up to the pale, warm nave. */
-const RAMP = [0x0b0f25, 0x172050, 0x30366f, 0x7a6488, 0xc6a7a8, 0xecd8cb];
+const RAMP = [0x0b0a20, 0x1d1b4c, 0x353068, 0x6e5a88, 0xc49ea6, 0xf0d6c8];
 /** How much painted detail (grout, carving, cracks) survives at each level: darkness swallows it. */
 const DETAIL = [0.35, 0.55, 0.8, 1, 1, 0.85];
 const WARM = 0xff9a52;
@@ -610,35 +611,39 @@ const inShadow = (x: number, y: number) =>
     return t >= -0.6 && t <= 1 && x >= l + t * reach * 0.9 && x <= r + t * reach * 1.1;
   });
 
-/** Moonlight level 0..5 on the floor: a pale nave from the gate down to the stairs, widening over the medallion. */
+/** Is the floor point inside the gate's light wedge (the gate opening projected on the floor, bars ignored)? */
+function inWedge(x: number, y: number) {
+  const d = y - FY0;
+  if (d < 0 || d > 100) return false;
+  return inArch(CX + (x - CX - d * 0.12) / (1 + d * 0.012), FY0 - d / 2, CX, GATE.hw, GATE.ys, GATE.R);
+}
+
+/** Light level 0..5 on the floor. Every lit shape comes from a source: the gate wedge pooling on the circle,
+ *  the lancets, the fires (see `fire`); everything else is one dark blue-violet, near black against the walls. */
 function level(x: number, y: number, shadows = true) {
-  const wob = (noise(x, y, 24, 21) - 0.5) * 0.36;
-  const pool = 1.1 - Math.hypot((x + 0.5 - CX) / 150, (y + 0.5 - CY + 4) / 100);
-  const nave = 0.95 - Math.abs(x + 0.5 - CX) / 100;
-  const i = Math.max(pool, nave) + wob;
-  let L = i > 0.7 ? 4 : i > 0.42 ? 3 : i > 0.16 ? 2 : 1;
-  const g = gateSpill(x, y);
-  if (g) L = Math.max(L, g > 0.7 ? 5 : 4);
-  if (lancetSpill(x, y)) L = Math.min(Math.max(L + 1, 3), 4);
-  if (shadows && inShadow(x, y)) L = Math.max(L - 2, 0);
-  // Against the walls the hall drops to near black; the stair opening at the bottom stays open to the light.
+  const r = Math.hypot(x + 0.5 - CX, y + 0.5 - CY);
+  let L = r < 50 ? 4 : r < 58 ? 3 : r < 66 ? 2 : 1;
+  const wedge = inWedge(x, y);
+  if (wedge) L = Math.max(L, gateSpill(x, y) ? (y - FY0 < 44 ? 5 : 4) : 3);
+  else if (y > CY && Math.abs(x + 0.5 - CX) < 24) L = Math.max(L, 2); // the walkway on to the stairs catches the spill
+  if (lancetSpill(x, y)) L = Math.min(Math.max(L + 1, 2), 3);
+  if (shadows && inShadow(x, y)) L = Math.max(L - 1, 0);
   const bottom = Math.abs(x + 0.5 - CX) < 24 ? 99 : FY1 - 1 - y;
-  const wall = Math.min(x - FX0, FX1 - 1 - x, (y - FY0) * 1.6, bottom) + (noise(x, y, 9, 22) - 0.5) * 10;
-  if (wall < 5 && !g) L = 0;
-  else if (wall < 16 && !g) L = Math.min(L, 1);
+  if (!wedge && Math.min(x - FX0, FX1 - 1 - x, y - FY0, bottom) < 6) L = 0;
   return L;
 }
 
-/** Fire bands 0..2 around braziers and candles, hard edged. */
+/** Fire pools 0..2 around braziers and candle clusters, stepped on a 4 px grid (a quarter tile). */
 function fire(x: number, y: number) {
+  const gx = Math.floor((x - FX0) / 4) * 4 + FX0 + 2, gy = Math.floor((y - FY0) / 4) * 4 + FY0 + 2;
   let f = 0;
   for (const b of BRAZIERS) {
-    const d = Math.hypot((x - b.x) / 36, (y - b.y + 8) / 26) + (noise(x, y, 6, b.x) - 0.5) * 0.25;
-    f = Math.max(f, d < 0.55 ? 2 : d < 1 ? 1 : 0);
+    const d = Math.hypot(gx - b.x, (gy - b.y + 4) * 1.3);
+    f = Math.max(f, d < 12 ? 2 : d < 24 ? 1 : 0);
   }
   for (const [cx, cy, n] of CANDLES) {
-    const d = Math.hypot((x - cx - n * 1.5) / (9 + n * 2), (y - cy + 1) / (6 + n * 2)) + (noise(x, y, 4, cx) - 0.5) * 0.3;
-    f = Math.max(f, d < 0.5 ? 2 : d < 1 ? 1 : 0);
+    const d = Math.hypot(gx - cx - n * 1.5, (gy - cy + 2) * 1.3);
+    f = Math.max(f, d < 6 + n ? 2 : d < 12 + n * 2 ? 1 : 0);
   }
   return f;
 }
@@ -653,7 +658,7 @@ function paintLight(p: Px) {
       let o = p.obj[y * p.w + x]
         ? L < 3 ? mix(c, RAMP[0], [0.65, 0.45, 0.2][L]) : mix(c, 0xf0e0d8, [0, 0.08, 0.15][L - 3])
         : lift(RAMP[L], (lum(c) - base) * DETAIL[L]);
-      if (f) o = mix(o, WARM, f === 2 ? 0.3 : 0.18);
+      if (f) o = mix(o, WARM, f === 2 ? 0.3 : 0.14);
       p.p(x, y, o);
     }
   // Fire on the wall behind the braziers, in the same hard steps.
@@ -673,7 +678,8 @@ function growth(p: Px, cx: number, cy: number, rx: number, ry: number, seed: num
   for (let y = Math.floor(cy - ry * 1.7); y <= cy + ry * 1.7; y++)
     for (let x = Math.floor(cx - rx * 1.7); x <= cx + rx * 1.7; x++) {
       if (!inside(x, y)) continue;
-      p.p(x, y, !inside(x, y - 1) ? P.glowDark : !inside(x, y + 1) ? P.abyss1 : noise(x, y, 3, seed + 2) > 0.66 ? P.abyss1 : P.abyss2);
+      const c = !inside(x, y - 1) ? P.glowDark : !inside(x, y + 1) ? P.abyss1 : noise(x, y, 3, seed + 2) > 0.66 ? P.abyss1 : P.abyss2;
+      p.p(x, y, y >= FY0 && level(x, y) < 2 ? mix(c, RAMP[0], 0.3) : c); // in the dark it frames, it does not glow
       if (inside(x, y + 1)) continue;
       if (!drips) p.tint(x, y + 1, P.void0, 0.5);
       // On a wall it runs down in strands.
@@ -868,26 +874,9 @@ function paintCoffin(p: Px, open: boolean) {
 
 // ---------- overlays ----------
 
-/** Moon shafts falling from the unseen oculus at the top left: parallel beams with hard edges, drawn additive. */
-const BEAMS = [
-  { x: 116, w: 28, k: 0.11, len: 1 },
-  { x: 140, w: 9, k: 0.09, len: 0.94 },
-  { x: 98, w: 8, k: 0.07, len: 0.86 },
-];
-const SHAFT = { dx: 0.76, top: -10, bottom: 166 };
-const inBeam = (x: number, y: number, b: (typeof BEAMS)[number]) => {
-  const t = (y - SHAFT.top) / (SHAFT.bottom - SHAFT.top);
-  return t >= 0 && t <= b.len && Math.abs(x - (b.x + (y - SHAFT.top) * SHAFT.dx)) < b.w / 2 + t * 6;
-};
-
+/** The gate's light hanging in the air over its wedge: one flat, hard-edged additive shape that also lights characters. */
 function paintShaft(p: Px) {
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      let k = 0;
-      const t = (y - SHAFT.top) / (SHAFT.bottom - SHAFT.top);
-      for (const b of BEAMS) if (inBeam(x, y, b)) k += b.k * (t > b.len - 0.12 ? 0.55 : 1);
-      if (k > 0) p.p(x, y, P.moon2, k);
-    }
+  for (let y = FY0; y < FY0 + 100; y++) for (let x = CX - 60; x < CX + 80; x++) if (inWedge(x, y)) p.p(x, y, 0xffe6cc, gateSpill(x, y) ? 0.08 : 0.04);
 }
 
 function paintVignette(p: Px) {
@@ -991,14 +980,14 @@ function flame(scene: Phaser.Scene, x: number, y: number, depth: number) {
 }
 
 function atmosphere(scene: Phaser.Scene) {
-  // Dust motes drifting inside the moon beams.
+  // Dust motes drifting in the gate's light.
   const dot = bake(scene, 'room-dot', 1, 1, (p) => p.p(0, 0, 0xffffff));
   const pt = new Phaser.Math.Vector2();
   const source = {
     getRandomPoint(out: Phaser.Types.Math.Vector2Like) {
       for (let i = 0; i < 20; i++) {
-        pt.set(100 + Math.random() * 220, 10 + Math.random() * 160);
-        if (BEAMS.some((b) => inBeam(pt.x, pt.y, b))) break;
+        pt.set(CX - 50 + Math.random() * 110, FY0 + Math.random() * 100);
+        if (inWedge(pt.x, pt.y)) break;
       }
       out.x = pt.x; out.y = pt.y;
     },
