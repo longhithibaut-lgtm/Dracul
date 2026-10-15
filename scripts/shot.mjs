@@ -58,6 +58,21 @@ await freeze(false);
 await page.keyboard.up('d');
 await page.keyboard.up('s');
 
+// The first enemy to reach the idle hero, winding up its attack: its most menacing, telegraphed pose, before the
+// melee clutters the frame.
+{
+  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren()
+    .some((e) => e.body?.enable && e.getData('state') === 'windup' && e.getData('flashUntil') < window.game.scene.getScene('room').time.now), null, { timeout: 8000 });
+  await page.waitForTimeout(150); // mid-windup
+  await freeze(true);
+  const w = await page.evaluate(() => {
+    const e = window.game.scene.getScene('room').enemies.getChildren().find((o) => o.body?.enable && o.getData('state') === 'windup');
+    return e ? { x: e.x, y: e.y } : null;
+  });
+  if (w) await shot('enemy', clip(w.x, w.y - 4, 240, 200));
+  await freeze(false);
+}
+
 // Line up horizontally with an enemy, mist-dash in and slash, like the reference frame: the capture shows the dash
 // trail, the swing and the impact together.
 await page.waitForFunction(() => window.game.scene.getScene('room').enemies.countActive() > 0);
@@ -95,20 +110,6 @@ for (let i = 0; i < 200 && !captured; i++) {
   await shot('fx', clip((pre.x + target.x) / 2, s.hy, 480, 270));
   await freeze(false);
   captured = true;
-}
-
-// An enemy winding up its attack (its most menacing, telegraphed pose), away from hit flashes.
-if (captured) {
-  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren()
-    .some((e) => e.body?.enable && e.getData('state') === 'windup' && e.getData('flashUntil') < window.game.scene.getScene('room').time.now), null, { timeout: 8000 });
-  await page.waitForTimeout(150); // mid-windup
-  await freeze(true);
-  const w = await page.evaluate(() => {
-    const e = window.game.scene.getScene('room').enemies.getChildren().find((o) => o.body?.enable && o.getData('state') === 'windup');
-    return e ? { x: e.x, y: e.y } : null;
-  });
-  if (w) await shot('enemy', clip(w.x, w.y - 4, 240, 200));
-  await freeze(false);
 }
 
 // HUD in a representative mid-fight state, like the reference: 3 of 5 health, dash just spent.
