@@ -10,6 +10,7 @@ const game = new Phaser.Game({
   backgroundColor: '#000000',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 } } },
+  parent: 'game', // falls back to <body> when there is no #game element
   scene: [RoomScene],
 });
 
