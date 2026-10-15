@@ -14,7 +14,7 @@ Référence : Hyper Light Drifter. Résolution native 480×270, affichée ×4 en
 | Lune (accent froid) | `#1f4a5a` `#3fa7a3` `#8ff0dc` |
 | Bougies, feu | `#ffb347` `#ff9a52` |
 | Murs de la crypte | `#2b1631` `#4a1d3c` `#6e2d4f` |
-| Sol éclairé (rampe de lumière en 6 paliers nets) | `#0b0f25` `#172050` `#30366f` `#7a6488` `#c6a7a8` `#ecd8cb` |
+| Sol éclairé (rampe de lumière en 6 paliers nets) | `#0b0a20` `#1d1b4c` `#353068` `#6e5a88` `#c49ea6` `#f0d6c8` |
 | Abîme hors des murs | `#1f0520` `#3d0a3a` `#5e1256` |
 | Robe des serviteurs | `#33102a` `#521030` `#7a1a3e` `#b03a5e` |
 
