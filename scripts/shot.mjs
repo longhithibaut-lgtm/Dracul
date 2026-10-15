@@ -1,7 +1,7 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
 // Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
-// hero.png, enemy.png, fx.png, and hud.png (taken at 3/5 health, dash spent).
+// hero.png (running diagonally), enemy.png, fx.png, and hud.png (taken at 3/5 health, dash spent).
 // Exit code 1 if the page logged an error.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -44,11 +44,19 @@ await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 await page.waitForTimeout(400);
 
-let s = await state();
 await freeze(true);
 await shot('room');
+await freeze(false);
+// The hero mid-stride on a diagonal, like the reference.
+await page.keyboard.down('d');
+await page.keyboard.down('s');
+await page.waitForTimeout(250);
+await freeze(true);
+let s = await state();
 await shot('hero', clip(s.hx, s.hy - 4, 240, 200));
 await freeze(false);
+await page.keyboard.up('d');
+await page.keyboard.up('s');
 
 // Line up horizontally with an enemy, mist-dash in and slash, like the reference frame: the capture shows the dash
 // trail, the swing and the impact together.
