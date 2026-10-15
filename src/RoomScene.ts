@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { biteTarget, burnsAfter, dashStopsAt, drawGifts, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -9,6 +9,7 @@ import * as Fx from './fx.ts';
 import * as Hud from './hud.ts';
 import * as Sfx from './sfx.ts';
 import * as Lantern from './lantern.ts';
+import * as Glyph from './glyph.ts';
 import * as Rats from './rats.ts';
 import * as Training from './training.ts';
 import { GIFTS, GIFT_IDS, type GiftId } from './gifts.ts';
@@ -42,7 +43,8 @@ export class RoomScene extends Phaser.Scene {
   private shotUntil = 0; // the throw: he moves at half speed, facing it
   private invulnUntil = 0;
   private hurtAt = -1e9;
-  private dashRequested = false;
+  private dashPressedAt = -1e9;
+  private queued?: { act: () => boolean; until: number }; // the input buffer, see press()
   private dead = false;
   private wave = 0;
   private lanterns: Lantern.Lantern[] = [];
@@ -59,6 +61,9 @@ export class RoomScene extends Phaser.Scene {
   private gateUpAt = Infinity;
   private rats: { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until: number }[] = [];
   private training = false; // the training room (key T): no waves, enemies on demand, see training.ts
+  private glyph?: Glyph.Glyph; // the blood sigil on the floor, from its cast until it has crumbled
+  private glyphReadyAt = 0;
+  private castUntil = 0; // the hero's cast pose
 
   constructor() {
     super('room');
@@ -74,7 +79,8 @@ export class RoomScene extends Phaser.Scene {
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.shotReadyAt = this.shotUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
     this.dead = false;
-    this.dashRequested = false;
+    this.dashPressedAt = -1e9;
+    this.queued = undefined;
     this.litMs = 0;
     this.wave = (this.roomNo - 1) * T.run.wavesPerRoom; // the count carries on, and so does the difficulty
     this.lanterns = [];
@@ -86,6 +92,8 @@ export class RoomScene extends Phaser.Scene {
     this.offer = [];
     this.gateUpAt = Infinity;
     this.rats = [];
+    this.glyph = undefined; // the last scene's is ended on its shutdown
+    this.glyphReadyAt = this.castUntil = 0;
   }
 
   create() {
@@ -121,15 +129,24 @@ export class RoomScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.cards) return this.pick(this.cards.at(p.worldX, p.worldY));
       const a = Math.atan2(p.worldY - this.hero.y, p.worldX - this.hero.x);
-      if (p.button === 0) this.slash(a);
-      else if (p.button === 2) this.shoot(a);
+      if (p.button === 0) this.press(() => this.slash(a));
+      else if (p.button === 2) this.press(() => this.shoot(a));
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.worldX, p.worldY)));
-    this.keys.J.on('down', () => this.slash(this.facing));
-    this.keys.K.on('down', () => this.shoot(this.facing));
-    this.keys.F.on('down', () => this.bite());
+    this.keys.J.on('down', () => { const a = this.facing; this.press(() => this.slash(a)); });
+    this.keys.K.on('down', () => { const a = this.facing; this.press(() => this.shoot(a)); });
+    this.keys.F.on('down', () => this.press(() => this.bite()));
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
-    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashRequested = true));
+    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashPressedAt = this.time.now));
+    // Le Glyphe: E casts it at the pointer, L ahead of the hero (keyboard only).
+    this.input.keyboard!.on('keydown-E', () => {
+      const to = { x: this.input.activePointer.worldX, y: this.input.activePointer.worldY };
+      this.press(() => this.cast(to));
+    });
+    this.input.keyboard!.on('keydown-L', () => {
+      const f = this.hero.body!.center, to = { x: f.x + Math.cos(this.facing) * T.glyph.near, y: f.y + Math.sin(this.facing) * T.glyph.near };
+      this.press(() => this.cast(to));
+    });
     this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
     // Gift cards: the 1, 2, 3 keys of the top row (by position, so AZERTY works unshifted) or of the numpad.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
@@ -183,11 +200,12 @@ export class RoomScene extends Phaser.Scene {
     const auto = this.phase === 'enter' || this.phase === 'leave';
     const x = auto ? 0 : Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
     const y = auto ? -1 : Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
-    if ((x || y) && time >= this.slashUntil && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
+    const posing = time < this.slashUntil || time < this.castUntil;
+    if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
-    const wantsDash = this.dashRequested && !auto;
-    this.dashRequested = false;
+    const wantsDash = time - this.dashPressedAt <= T.hero.bufferMs && !auto; // buffered like the actions, see press()
     if (wantsDash && time >= this.dashReadyAt && !this.prey) {
+      this.dashPressedAt = -1e9;
       this.dashUntil = time + T.dash.durationMs;
       this.dashReadyAt = this.dashUntil + this.dashCooldown();
       Fx.dash(this, this.hero, this.facing);
@@ -211,18 +229,20 @@ export class RoomScene extends Phaser.Scene {
     }
     if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      this.hero.body!.velocity.normalize().scale(T.hero.speed * (time < this.slashUntil ? 0.3 : time < this.shotUntil ? 0.5 : 1));
+      this.hero.body!.velocity.normalize().scale(T.hero.speed * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
     }
 
+    if (this.queued && (time > this.queued.until || this.queued.act())) this.queued = undefined;
     Hero.show(this.hero, {
       moving: (x || y) !== 0, dashing: time < this.dashUntil, slashing: time < this.slashUntil, throwing: time < this.shotUntil,
-      biting: !!this.prey || time - this.biteAt < 130,
+      biting: !!this.prey || time - this.biteAt < 130, casting: time < this.castUntil,
       hurt: time - this.hurtAt < 120, invulnerable: time < this.invulnUntil, facing: this.facing,
     });
     // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy;
     // biting, in front of his prey.
     this.hero.setDepth(this.hero.y + (time < this.slashUntil || this.prey ? 12 : 0));
     this.hud.dashReady(time >= this.dashReadyAt, this.dashReadyAt);
+    this.hud.glyphReady(time >= this.glyphReadyAt, this.glyphReadyAt);
 
     const feet = this.hero.body!;
     if (this.phase === 'enter' && feet.bottom < this.room.bounds.bottom - 16) {
@@ -243,6 +263,7 @@ export class RoomScene extends Phaser.Scene {
       }
     } else this.litMs = 0;
 
+    const held: Sprite[] = []; // bound by the glyph this frame
     for (const e of this.enemies.getChildren() as Sprite[]) {
       if (!e.body?.enable) continue;
       // Griffes pestilentes: an infected enemy smokes, then the plague takes its due.
@@ -256,7 +277,14 @@ export class RoomScene extends Phaser.Scene {
         if (!e.body?.enable) continue;
       }
       const bow = e.getData('kind') === 'crossbow';
-      if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
+      // Bound by the glyph, it stops dead, its lunge or aim cancelled, and cannot be shoved; it resumes once let go. A
+      // prey in the hero's jaws is held by the bite instead.
+      const bound = !!this.glyph && Glyph.binds(this.glyph, e.body.center, time);
+      e.setImmovable(bound || e === this.prey);
+      if (bound && e !== this.prey) {
+        held.push(e);
+        e.setVelocity(0).setData({ state: 'chase', until: 0 });
+      } else if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
         if (this.training && Training.opts.passive) e.setVelocity(0).setData('state', 'chase'); // a training dummy
         else if (bow) this.stepCrossbow(e, time);
         else this.stepEnemy(e, time);
@@ -264,6 +292,10 @@ export class RoomScene extends Phaser.Scene {
       if (bow) Crossbow.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'), e.getData('hp') <= T.bite.weakAt);
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
+    }
+    if (this.glyph) {
+      if (held.length && this.glyph.caughtAt < 0) Sfx.play(this, 'bind'); // once per glyph
+      if (!Glyph.show(this.glyph, time, held)) this.glyph = undefined;
     }
     this.stepRats(time, delta);
     // Bolts fly until the prop or wall they were aimed into.
@@ -375,9 +407,15 @@ export class RoomScene extends Phaser.Scene {
     return rayDistance({ x: from.x!, y: from.y! }, angle, this.room.bounds, props);
   }
 
+  /** Input buffer: an action pressed while the hero is still busy (mid-swing, dashing, cooling down...) is kept for
+   *  T.hero.bufferMs and fired by update() the moment it can be, so a press a hair early is never lost. */
+  private press(act: () => boolean) {
+    if (!act()) this.queued = { act, until: this.time.now + T.hero.bufferMs };
+  }
+
   private slash(angle: number) {
     const now = this.time.now;
-    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.slashReadyAt || now < this.dashUntil) return;
+    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.slashReadyAt || now < this.dashUntil) return false;
     this.combo = nextCombo(this.combo, now - this.lastSlashAt, T.slash.comboWindowMs);
     this.lastSlashAt = now;
     this.slashReadyAt = now + T.slash.cooldownMs;
@@ -398,17 +436,18 @@ export class RoomScene extends Phaser.Scene {
       hits++;
       this.hitLantern(l, angle, damage);
     }
-    if (!hits) return;
+    if (!hits) return true;
     // Hit-stop: freeze physics briefly so the impact reads; tweens and timers keep running.
     this.physics.pause();
     this.time.delayedCall(T.slash.hitStopMs, () => this.phase !== 'choose' && this.physics.resume());
+    return true;
   }
 
   /** Le Tir: a shard of blood flicked toward `angle`, without limit. It flies until the first enemy it touches, or the
    *  lantern, prop or wall it was thrown into. */
   private shoot(angle: number) {
     const now = this.time.now, S = T.shot;
-    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil) return;
+    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
     this.shotReadyAt = now + S.cooldownMs;
     this.shotUntil = now + S.throwMs;
     this.facing = angle;
@@ -420,6 +459,7 @@ export class RoomScene extends Phaser.Scene {
     this.physics.velocityFromRotation(angle, S.speed, (b.body as Phaser.Physics.Arcade.Body).velocity);
     Fx.shard(this, b, angle, (reach / S.speed) * 1000);
     Sfx.play(this, 'shoot');
+    return true;
   }
 
   /** A shard lands on an enemy: a light blow (flash, a flinch, small knockback) without hit-stop. Unlike a claw it never
@@ -476,7 +516,7 @@ export class RoomScene extends Phaser.Scene {
    */
   private bite() {
     const now = this.time.now, B = T.bite;
-    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil) return;
+    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
     const live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
     const prey = biteTarget(this.hero, this.facing, live.map((e) => ({ x: e.x, y: e.y, hp: e.getData('hp'), human: !!e.getData('human'), e })),
       B.range, B.arcDeg, B.weakAt)?.e;
@@ -485,7 +525,7 @@ export class RoomScene extends Phaser.Scene {
       this.biteReadyAt = now + B.whiffCooldownMs;
       Fx.snap(this, this.hero.x, this.hero.y, this.facing);
       Sfx.play(this, 'snap');
-      return;
+      return true;
     }
     this.prey = prey;
     // The bite is drawn side-on: he lands beside it, feet in line with its feet, face at its neck. It faces him.
@@ -514,6 +554,23 @@ export class RoomScene extends Phaser.Scene {
         Sfx.play(this, 'heal');
       });
     });
+    return true;
+  }
+
+  /** Le Glyphe: a blood sigil drawn on the floor at `to`, within reach and wholly on the floor; once armed, it binds
+   *  every enemy standing in it for a while. One at a time: a new one replaces the last. */
+  private cast(to: { x: number; y: number }) {
+    const now = this.time.now, G = T.glyph;
+    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.glyphReadyAt || now < this.dashUntil) return false;
+    const feet = this.hero.body!.center, b = this.room.bounds, rx = G.radius, ry = rx * T.lantern.squash;
+    const at = glyphSpot(feet, to, G.range, { x: b.x + rx, y: b.y + ry, width: b.width - 2 * rx, height: b.height - 2 * ry });
+    this.glyph?.end();
+    this.glyph = Glyph.cast(this, at.x, at.y, feet);
+    this.glyphReadyAt = now + G.cooldownMs;
+    this.castUntil = now + G.castMs;
+    this.facing = Math.atan2(at.y - feet.y, at.x - feet.x);
+    Sfx.play(this, 'glyph');
+    return true;
   }
 
   /** The room's last enemy is down: it falls in slow motion with a sting, then the gift of the Rat house rises on the

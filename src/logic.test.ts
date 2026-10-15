@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, burnsAfter, dashStopsAt, drawGifts, ellipseDist, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
 import { GIFTS, GIFT_IDS, SLOTS } from './gifts.ts';
 import { missing, width, wrap } from './font.ts';
 
@@ -90,6 +90,24 @@ describe('keepDistance', () => {
     expect(keepDistance(125, 110, 140, 1)).toBeCloseTo(Math.PI / 2);
     expect(keepDistance(125, 110, 140, -1)).toBeCloseTo(-Math.PI / 2);
     expect(keepDistance(60, 110, 140, 1)).toBeGreaterThan(0.85 * Math.PI);
+  });
+});
+
+describe('glyphSpot', () => {
+  const room = { x: 0, y: 0, width: 200, height: 100 };
+
+  it('lands on the target in reach, else at the end of the reach toward it', () => {
+    expect(glyphSpot({ x: 50, y: 50 }, { x: 80, y: 90 }, 110, room)).toEqual({ x: 80, y: 90 });
+    const far = glyphSpot({ x: 20, y: 50 }, { x: 180, y: 50 }, 110, room);
+    expect(far).toEqual({ x: 130, y: 50 });
+  });
+
+  it('stays in the room, never farther than the reach from a hero inside it', () => {
+    const p = glyphSpot({ x: 190, y: 90 }, { x: 260, y: 160 }, 110, room);
+    expect(p).toEqual({ x: 200, y: 100 });
+    const q = glyphSpot({ x: 10, y: 10 }, { x: -100, y: 60 }, 110, room);
+    expect(q.x).toBe(0);
+    expect(Math.hypot(q.x - 10, q.y - 10)).toBeLessThanOrEqual(110);
   });
 });
 

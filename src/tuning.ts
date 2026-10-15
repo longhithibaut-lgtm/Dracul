@@ -4,7 +4,7 @@ export const T = {
   width: 480,
   height: 270,
 
-  hero: { maxHealth: 5, speed: 95, hurtInvulnMs: 800 },
+  hero: { maxHealth: 5, speed: 95, hurtInvulnMs: 800, bufferMs: 150 }, // bufferMs: how early a press may come, see press()
   dash: { speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22 }, // stopShort: halts this far from an enemy it'd end on
   slash: { range: 30, arcDeg: 130, damage: 1, cooldownMs: 210, comboWindowMs: 450, knockback: 140, hitStopMs: 40 },
   // Le Tir: a shard of blood flicked straight ahead, without limit; weaker and slower than the claws. It flies until the
@@ -20,6 +20,17 @@ export const T = {
     drainMs: 450, // latched: neither the hero nor the prey can act
     heal: 1,
     whiffCooldownMs: 300, // a bite with no valid prey: a teeth snap in place
+  },
+
+  // Le Glyphe: a blood sigil cast on the floor; once drawn, every enemy standing in it is bound (stops dead, cannot attack).
+  glyph: {
+    range: 110, // cast at the pointer, no farther than this from the hero's feet
+    near: 60, // cast from the keyboard: this far ahead of him
+    radius: 30, // half-width; an ellipse squashed like the ground (T.lantern.squash)
+    armMs: 350, // the sigil draws itself, binding nothing yet
+    holdMs: 2500, // then it binds, this long
+    cooldownMs: 5000, // from one cast to the next
+    castMs: 220, // the hero's cast pose
   },
 
   enemy: {

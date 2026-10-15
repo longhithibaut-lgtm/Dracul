@@ -23,7 +23,8 @@ const sounds = [['slash', 0, 60, 140], ['slash', 1, 60, 140], ['slash', 2, 120, 
   ['holy', 0, 500, 900], ['burn', 0, 250, 420], ['shatter', 0, 80, 180],
   ['shatter', 1, 350, 600], ['bite', 0, 70, 180], ['drain', 0, 380, 520], ['heal', 0, 250, 450], ['snap', 0, 50, 130],
   ['shoot', 0, 30, 110], ['splat', 0, 30, 120], ['splat', 1, 30, 110],
-  ['clear', 0, 650, 1000], ['gift', 0, 380, 650], ['gift', 1, 380, 650], ['gate', 0, 1000, 1300]];
+  ['clear', 0, 650, 1000], ['gift', 0, 380, 650], ['gift', 1, 380, 650], ['gate', 0, 1000, 1300],
+  ['glyph', 0, 450, 900], ['bind', 0, 220, 420]];
 const results = await page.evaluate(async (sounds) => {
   const m = await import('/src/sfx.ts');
   const rate = 44100;
@@ -54,12 +55,12 @@ const results = await page.evaluate(async (sounds) => {
   }
   // Worst case: a finisher hitting three enemies (one dies) while the hero is hurt, an enemy winds up, a wave spawns
   // and crossbows aim, shoot and hit, a bite latches, drains and heals, a shard is thrown and bursts on an enemy and on a
-  // wall, the room clears, a gift is taken and the gate rises.
+  // wall, the room clears, a gift is taken, the gate rises and a glyph burns in and binds.
   const pile = [['slash', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['kill', 0, 0], ['hurt', 0, 0.01],
     ['windup', 0, 0], ['lunge', 0, 0.02], ['spawn', 0, 0], ['spawn', 0, 0], ['spawn', 0, 0], ['spawn', 0, 0], ['death', 0, 0.02],
     ['aim', 0.45, 0], ['twang', 0, 0.01], ['twang', 0, 0], ['thunk', 0, 0.02],
     ['burn', 0, 0], ['shatter', 1, 0], ['holy', 0, 0], ['bite', 0, 0], ['drain', 0, 0], ['heal', 0, 0.01], ['snap', 0, 0],
-    ['shoot', 0, 0], ['splat', 0, 0], ['splat', 1, 0.01], ['clear', 0, 0], ['gift', 1, 0], ['gate', 0, 0]];
+    ['shoot', 0, 0], ['splat', 0, 0], ['splat', 1, 0.01], ['clear', 0, 0], ['gift', 1, 0], ['gate', 0, 0], ['glyph', 0, 0], ['bind', 0, 0]];
   out.push(await render(pile, 2), (await render(pile, 2, true)).peak);
   return out;
 }, sounds);

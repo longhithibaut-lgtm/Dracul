@@ -12,6 +12,7 @@ const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrie
 const KNOBS = [
   ['Vitesse de marche', 'hero', 'speed', 50, 160, 5],
   ['Invulnérabilité après un coup (ms)', 'hero', 'hurtInvulnMs', 200, 1500, 50],
+  ['Mémoire des touches pressées trop tôt (ms)', 'hero', 'bufferMs', 0, 400, 10],
   ['Brume : vitesse', 'dash', 'speed', 200, 500, 10],
   ['Brume : durée (ms)', 'dash', 'durationMs', 60, 250, 10],
   ['Brume : recharge (ms)', 'dash', 'cooldownMs', 0, 1000, 20],
@@ -26,6 +27,9 @@ const KNOBS = [
   ['Tir : vitesse', 'shot', 'speed', 100, 500, 10],
   ['Morsure : portée', 'bite', 'range', 14, 50, 1],
   ['Morsure : durée (ms)', 'bite', 'drainMs', 150, 1000, 25],
+  ['Glyphe : rayon', 'glyph', 'radius', 15, 60, 1],
+  ['Glyphe : durée (ms)', 'glyph', 'holdMs', 500, 6000, 100],
+  ['Glyphe : recharge (ms)', 'glyph', 'cooldownMs', 0, 10000, 250],
 ] as const;
 
 const tuned = T as unknown as Record<string, Record<string, number>>;
