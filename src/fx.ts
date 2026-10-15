@@ -271,6 +271,69 @@ export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle:
   }).once('destroy', () => ghosts.forEach((gh) => gh.strips.forEach((s) => s.destroy())));
 }
 
+// Le Tir flies at chest height, this far above the floor point that collides (like the crossbow's bolts).
+const SHOT_HEIGHT = 11;
+
+/**
+ * Le Tir: a thin shard of blood flicked from the hand, drawn over its floor body `b` while it flies (`ms` at most): a
+ * crimson splinter with a white-hot point, and a short dark trail that catches up with it once it is gone. A few drops
+ * fly off the fingers with it.
+ */
+export function shard(scene: Phaser.Scene, b: P & { active: boolean }, angle: number, ms: number) {
+  const c = Math.cos(angle), s = Math.sin(angle), x0 = b.x, y0 = b.y - SHOT_HEIGHT;
+  const path: (P & { t: number })[] = [];
+  const flung = Array.from({ length: 3 }, () => ({ a: angle + rnd(-0.4, 0.4), v: rnd(60, 130) }));
+  // Lives past its expected flight: a pause (hit-stop, gift cards) holds the body back.
+  animate(scene, b.y, ms + 400, (g, t) => {
+    if (b.active) path.push({ t, x: b.x, y: b.y - SHOT_HEIGHT });
+    while (path.length > 1 && t - path[0].t > 45) path.shift();
+    g.setDepth(path[path.length - 1].y + SHOT_HEIGHT - 8); // sorts like a character standing on its floor point
+    for (const f of flung) {
+      const k = t / 160, d = f.v * (t / 1000);
+      if (k < 1) px(g, x0 + Math.cos(f.a) * d, y0 + Math.sin(f.a) * d + 8 * k * k, k < 0.5 ? RED : BLOOD);
+    }
+    const head = path[path.length - 1], trail = (k: number) => (k < 0.4 && (k * 16) & 1 ? -1 : k < 0.4 ? DRIED : BLOOD);
+    if (!b.active) {
+      if (path.length > 1) line(g, path[0], head, trail);
+      return;
+    }
+    const tail = { x: head.x - c * 4, y: head.y - s * 4 }, sh = -s + c < 0 ? { x: s, y: -c } : { x: -s, y: c };
+    line(g, path[0], tail, trail);
+    // A sliver: its underside in shadow (light from the top left), the crimson core whitening to the point.
+    line(g, { x: tail.x + sh.x, y: tail.y + sh.y }, { x: head.x + sh.x, y: head.y + sh.y }, () => BLOOD);
+    line(g, tail, { x: head.x + c * 2, y: head.y + s * 2 }, (k) => (k < 0.6 ? RED : k < 0.85 ? GLOW : HOT));
+  });
+}
+
+/** A shard bursts where it struck: a small star and drops spattering back that dot the floor a moment; `big` off an
+ *  enemy, smaller on a wall or a prop. (x, y) is its floor point. */
+export function splat(scene: Phaser.Scene, x: number, y: number, angle: number, big: boolean) {
+  const cx = Math.round(x - Math.cos(angle) * 2), cy = Math.round(y - Math.sin(angle) * 2), z0 = SHOT_HEIGHT;
+  const drops = Array.from({ length: big ? 7 : 4 }, () => {
+    const a = angle + Math.PI + rnd(-1.4, 1.4), v = rnd(20, big ? 75 : 50), vz = rnd(10, 60);
+    const land = ((vz + Math.sqrt(vz * vz + 2 * GRAVITY * z0)) / GRAVITY) * 1000;
+    return { vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.6, vz, land, c: Math.random() < 0.3 ? GLOW : RED };
+  });
+  // Where drop d is at t ms: its floor point and its height.
+  const at = (d: (typeof drops)[number], t: number) => {
+    const u = Math.min(t, d.land) / 1000;
+    return { x: cx + d.vx * u, y: cy + d.vy * u, z: Math.max(0, z0 + d.vz * u - (GRAVITY / 2) * u * u) };
+  };
+  animate(scene, ABOVE, 300, (g, t) => {
+    if (t < 80) {
+      const k = Math.max(0, (t - 30) / 50);
+      star(g, cx, cy - z0, 0, (big ? 4 : 3) * (1 - k), (big ? 3 : 2) * (1 - k), 1); // square to the grid: crisp at 1 px
+    }
+    for (const d of drops) if (t < d.land) {
+      const p = at(d, t);
+      px(g, p.x, p.y - p.z, t < 120 ? d.c : BLOOD);
+    }
+  });
+  animate(scene, FLOOR, 700, (g, t) => {
+    for (const d of drops) if (t >= d.land && t < d.land + 400) px(g, at(d, t).x, at(d, t).y, t - d.land < 120 ? BLOOD : DRIED);
+  });
+}
+
 /** A bite at nothing: two rows of bone-white fangs clamp shut in front of the face, a small glint where they meet. */
 export function snap(scene: Phaser.Scene, x: number, y: number, angle: number) {
   const cx = Math.round(x + Math.cos(angle) * 11), cy = Math.round(y - 5 + Math.sin(angle) * 7);

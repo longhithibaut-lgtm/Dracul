@@ -4,8 +4,9 @@
 // hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (3/5 health, dash spent, 2 gifts),
 // light.png (a lit lantern, the hero at the edge of its holy light), crossbow.png (a crossbowman aiming), weak.png (a
 // weakened crossbowman, its heartbeat drop on the beat), bite.png (the hero latched onto it, mid-drain), gifts.png
-// (full frame, the room cleared and the three gift cards open, the second hovered), gate.png (the portcullis up) and
-// training.png (full frame: the training room, its panel, enemies called in from it).
+// (full frame, the room cleared and the three gift cards open, the second hovered), gate.png (the portcullis up),
+// training.png (full frame: the training room, its panel, enemies called in from it) and tir.png (the hero mid-throw,
+// a shard of blood in flight toward a ghoul).
 // Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -194,7 +195,7 @@ let bit = null;
       s.health = 3;
       s.hud.health(3, 5);
       s.hero.body.reset(x - 20, y - 1);
-      s.bite(0);
+      s.bite();
       return s.health;
     }, p);
     await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.time.now - s.biteAt > 300; });
@@ -262,8 +263,35 @@ let training = false;
   }
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
+// Le Tir, in the training room (its dummies hold still): the hero flicks a shard at a ghoul on his row, caught mid-throw
+// with the shard in flight; then it must land.
+let tir = null;
+if (training) {
+  const p = await page.evaluate(() => {
+    const s = window.game.scene.getScene('room');
+    const g = s.enemies.getChildren().find((e) => e.body?.enable && e.getData('kind') !== 'crossbow');
+    if (!g) return null;
+    s.hero.body.reset(170, 160); // across the medallion, out of every lantern's light
+    g.body.reset(236, 160);
+    return { x: 203, y: 156, hp: g.getData('hp') };
+  });
+  if (p) {
+    await page.waitForTimeout(100); // a physics step puts the bodies back under their sprites
+    await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.shoot(0); s.shotUntil = Infinity; }); // held mid-throw
+    await page.waitForFunction(() => { const s = window.game.scene.getScene('room'), b = s.shards.getChildren()[0]; return !b || b.x > s.hero.x + 28; });
+    await freeze(true);
+    const flying = await page.evaluate(() => window.game.scene.getScene('room').shards.countActive() > 0);
+    if (flying) await shot('tir', clip(p.x, p.y, 400, 200));
+    await page.evaluate(() => (window.game.scene.getScene('room').shotUntil = 0));
+    await freeze(false);
+    await page.waitForTimeout(500);
+    const hp = await page.evaluate(() => window.game.scene.getScene('room').enemies.getChildren().find((e) => e.body?.enable && e.getData('kind') !== 'crossbow')?.getData('hp'));
+    tir = flying && hp < p.hp && `ghoul ${p.hp} -> ${hp} hp`;
+  }
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow || !bit || !gifts || !training ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !tir ? 1 : 0);

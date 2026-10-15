@@ -172,6 +172,16 @@ export const recipes = {
     voice(o, { src: 'noise', filter: 'bandpass', ff: 3600, q: 8, gain: 2, attack: 0.001, dur: 0.03, delay: 0.05 });
     voice(o, { src: 'square', f: 1900, f2: 1300, filter: 'bandpass', ff: 1900, q: 10, gain: 0.2, attack: 0.001, dur: 0.025, delay: 0.05 });
   },
+  // Le Tir leaves the hand: a quick wet flick, a short rising swish and a small liquid plip. Fired a lot: short and quiet.
+  shoot(o: Play) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 1400, ff2: 4200, q: 3, gain: 0.6, attack: 0.008, dur: 0.08 });
+    voice(o, { src: 'sine', f: 500, f2: 1300, gain: 0.22, attack: 0.002, dur: 0.035, delay: 0.01 });
+  },
+  // A shard bursts: a soft wet pat; on a wall or a prop (arg 1), smaller and drier.
+  splat(o: Play, wall: number) {
+    voice(o, { src: 'noise', filter: 'lowpass', ff: wall ? 2200 : 1400, ff2: 250, q: 5, gain: wall ? 0.35 : 0.5, attack: 0.002, dur: 0.07 });
+    if (!wall) voice(o, { src: 'sine', f: 190, f2: 70, gain: 0.35, dur: 0.07 });
+  },
   // A lantern struck: a glass tink and an iron clank. Broken (arg 1): glass bursts, shards tinkle, its light dies down.
   shatter(o: Play, broken: number) {
     voice(o, { src: 'triangle', f: 2100, gain: 0.4, dur: 0.14 });

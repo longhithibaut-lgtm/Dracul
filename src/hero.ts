@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 // How the hero looks. Gameplay calls create() once and show() every frame; everything visual lives here.
-export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; biting: boolean; hurt: boolean; invulnerable: boolean; facing: number };
+export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; throwing: boolean; biting: boolean; hurt: boolean; invulnerable: boolean; facing: number };
 
 // Palette "Nuit de sang" (docs/art.md), one char per colour. In a grid '.' leaves the pixel below, ',' erases it;
 // x is the translucent ground shadow.
@@ -330,6 +330,40 @@ dsdd.........
 `)]],
 };
 
+// Throw poses (Le Tir), on the slash poses' bodies: the arm flicked out toward the throw, the hand open on the shard it
+// just let go. Two per view, alternated.
+const THROW_DOWN = grid(`
+s......
+ss.....
+.dss...
+...dsw.
+...wWW.
+..W.W.W
+`);
+const THROW_UP = grid(`
+...W.W
+...WW.
+..sw..
+.ss...
+ss....
+s.....
+`);
+const THROWS: Record<keyof typeof VIEWS, [number, number, Grid][]> = {
+  down: [[12, 8, THROW_DOWN], [-1, 8, flip(THROW_DOWN)]],
+  up: [[12, -2, THROW_UP], [0, -2, flip(THROW_UP)]],
+  side: [[12, 6, grid(`
+..........W
+......ssWW.
+...ssssWW.W
+dsssdd.....
+.ddd.......
+`)], [12, 8, grid(`
+.........W..
+dsssssswWW.W
+.dddddd..W..
+`)]],
+};
+
 // The bite, side view only (gameplay latches him side-on): hunched over the prey, head bowed into its throat with the
 // jaw open on a fang, the cape flared up and back like a bat wing, the near hand clawed on its shoulder. Legs included,
 // drawn from the frame's left edge, row 2.
@@ -388,9 +422,12 @@ function frames(): Record<string, Layer[]> {
         ? [[OX, OY + HEM, legs], [OX - 4, OY + dy, d.runBodies[flap]]]
         : pose(legs, dy, d.runHems[flap], false);
     });
-    SLASHES[v as keyof typeof VIEWS].forEach(([x, y, arm], i) => {
-      const base = 'runBodies' in d ? [[OX, OY + HEM, d.run[0]], [OX - 4, OY + 1, d.runBodies[0]]] as Layer[] : pose(d.legs, 0, d.runHems[i], false);
-      f[`${v}-slash${i}`] = [...base, [OX + x, OY + y, arm]];
+    for (const [kind, arms] of [['slash', SLASHES], ['throw', THROWS]] as const) arms[v as keyof typeof VIEWS].forEach(([x, y, arm], i) => {
+      // Side-on, the two throws alternate the cape's two streaming shapes.
+      const base = 'runBodies' in d
+        ? [[OX, OY + HEM, d.run[0]], [OX - 4, OY + 1, d.runBodies[kind === 'throw' ? 1 - i : 0]]] as Layer[]
+        : pose(d.legs, 0, d.runHems[i], false);
+      f[`${v}-${kind}${i}`] = [...base, [OX + x, OY + y, arm]];
     });
     MIST.forEach((_, i) => (f[`${v}-dash${i}`] = f[`${v}-run${d.run.length === 6 ? 2 : 1}`]));
   }
@@ -478,7 +515,7 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
   const follow = () => shadow.setPosition(s.x, s.y).setDepth(s.depth - 0.5);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
   s.once(Phaser.GameObjects.Events.DESTROY, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow));
-  const was = { moving: false, dashing: false, slashing: false, biting: false, hurt: false, invulnerable: false, facing: 0 };
+  const was = { moving: false, dashing: false, slashing: false, throwing: false, biting: false, hurt: false, invulnerable: false, facing: 0 };
   states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9 });
   return s;
 }
@@ -486,6 +523,7 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
 export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   const st = states.get(s)!, now = s.scene.time.now;
   if (look.slashing && !st.was.slashing) { st.slashAt = now; st.swing ^= 1; } // alternate the two swings
+  if (look.throwing && !st.was.throwing) st.swing ^= 1; // and the two throws
   if (look.hurt && !st.was.hurt) st.hurtAt = now;
   if (look.dashing && !st.was.dashing) st.dashAt = now;
   if (!look.dashing && st.was.dashing) st.dashEnd = now;
@@ -498,6 +536,7 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
   else if (look.biting && view === 'side') frame = 'bite';
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${st.swing}`;
+  else if (look.throwing) frame = `throw${st.swing}`;
   else if (now - st.dashEnd < 70) frame = 'dash0';
   else if (look.moving) { const n = VIEWS[view].run.length; frame = `run${Math.floor(now / (540 / n)) % n}`; } // one stride pair per 540ms in every view
   s.setFrame(`${view}-${frame}`).setFlipX(view === 'side' && c < 0);

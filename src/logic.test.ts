@@ -35,6 +35,11 @@ describe('biteTarget', () => {
     expect(biteTarget(o, 0, [human(30, 0, 1)], 26, 140, 1)).toBeUndefined();
     expect(biteTarget(o, 0, [human(-15, 0, 1)], 26, 140, 1)).toBeUndefined();
   });
+
+  it('unaimed (a full circle): the nearest one all around, behind included', () => {
+    const behind = human(-12, 3, 1);
+    expect(biteTarget(o, 0, [human(20, 0, 1), behind], 26, 360, 1)).toBe(behind);
+  });
 });
 
 describe('nextCombo', () => {

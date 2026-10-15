@@ -208,7 +208,7 @@ function shards(scene: Scene, l: Lantern, angle: number, n: number, power: numbe
 
 /** A blow that did not break it: a white flash, a shudder of the light, cracks and a spray of glass. */
 export function hit(scene: Scene, l: Lantern, angle: number) {
-  l.img?.setFrame(`l${Math.max(1, l.hp)}`).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+  l.img?.setFrame(`l${Math.max(1, Math.ceil(l.hp))}`).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
   scene.time.delayedCall(60, () => l.img?.clearTint());
   l.stutterUntil = scene.time.now + 100;
   scene.cameras.main.shake(60, new Phaser.Math.Vector2(1.5 / T.width, 1.5 / T.height));

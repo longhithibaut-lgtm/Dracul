@@ -21,6 +21,9 @@ const KNOBS = [
   ['Griffes : fenêtre d\'enchaînement (ms)', 'slash', 'comboWindowMs', 200, 900, 25],
   ['Griffes : recul', 'slash', 'knockback', 0, 300, 10],
   ['Griffes : gel à l\'impact (ms)', 'slash', 'hitStopMs', 0, 150, 5],
+  ['Tir : dégâts', 'shot', 'damage', 0.25, 3, 0.25],
+  ['Tir : recharge (ms)', 'shot', 'cooldownMs', 100, 1000, 25],
+  ['Tir : vitesse', 'shot', 'speed', 100, 500, 10],
   ['Morsure : portée', 'bite', 'range', 14, 50, 1],
   ['Morsure : durée (ms)', 'bite', 'drainMs', 150, 1000, 25],
 ] as const;

@@ -26,6 +26,7 @@ export class RoomScene extends Phaser.Scene {
   hero!: Sprite;
   enemies!: Phaser.Physics.Arcade.Group;
   bolts!: Phaser.Physics.Arcade.Group;
+  shards!: Phaser.Physics.Arcade.Group; // Le Tir in flight: bodies on the floor, drawn by Fx.shard
 
   private room!: Room.Room;
   private hud!: Hud.Hud;
@@ -37,6 +38,8 @@ export class RoomScene extends Phaser.Scene {
   private slashUntil = 0;
   private lastSlashAt = -1e9;
   private combo = 0;
+  private shotReadyAt = 0;
+  private shotUntil = 0; // the throw: he moves at half speed, facing it
   private invulnUntil = 0;
   private hurtAt = -1e9;
   private dashRequested = false;
@@ -68,7 +71,7 @@ export class RoomScene extends Phaser.Scene {
     this.gifts = [...(data.gifts ?? [])];
     this.health = data.health ?? this.maxHealth();
     this.facing = Math.PI / 2; // start facing the camera
-    this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.invulnUntil = this.combo = 0;
+    this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.shotReadyAt = this.shotUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
     this.dead = false;
     this.dashRequested = false;
@@ -104,24 +107,27 @@ export class RoomScene extends Phaser.Scene {
     this.bolts = this.physics.add.group();
     // A bolt that lands is spent; one that misses (dash, invulnerability) flies on.
     this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
+    this.shards = this.physics.add.group();
+    this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
 
     this.hud = Hud.create(this);
     this.hud.health(this.health, this.maxHealth());
     this.hud.gifts(this.gifts.map((g) => GIFTS[g].slot));
 
-    this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,K,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
-    // Left click slashes, right click bites, both toward the pointer; J and K do the same toward where he faces.
-    // While the gift cards are open, a click picks one.
+    this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,K,F,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
+    // Left click slashes, right click shoots, both toward the pointer; J and K do the same toward where he faces. F bites,
+    // unaimed. While the gift cards are open, a click picks one.
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.cards) return this.pick(this.cards.at(p.worldX, p.worldY));
       const a = Math.atan2(p.worldY - this.hero.y, p.worldX - this.hero.x);
       if (p.button === 0) this.slash(a);
-      else if (p.button === 2) this.bite(a);
+      else if (p.button === 2) this.shoot(a);
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.worldX, p.worldY)));
     this.keys.J.on('down', () => this.slash(this.facing));
-    this.keys.K.on('down', () => this.bite(this.facing));
+    this.keys.K.on('down', () => this.shoot(this.facing));
+    this.keys.F.on('down', () => this.bite());
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
     for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashRequested = true));
     this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
@@ -148,6 +154,7 @@ export class RoomScene extends Phaser.Scene {
           for (const e of this.enemies.getChildren() as Sprite[]) this.kill(e);
           for (const l of [...this.lanterns]) this.hitLantern(l, 0, Infinity);
           this.bolts.clear(true, true);
+          this.shards.clear(true, true);
         },
         heal: () => {
           this.health = this.maxHealth();
@@ -176,7 +183,7 @@ export class RoomScene extends Phaser.Scene {
     const auto = this.phase === 'enter' || this.phase === 'leave';
     const x = auto ? 0 : Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
     const y = auto ? -1 : Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
-    if ((x || y) && time >= this.slashUntil && !this.prey) this.facing = Math.atan2(y, x);
+    if ((x || y) && time >= this.slashUntil && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
     const wantsDash = this.dashRequested && !auto;
     this.dashRequested = false;
@@ -204,11 +211,12 @@ export class RoomScene extends Phaser.Scene {
     }
     if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      this.hero.body!.velocity.normalize().scale(time < this.slashUntil ? T.hero.speed * 0.3 : T.hero.speed);
+      this.hero.body!.velocity.normalize().scale(T.hero.speed * (time < this.slashUntil ? 0.3 : time < this.shotUntil ? 0.5 : 1));
     }
 
     Hero.show(this.hero, {
-      moving: (x || y) !== 0, dashing: time < this.dashUntil, slashing: time < this.slashUntil, biting: !!this.prey || time - this.biteAt < 130,
+      moving: (x || y) !== 0, dashing: time < this.dashUntil, slashing: time < this.slashUntil, throwing: time < this.shotUntil,
+      biting: !!this.prey || time - this.biteAt < 130,
       hurt: time - this.hurtAt < 120, invulnerable: time < this.invulnUntil, facing: this.facing,
     });
     // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy;
@@ -266,6 +274,17 @@ export class RoomScene extends Phaser.Scene {
       b.setPosition(x0 + Math.cos(angle) * reach, y0 + Math.sin(angle) * reach - Crossbow.BOLT_HEIGHT);
       Crossbow.boltHit(this, b);
       Sfx.play(this, 'thunk');
+    }
+    // Shards too, unless an enemy stopped them first (shardHit); one thrown into a lantern hits it.
+    for (const b of [...this.shards.getChildren()] as Phaser.GameObjects.Zone[]) {
+      const { x0, y0, angle, reach } = b.data.values;
+      if (Phaser.Math.Distance.Between(x0, y0, b.x, b.y) < reach) continue;
+      b.destroy();
+      const x = x0 + Math.cos(angle) * reach, y = y0 + Math.sin(angle) * reach;
+      const l = this.lanterns.find((l) => l.lit && Phaser.Math.Distance.Between(l.x, l.y, x, y) < 8);
+      if (l) this.hitLantern(l, angle, T.shot.damage);
+      else Sfx.play(this, 'splat', 1);
+      Fx.splat(this, x, y, angle, false);
     }
   }
 
@@ -385,6 +404,39 @@ export class RoomScene extends Phaser.Scene {
     this.time.delayedCall(T.slash.hitStopMs, () => this.phase !== 'choose' && this.physics.resume());
   }
 
+  /** Le Tir: a shard of blood flicked toward `angle`, without limit. It flies until the first enemy it touches, or the
+   *  lantern, prop or wall it was thrown into. */
+  private shoot(angle: number) {
+    const now = this.time.now, S = T.shot;
+    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil) return;
+    this.shotReadyAt = now + S.cooldownMs;
+    this.shotUntil = now + S.throwMs;
+    this.facing = angle;
+    const from = this.hero.body!.center, reach = this.boltReach(from, angle);
+    // It leaves from the hand, flung out ahead of him.
+    const b = this.add.zone(from.x + Math.cos(angle) * 10, from.y + Math.sin(angle) * 10, 8, 8);
+    b.setData({ x0: from.x, y0: from.y, angle, reach });
+    this.shards.add(b);
+    this.physics.velocityFromRotation(angle, S.speed, (b.body as Phaser.Physics.Arcade.Body).velocity);
+    Fx.shard(this, b, angle, (reach / S.speed) * 1000);
+    Sfx.play(this, 'shoot');
+  }
+
+  /** A shard lands on an enemy: a light blow (flash, small knockback, the stun of a hit) without hit-stop. Not a claw:
+   *  no plague. */
+  private shardHit(b: Phaser.GameObjects.Zone, e: Sprite) {
+    if (!b.active || !e.body?.enable) return;
+    const { x, y } = b, angle = b.getData('angle');
+    b.destroy();
+    if (e !== this.prey) { // a prey stays held in the bite
+      e.setData({ state: 'chase', until: 0, stunnedUntil: this.time.now + T.enemy.stunMs });
+      this.physics.velocityFromRotation(angle, T.shot.knockback, e.body.velocity);
+    }
+    Fx.splat(this, x, y, angle, true);
+    Sfx.play(this, 'splat');
+    this.hurtEnemy(e, T.shot.damage);
+  }
+
   private hitEnemy(e: Sprite, angle: number, damage: number) {
     const now = this.time.now;
     // A hit interrupts whatever the enemy was doing, including a windup: aggression is rewarded.
@@ -418,21 +470,20 @@ export class RoomScene extends Phaser.Scene {
   }
 
   /**
-   * La Morsure. On a weakened human in reach ahead, the hero snaps to its side, latches on its throat and drains it:
-   * both are held, and he takes every blow meanwhile. Then it dies like any kill and he regains blood. With no prey,
-   * a teeth snap in place.
+   * La Morsure, unaimed. On the nearest weakened human in reach, the hero snaps to its side, latches on its throat and
+   * drains it: both are held, and he takes every blow meanwhile. Then it dies like any kill and he regains blood. With
+   * no prey, a teeth snap in place.
    */
-  private bite(angle: number) {
+  private bite() {
     const now = this.time.now, B = T.bite;
     if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil) return;
     const live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
-    const prey = biteTarget(this.hero, angle, live.map((e) => ({ x: e.x, y: e.y, hp: e.getData('hp'), human: !!e.getData('human'), e })),
+    const prey = biteTarget(this.hero, this.facing, live.map((e) => ({ x: e.x, y: e.y, hp: e.getData('hp'), human: !!e.getData('human'), e })),
       B.range, B.arcDeg, B.weakAt)?.e;
     this.biteAt = now;
-    this.facing = angle;
     if (!prey) {
       this.biteReadyAt = now + B.whiffCooldownMs;
-      Fx.snap(this, this.hero.x, this.hero.y, angle);
+      Fx.snap(this, this.hero.x, this.hero.y, this.facing);
       Sfx.play(this, 'snap');
       return;
     }
