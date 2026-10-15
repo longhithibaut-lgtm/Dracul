@@ -20,3 +20,15 @@ export function inArc(
 export function nextCombo(prev: number, msSinceLast: number, windowMs: number): number {
   return msSinceLast <= windowMs ? (prev + 1) % 3 : 0;
 }
+
+type P = { x: number; y: number };
+
+/**
+ * True when a dash at `at`, moving at `v` (px/s) for `left` more seconds, is within `contact` of `target` ahead of it
+ * and would still end that close: it should halt here. It passes through targets it would leave behind.
+ */
+export function dashStopsAt(at: P, v: P, left: number, target: P, contact: number): boolean {
+  const d2 = (x: number, y: number) => (target.x - x) ** 2 + (target.y - y) ** 2;
+  const ahead = v.x * (target.x - at.x) + v.y * (target.y - at.y) > 0;
+  return ahead && d2(at.x, at.y) <= contact ** 2 && d2(at.x + v.x * left, at.y + v.y * left) < contact ** 2;
+}
