@@ -82,5 +82,6 @@ export const T = {
     dashRecharge: 1.4, // Fuite du rat: the dash recharges this many times faster
     gnaw: 1, // Rongeur: extra damage of the combo's third blow
     blood: 1, // Survivant: extra max health, healed once when taken
+    bite: 1, // Morsure de rat: extra blood a bite gives back
   },
 } as const;

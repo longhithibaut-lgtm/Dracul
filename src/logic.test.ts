@@ -121,7 +121,7 @@ describe('gifts', () => {
     const d = drawGifts(GIFT_IDS, taken, 3, Math.random);
     expect(new Set(d).size).toBe(3);
     expect(d.some((g) => (taken as readonly string[]).includes(g))).toBe(false);
-    expect(drawGifts(GIFT_IDS, GIFT_IDS.slice(0, 4), 3, Math.random)).toEqual([GIFT_IDS[4]]);
+    expect(drawGifts(GIFT_IDS, GIFT_IDS.slice(0, -1), 3, Math.random)).toEqual(GIFT_IDS.slice(-1));
     expect(drawGifts(GIFT_IDS, GIFT_IDS, 3, Math.random)).toEqual([]);
   });
 

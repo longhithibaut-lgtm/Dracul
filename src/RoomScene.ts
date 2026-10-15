@@ -421,7 +421,7 @@ export class RoomScene extends Phaser.Scene {
         if (this.dead) return;
         this.prey = undefined;
         this.kill(prey);
-        this.health = Math.min(this.maxHealth(), this.health + B.heal);
+        this.health = Math.min(this.maxHealth(), this.health + B.heal + (this.gifts.includes('morsure') ? T.gifts.bite : 0));
         this.hud.health(this.health, this.maxHealth());
         Fx.heal(this, this.hero);
         Sfx.play(this, 'heal');
