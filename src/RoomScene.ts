@@ -6,6 +6,7 @@ import * as Enemy from './enemy.ts';
 import * as Room from './room.ts';
 import * as Fx from './fx.ts';
 import * as Hud from './hud.ts';
+import * as Sfx from './sfx.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 
@@ -65,6 +66,7 @@ export class RoomScene extends Phaser.Scene {
     this.keys.J.on('down', () => this.slash(this.facing));
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
     for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashRequested = true));
+    this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
 
     this.time.delayedCall(900, () => this.spawnWave());
   }
@@ -82,6 +84,7 @@ export class RoomScene extends Phaser.Scene {
       this.dashUntil = time + T.dash.durationMs;
       this.dashReadyAt = this.dashUntil + T.dash.cooldownMs;
       Fx.dash(this, this.hero, this.facing);
+      Sfx.play(this, 'dash');
       this.physics.velocityFromRotation(this.facing, T.dash.speed, this.hero.body!.velocity);
     } else if (time >= this.dashUntil) {
       this.hero.setVelocity(x, y);
@@ -112,6 +115,7 @@ export class RoomScene extends Phaser.Scene {
       case 'windup':
         this.physics.velocityFromRotation(e.getData('facing'), E.lungeSpeed, e.body!.velocity);
         e.setData({ state: 'lunge', until: time + E.lungeMs });
+        Sfx.play(this, 'lunge');
         break;
       case 'lunge':
         e.setVelocity(0).setData({ state: 'recover', until: time + E.recoverMs, restUntil: time + E.recoverMs + E.restMs });
@@ -124,6 +128,7 @@ export class RoomScene extends Phaser.Scene {
         const waiting = time < e.getData('restUntil') || pack.some((o) => o.getData('state') === 'windup' || o.getData('state') === 'lunge');
         if (!waiting && dist <= E.lungeRange) {
           e.setVelocity(0).setData({ state: 'windup', until: time + E.windupMs, facing: toHero });
+          Sfx.play(this, 'windup');
           break;
         }
         // A waiting enemy on the ring circles the hero, or backs off if too close.
@@ -153,6 +158,7 @@ export class RoomScene extends Phaser.Scene {
     this.slashUntil = now + T.slash.cooldownMs;
     this.facing = angle;
     Fx.slash(this, this.hero.x, this.hero.y, angle, this.combo);
+    Sfx.play(this, 'slash', this.combo);
 
     let hits = 0;
     for (const e of this.enemies.getChildren() as Sprite[]) {
@@ -174,9 +180,11 @@ export class RoomScene extends Phaser.Scene {
     const kb = this.combo === 2 ? T.slash.knockback * 1.6 : T.slash.knockback;
     this.physics.velocityFromRotation(angle, kb, e.body!.velocity);
     Fx.hit(this, e.x, e.y, angle);
+    Sfx.play(this, 'hit', this.combo);
     if (hp > 0) return;
     e.disableBody(false, false);
     Enemy.die(this, e);
+    Sfx.play(this, 'kill');
     if (!this.enemies.getChildren().some((o) => (o as Sprite).body?.enable)) this.time.delayedCall(1500, () => this.spawnWave());
   }
 
@@ -188,8 +196,10 @@ export class RoomScene extends Phaser.Scene {
     this.health -= T.enemy.damage;
     this.hud.health(this.health, T.hero.maxHealth);
     Fx.hurt(this);
+    Sfx.play(this, 'hurt');
     if (this.health > 0) return;
     this.dead = true;
+    Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
     this.time.delayedCall(1200, () => this.scene.restart());
   }
@@ -198,6 +208,7 @@ export class RoomScene extends Phaser.Scene {
     if (this.dead) return;
     for (const p of this.room.spawns) {
       Enemy.telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
+      Sfx.play(this, 'spawn');
       this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
         if (this.dead) return;
         const e = Enemy.create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);

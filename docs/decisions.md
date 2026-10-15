@@ -14,3 +14,4 @@ et la nouvelle dit ce qu'elle remplace.
 | 2026-10-15 | Le héros est le Sans-Maison | Choix de l'utilisateur ; justifie qu'il reçoive les Dons de toutes les maisons |
 | 2026-10-15 | La Maison du Rat aide le héros dès la première fuite ; les trois autres se débloquent en libérant leur chef | Choix de l'utilisateur ; on gagne les maisons une à une |
 | 2026-10-15 | Chefs de maison : Vesna la Grise (Rat), Séverin d'Ombrelune (Brume), Magda Croc-de-Fer (Loup), Lucian Noctule (Chauve-souris) | L'utilisateur a laissé Claude choisir ; provisoires |
+| 2026-10-15 | Sons de combat synthétisés en Web Audio (`src/sfx.ts`, aucun fichier audio), sur le contexte audio de Phaser ; touche M pour couper le son ; vérifiés par mesure (`tools/sfx.check.mjs`) | Pas de dépendance ni d'asset ; Phaser gère déjà le déverrouillage au premier geste et le mute |
