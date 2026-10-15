@@ -204,19 +204,26 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private hurt(e: Sprite) {
+    if (e.getData('state') === 'lunge') this.damageHero(T.enemy.damage);
+  }
+
+  /** Every source of harm to the hero goes through here (lunges, bolts, holy light): invulnerability, the mist dash,
+   *  HUD, feedback and death are handled once. Returns false when the hit didn't land. */
+  damageHero(amount: number): boolean {
     const now = this.time.now;
-    if (this.dead || e.getData('state') !== 'lunge' || now < this.invulnUntil || now < this.dashUntil) return;
+    if (this.dead || now < this.invulnUntil || now < this.dashUntil) return false;
     this.invulnUntil = now + T.hero.hurtInvulnMs;
     this.hurtAt = now;
-    this.health -= T.enemy.damage;
+    this.health -= amount;
     this.hud.health(this.health, T.hero.maxHealth);
     Fx.hurt(this);
     Sfx.play(this, 'hurt');
-    if (this.health > 0) return;
+    if (this.health > 0) return true;
     this.dead = true;
     Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
     this.time.delayedCall(1200, () => this.scene.restart());
+    return true;
   }
 
   private spawnWave() {
