@@ -2,15 +2,17 @@ import Phaser from 'phaser';
 import { T } from './tuning.ts';
 
 // Combat feedback: slashes, impacts, dash trail, being hurt. Gameplay only says what happened and where.
-// Everything is plotted as 1x1 rects on the native pixel grid and redrawn every frame, so shapes stay crisp at x4
-// at any angle: no rotated sprites, no smooth lines.
+// Everything sits on the native pixel grid: 1x1 rects redrawn every frame, or unrotated 1 px crops of the hero's
+// frame for the afterimages. Shapes stay crisp at x4 at any angle: no rotated sprites, no smooth lines.
 
-// Palette "Nuit de sang" (docs/art.md), plus HOT: the near-white pink of the brightest pixels of a blow.
-const HOT = 0xffe4ee, GLOW = 0xff4f8b, RED = 0xe0284a, BLOOD = 0xa3122f, DRIED = 0x5c0a1c;
+// Palette "Nuit de sang" (docs/art.md), plus DEEP: a deep magenta bridging the pink of a swing to its purple tail.
+const HOT = 0xffe4ee, GLOW = 0xff4f8b, DEEP = 0x8f195e, RED = 0xe0284a, BLOOD = 0xa3122f, DRIED = 0x5c0a1c;
+const DUSK = [0x5a4468, 0x3b2a4a]; // stone purples, dithered at the end of a swing
 const MIST = [0xe8dcc8, 0x8ff0dc, 0x3fa7a3, 0x1f4a5a]; // vampiric mist: pale, then cold moonlight fading out
 const ABOVE = 9_000; // over characters, whose depth is their y
 const FLOOR = 2; // on the ground, under characters
 const GRAVITY = 520; // px/s², blood droplets
+const SQUASH = 0.72; // the ground is seen at an angle: a swing around the body is a flattened ellipse on screen
 
 type G = Phaser.GameObjects.Graphics;
 type P = { x: number; y: number };
@@ -20,24 +22,27 @@ const px = (g: G, x: number, y: number, c: number, a = 1) => g.fillStyle(c, a).f
 // Stable per-pixel noise in [0, 1), for dissolves that do not flicker.
 const hash = (x: number, y: number) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 1009 / 1009;
 
-// The last swing: impacts land in the same tick as their slash, so they can match its weight and direction.
-let swing = { heavy: false, dir: 1 };
+// The last swing: impacts land in the same tick as their slash, so they can match its weight and direction, and
+// tell it that it landed.
+let swing = { heavy: false, dir: 1, landed: false };
 
 /** Clears and redraws a Graphics every frame with the elapsed ms, for `ms`, then destroys it. */
-function animate(scene: Phaser.Scene, depth: number, ms: number, draw: (g: G, t: number) => void) {
+function animate(scene: Phaser.Scene, depth: number, ms: number, draw: (g: G, t: number) => void): G {
   const g = scene.add.graphics().setDepth(depth);
   draw(g, 0);
   scene.tweens.addCounter({ from: 0, to: ms, duration: ms, onUpdate: (tw) => draw(g.clear(), tw.getValue() ?? 0), onComplete: () => g.destroy() });
+  return g;
 }
 
-/** 1px line from a to b (Bresenham), coloured from a (k=0) to b (k=1). */
+/** 1px line from a to b (Bresenham), coloured from a (k=0) to b (k=1); a negative colour leaves a gap. */
 function line(g: G, a: P, b: P, color: (k: number) => number) {
   let x = Math.round(a.x), y = Math.round(a.y);
   const x1 = Math.round(b.x), y1 = Math.round(b.y);
   const dx = Math.abs(x1 - x), dy = -Math.abs(y1 - y), sx = x < x1 ? 1 : -1, sy = y < y1 ? 1 : -1;
   const n = Math.max(dx, -dy);
   for (let i = 0, err = dx + dy; ; i++) {
-    px(g, x, y, color(n ? i / n : 0));
+    const c = color(n ? i / n : 0);
+    if (c >= 0) px(g, x, y, c);
     if (x === x1 && y === y1) return;
     const e2 = 2 * err;
     if (e2 >= dy) { err += dy; x += sx; }
@@ -54,6 +59,14 @@ function needle(g: G, cx: number, cy: number, a: number, len: number, w: number,
   }
 }
 
+/** Four-point star: a long arm along `a`, a short one across, white with a pink rim so it reads on dark and on white. */
+function star(g: G, x: number, y: number, a: number, long: number, short: number, w: number) {
+  needle(g, x, y, a, long + 1, w + 2, GLOW);
+  needle(g, x, y, a + Math.PI / 2, short + 1, w + 2, GLOW);
+  needle(g, x, y, a, long, w, HOT);
+  needle(g, x, y, a + Math.PI / 2, short, w, HOT);
+}
+
 /** Pixels inside an ellipse whose neighbour is outside: a clean 1px outline. */
 function ellipse(g: G, cx: number, cy: number, rx: number, ry: number, keep: (x: number, y: number) => boolean, color: number) {
   const inside = (x: number, y: number) => (x / rx) ** 2 + (y / ry) ** 2 <= 1;
@@ -63,49 +76,56 @@ function ellipse(g: G, cx: number, cy: number, rx: number, ry: number, keep: (x:
 }
 
 /**
- * A crescent swept around (ox, oy): `u` runs 0..1 along the swing, the blade is at `head`, everything before `tail`
- * is gone. Thickest mid-swing and right behind the blade, pointed at both ends; brightest at the blade's edge.
+ * A swing smear around (ox, oy), on the ground plane seen squashed. `u` runs 0..1 along the swing, from `a0` to `a1`
+ * radians past the aim (in the swing's direction); the blade is at `head`, nothing is left before `tail`. Thick and
+ * white at the blade, it tapers through pink and deep magenta to a 1 px dithered purple tail, so the direction of
+ * travel reads in a single frame. Pixels on the far side of the body go to `back`, drawn behind the hero.
  */
-function crescent(g: G, ox: number, oy: number, angle: number, dir: number, half: number, R: number, W: number, head: number, tail: number, cool: number) {
-  const r = Math.ceil(R) + 1;
+function crescent(front: G, back: G, ox: number, oy: number, aim: number, dir: number, a0: number, a1: number, R: number, W: number, head: number, tail: number) {
+  if (head <= tail) return;
+  const r = Math.ceil(R) + 1, len = (a1 - a0) * R; // arc length in px
   for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-    const cx = dx + 0.5, cy = dy + 0.5; // pixel centres, so the shape is symmetric about the swing axis
-    const u = (dir * Phaser.Math.Angle.Wrap(Math.atan2(cy, cx) - angle) + half) / (2 * half);
+    const gx = dx + 0.5, gy = (dy + 0.5) / SQUASH; // pixel centre, back on the ground plane
+    const u = (dir * Phaser.Math.Angle.Wrap(Math.atan2(gy, gx) - aim) - a0) / (a1 - a0);
     if (u < tail || u > head) continue;
-    const age = head - u + cool; // 0 at the blade, grows along the trail and as the swing cools
-    const w = W * Math.sin(Math.PI * u) ** 0.5 * Math.max(0, 1 - 0.45 * age);
-    const v = R - Math.hypot(cx, cy); // depth below the outer edge
+    const q = (head - u) / (head - tail); // 0 at the blade, 1 at the end of the tail
+    const w = (1 + (W - 1) * (1 - q) ** 0.8) * Math.min(1, ((head - u) * len) / 3) ** 0.5; // pointed front, 1 px tail
+    const v = R - Math.hypot(gx, gy); // depth below the outer edge
     if (v < 0 || v > w) continue;
-    // Three flat tones: hot edge, pink body, darker inner rim; all cooling toward blood red along the trail.
-    const tone = v < 1.2 ? (age < 0.15 ? 0 : age < 0.6 ? 1 : age < 0.95 ? 2 : 3) : v < w - 1.5 ? (age < 0.55 ? 1 : age < 0.9 ? 2 : 3) : age < 0.3 ? 2 : 3;
-    px(g, ox + dx, oy + dy, [HOT, GLOW, RED, BLOOD][tone]);
+    const odd = (ox + dx + oy + dy) & 1;
+    const c = (v < 1.3 && q < 0.5) || q < 0.14 ? HOT : q < 0.46 ? GLOW : q < 0.7 ? DEEP : q < 0.85 ? DUSK[odd] : odd ? -1 : DUSK[1];
+    if (c >= 0) px(gy < 0 ? back : front, ox + dx, oy + dy, c);
   }
 }
 
 export function slash(scene: Phaser.Scene, x: number, y: number, angle: number, combo: number) {
   const heavy = combo === 2;
   const dir = combo === 1 ? -1 : 1; // swipe, back-swipe, then a wider, heavier finisher
-  swing = { heavy, dir };
-  const R = heavy ? 32 : 27, W = heavy ? 13 : 9, half = Phaser.Math.DegToRad(heavy ? 88 : 68);
-  const swingMs = heavy ? 75 : 50, hold = 25, life = heavy ? 240 : 170;
-  const ox = Math.round(x), oy = Math.round(y);
+  swing = { heavy, dir, landed: false };
+  const sw = swing;
+  // The swing starts behind the body and follows through a little past the aim, so it wraps around the hero.
+  const R = heavy ? 31 : 27, W = heavy ? 13 : 10, a0 = Phaser.Math.DegToRad(heavy ? -165 : -125), a1 = Phaser.Math.DegToRad(heavy ? 45 : 30);
+  const swingMs = heavy ? 80 : 60, hold = 20, life = heavy ? 250 : 190;
+  const ox = Math.round(x), oy = Math.round(y) + 1;
+  const aim = Math.atan2(Math.sin(angle) / SQUASH, Math.cos(angle)); // the aim, on the ground plane
+  const back = scene.add.graphics().setDepth(y - 0.5);
   animate(scene, ABOVE, life, (g, t) => {
-    const head = Math.min(1, 0.35 + 0.65 * ease(Math.min(1, t / swingMs)));
+    back.clear();
+    const head = Math.min(1, 0.55 + 0.45 * ease(Math.min(1, t / swingMs))); // already a wide smear on its first frame
     const fade = Math.max(0, (t - swingMs - hold) / (life - swingMs - hold)); // 0 during the swing and a short hold, then 0..1
-    crescent(g, ox, oy, angle, dir, half, R + 2 * fade, W * (1 - fade * fade), head, fade ** 0.8, fade * 0.7);
-    if (heavy) crescent(g, ox, oy, angle, dir, half * 0.85, R - 11, 4 * (1 - fade), head - 0.12, fade, 0.3 + fade);
-    if (t < swingMs + 25) {
-      // Glint on the blade's tip while it travels.
-      const a = angle + dir * (head * 2 - 1) * half, gx = ox + Math.cos(a) * (R - 1), gy = oy + Math.sin(a) * (R - 1);
-      const arm = t < swingMs ? 2 : 1;
-      needle(g, gx, gy, 0, arm + 0.5, 1, HOT);
-      needle(g, gx, gy, Math.PI / 2, arm + 0.5, 1, HOT);
-    }
-  });
+    // Follow-through: once the blade stops, the tail catches up with it while the smear thins.
+    crescent(g, back, ox, oy, aim, dir, a0, a1, R + 2 * fade, W * (1 - fade * fade), head, Math.min(head - 0.02, fade ** 0.7));
+    if (heavy) crescent(g, back, ox, oy, aim, dir, a0 + 0.5, a1, R - 10, 4 * (1 - fade), head - 0.1, fade);
+    // The blade's tip glints while it travels, and flashes where the swing ends unless an impact already does.
+    const a = aim + dir * (a0 + head * (a1 - a0)), tx = ox + Math.cos(a) * (R - 1), ty = oy + Math.sin(a) * (R - 1) * SQUASH;
+    if (t < swingMs) star(g, tx, ty, 0, 2, 2, 1);
+    else if (t < swingMs + 50 && !sw.landed) star(g, tx, ty, 0, 5 - (t - swingMs) / 15, 4 - (t - swingMs) / 15, 2);
+  }).once('destroy', () => back.destroy());
 }
 
 export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
   const { heavy, dir } = swing;
+  swing.landed = true;
   const cos = Math.cos(angle), sin = Math.sin(angle);
   // Small, sharp shake, mostly along the blow.
   const cam = scene.cameras.main, kick = heavy ? 3 : 2;
@@ -138,16 +158,10 @@ export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
   }
 
   animate(scene, ABOVE, 420, (g, t) => {
-    // Flash: a cut across the blow (a cross for the finisher), white with a pink rim so it reads both over the dark
-    // floor and over a body flashing white. Longer than a body is wide, so its tips always show.
+    // Impact star: three frames at full size, then it shrinks away.
     if (t < 110) {
-      const k = t / 110, long = (heavy ? 18 : 15) * (1 - k * k), short = 8 * (1 - k), w = heavy ? 4 : 3, cut = angle + dir * 1.2;
-      needle(g, ix, iy, cut, long + 1, w + 2, GLOW);
-      if (heavy) needle(g, ix, iy, cut + Math.PI / 2, short + 1, w + 2, GLOW);
-      if (t < 70) {
-        needle(g, ix, iy, cut, long, w, HOT);
-        if (heavy) needle(g, ix, iy, cut + Math.PI / 2, short, w, HOT);
-      }
+      const k = Math.max(0, (t - 50) / 60);
+      star(g, ix, iy, angle + Math.PI / 2, (heavy ? 9 : 7) * (1 - k), (heavy ? 7 : 5) * (1 - k), heavy ? 3 : 2);
     }
     // The finisher also sends a ring out, breaking up as it widens.
     if (heavy && t < 160) {
@@ -178,76 +192,69 @@ export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
   });
 }
 
-// Opaque pixels of a texture frame as [x, y, lit] (lit: nothing above it), read once per frame and cached: the
-// afterimages are redrawn from them.
-type Px = [number, number, boolean];
-const shapes = new Map<string, Px[]>();
-function silhouette(s: Phaser.GameObjects.Sprite): Px[] {
-  const f = s.frame, key = `${s.texture.key}#${f.name}`, w = f.cutWidth, h = f.cutHeight;
-  let pts = shapes.get(key);
-  if (pts) return pts;
-  pts = [];
-  const img = f.source.image;
-  if (img instanceof HTMLImageElement || img instanceof HTMLCanvasElement) {
-    const ctx = Object.assign(document.createElement('canvas'), { width: w, height: h }).getContext('2d')!;
-    ctx.drawImage(img, f.cutX, f.cutY, w, h, 0, 0, w, h);
-    const a = ctx.getImageData(0, 0, w, h).data, solid = (x: number, y: number) => y >= 0 && a[(y * w + x) * 4 + 3] > 127;
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (solid(x, y)) pts.push([x, y, !solid(x, y - 1)]);
-  }
-  shapes.set(key, pts);
-  return pts;
-}
-
 export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle: number) {
   // Gameplay passes the hero itself, so the trail can follow it for the whole dash.
   const hero = from as Partial<Phaser.GameObjects.Sprite> & P;
   const sprite = hero.frame ? (hero as Phaser.GameObjects.Sprite) : undefined;
-  const feet = (hero.displayHeight ?? 16) / 2 - 1, back = angle + Math.PI;
-  const ghosts: { t: number; x: number; y: number; h: number; pts: Px[] }[] = [];
+  const feet = (hero.displayHeight ?? 16) / 2 - 1, back = angle + Math.PI, D = T.dash.durationMs;
+  const GHOST_MS = 420, STREAK_MS = 340, RING_MS = 460, EVERY = 60, life = D + 520;
+  type Strip = Phaser.GameObjects.Image;
+  const ghosts: { t: number; y: number; h: number; strips: Strip[] }[] = [];
   const wisps: { t: number; x: number; y: number; vx: number; vy: number; life: number; phase: number }[] = [];
   const rings: { t: number; x: number; y: number; big: boolean }[] = [];
-  const GHOST_MS = 260, EVERY = 40, life = T.dash.durationMs + 500;
+  const path: { t: number; x: number; y: number }[] = [];
+  const ringAt = [0, D / 2, D];
 
   const sample = (t: number) => {
     if (sprite) {
-      const tl = sprite.getTopLeft(), pts = silhouette(sprite), w = sprite.frame.cutWidth;
-      ghosts.push({ t, x: Math.round(tl.x), y: Math.round(tl.y), h: sprite.frame.cutHeight, pts: sprite.flipX ? pts.map(([x, y, l]) => [w - 1 - x, y, l]) : pts });
+      // An afterimage: the hero's current frame cut into 1 px columns, so each column can fray and drift on its own
+      // (cropped copies of the texture: no pixel read-back from the GPU).
+      const f = sprite.frame, tl = sprite.getTopLeft(), w = f.cutWidth, x0 = Math.round(tl.x), y0 = Math.round(tl.y);
+      const strips = Array.from({ length: w }, (_, x) => scene.add.image(x0 + (sprite.flipX ? w - 1 - 2 * x : 0), y0, sprite.texture, f.name)
+        .setOrigin(0).setCrop(x, 0, 1, f.cutHeight).setTint(MIST[0]).setTintMode(Phaser.TintModes.FILL));
+      ghosts.push({ t, y: y0, h: f.cutHeight, strips });
     }
     for (let i = 0; i < 2; i++) {
       const sp = rnd(8, 22), a = back + rnd(-0.7, 0.7);
       wisps.push({ t, x: hero.x + rnd(-4, 4), y: hero.y + rnd(-7, 5), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rnd(14, 28), life: rnd(280, 440), phase: rnd(0, 6) });
     }
   };
-  rings.push({ t: 0, x: Math.round(hero.x), y: Math.round(hero.y + feet), big: true });
   sample(0);
   let next = EVERY;
 
   animate(scene, FLOOR, life, (floor, t) => {
+    // Mist rings on the ground where the dash leaves, crosses and lands; whole at first, breaking into arcs later.
+    while (ringAt.length && t >= ringAt[0]) rings.push({ t: ringAt.shift()!, x: Math.round(hero.x), y: Math.round(hero.y + feet), big: !rings.length });
     for (const r of rings) {
-      const k = (t - r.t) / 280;
+      const k = (t - r.t) / RING_MS;
       if (k < 0 || k >= 1) continue;
-      const rx = (r.big ? 5 : 3) + (r.big ? 9 : 5) * ease(k);
-      // Breaks into arcs as it spreads.
-      ellipse(floor, r.x, r.y, rx, rx * 0.4, (x, y) => hash(Math.floor((Math.atan2(y * 2.5, x) + 4) * 2), r.t) > k * 1.1 - 0.1, k < 0.25 ? MIST[0] : k < 0.6 ? MIST[1] : MIST[2]);
+      const rx = (r.big ? 6 : 4) + (r.big ? 8 : 5) * ease(k);
+      ellipse(floor, r.x, r.y, rx, rx * 0.4, (x, y) => hash(Math.floor((Math.atan2(y * 2.5, x) + 4) * 2), r.t) > (k - 0.45) * 2, k < 0.2 ? MIST[0] : k < 0.6 ? MIST[1] : MIST[2]);
     }
   });
   animate(scene, ABOVE, life, (g, t) => {
-    if (t >= next && t <= T.dash.durationMs) {
+    if (t <= D + 20) path.push({ t, x: hero.x, y: hero.y });
+    if (t >= next && t <= D) {
       sample(t);
       next += EVERY;
-      if (next > T.dash.durationMs) rings.push({ t, x: Math.round(hero.x), y: Math.round(hero.y + feet), big: false });
     }
     g.setDepth(hero.y - 1); // just behind the hero, wherever it went
+    // A speed streak along the path at chest height: pale near the hero, broken up toward the tail, which retracts.
+    const live = path.filter((p) => t - p.t < STREAK_MS);
+    if (live.length > 1) {
+      const a = live[0], b = live[live.length - 1];
+      line(g, { x: a.x, y: a.y - 2 }, { x: b.x, y: b.y - 2 }, (j) => (j < 0.35 && Math.floor(j * 40) % 2 ? -1 : MIST[j > 0.8 ? 0 : j > 0.45 ? 1 : 2]));
+    }
     for (const gh of ghosts) {
       const k = (t - gh.t) / GHOST_MS;
-      if (k < 0 || k >= 1) continue;
-      const tone = k < 0.12 ? 0 : k < 0.4 ? 1 : k < 0.7 ? 2 : 3;
-      for (const [x, y, lit] of gh.pts) {
+      if (k >= 1) gh.strips.forEach((s) => s.destroy());
+      if (k >= 1 || !gh.strips[0]?.active) continue;
+      const tone = MIST[k < 0.1 ? 0 : k < 0.35 ? 1 : k < 0.65 ? 2 : 3];
+      gh.strips.forEach((s, x) => {
         // Turns to mist from the feet up along a ragged edge, each column drifting up at its own pace.
-        const n = hash(x, gh.t + 1);
-        if (y / gh.h > 1.15 - 1.4 * k + 0.5 * (n - 0.5) * k) continue;
-        px(g, gh.x + x, gh.y + y - Math.floor(k * (2 + 7 * n)), MIST[lit ? Math.max(0, tone - 1) : tone]); // lit from above
-      }
+        const n = hash(x, gh.t + 1), keep = Math.round(gh.h * Phaser.Math.Clamp(1.15 - 1.4 * k + 0.5 * (n - 0.5) * k, 0, 1));
+        s.setCrop(x, 0, 1, keep).setVisible(keep > 0).setY(gh.y - Math.floor(k * (2 + 7 * n))).setTint(tone).setDepth(hero.y - 1);
+      });
     }
     for (const w of wisps) {
       const k = (t - w.t) / w.life;
@@ -260,7 +267,7 @@ export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle:
       const age = t - w.t;
       line(g, at(age - 60 * (1 - k)), at(age), (j) => MIST[j > 0.6 ? (k < 0.5 ? 1 : 2) : k < 0.5 ? 2 : 3]);
     }
-  });
+  }).once('destroy', () => ghosts.forEach((gh) => gh.strips.forEach((s) => s.destroy())));
 }
 
 export function hurt(scene: Phaser.Scene) {
