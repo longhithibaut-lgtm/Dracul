@@ -483,7 +483,7 @@ const IDLE_BOB = [0, 0, 1, 1];
 const RUN_BOB = [0, 1, 0, 0, 1, 0];
 
 // Dash frames are run poses dissolved into mist by this amount (0 = intact, 1 = all mist).
-const MIST = [0.35, 0.8];
+export const MIST = [0.35, 0.8];
 
 function frames(): Record<string, Layer[]> {
   const f: Record<string, Layer[]> = { shadow: [[9, 24, SHADOW]] };
@@ -522,25 +522,27 @@ function frames(): Record<string, Layer[]> {
 const noise = (x: number, y: number) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 997 / 997;
 
 // Turns part of one frame into a two-tone mist silhouette that streams behind the motion (tx, ty).
-// More of the body goes to mist at the feet and at the trailing side; the eyes stay lit.
-function dissolve(ctx: CanvasRenderingContext2D, fx: number, amount: number, tx: number, ty: number) {
-  const img = ctx.getImageData(fx, 0, FW, FW), p = img.data;
+// More of the body goes to mist at the feet and at the trailing side; the eyes stay lit. Frames FW wide and `fh` tall
+// whose figure stands `oy` rows lower than this hero's (the wanderer's 32x40 frames) work too.
+export function dissolve(ctx: CanvasRenderingContext2D, fx: number, amount: number, tx: number, ty: number, fh = FW, oy = 0) {
+  const img = ctx.getImageData(fx, 0, FW, fh), p = img.data;
   const at = (x: number, y: number) => (y * FW + x) * 4;
   const light = [0x8f, 0xf0, 0xdc], dark = [0x3f, 0xa7, 0xa3], far = [0x1f, 0x4a, 0x5a]; // fx.ts moon mist
-  for (let y = 0; y < FW; y++) for (let x = 0; x < FW; x++) {
-    const i = at(x, y);
-    if (!p[i + 3] || (ty <= 0 && p[i] === 0xe0 && p[i + 1] === 0x28 && y < 13 && x > 12)) continue;
+  for (let y = 0; y < fh; y++) for (let x = 0; x < FW; x++) {
+    const i = at(x, y), yy = y - oy;
+    if (!p[i + 3] || (ty <= 0 && p[i] === 0xe0 && p[i + 1] === 0x28 && yy < 13 && x > 12)) continue;
     // 2x2 clumps share their noise, so the edge of the mist is ragged without single-pixel static.
-    const a = amount + (y - 16) / 24 + (tx * (x - 16) + ty * (y - 16)) / 30 + (noise(x >> 1, y >> 1) - 0.5) * 0.5;
+    const a = amount + (yy - 16) / 24 + (tx * (x - 16) + ty * (yy - 16)) / 30 + (noise(x >> 1, y >> 1) - 0.5) * 0.5;
     if (a > 0.5) p.set([...(p[i] + p[i + 1] + p[i + 2] > 300 ? light : dark), 230], i);
   }
   // Streaks: most lines along the motion trail a wisp off the body's back edge.
-  for (let l = 0; l < FW; l++) {
+  const lines = tx ? fh : FW, along = tx ? FW : fh;
+  for (let l = 0; l < lines; l++) {
     if (noise(l, 3) < 0.4) continue;
-    const pos = (k: number) => ((v) => (tx ? at(v, l) : at(l, v)))((tx || ty) < 0 ? k : FW - 1 - k);
+    const pos = (k: number) => ((v) => (tx ? at(v, l) : at(l, v)))((tx || ty) < 0 ? k : along - 1 - k);
     let k = 0;
-    while (k < FW && !p[pos(k) + 3]) k++;
-    if (k === FW || (p[pos(k)] !== light[0] && p[pos(k)] !== dark[0])) continue;
+    while (k < along && !p[pos(k) + 3]) k++;
+    if (k === along || (p[pos(k)] !== light[0] && p[pos(k)] !== dark[0])) continue;
     const len = Math.min(k, Math.floor(amount * (3 + noise(l, 9) * 9)));
     for (let j = 1; j <= len; j++) p.set([...(j < 3 ? dark : far), 200 - j * 15], pos(k - j));
   }
@@ -585,6 +587,14 @@ function bake(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+// How many run frames a view has in a hero sheet (this one or the wanderer's), counted once.
+const runCounts = new Map<string, number>();
+function runs(tex: Phaser.Textures.Texture, view: string) {
+  const key = `${tex.key}/${view}`;
+  if (!runCounts.has(key)) runCounts.set(key, tex.getFrameNames().filter((n) => n.startsWith(`${view}-run`)).length);
+  return runCounts.get(key)!;
+}
+
 // Per-hero animation memory: show() only gets the current look, so edges (slash start, dash end...) are kept here.
 type State = { shadow: Phaser.GameObjects.Image; was: HeroLook; swing: number; slashAt: number; hurtAt: number; dashAt: number; dashEnd: number };
 const states = new WeakMap<Phaser.Physics.Arcade.Sprite, State>();
@@ -622,7 +632,7 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${st.swing}`;
   else if (look.throwing) frame = `throw${st.swing}`;
   else if (now - st.dashEnd < 70) frame = 'dash0';
-  else if (look.moving) { const n = VIEWS[view].run.length; frame = `run${Math.floor(now / (540 / n)) % n}`; } // one stride pair per 540ms in every view
+  else if (look.moving) { const n = runs(s.texture, view); frame = `run${Math.floor(now / (540 / n)) % n}`; } // one stride pair per 540ms in every view
   s.setFrame(`${view}-${frame}`).setFlipX(view === 'side' && c < 0);
 
   if (look.hurt) s.setTint(now - st.hurtAt < 60 ? 0xffffff : 0xe0284a).setTintMode(Phaser.TintModes.FILL);

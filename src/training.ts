@@ -5,7 +5,7 @@ import { GIFTS, GIFT_IDS, KINDS, kind, type GiftId } from './gifts.ts';
 
 export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern';
 /** Survive the scene restarts (a death in training starts the training room again). */
-export const opts = { god: true, passive: false };
+export const opts = { god: true, passive: false, wanderer: false }; // wanderer: the new hero, see wanderer.ts
 
 const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne']];
 // [label, group, key, min, max, step]
@@ -53,7 +53,7 @@ const CSS = `
   font:11px/1.3 ui-monospace,monospace;resize:vertical}`;
 
 /** Opens the panel; returns what closes it. */
-export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean): void }) {
+export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean): void; restart(): void }) {
   // Every gift can be ticked, several in one slot too: the one-per-slot rule is the run's, not the training room's.
   const gifts = (slotted: boolean) => GIFT_IDS.filter((id) => !!GIFTS[id].slot === slotted).map((id) =>
     `<label><input type="checkbox" data-gift="${id}"${api.gifts.includes(id) ? ' checked' : ''}> ${GIFTS[id].name}${slotted ? ` <small>· ${KINDS[kind(id)]}</small>` : ''}</label>`).join('');
@@ -65,6 +65,7 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
     <label><input type="checkbox" data-opt="passive"> Ennemis passifs (mannequins)</label>
     <h3>Héros</h3>
     <label><input type="checkbox" data-opt="god"> Invincible</label>
+    <label><input type="checkbox" data-opt="wanderer"> Nouveau héros (l'errant, en cours)</label>
     <div class="row"><button type="button" data-act="heal">Soigner</button></div>
     <h3>Dons du Rat : emplacements</h3>${gifts(true)}
     <h3>Dons du Rat : talents</h3>${gifts(false)}
@@ -94,6 +95,7 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
   root.addEventListener('change', (ev) => {
     const i = ev.target as HTMLInputElement;
     if (i.dataset.opt) opts[i.dataset.opt as keyof typeof opts] = i.checked;
+    if (i.dataset.opt === 'wanderer') api.restart(); // a new sprite: the room starts again around him
     if (i.dataset.gift) api.toggle(i.dataset.gift as GiftId, i.checked);
     release();
   });

@@ -12,6 +12,7 @@ import * as Lantern from './lantern.ts';
 import * as Glyph from './glyph.ts';
 import * as Rats from './rats.ts';
 import * as Training from './training.ts';
+import * as Wanderer from './wanderer.ts';
 import { GIFTS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -107,7 +108,7 @@ export class RoomScene extends Phaser.Scene {
     this.physics.world.setBounds(b.x, b.y, b.width, b.height);
 
     const start = this.phase === 'enter' ? this.room.stairs : this.room.heroStart;
-    this.hero = Hero.create(this, start.x, start.y);
+    this.hero = (Training.opts.wanderer ? Wanderer : Hero).create(this, start.x, start.y);
     this.hero.setCollideWorldBounds(this.phase !== 'enter');
     this.enemies = this.physics.add.group();
     this.physics.add.collider(this.hero, this.room.obstacles);
@@ -175,6 +176,7 @@ export class RoomScene extends Phaser.Scene {
           this.bolts.clear(true, true);
           this.shards.clear(true, true);
         },
+        restart: () => this.scene.restart({ training: true, gifts: this.gifts } satisfies Run),
         heal: () => {
           this.health = this.maxHealth();
           this.hud.health(this.health, this.health);
