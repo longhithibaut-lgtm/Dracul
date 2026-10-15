@@ -1,7 +1,8 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
 // Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
-// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, and hud.png (taken at 3/5 health, dash spent).
+// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (taken at 3/5 health, dash spent)
+// and crossbow.png (a crossbowman aiming).
 // Exit code 1 if the page logged an error.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -123,8 +124,24 @@ if (captured) {
   await freeze(false);
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; state: ${JSON.stringify(await state())}`);
+// A crossbowman of the Order mid-aim, its dotted aim line out but not yet locked. They join from the second wave, so
+// that wave is called now, with the hero kept alive for it.
+let bow = null;
+{
+  await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.invulnUntil = Infinity; s.wave = Math.max(s.wave, 1); s.spawnWave(); });
+  await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.enemies.getChildren()
+    .some((e) => e.body?.enable && e.getData('kind') === 'crossbow' && e.getData('state') === 'aim' && e.getData('fireAt') - s.time.now < 400); }, null, { timeout: 15000 }).catch(() => {});
+  await freeze(true);
+  bow = await page.evaluate(() => {
+    const e = window.game.scene.getScene('room').enemies.getChildren().find((o) => o.body?.enable && o.getData('state') === 'aim');
+    return e ? { x: e.x, y: e.y } : null;
+  });
+  if (bow) await shot('crossbow', clip(bow.x, bow.y - 4, 240, 200));
+  await freeze(false);
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}, crossbow: ${bow ? 'yes' : 'NO'}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured ? 1 : 0);
+process.exit(errors.length || !captured || !bow ? 1 : 0);

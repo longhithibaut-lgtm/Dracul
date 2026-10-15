@@ -24,4 +24,19 @@ export const T = {
     restMs: 700, // then it backs off to the ring before it may attack again
     damage: 1,
   },
+
+  // The Order's crossbowman: keeps its distance and shoots dodgeable bolts; frail once the hero is on it.
+  crossbow: {
+    hp: 2,
+    speed: 38,
+    near: 110, far: 140, // keeps the hero between these distances: backs off, strafes, closes in
+    minShot: 56, maxShot: 200, // aims only at the hero between these distances, with a clear line
+    aimMs: 650, // telegraph: raise, aim line, creak
+    lockMs: 200, // the last part of the aim stops tracking the hero, so a sidestep dodges the bolt
+    recoilMs: 300,
+    reloadMs: 1700, // from one shot to the next aim
+    firstShotMs: 1200, // after it appears
+    boltSpeed: 260,
+    damage: 1,
+  },
 } as const;
