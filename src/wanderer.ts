@@ -76,6 +76,8 @@ function scarf(scene: Phaser.Scene, s: Phaser.Physics.Arcade.Sprite) {
       const a = pts[i - 1], b = pts[i], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1e-6;
       b.x -= (dx * (d - LINK)) / d;
       b.y -= (dy * (d - LINK)) / d;
+      // Up the screen is away into the room: running at the camera, the tail trails behind his back, not over his head.
+      b.y = Math.max(b.y, ay - 3);
     }
     // A 3 px ribbon shaded across its width (light, mid, dark as on the sheet), the mid line drawn last so it wins.
     const px = new Map<string, number>();
