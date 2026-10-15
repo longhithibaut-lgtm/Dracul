@@ -208,10 +208,11 @@ export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle:
   const sample = (t: number) => {
     if (sprite) {
       // An afterimage: the hero's current frame cut into 1 px columns, so each column can fray and drift on its own
-      // (cropped copies of the texture: no pixel read-back from the GPU).
-      const f = sprite.frame, tl = sprite.getTopLeft(), w = f.cutWidth, x0 = Math.round(tl.x), y0 = Math.round(tl.y);
-      const strips = Array.from({ length: w }, (_, x) => scene.add.image(x0 + (sprite.flipX ? w - 1 - 2 * x : 0), y0, sprite.texture, f.name)
-        .setOrigin(0).setCrop(x, 0, 1, f.cutHeight).setTint(MIST[0]).setTintMode(Phaser.TintModes.FILL));
+      // (cropped copies of the texture: no pixel read-back from the GPU). Mid-dash the hero is a mist frame whose
+      // streaks would fill into a solid block, so the ghost takes the intact run pose, translucent, behind the action.
+      const f = sprite.frame, name = f.name.replace(/dash\d$/, 'run1'), tl = sprite.getTopLeft(), w = f.cutWidth, x0 = Math.round(tl.x), y0 = Math.round(tl.y);
+      const strips = Array.from({ length: w }, (_, x) => scene.add.image(x0 + (sprite.flipX ? w - 1 - 2 * x : 0), y0, sprite.texture, name)
+        .setOrigin(0).setCrop(x, 0, 1, f.cutHeight).setTint(MIST[0]).setTintMode(Phaser.TintModes.FILL).setAlpha(0.55));
       ghosts.push({ t, y: y0, h: f.cutHeight, strips });
     }
     for (let i = 0; i < 2; i++) {

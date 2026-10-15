@@ -460,7 +460,7 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   const c = Math.cos(look.facing);
   const view = Math.abs(c) > 0.38 ? 'side' : Math.sin(look.facing) > 0 ? 'down' : 'up'; // diagonals use the side view
   let frame = `${now % 3600 < 140 ? 'blink' : 'idle'}${Math.floor(now / 260) % 4}`;
-  // The body turns to mist during the dash and re-forms just after; fx.ts draws the trail from these frames.
+  // The body turns to mist during the dash and re-forms just after (fx.ts ghosts the intact run pose instead).
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${st.swing}`;
   else if (now - st.dashEnd < 70) frame = 'dash0';

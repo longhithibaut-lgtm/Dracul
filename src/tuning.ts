@@ -11,14 +11,17 @@ export const T = {
   enemy: {
     hp: 3,
     speed: 42,
+    spacing: 56, // packmates closer than this push apart, so a wave surrounds the hero instead of stacking
     stunMs: 200,
     spawnTelegraphMs: 700,
     // Attack: stop and telegraph (windup), then lunge. Only the lunge hurts, so it can be dodged.
     lungeRange: 38,
+    holdRange: 58, // enemies waiting their turn to attack circle the hero at about this distance
     windupMs: 450,
     lungeSpeed: 210,
     lungeMs: 200,
     recoverMs: 500,
+    restMs: 700, // then it backs off to the ring before it may attack again
     damage: 1,
   },
 } as const;

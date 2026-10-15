@@ -92,7 +92,8 @@ export class RoomScene extends Phaser.Scene {
       moving: (x || y) !== 0, dashing: time < this.dashUntil, slashing: time < this.slashUntil,
       hurt: time - this.hurtAt < 120, invulnerable: time < this.invulnUntil, facing: this.facing,
     });
-    this.hero.setDepth(this.hero.y);
+    // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy.
+    this.hero.setDepth(this.hero.y + (time < this.slashUntil ? 12 : 0));
     this.hud.dashReady(time >= this.dashReadyAt);
 
     for (const e of this.enemies.getChildren() as Sprite[]) {
@@ -113,15 +114,33 @@ export class RoomScene extends Phaser.Scene {
         e.setData({ state: 'lunge', until: time + E.lungeMs });
         break;
       case 'lunge':
-        e.setVelocity(0).setData({ state: 'recover', until: time + E.recoverMs });
+        e.setVelocity(0).setData({ state: 'recover', until: time + E.recoverMs, restUntil: time + E.recoverMs + E.restMs });
         break;
-      default: // chase, or recovery finished
-        if (Phaser.Math.Distance.BetweenPoints(e, this.hero) > E.lungeRange) {
-          this.physics.moveToObject(e, this.hero, E.speed);
-          e.setData({ state: 'chase', facing: toHero });
-        } else {
+      default: { // chase, or recovery finished
+        const pack = (this.enemies.getChildren() as Sprite[]).filter((o) => o !== e && o.body?.enable);
+        const dist = Phaser.Math.Distance.BetweenPoints(e, this.hero);
+        // One attacker at a time, and never twice in a row: the others wait their turn on a ring around the hero
+        // instead of piling onto him.
+        const waiting = time < e.getData('restUntil') || pack.some((o) => o.getData('state') === 'windup' || o.getData('state') === 'lunge');
+        if (!waiting && dist <= E.lungeRange) {
           e.setVelocity(0).setData({ state: 'windup', until: time + E.windupMs, facing: toHero });
+          break;
         }
+        // A waiting enemy on the ring circles the hero, or backs off if too close.
+        const turn = !waiting || dist > E.holdRange ? 0 : (dist < E.holdRange - 12 ? Math.PI : Math.PI / 2) * e.getData('side');
+        const v = this.physics.velocityFromRotation(toHero + turn, E.speed, e.body!.velocity);
+        // Close packmates push each other apart, so the pack surrounds the hero instead of stacking.
+        for (const o of pack) {
+          const d = Phaser.Math.Distance.BetweenPoints(e, o);
+          if (d < E.spacing) v.add(new Phaser.Math.Vector2(e.x - o.x, e.y - o.y).setLength(E.speed * (1 - d / E.spacing)));
+        }
+        // Circling turns back at walls, props and packmates in the way, then holds its new course a moment so it never
+        // dithers in place: a waiting enemy keeps moving.
+        if (turn && time >= e.getData('steadyUntil') && (!e.body!.blocked.none || v.length() < E.speed / 3))
+          e.setData({ side: -e.getData('side'), steadyUntil: time + 400 });
+        v.limit(E.speed);
+        e.setData({ state: 'chase', facing: toHero });
+      }
     }
   }
 
@@ -182,7 +201,7 @@ export class RoomScene extends Phaser.Scene {
       this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
         if (this.dead) return;
         const e = Enemy.create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
-        e.setData({ hp: T.enemy.hp, state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2 });
+        e.setData({ hp: T.enemy.hp, state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, restUntil: 0, steadyUntil: 0 });
       });
     }
   }

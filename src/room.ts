@@ -878,8 +878,9 @@ export function build(scene: Phaser.Scene): Room {
   const room: Room = {
     bounds: new Phaser.Geom.Rectangle(FX0, FY0, FX1 - FX0, FY1 - FY0),
     obstacles,
-    heroStart: { x: CX, y: 222 },
-    spawns: [{ x: CX, y: 100 }, { x: 64, y: 176 }, { x: 416, y: 176 }],
+    // The hero starts on the medallion and the wave rises around it, so fights play out in the open middle.
+    heroStart: { x: CX, y: CY },
+    spawns: [{ x: CX, y: 88 }, { x: 120, y: CY }, { x: 360, y: CY }],
   };
   // Self-check: every start point is inside the hall and clear of every footprint (with a body's margin).
   for (const s of [room.heroStart, ...room.spawns])
