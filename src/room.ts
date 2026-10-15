@@ -12,8 +12,6 @@ export type Room = {
 // A crypt hall seen in HLD's three-quarter view: a back wall with lancets, ossuaries and a portcullis
 // the moon blazes through, a carved ritual medallion in the middle, braziers, pillars, coffins.
 // Everything is painted pixel by pixel into canvas textures once, then reused on scene restarts.
-// Floor light is one quantised level field built only from real sources (gate wedge pooling on the circle, lancets,
-// fire pools stepped on a 4 px grid) over one dark blue-violet; never an alpha gradient.
 
 // Palette "Nuit de sang" (docs/art.md) plus crimson walls, a moonlit blue floor and the magenta dark beyond.
 const P = {
@@ -25,7 +23,7 @@ const P = {
   fire: 0xffb347,
   wall0: 0x2b1631, wall1: 0x4a1d3c, wall2: 0x6e2d4f,
   floor1: 0x1b2b60, floor2: 0x21346f, floor3: 0x293e80,
-  abyss0: 0x1f0520, abyss1: 0x3d0a3a, abyss2: 0x5e1256, glowDark: 0x8f195e,
+  abyss0: 0x1f0520, abyss1: 0x3d0a3a, abyss2: 0x5e1256,
 };
 
 // Floor rectangle = walkable bounds (feet). Walls: back face above FY0, side caps 12 px, front cap below FY1.
@@ -75,14 +73,10 @@ class Px {
   readonly d: Uint8ClampedArray<ArrayBuffer>;
   readonly w: number;
   readonly h: number;
-  /** Pixels painted while `marking` are objects: the floor light pass keeps their hue. */
-  readonly obj: Uint8Array;
-  marking = false;
   constructor(w: number, h: number) {
     this.w = w;
     this.h = h;
     this.d = new Uint8ClampedArray(w * h * 4);
-    this.obj = new Uint8Array(w * h);
   }
   in(x: number, y: number) {
     return x >= 0 && y >= 0 && x < this.w && y < this.h;
@@ -94,7 +88,6 @@ class Px {
     const d = this.d, i = (y * this.w + x) * 4, b = d[i + 3] / 255, o = a + b * (1 - a);
     for (let k = 0; k < 3; k++) d[i + k] = (ch(c, k) * a + d[i + k] * b * (1 - a)) / o;
     d[i + 3] = o * 255;
-    if (this.marking) this.obj[i / 4] = 1;
   }
   /** Colour at a pixel (ignores alpha). */
   get(x: number, y: number) {
@@ -141,6 +134,20 @@ function engrave(p: Px, mask: (x: number, y: number) => boolean, x0: number, y0:
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (mask(x, y)) hits.push([x, y]);
   for (const [x, y] of hits) if (!mask(x, y + 1)) p.tint(x, y + 1, P.stone2, depth * 0.35);
   for (const [x, y] of hits) p.tint(x, y, P.void0, depth);
+}
+
+/** Irregular light pool with hard stepped edges: ks are the band strengths from the rim inward. */
+function light(p: Px, cx: number, cy: number, rx: number, ry: number, c: number, ks: number[], wobble = 0.18, seed = 0, size = 9, mode: 'glow' | 'tint' | 'paint' = 'glow') {
+  for (let y = Math.floor(cy - ry * 1.3); y <= cy + ry * 1.3; y++)
+    for (let x = Math.floor(cx - rx * 1.3); x <= cx + rx * 1.3; x++) {
+      const d = Math.hypot((x - cx) / rx, (y - cy) / ry) + (noise(x, y, size, seed) - 0.5) * wobble * 2;
+      const band = Math.floor((1 - d) * ks.length * 1.15);
+      if (band < 0) continue;
+      const k = ks[Math.min(band, ks.length - 1)];
+      if (mode === 'paint') p.p(x, y, c, k);
+      else if (mode === 'tint') p.tint(x, y, c, k);
+      else p.glow(x, y, c, k);
+    }
 }
 
 /** Organic splash built from noise: two tones, an optional wet glint, a few droplets around. */
@@ -383,7 +390,6 @@ function paintFloor(p: Px) {
       const border = tx === 0 || tx === 24 || ty === 11;
       const merged = !border && tx > 1 && hash(tx, ty, 2) < 0.3;
       const base = border ? P.wall1 : tone(merged ? tx - 1 : tx, ty);
-      p.marking = border;
       p.rect(x, y, 16, 16, base);
       p.rect(x, y, 16, 1, mix(base, P.void0, border ? 0.35 : 0.27));
       if (!merged) p.rect(x, y, 1, 16, mix(base, P.void0, border ? 0.35 : 0.27));
@@ -396,13 +402,11 @@ function paintFloor(p: Px) {
         const sp = spiral(11, (tx + ty) % 2 === 0);
         engrave(p, (i, j) => sp.has((i - x - 3) + (j - y - 3) * 16), x + 2, y + 2, x + 15, y + 15, 0.45);
       }
-      p.marking = false;
     }
   // Ritual medallion: a smooth disc in a ring of crimson voussoirs, a blood channel, an eight-point star, a drain.
   const dist = (x: number, y: number) => Math.hypot(x + 0.5 - CX, y + 0.5 - CY);
   const ang = (x: number, y: number) => Math.atan2(y + 0.5 - CY, x + 0.5 - CX);
   p.fill(CX - 52, CY - 52, CX + 52, CY + 52, (x, y) => dist(x, y) < 50, P.floor3);
-  p.marking = true;
   p.fill(CX - 52, CY - 52, CX + 52, CY + 52, (x, y) => dist(x, y) >= 41 && dist(x, y) < 50, P.wall1);
   p.fill(CX - 52, CY - 52, CX + 52, CY + 52, (x, y) => dist(x, y) >= 41 && dist(x, y) < 50 && hash(Math.floor(((ang(x, y) / Math.PI) * 12 + 24.5) % 24), 0, 6) < 0.4, mix(P.wall1, P.wall2, 0.5));
   engrave(p, (x, y) => {
@@ -412,7 +416,6 @@ function paintFloor(p: Px) {
   p.fill(CX - 40, CY - 40, CX + 40, CY + 40, (x, y) => Math.abs(dist(x, y) - 37.5) < 1.2, P.blood0);
   p.fill(CX - 40, CY - 40, CX + 40, CY + 40, (x, y) => Math.abs(dist(x, y) - 37.5) < 1.2 && noise(x, y, 6, 3) > 0.6, P.blood1);
   p.fill(CX - 40, CY - 40, CX + 40, CY + 40, (x, y) => Math.abs(dist(x, y) - 36) < 0.5 && y < CY, P.void1, 0.6);
-  p.marking = false;
   const inStar = (x: number, y: number) => {
     const dx = Math.abs(x + 0.5 - CX), dy = Math.abs(y + 0.5 - CY);
     return dx + dy <= 33 || Math.max(dx, dy) <= 33 / Math.SQRT2;
@@ -430,7 +433,6 @@ function paintFloor(p: Px) {
   }
   engrave(p, (x, y) => star.has(x + y * 1000), CX - 36, CY - 36, CX + 36, CY + 36, 0.5);
   engrave(p, (x, y) => Math.abs(dist(x, y) - 14) < 0.6 || Math.abs(dist(x, y) - 22) < 0.6, CX - 24, CY - 24, CX + 24, CY + 24, 0.45);
-  p.marking = true;
   p.ellipse(CX, CY, 6, 6, P.stone1);
   p.ellipse(CX, CY, 5, 5, P.void0);
   for (const dy of [-3, -1, 1, 3]) p.rect(CX - 4 + Math.abs(dy) / 2, CY + dy, 8 - Math.abs(dy), 1, P.stone0);
@@ -452,7 +454,6 @@ function paintFloor(p: Px) {
       const along = (x + 0.5 - CX) * dx + (y + 0.5 - CY) * dy, across = (x + 0.5 - CX) * dy - (y + 0.5 - CY) * dx;
       return Math.abs(Math.abs(across) - 2) < 0.6 && along > 50 && along < 66;
     }, CX - 68, CY - 68, CX + 68, CY + 68, 0.5);
-  p.marking = false;
 }
 
 /** Square spiral with a one pixel gap, as a set of x + y * 16 keys. */
@@ -503,16 +504,14 @@ function paintWear(p: Px) {
     p.p(x, y, R() < 0.5 ? P.stone1 : P.floor3);
     p.tint(x + 1, y + 1, P.void0, 0.5);
   }
-  // Rubble from the broken pillar and a collapse at the foot of the left wall: chunks, lit top, dark front.
-  p.marking = true;
-  for (const [x, y, w, h] of [[404, 146, 7, 4], [412, 150, 5, 3], [398, 152, 4, 3], [416, 142, 3, 2], [406, 156, 3, 2], [372, 150, 4, 3], [42, 140, 8, 5], [50, 146, 5, 3], [44, 147, 4, 3], [56, 142, 3, 2], [47, 136, 4, 3]]) {
+  // Rubble from the broken pillar: chunks with a lit top face and a dark front.
+  for (const [x, y, w, h] of [[404, 146, 7, 4], [412, 150, 5, 3], [398, 152, 4, 3], [416, 142, 3, 2], [406, 156, 3, 2], [372, 150, 4, 3]]) {
     p.rect(x + 1, y + h, w, 2, P.void0, 0.45);
     p.rect(x, y, w, h, P.stone1);
     p.rect(x, y, w, 1, P.stone2);
     p.rect(x, y + h - 1, w, 1, P.stone0);
     p.p(x + w - 1, y, P.stone1);
   }
-  p.marking = false;
 }
 
 /** Ragged flat pool of blood, one colour with a hard edge; the gloss sits inside, so it reads as liquid, not a lump. */
@@ -555,8 +554,6 @@ function paintGore(p: Px) {
     splat(p, 352 - t * 66, 212 - t * 34 + Math.sin(i) * 2, 3.5 - t * 2, 40 + i, P.blood0, mix(P.blood0, P.blood1, 0.5));
   }
   pool(p, 66, 246, 14, 6, 33);
-  pool(p, 206, 198, 13, 7, 34);
-  pool(p, 196, 214, 6, 4, 35);
   splat(p, 196, 128, 4, 51, P.blood0, P.blood1, P.blood2);
   splat(p, 286, 196, 3, 52, P.blood0, P.blood1);
   splat(p, 112, 172, 5, 53, P.blood0, mix(P.blood0, P.blood1, 0.5));
@@ -584,132 +581,40 @@ function candles(p: Px, x: number, y: number, n: number, seed: number) {
   }
 }
 
-/** Fire sources: braziers, and candle clusters [x, y, count] (self-lit, painted after the light pass). */
+/** Light sources baked into the background; braziers also get a flickering overlay. */
 const BRAZIERS = PROPS.filter((o) => o.kind === 'brazier');
 const CANDLES: [number, number, number][] = [[54, 236, 3], [128, 240, 2], [62, 82, 3], [414, 80, 2], [334, 246, 3]];
 const LANCETS = [CX - 100, CX + 100];
-
-// ---------- light: one quantised level field, no gradients ----------
-
-/** Visible floor colour per light level: near-black blue against the walls up to the pale, warm nave. */
-const RAMP = [0x0b0a20, 0x1d1b4c, 0x353068, 0x6e5a88, 0xc49ea6, 0xf0d6c8];
-/** How much painted detail (grout, carving, cracks) survives at each level: darkness swallows it. */
-const DETAIL = [0.35, 0.55, 0.8, 1, 1, 0.85];
-const WARM = 0xff9a52;
-const lum = (c: number) => ch(c, 0) * 0.3 + ch(c, 1) * 0.59 + ch(c, 2) * 0.11;
-const lift = (c: number, d: number) => {
-  let o = 0;
-  for (let k = 0; k < 3; k++) o = (o << 8) | Math.max(0, Math.min(255, Math.round(ch(c, k) + d)));
-  return o;
-};
-
-/** Is (x, y) inside a prop's cast shadow (toward the bottom right, away from the moon)? */
-const inShadow = (x: number, y: number) =>
-  PROPS.some((o) => {
-    const reach = o.kind === 'pillar' ? 34 : o.kind === 'stump' ? 18 : o.kind === 'brazier' ? 10 : 9;
-    const l = o.x - o.w / 2, r = o.x + o.w / 2, t = (y - o.y + o.h * 0.5) / (reach * 0.6);
-    return t >= -0.6 && t <= 1 && x >= l + t * reach * 0.9 && x <= r + t * reach * 1.1;
-  });
-
-/** Is the floor point inside the gate's light wedge (the gate opening projected on the floor, bars ignored)? */
-function inWedge(x: number, y: number) {
-  const d = y - FY0;
-  if (d < 0 || d > 100) return false;
-  return inArch(CX + (x - CX - d * 0.12) / (1 + d * 0.012), FY0 - d / 2, CX, GATE.hw, GATE.ys, GATE.R);
-}
-
-/** Light level 0..5 on the floor. Every lit shape comes from a source: the gate wedge pooling on the circle,
- *  the lancets, the fires (see `fire`); everything else is one dark blue-violet, near black against the walls. */
-function level(x: number, y: number, shadows = true) {
-  const r = Math.hypot(x + 0.5 - CX, y + 0.5 - CY);
-  let L = r < 50 ? 4 : r < 58 ? 3 : r < 66 ? 2 : 1;
-  const wedge = inWedge(x, y);
-  if (wedge) L = Math.max(L, gateSpill(x, y) ? (y - FY0 < 44 ? 5 : 4) : 3);
-  else if (y > CY && Math.abs(x + 0.5 - CX) < 24) L = Math.max(L, 2); // the walkway on to the stairs catches the spill
-  if (lancetSpill(x, y)) L = Math.min(Math.max(L + 1, 2), 3);
-  if (shadows && inShadow(x, y)) L = Math.max(L - 1, 0);
-  const bottom = Math.abs(x + 0.5 - CX) < 24 ? 99 : FY1 - 1 - y;
-  if (!wedge && Math.min(x - FX0, FX1 - 1 - x, y - FY0, bottom) < 6) L = 0;
-  return L;
-}
-
-/** Fire pools 0..2 around braziers and candle clusters, stepped on a 4 px grid (a quarter tile). */
-function fire(x: number, y: number) {
-  const gx = Math.floor((x - FX0) / 4) * 4 + FX0 + 2, gy = Math.floor((y - FY0) / 4) * 4 + FY0 + 2;
-  let f = 0;
-  for (const b of BRAZIERS) {
-    const d = Math.hypot(gx - b.x, (gy - b.y + 4) * 1.3);
-    f = Math.max(f, d < 12 ? 2 : d < 24 ? 1 : 0);
-  }
-  for (const [cx, cy, n] of CANDLES) {
-    const d = Math.hypot(gx - cx - n * 1.5, (gy - cy + 2) * 1.3);
-    f = Math.max(f, d < 6 + n ? 2 : d < 12 + n * 2 ? 1 : 0);
-  }
-  return f;
-}
+const MOON_POOL = [CX - 2, CY - 4, 84, 64] as const;
 
 function paintLight(p: Px) {
-  const base = lum(P.floor2);
+  // The hall sinks into darkness away from the light: ragged stepped bands from the edges in.
   for (let y = FY0; y < FY1; y++)
     for (let x = FX0; x < FX1; x++) {
-      const f = fire(x, y), L = Math.max(level(x, y), f ? f + 1 : 0), c = p.get(x, y);
-      // Floor stone takes the ramp colour of its level, keeping its carving as a luminance offset;
-      // objects (blood, inlays, bones, roots) keep their hue and only sink into the dark.
-      let o = p.obj[y * p.w + x]
-        ? L < 3 ? mix(c, RAMP[0], [0.65, 0.45, 0.2][L]) : mix(c, 0xf0e0d8, [0, 0.08, 0.15][L - 3])
-        : lift(RAMP[L], (lum(c) - base) * DETAIL[L]);
-      if (f) o = mix(o, WARM, f === 2 ? 0.3 : 0.14);
-      p.p(x, y, o);
+      const d = Math.min(x - FX0, (FX1 - 1 - x) * 1.2, (y - FY0) * 2.4, (FY1 - 1 - y) * 1.6) + (noise(x, y, 18, 12) - 0.5) * 18;
+      p.tint(x, y, P.void0, d < 8 ? 0.5 : d < 30 ? 0.28 : 0);
     }
-  // Fire on the wall behind the braziers, in the same hard steps.
-  for (const b of BRAZIERS)
-    for (let y = 0; y < FY0; y++)
-      for (let x = b.x - 40; x < b.x + 40; x++) {
-        const d = Math.hypot((x - b.x) / 30, (y - b.y + 24) / 26) + (noise(x, y, 6, b.x) - 0.5) * 0.25;
-        if (d < 1) p.tint(x, y, WARM, d < 0.55 ? 0.26 : 0.13);
-      }
+  // Each lancet lands on the floor as its own shape, mullion and transom included, slanting right.
+  for (let y = FY0; y < FY0 + 60; y++) for (let x = FX0; x < FX1; x++) p.glow(x, y, P.moon1, lancetSpill(x, y) * 0.2);
+  // Moonlight pouring through the gate, striped by the portcullis.
+  for (let y = FY0; y < FY0 + 100; y++) for (let x = CX - 60; x < CX + 80; x++) p.glow(x, y, P.moon1, gateSpill(x, y) * 0.3);
+  // The great moon pool on the medallion.
+  light(p, ...MOON_POOL, P.moon1, [0.15, 0.32], 0.06, 4, 22);
+  // Warm pools on the floor and the wall behind: fire pulls the cold floor toward its own colour, so it reads warm on blue.
+  for (const b of BRAZIERS) light(p, b.x, b.y - 14, 38, 30, mix(P.fire, P.blood2, 0.3), [0.12, 0.24, 0.36], 0.08, b.x, 12, 'tint');
+  for (const [x, y, n] of CANDLES) light(p, x + n * 1.5, y - 2, 10 + n * 2, 7 + n * 2, P.fire, [0.14, 0.28], 0.06, x, 8, 'tint');
 }
 
-/** Magenta overgrowth (HLD lays moss the same way): one flat saturated mass with a hard ragged edge,
- *  lit along its top, spilling across the tile seams; painted after the light pass so it holds its colour in the dark. */
-function growth(p: Px, cx: number, cy: number, rx: number, ry: number, seed: number, drips = false) {
-  const inside = (x: number, y: number) =>
-    Math.hypot((x - cx) / rx, (y - cy) / ry) + (noise(x, y, 5, seed) - 0.5) * 0.9 + (noise(x, y, 2, seed + 1) - 0.5) * 0.35 < 1;
-  for (let y = Math.floor(cy - ry * 1.7); y <= cy + ry * 1.7; y++)
-    for (let x = Math.floor(cx - rx * 1.7); x <= cx + rx * 1.7; x++) {
-      if (!inside(x, y)) continue;
-      const c = !inside(x, y - 1) ? P.glowDark : !inside(x, y + 1) ? P.abyss1 : noise(x, y, 3, seed + 2) > 0.66 ? P.abyss1 : P.abyss2;
-      p.p(x, y, y >= FY0 && level(x, y) < 2 ? mix(c, RAMP[0], 0.3) : c); // in the dark it frames, it does not glow
-      if (inside(x, y + 1)) continue;
-      if (!drips) p.tint(x, y + 1, P.void0, 0.5);
-      // On a wall it runs down in strands.
-      else if (hash(x, y, seed) < 0.3) for (let k = 1, n = 2 + Math.floor(hash(y, x, seed) * 12); k <= n; k++) p.p(x, y + k, k === n ? P.glowDark : P.abyss2);
-    }
-  const R = rng(seed);
-  for (let i = 0; i < rx; i++) {
-    const a = R() * Math.PI * 2, d = 1.1 + R() * 0.6;
-    p.p(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, R() < 0.5 ? P.abyss2 : P.glowDark);
+/** Shadows cast by the props, toward the bottom right. */
+function paintShadows(p: Px) {
+  for (const o of PROPS) {
+    const l = o.x - o.w / 2, r = o.x + o.w / 2;
+    const reach = o.kind === 'pillar' ? 34 : o.kind === 'stump' ? 18 : o.kind === 'brazier' ? 10 : 9;
+    p.fill(l - 2, o.y - o.h, r + reach * 1.2, o.y + reach * 0.6, (x, y) => {
+      const t = (y - o.y + o.h * 0.5) / (reach * 0.6);
+      return t >= -0.6 && t <= 1 && x >= l + t * reach * 0.9 && x <= r + t * reach * 1.1;
+    }, P.void0, 0.45);
   }
-  if (drips) return;
-  // Tendrils creep out along the grout, so the mass grips the grid instead of floating on it.
-  for (let t = 0; t < 3; t++) {
-    let x = Math.round(cx + (R() - 0.5) * rx), y = Math.round(cy + (R() - 0.5) * ry);
-    x = FX0 + Math.round((x - FX0) / 16) * 16;
-    const dir = R() < 0.5 ? 1 : -1, len = 8 + R() * 18;
-    for (let k = 0; k < len; k++, y += dir) {
-      p.p(x, y, k > len - 3 ? P.glowDark : P.abyss2);
-      if (R() < 0.25) p.p(x + 1, y, P.abyss1);
-    }
-  }
-}
-
-function paintGrowth(p: Px) {
-  for (const [x, y, rx, ry, s] of [
-    [52, 196, 14, 32, 81], [100, 148, 22, 7, 82], [418, 214, 20, 24, 83], [356, 72, 26, 8, 84], [404, 158, 16, 7, 85],
-    [150, 250, 24, 7, 86], [434, 118, 8, 18, 87], [80, 74, 20, 6, 88], [300, 250, 14, 5, 89],
-  ]) growth(p, x, y, rx, ry, s);
-  // Lying along the plinth ledge and dripping down its face to the floor masses below.
-  for (const [x, y, rx, ry, s] of [[356, 55, 26, 2.5, 91], [118, 55, 14, 2, 92], [80, 56, 10, 2, 93], [404, 55, 9, 2, 94]]) growth(p, x, y, rx, ry, s, true);
 }
 
 function paintBackground(p: Px) {
@@ -721,24 +626,23 @@ function paintBackground(p: Px) {
   }
   paintFloor(p);
   paintWear(p);
-  p.marking = true; // everything below keeps its own colour under the light pass
   ledger(p, 108, 168, false);
   ledger(p, 346, 160, true);
   paintGore(p);
   skull(p, 70, 152); bone(p, 77, 156, 5); bone(p, 64, 158, 4, true);
   skull(p, 424, 128); bone(p, 416, 132, 6);
   skull(p, 120, 250); bone(p, 404, 248, 5); bone(p, 292, 84, 4);
-  p.marking = false;
-  paintLight(p);
+  paintShadows(p);
   paintBackWall(p);
   // Side wall tops (seen from above): the right wall's inner rim faces the light, the left one's is in shadow.
   for (const x of [FX0 - 12, FX1]) wallTop(p, x, 0, 12, T.height);
   p.rect(FX1, 9, 1, T.height, P.stone0);
   p.rect(FX0 - 12, 0, 1, T.height, P.stone0);
   p.rect(FX0 - 1, 9, 1, T.height, P.void0);
-  paintGrowth(p);
+  p.rect(FX0, FY0, 2, FY1 - FY0, P.void0, 0.4);
   for (const [x, y, n] of CANDLES) candles(p, x, y, n, x * 7 + y);
   cobweb(p, FX1 - 1, 10, 22);
+  paintLight(p);
 }
 
 // ---------- props ----------
@@ -874,16 +778,38 @@ function paintCoffin(p: Px, open: boolean) {
 
 // ---------- overlays ----------
 
-/** The gate's light hanging in the air over its wedge: one flat, hard-edged additive shape that also lights characters. */
+/** Moon shafts falling from the unseen oculus at the top left: parallel beams with hard edges, drawn additive. */
+const BEAMS = [
+  { x: 116, w: 28, k: 0.11, len: 1 },
+  { x: 140, w: 9, k: 0.09, len: 0.94 },
+  { x: 98, w: 8, k: 0.07, len: 0.86 },
+];
+const SHAFT = { dx: 0.76, top: -10, bottom: 166 };
+const inBeam = (x: number, y: number, b: (typeof BEAMS)[number]) => {
+  const t = (y - SHAFT.top) / (SHAFT.bottom - SHAFT.top);
+  return t >= 0 && t <= b.len && Math.abs(x - (b.x + (y - SHAFT.top) * SHAFT.dx)) < b.w / 2 + t * 6;
+};
+
 function paintShaft(p: Px) {
-  for (let y = FY0; y < FY0 + 100; y++) for (let x = CX - 60; x < CX + 80; x++) if (inWedge(x, y)) p.p(x, y, 0xffe6cc, gateSpill(x, y) ? 0.08 : 0.04);
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      let k = 0;
+      const t = (y - SHAFT.top) / (SHAFT.bottom - SHAFT.top);
+      for (const b of BEAMS) if (inBeam(x, y, b)) k += b.k * (t > b.len - 0.12 ? 0.55 : 1);
+      if (k > 0) p.p(x, y, P.moon2, k);
+    }
+  // The same pool again, faint, so whoever stands in it catches the moon.
+  light(p, ...MOON_POOL, P.moon2, [0.035, 0.07], 0.06, 4, 22, "paint");
+  for (let y = FY0; y < FY0 + 100; y++) for (let x = CX - 60; x < CX + 80; x++) if (gateSpill(x, y)) p.p(x, y, P.moon2, gateSpill(x, y) * 0.08);
+  for (let y = FY0; y < FY0 + 60; y++) for (let x = FX0; x < FX1; x++) if (lancetSpill(x, y)) p.p(x, y, P.moon2, 0.05);
 }
 
 function paintVignette(p: Px) {
   for (let y = 0; y < p.h; y++)
     for (let x = 0; x < p.w; x++) {
-      const v = Math.hypot((x - CX) / 250, (y - 150) / 150) + (noise(x, y, 12, 30) - 0.5) * 0.08;
-      if (v > 0.95) p.p(x, y, P.abyss0, v > 1.12 ? 0.7 : 0.4); // two hard steps
+      const v = Math.hypot((x - CX) / 250, (y - 150) / 150);
+      const a = Math.min(1, Math.max(0, (v - 0.66) / 0.6)) ** 1.6 * 0.8;
+      if (a > 0) p.p(x, y, P.abyss0, a);
     }
 }
 
@@ -913,10 +839,13 @@ function cobweb(p: Px, cx: number, cy: number, r: number) {
       p.line(cx + Math.cos(angles[k]) * d, cy + Math.sin(angles[k]) * d + 1, cx + Math.cos(angles[k + 1]) * d, cy + Math.sin(angles[k + 1]) * d + 1, P.stone1, 0.45);
 }
 
-/** One flat, hard-edged warm shape over whoever stands at the fire; it flickers by stepping its alpha. */
 function glowTexture(p: Px) {
   const c = p.w / 2;
-  p.fill(0, 0, p.w - 1, p.h - 1, (x, y) => Math.hypot((x + 0.5 - c) / c, (y + 0.5 - p.h / 2) / (p.h / 2)) + (noise(x, y, 5, 3) - 0.5) * 0.3 < 0.8, P.fire, 0.12);
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      const d = Math.hypot((x + 0.5 - c) / c, (y + 0.5 - p.h / 2) / (p.h / 2));
+      if (d < 1) p.p(x, y, P.fire, [0.03, 0.06, 0.1][Math.min(2, Math.floor((1 - d) * 3.3))]);
+    }
 }
 
 // ---------- build ----------
@@ -925,20 +854,18 @@ export function build(scene: Phaser.Scene): Room {
   scene.add.image(0, 0, bake(scene, 'room-bg', T.width, T.height, paintBackground)).setOrigin(0).setDepth(-1000);
 
   const obstacles = scene.physics.add.staticGroup();
-  // Props take the light level of the floor they stand on (multiply tint), so the dark edges stay dark.
-  const dim = [0x6c6c96, 0x9a9abe, 0xc8c8de, 0xffffff, 0xffffff, 0xffffff];
   for (const o of PROPS) {
     // Characters sort by their sprite centre (feet - ~11 px), so a prop sorts at its feet line minus that.
     const depth = o.y - 11;
     if (o.kind === 'pillar' || o.kind === 'stump') {
       const key = bake(scene, `room-${o.kind}`, 28, o.kind === 'pillar' ? o.y : 58, (p) => paintPillar(p, o.kind === 'stump'));
-      scene.add.image(o.x, o.y, key).setOrigin(0.5, 1).setDepth(depth).setTint(dim[level(o.x, o.y + 3, false)]);
+      scene.add.image(o.x, o.y, key).setOrigin(0.5, 1).setDepth(depth);
     } else if (o.kind === 'brazier') {
       scene.add.image(o.x, o.y, bake(scene, 'room-brazier', 17, 23, paintBrazier)).setOrigin(0.5, 1).setDepth(depth);
       flame(scene, o.x, o.y - 17, depth);
     } else {
       const key = bake(scene, `room-${o.kind}`, o.w + 2, o.kind === 'coffinOpen' ? 46 : 34, (p) => paintCoffin(p, o.kind === 'coffinOpen'));
-      scene.add.image(o.x - o.w / 2 - 1, o.y, key).setOrigin(0, 1).setDepth(depth).setTint(dim[level(o.x, o.y + 3, false)]);
+      scene.add.image(o.x - o.w / 2 - 1, o.y, key).setOrigin(0, 1).setDepth(depth);
     }
     obstacles.add(scene.add.zone(o.x, o.y - o.h / 2, o.w, o.h));
   }
@@ -971,7 +898,7 @@ function flame(scene: Phaser.Scene, x: number, y: number, depth: number) {
     scene.anims.create({ key: 'room-flame', frames: [0, 1, 2, 3].map((f) => ({ key, frame: String(f) })), frameRate: 9, repeat: -1 });
   scene.add.sprite(x, y, key, '0').setOrigin(0.5, 1).setDepth(depth).play({ key: 'room-flame', startFrame: x % 4 });
   // Warm glow on whoever stands near, breathing irregularly.
-  const glow = scene.add.image(x, y + 4, bake(scene, 'room-glow', 64, 44, glowTexture)).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
+  const glow = scene.add.image(x, y - 2, bake(scene, 'room-glow', 72, 56, glowTexture)).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
   scene.tweens.add({ targets: glow, alpha: { from: 1, to: 0.55 }, duration: 140 + (x % 5) * 37, yoyo: true, repeat: -1, ease: 'Stepped' });
   scene.add.particles(x, y - 8, bake(scene, 'room-dot', 1, 1, (p) => p.p(0, 0, 0xffffff)), {
     lifespan: { min: 700, max: 1400 }, speedY: { min: -32, max: -14 }, speedX: { min: -6, max: 6 },
@@ -980,14 +907,14 @@ function flame(scene: Phaser.Scene, x: number, y: number, depth: number) {
 }
 
 function atmosphere(scene: Phaser.Scene) {
-  // Dust motes drifting in the gate's light.
+  // Dust motes drifting inside the moon beams.
   const dot = bake(scene, 'room-dot', 1, 1, (p) => p.p(0, 0, 0xffffff));
   const pt = new Phaser.Math.Vector2();
   const source = {
     getRandomPoint(out: Phaser.Types.Math.Vector2Like) {
       for (let i = 0; i < 20; i++) {
-        pt.set(CX - 50 + Math.random() * 110, FY0 + Math.random() * 100);
-        if (inWedge(pt.x, pt.y)) break;
+        pt.set(100 + Math.random() * 220, 10 + Math.random() * 160);
+        if (BEAMS.some((b) => inBeam(pt.x, pt.y, b))) break;
       }
       out.x = pt.x; out.y = pt.y;
     },

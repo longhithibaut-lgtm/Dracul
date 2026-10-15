@@ -1,6 +1,7 @@
 # Direction artistique
 
-Référence : Hyper Light Drifter. Résolution native 480×270, affichée ×4 en 1080p (`pixelArt: true`).
+Référence : Hyper Light Drifter, sauf pour les salles : leur barre est la crypte validée par l'utilisateur
+([references/salle-crypte.png](references/salle-crypte.png)). Une nouvelle salle doit l'égaler, pas battre Hyper Light Drifter. Résolution native 480×270, affichée ×4 en 1080p (`pixelArt: true`).
 
 ## Palette « Nuit de sang » (base commune, à étendre avec parcimonie)
 
@@ -12,9 +13,9 @@ Référence : Hyper Light Drifter. Résolution native 480×270, affichée ×4 en
 | Sang | `#5c0a1c` `#a3122f` `#e0284a` |
 | Lueurs (magie, coups) | `#ff4f8b` `#8f195e` `#ffe4ee` (cœur blanc des coups) |
 | Lune (accent froid) | `#1f4a5a` `#3fa7a3` `#8ff0dc` |
-| Bougies, feu | `#ffb347` `#ff9a52` |
+| Bougies, feu | `#ffb347` |
 | Murs de la crypte | `#2b1631` `#4a1d3c` `#6e2d4f` |
-| Sol éclairé (rampe de lumière en 6 paliers nets) | `#0b0a20` `#1d1b4c` `#353068` `#6e5a88` `#c49ea6` `#f0d6c8` |
+| Sol (dalles cobalt) | `#1b2b60` `#21346f` `#293e80` |
 | Abîme hors des murs | `#1f0520` `#3d0a3a` `#5e1256` |
 | Robe des serviteurs | `#33102a` `#521030` `#7a1a3e` `#b03a5e` |
 
