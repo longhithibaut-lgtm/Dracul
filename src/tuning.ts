@@ -9,7 +9,8 @@ export const T = {
   slash: { range: 30, arcDeg: 130, damage: 1, cooldownMs: 210, comboWindowMs: 450, knockback: 140, hitStopMs: 40 },
   // Le Tir: a shard of blood flicked straight ahead, without limit; weaker and slower than the claws. It flies until the
   // first enemy, lantern, prop or wall in its way.
-  shot: { damage: 0.5, cooldownMs: 400, speed: 240, knockback: 40, throwMs: 120 }, // throwMs: the flick, at half speed
+  // throwMs: the flick, at half speed. stunMs: a short flinch that never cancels a windup or an aim, so the tir can't pin.
+  shot: { damage: 0.5, cooldownMs: 400, speed: 240, knockback: 40, throwMs: 120, stunMs: 80 },
   // La Morsure: the only heal. On a weakened human only; the hero is held at its throat, open to every blow, while it drains.
   bite: {
     weakAt: 1, // a human with this much hp or less can be bitten

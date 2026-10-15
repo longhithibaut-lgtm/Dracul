@@ -422,14 +422,14 @@ export class RoomScene extends Phaser.Scene {
     Sfx.play(this, 'shoot');
   }
 
-  /** A shard lands on an enemy: a light blow (flash, small knockback, the stun of a hit) without hit-stop. Not a claw:
-   *  no plague. */
+  /** A shard lands on an enemy: a light blow (flash, a flinch, small knockback) without hit-stop. Unlike a claw it never
+   *  interrupts a windup or an aim, so an endless tir can't keep an enemy pinned. Not a claw: no plague. */
   private shardHit(b: Phaser.GameObjects.Zone, e: Sprite) {
     if (!b.active || !e.body?.enable) return;
     const { x, y } = b, angle = b.getData('angle');
     b.destroy();
     if (e !== this.prey) { // a prey stays held in the bite
-      e.setData({ state: 'chase', until: 0, stunnedUntil: this.time.now + T.enemy.stunMs });
+      e.setData('stunnedUntil', Math.max(e.getData('stunnedUntil'), this.time.now + T.shot.stunMs));
       this.physics.velocityFromRotation(angle, T.shot.knockback, e.body.velocity);
     }
     Fx.splat(this, x, y, angle, true);
