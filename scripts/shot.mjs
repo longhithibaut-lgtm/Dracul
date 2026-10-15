@@ -1,6 +1,6 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
-// Writes room.png and combat.png (full frames) plus crops: hero.png, enemy.png, fx.png, hud.png.
+// Writes room.png and combat.png (full frames) plus crops: hero.png, enemy.png, fx.png, and hud.png (taken at 3/5 health, dash spent).
 // Exit code 1 if the page logged an error.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -72,9 +72,19 @@ for (let i = 0; i < 120 && !captured; i++) {
   await shot('combat');
   await shot('fx', clip(s.hx, s.hy, 480, 270));
   await shot('enemy', clip(target.x, target.y - 4, 240, 200));
-  await shot('hud', { x: 0, y: 0, width: 400, height: 120 });
   await freeze(false);
   captured = true;
+}
+
+// HUD in a representative mid-fight state, like the reference: 3 of 5 health, dash just spent.
+if (captured) {
+  await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.health = 3; s.hud.health(3, 5); });
+  await page.waitForTimeout(900); // let the lost-health animation settle
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(200);
+  await freeze(true);
+  await shot('hud', { x: 0, y: 0, width: 400, height: 120 });
+  await freeze(false);
 }
 
 console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; state: ${JSON.stringify(await state())}`);
