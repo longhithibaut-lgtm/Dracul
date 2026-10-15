@@ -1,7 +1,7 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
 // Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
-// hero.png (running diagonally), enemy.png, fx.png, and hud.png (taken at 3/5 health, dash spent).
+// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, and hud.png (taken at 3/5 health, dash spent).
 // Exit code 1 if the page logged an error.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -93,9 +93,22 @@ for (let i = 0; i < 200 && !captured; i++) {
   s = await state();
   await shot('combat');
   await shot('fx', clip((pre.x + target.x) / 2, s.hy, 480, 270));
-  await shot('enemy', clip(target.x, target.y - 4, 240, 200));
   await freeze(false);
   captured = true;
+}
+
+// An enemy winding up its attack (its most menacing, telegraphed pose), away from hit flashes.
+if (captured) {
+  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren()
+    .some((e) => e.body?.enable && e.getData('state') === 'windup' && e.getData('flashUntil') < window.game.scene.getScene('room').time.now), null, { timeout: 8000 });
+  await page.waitForTimeout(150); // mid-windup
+  await freeze(true);
+  const w = await page.evaluate(() => {
+    const e = window.game.scene.getScene('room').enemies.getChildren().find((o) => o.body?.enable && o.getData('state') === 'windup');
+    return e ? { x: e.x, y: e.y } : null;
+  });
+  if (w) await shot('enemy', clip(w.x, w.y - 4, 240, 200));
+  await freeze(false);
 }
 
 // HUD in a representative mid-fight state, like the reference: 3 of 5 health, dash just spent.
