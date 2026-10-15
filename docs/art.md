@@ -21,7 +21,7 @@ Référence : Hyper Light Drifter, sauf pour les salles : leur barre est la cryp
 | Ordre (humains) : or, tabard, acier, peau, bois | `#ffd66e` `#d9982e` `#8c5a1e` · `#fbf2dc` `#d9c7a0` `#9c8463` · `#e4eaf0` `#a0aabb` `#5a6176` · `#e9b78e` `#b57a52` · `#a66a3a` `#63391f` `#3c2418` |
 | Ordre / lumière sacrée | `#fff6d8` `#ffd75e` `#c8902a` `#7a4a1c` (or, du blanc au bronze) ; au sol : couche multiplicative `#ff9830` (absorbe le bleu) puis or additif, en 3 paliers nets à bord jaune franc |
 | Maison du Rat (Vesna la Grise) : argent, gris, gris sombre, sur le sang et la nuit des vampires | `#d4cdd2` `#948a91` `#574e57` |
-| Peste (Griffes pestilentes) : vert-de-gris maladif | `#c2cc8f` `#86935e` `#4f5a3a` |
+| Peste (Dons du Rat) : vert-de-gris maladif | `#c2cc8f` `#86935e` `#4f5a3a` |
 | Police (`src/font.ts`) : pixel, proportionnelle, capitales 7 px, minuscules 5 px + 2 px de jambage, accents français ; jamais mise à l'échelle | texte `#e8dcc8` (titres) `#b7a58f` (corps) `#d4cdd2` (Maison du Rat), ombre `#0b0710` |
 
 ## Règles

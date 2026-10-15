@@ -62,8 +62,8 @@ type Gift = { name: string; text: string; slot?: Slot; requires?: readonly strin
 const G = T.gifts, rats = `${G.rats} rats`;
 const DEFS = {
   // Slot gifts, in slot order.
-  griffes: { name: 'Griffes pestilentes', slot: 'griffes', text: 'Tes griffes infectent de Peste.' },
-  eclats: { name: 'Éclats pestilents', slot: 'tir', text: 'Tes éclats infectent de Peste.' },
+  griffes: { name: 'Griffes pestilentes', slot: 'griffes', text: `Tes griffes infectent de Peste\u00a0: ${G.plagueMs / 1000}\u00a0s après, l'ennemi perd ${G.plagueDamage}\u00a0PV.` },
+  eclats: { name: 'Éclats pestilents', slot: 'tir', text: `Tes éclats infectent de Peste\u00a0: ${G.plagueMs / 1000}\u00a0s après, l'ennemi perd ${G.plagueDamage}\u00a0PV.` },
   nid: { name: 'Glyphe du nid', slot: 'glyphe', text: `Quand ton glyphe s'arme, ${rats} en jaillissent et se ruent sur les ennemis.` },
   nuee: { name: 'Nuée', slot: 'brume', text: `Ta brume lâche ${rats} qui se ruent sur l'ennemi le plus proche.` },
   // Talents.
