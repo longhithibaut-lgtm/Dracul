@@ -4,7 +4,8 @@
 // hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (3/5 health, dash spent, 2 gifts),
 // light.png (a lit lantern, the hero at the edge of its holy light), crossbow.png (a crossbowman aiming), weak.png (a
 // weakened crossbowman, its heartbeat drop on the beat), bite.png (the hero latched onto it, mid-drain), gifts.png
-// (full frame, the room cleared and the three gift cards open, the second hovered) and gate.png (the portcullis up).
+// (full frame, the room cleared and the three gift cards open, the second hovered), gate.png (the portcullis up) and
+// training.png (full frame: the training room, its panel, enemies called in from it).
 // Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -156,7 +157,7 @@ let bow = null;
 {
   await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.invulnUntil = Infinity; s.wave = Math.max(s.wave, 1); s.spawnWave(); });
   await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.enemies.getChildren()
-    .some((e) => e.body?.enable && e.getData('kind') === 'crossbow' && e.getData('state') === 'aim' && e.getData('fireAt') - s.time.now < 400); }, null, { timeout: 15000 }).catch(() => {});
+    .some((e) => e.body?.enable && e.getData('kind') === 'crossbow' && e.getData('state') === 'aim' && e.getData('fireAt') - s.time.now < 400); }, null, { timeout: 30000 }).catch(() => {});
   await freeze(true);
   bow = await page.evaluate(() => {
     const e = window.game.scene.getScene('room').enemies.getChildren().find((o) => o.body?.enable && o.getData('state') === 'aim');
@@ -242,8 +243,27 @@ let gifts = false, gate = false;
   }
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
+// The training room (key T): its panel calls enemies in, freezes them and hands out a gift.
+let training = false;
+{
+  await page.keyboard.press('t');
+  if (await page.waitForSelector('#training', { timeout: 5000 }).catch(() => null)) {
+    for (const s of ['ghoul', 'weak', 'lantern']) await page.click(`#training [data-spawn="${s}"]`);
+    await page.click('#training [data-opt="passive"]');
+    await page.click('#training [data-gift="nuee"]');
+    await page.waitForTimeout(1200); // past the spawn telegraphs
+    training = await page.evaluate(() => {
+      const s = window.game.scene.getScene('room');
+      return s.training && s.gifts.includes('nuee') && s.enemies.getChildren().filter((e) => e.body?.enable).length === 2 && s.lanterns.length === 1;
+    });
+    await freeze(true);
+    await shot('training');
+    await freeze(false);
+  }
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow || !bit || !gifts ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit || !gifts || !training ? 1 : 0);

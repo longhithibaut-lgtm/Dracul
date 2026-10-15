@@ -1,0 +1,104 @@
+// The training room (key T): a DOM panel over the game to call enemies in, toggle the gifts and tune the hero live.
+// The knobs change T itself, so a tuned value holds for the whole session, normal runs included, until a reload.
+import { T } from './tuning.ts';
+import { GIFTS, GIFT_IDS, type GiftId } from './gifts.ts';
+
+export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern';
+/** Survive the scene restarts (a death in training starts the training room again). */
+export const opts = { god: true, passive: false };
+
+const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne']];
+// [label, group, key, min, max, step]
+const KNOBS = [
+  ['Vitesse de marche', 'hero', 'speed', 50, 160, 5],
+  ['Invulnérabilité après un coup (ms)', 'hero', 'hurtInvulnMs', 200, 1500, 50],
+  ['Brume : vitesse', 'dash', 'speed', 200, 500, 10],
+  ['Brume : durée (ms)', 'dash', 'durationMs', 60, 250, 10],
+  ['Brume : recharge (ms)', 'dash', 'cooldownMs', 0, 1000, 20],
+  ['Griffes : portée', 'slash', 'range', 18, 50, 1],
+  ['Griffes : angle (°)', 'slash', 'arcDeg', 60, 220, 5],
+  ['Griffes : recharge (ms)', 'slash', 'cooldownMs', 100, 500, 10],
+  ['Griffes : fenêtre d\'enchaînement (ms)', 'slash', 'comboWindowMs', 200, 900, 25],
+  ['Griffes : recul', 'slash', 'knockback', 0, 300, 10],
+  ['Griffes : gel à l\'impact (ms)', 'slash', 'hitStopMs', 0, 150, 5],
+  ['Morsure : portée', 'bite', 'range', 14, 50, 1],
+  ['Morsure : durée (ms)', 'bite', 'drainMs', 150, 1000, 25],
+] as const;
+
+const tuned = T as unknown as Record<string, Record<string, number>>;
+const defaults: Record<string, number> = Object.fromEntries(KNOBS.map(([, g, k]) => [`${g}.${k}`, tuned[g][k]]));
+
+const CSS = `
+#training{position:fixed;top:8px;right:8px;width:260px;max-height:calc(100% - 16px);overflow:auto;box-sizing:border-box;z-index:10;
+  padding:8px 10px;background:#170d22ee;border:1px solid #2e1838;color:#e8dcc8;font:13px/1.35 Georgia,"Times New Roman",serif}
+#training summary{cursor:pointer;font-weight:700;color:#e0284a;letter-spacing:.06em}
+#training summary small{color:#a8929f;font-weight:400;letter-spacing:0}
+#training h3{margin:10px 0 4px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#a8929f}
+#training .row{display:flex;flex-wrap:wrap;gap:4px}
+#training button{font:inherit;color:inherit;background:#0b0710;border:1px solid #2e1838;padding:3px 6px;cursor:pointer}
+#training button:hover{border-color:#8ff0dc;color:#8ff0dc}
+#training button:focus-visible,#training input:focus-visible{outline:2px solid #8ff0dc;outline-offset:1px}
+#training label{display:block;cursor:pointer}
+#training .knob{display:grid;grid-template-columns:1fr auto;margin-top:4px}
+#training .knob input{grid-column:1/-1;width:100%;accent-color:#e0284a}
+#training output{color:#8ff0dc}
+#training textarea{width:100%;box-sizing:border-box;margin:8px 0 4px;background:#0b0710;color:#e8dcc8;border:1px solid #2e1838;
+  font:11px/1.3 ui-monospace,monospace;resize:vertical}`;
+
+/** Opens the panel; returns what closes it. */
+export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean): void }) {
+  const root = document.createElement('aside');
+  root.id = 'training';
+  root.innerHTML = `<style>${CSS}</style><details open><summary>ENTRAÎNEMENT <small>· T pour quitter</small></summary>
+    <h3>Ennemis</h3>
+    <div class="row">${SPAWNS.map(([s, l]) => `<button type="button" data-spawn="${s}">+ ${l}</button>`).join('')}<button type="button" data-act="clear">Vider la salle</button></div>
+    <label><input type="checkbox" data-opt="passive"> Ennemis passifs (mannequins)</label>
+    <h3>Héros</h3>
+    <label><input type="checkbox" data-opt="god"> Invincible</label>
+    <div class="row"><button type="button" data-act="heal">Soigner</button></div>
+    <h3>Dons du Rat</h3>
+    ${GIFT_IDS.map((id) => `<label><input type="checkbox" data-gift="${id}"${api.gifts.includes(id) ? ' checked' : ''}> ${GIFTS[id].name}</label>`).join('')}
+    <h3>Réglages</h3>
+    ${KNOBS.map(([l, g, k, min, max, step]) => `<label class="knob">${l}<output>${tuned[g][k]}</output><input type="range" data-knob="${g}.${k}" min="${min}" max="${max}" step="${step}" value="${tuned[g][k]}"></label>`).join('')}
+    <textarea readonly rows="3" aria-label="Réglages modifiés" placeholder="Les réglages modifiés s'affichent ici : copie-les dans le chat."></textarea>
+    <div class="row"><button type="button" data-act="reset">Réinitialiser les réglages</button></div></details>`;
+  for (const i of root.querySelectorAll<HTMLInputElement>('[data-opt]')) i.checked = opts[i.dataset.opt as keyof typeof opts];
+
+  const changes = root.querySelector('textarea')!;
+  const show = () => (changes.value = KNOBS.filter(([, g, k]) => tuned[g][k] !== defaults[`${g}.${k}`])
+    .map(([l, g, k]) => `${g}.${k} (${l}) : ${defaults[`${g}.${k}`]} → ${tuned[g][k]}`).join('\n'));
+  const knobs = () => root.querySelectorAll<HTMLInputElement>('[data-knob]');
+  const set = (i: HTMLInputElement, v: number) => {
+    const [g, k] = i.dataset.knob!.split('.');
+    tuned[g][k] = v;
+    i.value = String(v);
+    i.previousElementSibling!.textContent = String(v);
+  };
+  // Focus is handed back after each use: a focused button or slider would also catch Space and the arrows meant for the hero.
+  const release = () => (document.activeElement as HTMLElement | null)?.blur();
+
+  root.addEventListener('input', (ev) => {
+    const i = ev.target as HTMLInputElement;
+    if (i.dataset.knob) set(i, Number(i.value)), show();
+  });
+  root.addEventListener('change', (ev) => {
+    const i = ev.target as HTMLInputElement;
+    if (i.dataset.opt) opts[i.dataset.opt as keyof typeof opts] = i.checked;
+    if (i.dataset.gift) api.toggle(i.dataset.gift as GiftId, i.checked);
+    release();
+  });
+  root.addEventListener('click', (ev) => {
+    const b = (ev.target as HTMLElement).closest('button');
+    if (!b) return;
+    if (b.dataset.spawn) api.spawn(b.dataset.spawn as Spawn);
+    else if (b.dataset.act === 'clear') api.clear();
+    else if (b.dataset.act === 'heal') api.heal();
+    else if (b.dataset.act === 'reset') knobs().forEach((i) => set(i, defaults[i.dataset.knob!])), show();
+    release();
+  });
+  changes.addEventListener('focus', () => changes.select());
+
+  document.body.append(root);
+  show();
+  return () => root.remove();
+}

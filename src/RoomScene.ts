@@ -10,11 +10,12 @@ import * as Hud from './hud.ts';
 import * as Sfx from './sfx.ts';
 import * as Lantern from './lantern.ts';
 import * as Rats from './rats.ts';
+import * as Training from './training.ts';
 import { GIFTS, GIFT_IDS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 /** What a run carries from room to room, through scene.restart(data); {} starts a new run. */
-type Run = { room?: number; health?: number; gifts?: GiftId[] };
+type Run = { room?: number; health?: number; gifts?: GiftId[]; training?: boolean };
 // A room: the hero climbs in (from room 2), fights its waves, takes the gift of the Rat house on the medallion (cards
 // open, the action pauses), then walks out through the portcullis it raised.
 type Phase = 'enter' | 'fight' | 'gift' | 'choose' | 'exit' | 'leave';
@@ -54,6 +55,7 @@ export class RoomScene extends Phaser.Scene {
   private offer: GiftId[] = [];
   private gateUpAt = Infinity;
   private rats: { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until: number }[] = [];
+  private training = false; // the training room (key T): no waves, enemies on demand, see training.ts
 
   constructor() {
     super('room');
@@ -62,6 +64,7 @@ export class RoomScene extends Phaser.Scene {
   init(data: Run) {
     // The scene instance is reused on restart, so every field is reset here; the run carries on through `data`.
     this.roomNo = data.room ?? 1;
+    this.training = !!data.training;
     this.gifts = [...(data.gifts ?? [])];
     this.health = data.health ?? this.maxHealth();
     this.facing = Math.PI / 2; // start facing the camera
@@ -128,6 +131,37 @@ export class RoomScene extends Phaser.Scene {
       if (n) this.pick(Number(n[1]) - 1);
     });
 
+    this.input.keyboard!.on('keydown-T', () => this.scene.restart((this.training ? {} : { training: true }) satisfies Run));
+    if (this.training) {
+      this.hud.title('Entraînement');
+      let calls = 0;
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, Training.panel({
+        gifts: this.gifts,
+        spawn: (k) => {
+          if (k === 'lantern') return void this.addLantern();
+          // Each call takes the next spawn point not on top of the hero, so two calls never stack two enemies.
+          const free = this.room.spawns.filter((p) => Phaser.Math.Distance.BetweenPoints(p, this.hero) > 50);
+          const p = free[calls++ % free.length] ?? this.room.spawns[0];
+          this.spawn(p, k === 'ghoul' ? 'ghoul' : 'crossbow', k === 'weak' ? T.bite.weakAt : undefined);
+        },
+        clear: () => {
+          for (const e of this.enemies.getChildren() as Sprite[]) this.kill(e);
+          for (const l of [...this.lanterns]) this.hitLantern(l, 0, Infinity);
+          this.bolts.clear(true, true);
+        },
+        heal: () => {
+          this.health = this.maxHealth();
+          this.hud.health(this.health, this.health);
+        },
+        toggle: (id, on) => {
+          this.gifts = on ? [...this.gifts, id] : this.gifts.filter((g) => g !== id);
+          this.health = Math.min(this.health + (on && id === 'survivant' ? T.gifts.blood : 0), this.maxHealth());
+          this.hud.health(this.health, this.maxHealth());
+          this.hud.gifts(this.gifts.map((g) => GIFTS[g].slot));
+        },
+      }));
+      return;
+    }
     if (this.phase === 'enter') {
       this.cameras.main.fadeIn(T.run.fadeMs);
       this.hud.title(`Salle ${this.roomNo}`);
@@ -215,7 +249,8 @@ export class RoomScene extends Phaser.Scene {
       }
       const bow = e.getData('kind') === 'crossbow';
       if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
-        if (bow) this.stepCrossbow(e, time);
+        if (this.training && Training.opts.passive) e.setVelocity(0).setData('state', 'chase'); // a training dummy
+        else if (bow) this.stepCrossbow(e, time);
         else this.stepEnemy(e, time);
       }
       if (bow) Crossbow.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'), e.getData('hp') <= T.bite.weakAt);
@@ -376,6 +411,7 @@ export class RoomScene extends Phaser.Scene {
     e.disableBody(false, false);
     (e.getData('kind') === 'crossbow' ? Crossbow : Enemy).die(this, e);
     Sfx.play(this, 'kill');
+    if (this.training) return;
     if ((this.enemies.getChildren() as Sprite[]).some((o) => o.body?.enable)) return;
     if (this.wave < this.roomNo * T.run.wavesPerRoom) this.time.delayedCall(1500, () => this.spawnWave());
     else this.roomCleared();
@@ -551,7 +587,7 @@ export class RoomScene extends Phaser.Scene {
    *  HUD, feedback and death are handled once. Returns false when the hit didn't land. */
   damageHero(amount: number): boolean {
     const now = this.time.now;
-    if (this.dead || now < this.invulnUntil || now < this.dashUntil) return false;
+    if (this.dead || (this.training && Training.opts.god) || now < this.invulnUntil || now < this.dashUntil) return false;
     this.invulnUntil = now + T.hero.hurtInvulnMs;
     this.hurtAt = now;
     this.health -= amount;
@@ -562,7 +598,8 @@ export class RoomScene extends Phaser.Scene {
     this.dead = true;
     Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
-    this.time.delayedCall(1200, () => this.scene.restart({} satisfies Run)); // a new run: room 1, no gifts
+    // A new run (room 1, no gifts), or back to the training room.
+    this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts } : {}) satisfies Run));
     return true;
   }
 
@@ -573,23 +610,20 @@ export class RoomScene extends Phaser.Scene {
     const bows = [...this.room.spawns].sort((a, b) => far(b) - far(a)).slice(0, Math.min(2, ++this.wave - 1));
     const lanterns = this.wave >= T.lantern.twoFromWave ? 2 : this.wave >= T.lantern.fromWave ? 1 : 0;
     while (this.lanterns.length < lanterns && this.addLantern());
-    for (const p of this.room.spawns) {
-      if (bows.includes(p)) {
-        Crossbow.telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
-        this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
-          if (this.dead) return;
-          const e = Crossbow.create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
-          e.setData({ kind: 'crossbow', human: true, hp: T.crossbow.hp, state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
-        });
-        continue;
-      }
-      Enemy.telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
-      Sfx.play(this, 'spawn');
-      this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
-        if (this.dead) return;
-        const e = Enemy.create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
-        e.setData({ hp: T.enemy.hp, state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, restUntil: 0, steadyUntil: 0 });
-      });
-    }
+    for (const p of this.room.spawns) this.spawn(p, bows.includes(p) ? 'crossbow' : 'ghoul');
+  }
+
+  /** An enemy rises at `p` after its telegraph: a ghoul, or a crossbowman of the Order (`hp` to start it weakened). */
+  private spawn(p: { x: number; y: number }, kind: 'ghoul' | 'crossbow', hp?: number) {
+    const bow = kind === 'crossbow';
+    (bow ? Crossbow : Enemy).telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
+    if (!bow) Sfx.play(this, 'spawn');
+    this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
+      if (this.dead) return;
+      const e = (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
+      const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0 };
+      if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
+      else e.setData({ ...common, hp: hp ?? T.enemy.hp, restUntil: 0 });
+    });
   }
 }
