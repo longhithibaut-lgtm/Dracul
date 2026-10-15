@@ -1,17 +1,18 @@
 // Room layout check in headless Chromium: the hero can walk away from its start in every direction,
 // and wherever it waits (behind props, in corners) every enemy reaches it instead of sticking on an obstacle.
-// Usage: node tools/art/room.check.mjs   (exit code 1 on a failure or a page error)
+// Usage: node tools/art/room.check.mjs [--port=5206]   (exit code 1 on a failure or a page error)
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
-const server = await createServer({ server: { port: 5206, strictPort: true }, logLevel: 'error' });
+const port = Number(process.argv.find((a) => a.startsWith('--port='))?.split('=')[1] ?? 5206);
+const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
 await server.listen();
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto('http://localhost:5206/');
+await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 
 const state = () => page.evaluate(() => {
