@@ -39,6 +39,10 @@ async function film(name, act, offsets) {
 }
 
 const hurt = 's.health -= 1; s.hud.health(s.health, 5);';
+// Same state as scripts/shot.mjs's hud.png: 3/5 health, then 200 ms after a dash.
+await film('pre', 's.health = 3; s.hud.health(3, 5);', [900]);
+await film('shot', 's.dashUntil = t0 + 130; s.dashReadyAt = t0 + 510;', [200]);
+await film('heal0', 's.health = 5; s.hud.health(5, 5);', [600]);
 await film('hit', hurt, [0, 30, 70, 110, 150, 190, 240, 300, 380, 460, 560, 700]);
 await film('dash', 's.dashUntil = t0 + 130; s.dashReadyAt = t0 + 510;', [0, 100, 250, 400, 505, 530, 560, 650]);
 await film('low', `${hurt} ${hurt} ${hurt}`, Array.from({ length: 24 }, (_, i) => 700 + i * 50));

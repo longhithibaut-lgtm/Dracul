@@ -1,20 +1,23 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 
-// Heads-up display, top-left and wordless like Hyper Light Drifter's: a lintel that is the dash meter, a bat emblem
-// that lights up when the dash is ready, and one blood drop per health point.
+// Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
+// recharges, one blood drop per health point, and under them three dash pips that refill over the cooldown.
 // Gameplay pushes values in; it never reads from here. Redrawn every frame into one Graphics, in native pixels.
 export type Hud = { health(current: number, max: number): void; dashReady(ready: boolean): void };
 
 // "Nuit de sang" palette (docs/art.md).
 const C = {
-  void: 0x0b0710, night: 0x1c1029, dusk: 0x2e1838, stone: 0x3b2a4a, stoneLight: 0x8a6f8f,
+  void: 0x0b0710, night: 0x1c1029, dusk: 0x2e1838, stoneMid: 0x5a4468,
   bone: 0xe8dcc8, boneDim: 0xb7a58f, blood: [0x5c0a1c, 0xa3122f, 0xe0284a], glow: 0xff4f8b, moon: 0x8ff0dc,
 };
 
 // Swallowtail banner hanging from the lintel. B cloth, L lit edge, r shaded edge, d shadow under the rod.
 const BANNER = [
   'ddddddddddddddddddd',
+  'LBBBBBBBBBBBBBBBBBr',
+  'LBBBBBBBBBBBBBBBBBr',
+  'LBBBBBBBBBBBBBBBBBr',
   'LBBBBBBBBBBBBBBBBBr',
   'LBBBBBBBBBBBBBBBBBr',
   'LBBBBBBBBBBBBBBBBBr',
@@ -72,21 +75,22 @@ const CRACK = [
   '...c...',
   '.......',
 ];
-// E rim, r dried blood.
+// E rim, v hollow, r dried blood.
 const EMPTY = [
   '...E...',
-  '..E.E..',
-  '.E...E.',
-  '.E...E.',
-  'E.....E',
-  'E.....E',
-  'E.....E',
+  '..EvE..',
+  '.EvvvE.',
+  '.EvvvE.',
+  'EvvvvvE',
+  'EvvvvvE',
+  'EvvvvvE',
   '.ErrrE.',
   '..EEE..',
 ];
 
 const X0 = 8, Y0 = 6; // top-left corner of the HUD
 const PITCH = 8; // drop spacing: 7 px drop + 1 px gap
+const PIPS = 3, PIP_GAP = 3; // dash pips under the drops
 const FLASH_MS = 60; // a lost drop flashes white, cracks, then bursts
 const BURST_MS = 140;
 const FILL_MS = 120; // a regained drop fills from the bottom
@@ -128,21 +132,35 @@ export function create(scene: Phaser.Scene): Hud {
     const sinceHit = now - hitAt;
     const x0 = X0 + (sinceHit < 160 ? [1, -1, 1, -1][Math.floor(sinceHit / 40)] : 0), y0 = Y0;
 
-    // Lintel: drains when the dash is used and refills over its cooldown; the bat dims meanwhile.
-    const charge = ready ? 1 : Math.min(1, (now - spentAt) / (T.dash.durationMs + T.dash.cooldownMs));
-    const pop = now - readyAt < 90;
-    const lintel = 23 + max * PITCH; // banner, then the drops tile with 2 px padding
-    const fill = Math.round(lintel * charge);
-    g.fillStyle(C.stone).fillRect(x0, y0, lintel, 2);
-    g.fillStyle(pop ? C.moon : ready ? C.bone : C.stoneLight).fillRect(x0, y0, fill, 1);
-    g.fillStyle(pop ? C.moon : ready ? C.boneDim : C.stoneLight).fillRect(x0, y0 + 1, fill, 1);
+    const row = max * PITCH - 1; // width of the drop row, shared by the pip row
+    const lintel = row + 24; // banner, then the tile with 2 px padding
+    g.fillStyle(C.bone).fillRect(x0, y0, lintel, 1);
+    g.fillStyle(C.boneDim).fillRect(x0, y0 + 1, lintel, 1);
     grid(x0 - 3, y0 - 1, FINIAL, { O: C.bone, o: C.boneDim });
     grid(x0 + lintel, y0 - 1, FINIAL, { O: C.bone, o: C.boneDim });
 
+    // Dash: the bat dims and the pips empty when it is used, then refill one by one over the cooldown.
+    const charge = ready ? 1 : Math.min(1, (now - spentAt) / (T.dash.durationMs + T.dash.cooldownMs));
+    const pop = now - readyAt < 90;
     grid(x0, y0 + 2, BANNER, { B: C.blood[0], L: C.blood[1], r: C.dusk, d: C.night });
-    grid(x0 + 2, y0 + 6, BAT, pop ? { X: C.moon, x: C.moon } : ready ? { X: C.bone, x: C.boneDim } : { X: C.stone, x: C.stone });
-    g.fillStyle(C.night, 0.9).fillRect(x0 + 20, y0 + 3, lintel - 20, 13);
+    grid(x0 + 2, y0 + 7, BAT, pop ? { X: C.moon, x: C.moon } : ready ? { X: C.bone, x: C.boneDim } : { X: C.night, x: C.night });
+    // Droplets of a burst drop fall behind the tile and drip out below it, never over the readout.
+    shards = shards.filter((s) => now - s.t0 < s.life);
+    for (const s of shards) {
+      const t = (now - s.t0) / 1000;
+      if (t >= 0) g.fillStyle(s.c).fillRect(Math.round(s.x + s.vx * t), Math.round(s.y + s.vy * t + 300 * t * t), 1, s.size);
+    }
+    g.fillStyle(C.night, 0.9).fillRect(x0 + 20, y0 + 3, lintel - 20, 17);
     g.fillStyle(C.dusk).fillRect(x0 + 20, y0 + 3, lintel - 20, 1);
+
+    const pw = Math.floor((row - (PIPS - 1) * PIP_GAP) / PIPS);
+    for (let k = 0; k < PIPS; k++) {
+      const x = x0 + 22 + k * (pw + PIP_GAP), y = y0 + 15, p = Math.min(1, Math.max(0, charge * PIPS - k));
+      // Chamfered 4-row pip: solid bone when charged, a hollow plum outline when spent.
+      g.fillStyle(p < 1 ? C.stoneMid : pop ? C.moon : C.bone).fillRect(x + 1, y, pw - 2, 1).fillRect(x, y + 1, pw, 1);
+      g.fillStyle(p < 1 ? C.stoneMid : pop ? C.moon : C.boneDim).fillRect(x, y + 2, pw, 1).fillRect(x + 1, y + 3, pw - 2, 1);
+      if (p < 1) g.fillStyle(C.void).fillRect(x + 1, y + 1, pw - 2, 2).fillStyle(C.boneDim).fillRect(x + 1, y + 1, Math.round((pw - 2) * p), 2);
+    }
 
     for (let i = 0; i < max; i++) {
       const x = x0 + 22 + i * PITCH, y = y0 + 5;
@@ -152,11 +170,11 @@ export function create(scene: Phaser.Scene): Hud {
         else if (t < BURST_MS) {
           grid(x, y, DROP, blood);
           grid(x, y, CRACK, { c: C.void });
-        } else grid(x, y, EMPTY, { E: t < 300 ? C.blood[2] : t < 450 ? C.blood[1] : C.stone, r: C.blood[0] });
+        } else grid(x, y, EMPTY, { E: t < 300 ? C.blood[2] : t < 450 ? C.blood[1] : C.stoneMid, v: C.void, r: C.blood[0] });
       } else if (t < 0) {
-        grid(x, y, EMPTY, { E: C.stone, r: C.blood[0] });
+        grid(x, y, EMPTY, { E: C.stoneMid, v: C.void, r: C.blood[0] });
       } else if (t < FILL_MS) {
-        grid(x, y, EMPTY, { E: C.stone });
+        grid(x, y, EMPTY, { E: C.stoneMid, v: C.void });
         grid(x, y, DROP, blood, Math.floor(DROP.length * (1 - t / FILL_MS)));
       } else if (t < FILL_MS + 60) {
         grid(x, y, DROP, solid(C.bone));
@@ -167,11 +185,6 @@ export function create(scene: Phaser.Scene): Hud {
       }
     }
 
-    shards = shards.filter((s) => now - s.t0 < s.life);
-    for (const s of shards) {
-      const t = (now - s.t0) / 1000;
-      if (t >= 0) g.fillStyle(s.c).fillRect(Math.round(s.x + s.vx * t), Math.round(s.y + s.vy * t + 300 * t * t), s.size, s.size);
-    }
   };
 
   scene.events.on(Phaser.Scenes.Events.ADDED_TO_SCENE, ignoreNew);
@@ -192,8 +205,8 @@ export function create(scene: Phaser.Scene): Hud {
         const x = X0 + 22 + i * PITCH, y = Y0 + 5;
         for (let k = 0; k < 9; k++) {
           shards.push({
-            x: x + 1 + (k % 5), y: y + 2 + (k % 6), vx: -20 + Math.random() * 80, vy: -40 - Math.random() * 70,
-            c: [C.blood[2], C.blood[1], C.glow][k % 3], t0: now + BURST_MS, life: 350 + Math.random() * 300, size: k < 3 ? 2 : 1,
+            x: x + 1 + (k % 5), y: y + 6 + (k % 3), vx: (Math.random() - 0.5) * 30, vy: Math.random() * 30,
+            c: [C.blood[2], C.blood[1], C.glow][k % 3], t0: now + BURST_MS, life: 450 + Math.random() * 350, size: k < 4 ? 2 : 1,
           });
         }
       }
