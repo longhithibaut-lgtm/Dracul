@@ -5,13 +5,17 @@ export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; h
 
 // Palette "Nuit de sang" (docs/art.md), one char per colour. '.' is empty, x is the translucent ground shadow.
 const PAL: Record<string, string> = {
-  K: '#0b0710', k: '#1c1029', d: '#2e1838', s: '#3b2a4a', m: '#5a4468', l: '#8a6f8f',
+  k: '#1c1029', d: '#2e1838', s: '#3b2a4a', m: '#5a4468', l: '#8a6f8f',
   W: '#e8dcc8', w: '#b7a58f', R: '#5c0a1c', r: '#a3122f', e: '#e0284a', g: '#ff4f8b',
-  t: '#3fa7a3', T: '#8ff0dc', x: 'rgba(11,7,16,0.55)',
+  t: '#3fa7a3', x: 'rgba(11,7,16,0.55)',
 };
 type Grid = string[];
 type Layer = [x: number, y: number, rows: Grid];
-const grid = (s: string): Grid => s.trim().split('\n');
+const grid = (s: string): Grid => {
+  const rows = s.trim().split('\n');
+  if (rows.some((r) => r.length !== rows[0].length)) throw new Error(`hero: ragged pixel grid\n${s}`);
+  return rows;
+};
 
 // Frames are 32x32. The figure is drawn in an 18-wide box at (OX, OY); its soles are on row 26, so with the
 // sprite's centre origin they sit 11px below hero.y, where the feet hitbox is.
@@ -48,6 +52,16 @@ errrrRR....RRrRRRR
 .rrrrRR....RRrRRR.
 .rrr.rR....R.RRR..
 ..r...r....R...R..
+`)],
+    // Running at the camera, the cape is pulled back: shorter hems that swing with each stride.
+    runHems: [grid(`
+errrrRR....RRrRRRR
+.rr..rR....R..RRR.
+..................
+`), grid(`
+errrrRR....RRrRRRR
+.rrr.R.....R.RR...
+..................
 `)],
     legs: grid(`
 ......ds..ds......
@@ -116,6 +130,16 @@ errrRrrrrRrrrRRRRR
 .rrrrRrrrRrrrRRRR.
 ..rrrRr...RrRRRR..
 ..r...r.....R.RR..
+`)],
+    // Running away, the cape swings from side to side with each stride.
+    runHems: [grid(`
+errrRrrrrRrrrRRRR.
+errr.Rrr..RrRRR...
+er....r....R......
+`), grid(`
+.rrrRrrrrRrrrRRRRR
+..rrrRr...RrRRRRRR
+......r.....R..RRR
 `)],
     legs: grid(`
 ......ds..ds......
@@ -286,15 +310,16 @@ const SLASHES: Record<keyof typeof VIEWS, [number, number, Grid][]> = {
   down: [[11, 9, SLASH_DOWN], [-3, 9, flip(SLASH_DOWN)]],
   up: [[11, -3, SLASH_UP], [-1, -3, flip(SLASH_UP)]],
   side: [[12, 9, grid(`
-dsssWkeggggW
-.dddw..eeee.
-`)], [12, 5, grid(`
-...........W
-.........gge
-.......gge..
-.....kge....
-..ssW.......
-dsdd........
+dsssWkggggggW
+.dddw..eeeee.
+`)], [12, 4, grid(`
+...........gW
+.........gge.
+.......gge...
+.....gge.....
+....kge......
+..ssW........
+dsdd.........
 `)]],
 };
 
@@ -320,10 +345,10 @@ function frames(): Record<string, Layer[]> {
       const flap = Math.floor((i * 2) / d.run.length); // the cape flaps once per stride
       f[`${v}-run${i}`] = 'runBodies' in d
         ? [[OX, OY + HEM, legs], [OX - 4, OY + dy, d.runBodies[flap]]]
-        : pose(legs, dy, d.hems[flap], false);
+        : pose(legs, dy, d.runHems[flap], false);
     });
     SLASHES[v as keyof typeof VIEWS].forEach(([x, y, arm], i) => {
-      const base = 'runBodies' in d ? [[OX, OY + HEM, d.run[0]], [OX - 4, OY + 1, d.runBodies[0]]] as Layer[] : pose(d.legs, 0, d.hems[0], false);
+      const base = 'runBodies' in d ? [[OX, OY + HEM, d.run[0]], [OX - 4, OY + 1, d.runBodies[0]]] as Layer[] : pose(d.legs, 0, d.runHems[i], false);
       f[`${v}-slash${i}`] = [...base, [OX + x, OY + y, arm]];
     });
     MIST.forEach((_, i) => (f[`${v}-dash${i}`] = f[`${v}-run${d.run.length === 6 ? 2 : 1}`]));
@@ -409,7 +434,7 @@ function mote(scene: Phaser.Scene, x: number, y: number, depth: number) {
 
 export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   const st = states.get(s)!, scene = s.scene, now = scene.time.now;
-  if (look.slashing && !st.was.slashing) (st.slashAt = now), (st.swing ^= 1);
+  if (look.slashing && !st.was.slashing) { st.slashAt = now; st.swing ^= 1; } // alternate the two swings
   if (look.hurt && !st.was.hurt) st.hurtAt = now;
   if (look.dashing && !st.was.dashing) {
     st.dashAt = now;
@@ -419,20 +444,20 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   st.was = { ...look };
 
   const c = Math.cos(look.facing);
-  const view = Math.abs(c) > 0.38 ? 'side' : Math.sin(look.facing) > 0 ? 'down' : 'up';
+  const view = Math.abs(c) > 0.38 ? 'side' : Math.sin(look.facing) > 0 ? 'down' : 'up'; // diagonals use the side view
   let frame = `${now % 3600 < 140 ? 'blink' : 'idle'}${Math.floor(now / 260) % 4}`;
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
   else if (now - st.dashEnd < 70) frame = 'dash0'; // re-forming out of the mist
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${st.swing}`;
-  else if (look.moving) frame = `run${Math.floor(now / 90) % VIEWS[view].run.length}`;
+  else if (look.moving) { const n = VIEWS[view].run.length; frame = `run${Math.floor(now / (540 / n)) % n}`; } // one stride pair per 540ms in every view
   s.setFrame(`${view}-${frame}`).setFlipX(view === 'side' && c < 0);
 
   // Mist dash: the body leaves fading afterimages and wisps behind it.
   if (look.dashing && now - st.ghostAt > 24) {
     st.ghostAt = now;
     const g = scene.add.image(s.x, s.y, 'hero', s.frame.name).setFlipX(s.flipX).setDepth(s.depth - 1).setAlpha(0.45);
-    g.setTint(0x8a6f8f).setTintMode(Phaser.TintModes.FILL);
-    scene.tweens.add({ targets: g, alpha: 0, duration: 240, onComplete: () => g.destroy() });
+    g.setTint(0x5a4468).setTintMode(Phaser.TintModes.FILL);
+    scene.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
     mote(scene, s.x + Phaser.Math.Between(-5, 5), s.y + Phaser.Math.Between(-8, 8), s.depth - 1);
   }
 
