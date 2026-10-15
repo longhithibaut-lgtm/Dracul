@@ -3,7 +3,8 @@ import Phaser from 'phaser';
 // How the hero looks. Gameplay calls create() once and show() every frame; everything visual lives here.
 export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; hurt: boolean; invulnerable: boolean; facing: number };
 
-// Palette "Nuit de sang" (docs/art.md), one char per colour. '.' is empty, x is the translucent ground shadow.
+// Palette "Nuit de sang" (docs/art.md), one char per colour. In a grid '.' leaves the pixel below, ',' erases it;
+// x is the translucent ground shadow.
 const PAL: Record<string, string> = {
   k: '#1c1029', d: '#2e1838', s: '#3b2a4a', m: '#5a4468', l: '#8a6f8f',
   W: '#e8dcc8', w: '#b7a58f', R: '#5c0a1c', r: '#a3122f', e: '#e0284a', g: '#ff4f8b',
