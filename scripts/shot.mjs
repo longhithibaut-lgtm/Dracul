@@ -1,10 +1,11 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
 // Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
-// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (taken at 3/5 health, dash spent)
+// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (3/5 health, dash spent, 2 gifts),
 // light.png (a lit lantern, the hero at the edge of its holy light), crossbow.png (a crossbowman aiming), weak.png (a
-// weakened crossbowman, its heartbeat drop on the beat) and bite.png (the hero latched onto it, mid-drain).
-// Exit code 1 if the page logged an error or the combat, crossbow or bite frame is missing.
+// weakened crossbowman, its heartbeat drop on the beat), bite.png (the hero latched onto it, mid-drain), gifts.png
+// (full frame, the room cleared and the three gift cards open, the second hovered) and gate.png (the portcullis up).
+// Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
@@ -114,14 +115,14 @@ for (let i = 0; i < 200 && !captured; i++) {
   captured = true;
 }
 
-// HUD in a representative mid-fight state, like the reference: 3 of 5 health, dash just spent.
+// HUD in a representative mid-fight state, like the reference: 3 of 5 health, dash just spent, two gifts shown.
 if (captured) {
-  await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.health = 3; s.hud.health(3, 5); });
+  await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.health = 3; s.hud.health(3, 5); s.hud.gifts(['griffes', 'brume']); });
   await page.waitForTimeout(900); // let the lost-health animation settle
   await page.keyboard.press('Space', { delay: 100 }); // held across a couple of frames, see above
   await page.waitForTimeout(100);
   await freeze(true);
-  await shot('hud', { x: 0, y: 0, width: 400, height: 120 });
+  await shot('hud', { x: 0, y: 0, width: 400, height: 160 }); // with the gift shelf
   await freeze(false);
 }
 
@@ -205,8 +206,44 @@ let bit = null;
   }
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; state: ${JSON.stringify(await state())}`);
+// The room cleared and its gift taken: the cards open. The bot never clears a room on its own, so the fight is
+// moved on to the room's last wave and its enemies are killed; then the hero is put on the gift.
+const room = () => page.evaluate(() => { const s = window.game.scene.getScene('room'); return { phase: s.phase, no: s.roomNo, gifts: s.gifts }; });
+let gifts = false, gate = false;
+{
+  // The bite's kill calls the next wave in: wait for it, then end it as the room's last.
+  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable), null, { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => {
+    const s = window.game.scene.getScene('room');
+    s.wave = s.roomNo * 3; // T.run.wavesPerRoom
+    for (const e of s.enemies.getChildren().filter((e) => e.body?.enable)) s.kill(e);
+  });
+  if (await page.waitForFunction(() => window.game.scene.getScene('room').pickup?.ready, null, { timeout: 8000 }).catch(() => null)) {
+    await page.evaluate(() => { const s = window.game.scene.getScene('room'), m = s.room.medallion; s.hero.body.reset(m.x, m.y - 8); }); // feet on it
+    await page.waitForFunction(() => window.game.scene.getScene('room').cards);
+    await page.waitForTimeout(600); // the cards have slid in
+    await page.mouse.move(240 * X, 140 * X); // hover the middle card
+    await page.waitForTimeout(100);
+    await freeze(true);
+    await shot('gifts');
+    await freeze(false);
+    gifts = true;
+    await page.keyboard.press('1');
+    await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.phase === 'exit' && s.time.now > s.gateUpAt + 100; }, null, { timeout: 8000 });
+    await freeze(true);
+    await shot('gate', clip(240, 38, 400, 300));
+    await freeze(false);
+    gate = true;
+    // Through the gate to the next room.
+    await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.hero.body.reset(s.room.gate.x, s.room.gate.y + 20); });
+    await page.keyboard.down('w');
+    await page.waitForFunction(() => window.game.scene.getScene('room').roomNo === 2, null, { timeout: 6000 }).catch(() => {});
+    await page.keyboard.up('w');
+  }
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow || !bit ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit || !gifts ? 1 : 0);

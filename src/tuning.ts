@@ -63,4 +63,24 @@ export const T = {
     twoFromWave: 4,
     clear: 1.3, // never planted with the hero inside this much of its pool
   },
+
+  // A run is a string of rooms; the wave count carries on from room to room, so difficulty keeps climbing.
+  run: {
+    wavesPerRoom: 3,
+    slowMo: 0.3, // the last kill of a room plays at this speed...
+    slowMoMs: 450, // ...for this long (real time)
+    giftDelayMs: 500, // then the gift of the Rat house appears on the medallion
+    gateMs: 1100, // the portcullis rises
+    fadeMs: 450, // to black, leaving through the gate; the next room fades in as fast
+    titleMs: 1200, // "Salle N" stays up this long; the first wave comes when it is gone
+  },
+
+  // Gifts of the Rat house, each taken at most once per run.
+  gifts: {
+    plagueMs: 2000, plagueDamage: 1, // Griffes pestilentes: an infected enemy loses this much more, this long after
+    rats: 3, ratSpeed: 150, ratLifeMs: 2500, ratDamage: 1, // Nuée: rats released by a dash (no more than `rats` at once)
+    dashRecharge: 1.4, // Fuite du rat: the dash recharges this many times faster
+    gnaw: 1, // Rongeur: extra damage of the combo's third blow
+    blood: 1, // Survivant: extra max health, healed once when taken
+  },
 } as const;

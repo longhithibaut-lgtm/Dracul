@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { biteTarget, burnsAfter, dashStopsAt, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, drawGifts, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -9,10 +9,17 @@ import * as Fx from './fx.ts';
 import * as Hud from './hud.ts';
 import * as Sfx from './sfx.ts';
 import * as Lantern from './lantern.ts';
+import * as Rats from './rats.ts';
+import { GIFTS, GIFT_IDS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
+/** What a run carries from room to room, through scene.restart(data); {} starts a new run. */
+type Run = { room?: number; health?: number; gifts?: GiftId[] };
+// A room: the hero climbs in (from room 2), fights its waves, takes the gift of the Rat house on the medallion (cards
+// open, the action pauses), then walks out through the portcullis it raised.
+type Phase = 'enter' | 'fight' | 'gift' | 'choose' | 'exit' | 'leave';
 
-// Gameplay only: movement, combat, enemy AI, waves. Every visual decision lives in the modules above.
+// Gameplay only: movement, combat, enemy AI, waves, the run. Every visual decision lives in the modules above.
 export class RoomScene extends Phaser.Scene {
   health: number = T.hero.maxHealth;
   hero!: Sprite;
@@ -39,33 +46,53 @@ export class RoomScene extends Phaser.Scene {
   private biteAt = -1e9;
   private biteReadyAt = 0;
   private prey?: Sprite; // the human the hero is latched onto, from the snap until it dies
+  private roomNo = 1;
+  private gifts: GiftId[] = [];
+  private phase: Phase = 'fight';
+  private pickup?: Rats.Pickup;
+  private cards?: Rats.Cards;
+  private offer: GiftId[] = [];
+  private gateUpAt = Infinity;
+  private rats: { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until: number }[] = [];
 
   constructor() {
     super('room');
   }
 
-  init() {
-    // The scene instance is reused on restart, so run state is reset here.
-    this.health = T.hero.maxHealth;
+  init(data: Run) {
+    // The scene instance is reused on restart, so every field is reset here; the run carries on through `data`.
+    this.roomNo = data.room ?? 1;
+    this.gifts = [...(data.gifts ?? [])];
+    this.health = data.health ?? this.maxHealth();
     this.facing = Math.PI / 2; // start facing the camera
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
     this.dead = false;
     this.dashRequested = false;
-    this.wave = this.litMs = 0;
+    this.litMs = 0;
+    this.wave = (this.roomNo - 1) * T.run.wavesPerRoom; // the count carries on, and so does the difficulty
     this.lanterns = [];
     this.biteAt = -1e9;
     this.biteReadyAt = 0;
     this.prey = undefined;
+    this.phase = this.roomNo > 1 ? 'enter' : 'fight';
+    this.pickup = this.cards = undefined;
+    this.offer = [];
+    this.gateUpAt = Infinity;
+    this.rats = [];
   }
 
   create() {
+    // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
+    this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
+    this.physics.resume();
     this.room = Room.build(this);
     const b = this.room.bounds;
     this.physics.world.setBounds(b.x, b.y, b.width, b.height);
 
-    this.hero = Hero.create(this, this.room.heroStart.x, this.room.heroStart.y);
-    this.hero.setCollideWorldBounds(true);
+    const start = this.phase === 'enter' ? this.room.stairs : this.room.heroStart;
+    this.hero = Hero.create(this, start.x, start.y);
+    this.hero.setCollideWorldBounds(this.phase !== 'enter');
     this.enemies = this.physics.add.group();
     this.physics.add.collider(this.hero, this.room.obstacles);
     this.physics.add.collider(this.enemies, this.room.obstacles);
@@ -76,40 +103,56 @@ export class RoomScene extends Phaser.Scene {
     this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
 
     this.hud = Hud.create(this);
-    this.hud.health(this.health, T.hero.maxHealth);
+    this.hud.health(this.health, this.maxHealth());
+    this.hud.gifts(this.gifts.map((g) => GIFTS[g].slot));
 
     this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,K,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
     // Left click slashes, right click bites, both toward the pointer; J and K do the same toward where he faces.
+    // While the gift cards are open, a click picks one.
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (this.cards) return this.pick(this.cards.at(p.worldX, p.worldY));
       const a = Math.atan2(p.worldY - this.hero.y, p.worldX - this.hero.x);
       if (p.button === 0) this.slash(a);
       else if (p.button === 2) this.bite(a);
     });
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.worldX, p.worldY)));
     this.keys.J.on('down', () => this.slash(this.facing));
     this.keys.K.on('down', () => this.bite(this.facing));
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
     for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashRequested = true));
     this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
+    // Gift cards: the 1, 2, 3 keys of the top row (by position, so AZERTY works unshifted) or of the numpad.
+    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
+      const n = /^(?:Digit|Numpad)([1-3])$/.exec(e.code);
+      if (n) this.pick(Number(n[1]) - 1);
+    });
 
-    this.time.delayedCall(900, () => this.spawnWave());
+    if (this.phase === 'enter') {
+      this.cameras.main.fadeIn(T.run.fadeMs);
+      this.hud.title(`Salle ${this.roomNo}`);
+    }
+    this.time.delayedCall(this.phase === 'enter' ? T.run.titleMs : 900, () => this.spawnWave());
   }
 
   update(time: number, delta: number) {
-    if (this.dead) return;
+    if (this.dead || this.phase === 'choose') return;
     const k = this.keys;
-    const x = Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
-    const y = Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
+    // Climbing in from the stairs or walking out through the gate, the hero moves on his own.
+    const auto = this.phase === 'enter' || this.phase === 'leave';
+    const x = auto ? 0 : Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
+    const y = auto ? -1 : Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
     if ((x || y) && time >= this.slashUntil && !this.prey) this.facing = Math.atan2(y, x);
 
-    const wantsDash = this.dashRequested;
+    const wantsDash = this.dashRequested && !auto;
     this.dashRequested = false;
     if (wantsDash && time >= this.dashReadyAt && !this.prey) {
       this.dashUntil = time + T.dash.durationMs;
-      this.dashReadyAt = this.dashUntil + T.dash.cooldownMs;
+      this.dashReadyAt = this.dashUntil + this.dashCooldown();
       Fx.dash(this, this.hero, this.facing);
       Sfx.play(this, 'dash');
       this.physics.velocityFromRotation(this.facing, T.dash.speed, this.hero.body!.velocity);
+      if (this.gifts.includes('nuee')) this.releaseRats();
     } else if (time - delta < this.dashUntil) {
       // The mist halts at contact with an enemy it would otherwise end on, so hero and target stay two shapes. Bodies,
       // not sprites: physics has already moved them this frame, including the dash's last step. Never for a lunging
@@ -122,7 +165,7 @@ export class RoomScene extends Phaser.Scene {
         const c = e.body!.center, back = new Phaser.Math.Vector2(b.center.x - c.x, b.center.y - c.y).setLength(T.dash.stopShort);
         b.position.add(back.add(c).subtract(b.center));
         this.dashUntil = time;
-        this.dashReadyAt = time + T.dash.cooldownMs;
+        this.dashReadyAt = time + this.dashCooldown();
       }
     }
     if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
@@ -137,7 +180,15 @@ export class RoomScene extends Phaser.Scene {
     // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy;
     // biting, in front of his prey.
     this.hero.setDepth(this.hero.y + (time < this.slashUntil || this.prey ? 12 : 0));
-    this.hud.dashReady(time >= this.dashReadyAt);
+    this.hud.dashReady(time >= this.dashReadyAt, this.dashReadyAt);
+
+    const feet = this.hero.body!;
+    if (this.phase === 'enter' && feet.bottom < this.room.bounds.bottom - 16) {
+      this.phase = 'fight';
+      this.hero.setCollideWorldBounds(true);
+    }
+    if (this.phase === 'gift' && this.pickup?.ready && Phaser.Math.Distance.BetweenPoints(feet.center, this.pickup) < 10) this.openGifts();
+    if (this.phase === 'exit' && time >= this.gateUpAt && feet.top <= this.room.bounds.top + 1 && Math.abs(feet.center.x - this.room.gate.x) < 14) this.leave();
 
     // Holy light: free for a grace on stepping in, then it burns on a steady beat until he steps out (or mists through).
     if (this.lanterns.some((l) => Lantern.lights(l, this.hero.body!.center))) {
@@ -152,6 +203,16 @@ export class RoomScene extends Phaser.Scene {
 
     for (const e of this.enemies.getChildren() as Sprite[]) {
       if (!e.body?.enable) continue;
+      // Griffes pestilentes: an infected enemy smokes, then the plague takes its due.
+      const sick = e.getData('plagueAt');
+      if (sick && time < sick) Rats.plagued(this, e, time);
+      else if (sick) {
+        e.setData('plagueAt', 0);
+        Rats.plague(this, e);
+        Sfx.play(this, 'hit');
+        this.hurtEnemy(e, T.gifts.plagueDamage);
+        if (!e.body?.enable) continue;
+      }
       const bow = e.getData('kind') === 'crossbow';
       if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
         if (bow) this.stepCrossbow(e, time);
@@ -161,6 +222,7 @@ export class RoomScene extends Phaser.Scene {
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
     }
+    this.stepRats(time, delta);
     // Bolts fly until the prop or wall they were aimed into.
     for (const b of [...this.bolts.getChildren()] as Sprite[]) {
       b.setDepth(b.y);
@@ -261,7 +323,7 @@ export class RoomScene extends Phaser.Scene {
 
   private slash(angle: number) {
     const now = this.time.now;
-    if (this.dead || this.prey || now < this.slashReadyAt || now < this.dashUntil) return;
+    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.slashReadyAt || now < this.dashUntil) return;
     this.combo = nextCombo(this.combo, now - this.lastSlashAt, T.slash.comboWindowMs);
     this.lastSlashAt = now;
     this.slashReadyAt = now + T.slash.cooldownMs;
@@ -270,41 +332,53 @@ export class RoomScene extends Phaser.Scene {
     Fx.slash(this, this.hero.x, this.hero.y, angle, this.combo);
     Sfx.play(this, 'slash', this.combo);
 
+    const damage = T.slash.damage + (this.combo === 2 && this.gifts.includes('rongeur') ? T.gifts.gnaw : 0);
     let hits = 0;
     for (const e of this.enemies.getChildren() as Sprite[]) {
       if (!e.body?.enable || !inArc(this.hero, angle, e, T.slash.range, T.slash.arcDeg)) continue;
       hits++;
-      this.hitEnemy(e, angle);
+      this.hitEnemy(e, angle, damage);
     }
     for (const l of [...this.lanterns]) { // aimed at its glass, about the hero's chest height
       if (!l.lit || !inArc(this.hero, angle, { x: l.x, y: l.y - 5 }, T.slash.range, T.slash.arcDeg)) continue;
       hits++;
-      this.hitLantern(l, angle);
+      this.hitLantern(l, angle, damage);
     }
     if (!hits) return;
     // Hit-stop: freeze physics briefly so the impact reads; tweens and timers keep running.
     this.physics.pause();
-    this.time.delayedCall(T.slash.hitStopMs, () => this.physics.resume());
+    this.time.delayedCall(T.slash.hitStopMs, () => this.phase !== 'choose' && this.physics.resume());
   }
 
-  private hitEnemy(e: Sprite, angle: number) {
+  private hitEnemy(e: Sprite, angle: number, damage: number) {
     const now = this.time.now;
-    const hp = e.getData('hp') - T.slash.damage;
     // A hit interrupts whatever the enemy was doing, including a windup: aggression is rewarded.
-    e.setData({ hp, state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs, flashUntil: now + 70 });
+    e.setData({ state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs });
     const kb = this.combo === 2 ? T.slash.knockback * 1.6 : T.slash.knockback;
     this.physics.velocityFromRotation(angle, kb, e.body!.velocity);
     Fx.hit(this, e.x, e.y, angle);
     Sfx.play(this, 'hit', this.combo);
+    if (this.gifts.includes('griffes') && !e.getData('plagueAt')) e.setData('plagueAt', now + T.gifts.plagueMs);
+    this.hurtEnemy(e, damage);
+  }
+
+  /** Damage to an enemy from any source (claws, plague, rats): it flashes, and dies through kill(). */
+  private hurtEnemy(e: Sprite, amount: number) {
+    if (!e.body?.enable) return;
+    const hp = e.getData('hp') - amount;
+    e.setData({ hp, flashUntil: this.time.now + 70 });
     if (hp <= 0) this.kill(e);
   }
 
-  /** Every enemy death (slash or bite) goes through here, so the wave-clear check lives in one place. */
+  /** Every enemy death goes through here, and here only it is decided whether the wave, or the room, is over. */
   private kill(e: Sprite) {
+    if (!e.body?.enable) return; // already dead: plague or rats can finish a prey mid-bite
     e.disableBody(false, false);
     (e.getData('kind') === 'crossbow' ? Crossbow : Enemy).die(this, e);
     Sfx.play(this, 'kill');
-    if (!this.enemies.getChildren().some((o) => (o as Sprite).body?.enable)) this.time.delayedCall(1500, () => this.spawnWave());
+    if ((this.enemies.getChildren() as Sprite[]).some((o) => o.body?.enable)) return;
+    if (this.wave < this.roomNo * T.run.wavesPerRoom) this.time.delayedCall(1500, () => this.spawnWave());
+    else this.roomCleared();
   }
 
   /**
@@ -314,7 +388,7 @@ export class RoomScene extends Phaser.Scene {
    */
   private bite(angle: number) {
     const now = this.time.now, B = T.bite;
-    if (this.dead || this.prey || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil) return;
+    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil) return;
     const live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
     const prey = biteTarget(this.hero, angle, live.map((e) => ({ x: e.x, y: e.y, hp: e.getData('hp'), human: !!e.getData('human'), e })),
       B.range, B.arcDeg, B.weakAt)?.e;
@@ -347,16 +421,112 @@ export class RoomScene extends Phaser.Scene {
         if (this.dead) return;
         this.prey = undefined;
         this.kill(prey);
-        this.health = Math.min(T.hero.maxHealth, this.health + B.heal);
-        this.hud.health(this.health, T.hero.maxHealth);
+        this.health = Math.min(this.maxHealth(), this.health + B.heal);
+        this.hud.health(this.health, this.maxHealth());
         Fx.heal(this, this.hero);
         Sfx.play(this, 'heal');
       });
     });
   }
 
-  private hitLantern(l: Lantern.Lantern, angle: number) {
-    l.hp -= T.slash.damage;
+  /** The room's last enemy is down: it falls in slow motion with a sting, then the gift of the Rat house rises on the
+   *  medallion; once every gift is taken, the gate opens straight away. */
+  private roomCleared() {
+    if (this.dead) return;
+    this.phase = 'gift';
+    Sfx.play(this, 'clear');
+    const k = T.run.slowMo;
+    this.time.timeScale = this.tweens.timeScale = k;
+    this.physics.world.timeScale = 1 / k; // Arcade's scale is a slowdown factor
+    this.time.delayedCall(T.run.slowMoMs * k, () => {
+      this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
+      this.time.delayedCall(T.run.giftDelayMs, () => {
+        if (this.dead) return;
+        if (GIFT_IDS.every((g) => this.gifts.includes(g))) this.openGate();
+        else this.pickup = Rats.pickup(this, this.room.medallion.x, this.room.medallion.y);
+      });
+    });
+  }
+
+  /** The hero steps on the gift: the action pauses and up to three untaken gifts are offered. */
+  private openGifts() {
+    this.phase = 'choose';
+    this.hero.setVelocity(0);
+    this.physics.pause();
+    this.pickup!.take();
+    this.pickup = undefined;
+    Sfx.play(this, 'gift');
+    this.offer = drawGifts(GIFT_IDS, this.gifts, 3, Math.random);
+    this.cards = Rats.cards(this, this.offer);
+  }
+
+  /** Card `i` of the offer is taken (a key or a click); the cards close, the action resumes, the gate rises. */
+  private pick(i: number) {
+    if (!this.cards?.choose(i, () => {
+      this.cards = undefined;
+      this.physics.resume();
+      this.openGate();
+    })) return;
+    const id = this.offer[i];
+    this.gifts.push(id);
+    if (id === 'survivant') this.health += T.gifts.blood;
+    this.hud.health(this.health, this.maxHealth());
+    this.hud.gifts(this.gifts.map((g) => GIFTS[g].slot));
+    Sfx.play(this, 'gift', 1);
+  }
+
+  private openGate() {
+    this.phase = 'exit';
+    Room.raiseGate(this, T.run.gateMs);
+    this.gateUpAt = this.time.now + T.run.gateMs;
+    Sfx.play(this, 'gate');
+  }
+
+  /** Into the open gate: fade to black, then the next room (the same hall, for now), health and gifts kept. */
+  private leave() {
+    this.phase = 'leave';
+    this.hero.setCollideWorldBounds(false);
+    this.cameras.main.fadeOut(T.run.fadeMs);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
+      this.scene.restart({ room: this.roomNo + 1, health: this.health, gifts: this.gifts } satisfies Run));
+  }
+
+  private maxHealth() {
+    return T.hero.maxHealth + (this.gifts.includes('survivant') ? T.gifts.blood : 0);
+  }
+
+  private dashCooldown() {
+    return T.dash.cooldownMs / (this.gifts.includes('fuite') ? T.gifts.dashRecharge : 1);
+  }
+
+  /** Nuée: the mist lets rats loose, up to `rats` at a time. */
+  private releaseRats() {
+    const at = this.hero.body!.center;
+    for (let i = this.rats.length; i < T.gifts.rats; i++)
+      this.rats.push({ s: Rats.rat(this, at.x + Phaser.Math.Between(-6, 6), at.y + Phaser.Math.Between(-3, 3)), heading: Math.random() * 2 * Math.PI, phase: i * 2.1, until: this.time.now + T.gifts.ratLifeMs });
+  }
+
+  /** Each rat zigzags at the enemy nearest to it and bites once; with none left it runs off and is gone. */
+  private stepRats(time: number, delta: number) {
+    const live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
+    this.rats = this.rats.filter((r) => {
+      const d = (e: Sprite) => Phaser.Math.Distance.Between(r.s.x, r.s.y, e.body!.center.x, e.body!.center.y);
+      const e = live.length ? live.reduce((a, b) => (d(a) < d(b) ? a : b)) : undefined;
+      if (e) r.heading = Phaser.Math.Angle.Between(r.s.x, r.s.y, e.body!.center.x, e.body!.center.y);
+      const angle = r.heading + Math.sin(time / 70 + r.phase) * 0.6, step = (T.gifts.ratSpeed * delta) / 1000;
+      r.s.setPosition(r.s.x + Math.cos(angle) * step, r.s.y + Math.sin(angle) * step);
+      Rats.scurry(r.s, angle, time);
+      if (e && d(e) < 6) {
+        this.hurtEnemy(e, T.gifts.ratDamage);
+        Sfx.play(this, 'hit');
+      } else if (time < r.until && this.room.bounds.contains(r.s.x, r.s.y)) return true;
+      Rats.vanish(this, r.s);
+      return false;
+    });
+  }
+
+  private hitLantern(l: Lantern.Lantern, angle: number, damage: number) {
+    l.hp -= damage;
     Sfx.play(this, 'shatter', Number(l.hp <= 0));
     if (l.hp > 0) return Lantern.hit(this, l, angle);
     Lantern.shatter(this, l, angle);
@@ -385,14 +555,14 @@ export class RoomScene extends Phaser.Scene {
     this.invulnUntil = now + T.hero.hurtInvulnMs;
     this.hurtAt = now;
     this.health -= amount;
-    this.hud.health(this.health, T.hero.maxHealth);
+    this.hud.health(this.health, this.maxHealth());
     Fx.hurt(this);
     Sfx.play(this, 'hurt');
     if (this.health > 0) return true;
     this.dead = true;
     Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
-    this.time.delayedCall(1200, () => this.scene.restart());
+    this.time.delayedCall(1200, () => this.scene.restart({} satisfies Run)); // a new run: room 1, no gifts
     return true;
   }
 

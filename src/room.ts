@@ -7,6 +7,9 @@ export type Room = {
   obstacles: Phaser.Physics.Arcade.StaticGroup;
   heroStart: { x: number; y: number };
   spawns: { x: number; y: number }[]; // fixed, so screenshots are comparable run to run
+  medallion: { x: number; y: number }; // centre of the ritual medallion, on the floor
+  gate: { x: number; y: number }; // middle of the exit, on the back edge of the floor
+  stairs: { x: number; y: number }; // where the hero climbs in from, below the front edge
 };
 
 // A crypt hall seen in HLD's three-quarter view: a back wall with lancets, ossuaries and a portcullis
@@ -184,7 +187,7 @@ function bake(scene: Phaser.Scene, key: string, w: number, h: number, paint: (p:
 
 // ---------- background: void, walls, floor, baked light ----------
 
-function paintBackWall(p: Px) {
+function paintBackWall(p: Px, bars: boolean) {
   const x0 = FX0 - 12, x1 = FX1 + 12;
   // Courses of stone blocks.
   for (let r = 0; r < 6; r++) {
@@ -217,7 +220,7 @@ function paintBackWall(p: Px) {
 
   for (const c of [CX - 48, CX + 48, CX - 152, CX + 152]) pilaster(p, c);
   for (const c of LANCETS) lancet(p, c);
-  gate(p);
+  gate(p, bars);
   for (const c of [CX - 48, CX + 48]) banner(p, c);
   ossuary(p, FX0 + 21);
   ossuary(p, FX1 - 21);
@@ -275,7 +278,7 @@ function lancet(p: Px, c: number) {
 
 const GATE = { hw: 22, ys: 44, R: 28 };
 
-function gate(p: Px) {
+function gate(p: Px, bars: boolean) {
   const { hw, ys, R } = GATE;
   const shade = (x: number, lit: number, dark: number) => (x < CX ? lit : dark);
   p.fill(CX - 32, 4, CX + 32, 63, (x, y) => inArch(x, y, CX, hw + 8, ys, R + 8), P.wall0);
@@ -296,7 +299,7 @@ function gate(p: Px) {
     for (let x = CX - 30; x <= CX + 30; x++)
       if (inArch(x, y, CX, hw + 3, ys, R + 3) && !inArch(x, y, CX, hw, ys, R)) p.tint(x, y, P.moon1, 0.25);
   // Portcullis in silhouette against it.
-  for (let y = 4; y < 64; y++)
+  if (bars) for (let y = 4; y < 64; y++)
     for (let x = CX - hw; x <= CX + hw; x++)
       if (inArch(x, y, CX, hw, ys, R) && portcullis(x, y)) p.p(x, y, (x - CX + 19 + 60) % 6 === 1 ? P.void0 : P.void1);
   // Skull keystone.
@@ -316,10 +319,10 @@ function gate(p: Px) {
 const portcullis = (x: number, y: number) => (x - CX + 19 + 60) % 6 < 2 || Math.abs(y - 26.5) < 1 || Math.abs(y - 44.5) < 1;
 
 /** Moonlight through the gate projected on the floor: each floor pixel looks back at the gate opening. */
-function gateSpill(x: number, y: number) {
+function gateSpill(x: number, y: number, bars = true) {
   if (y < FY0 || y > FY0 + 100) return 0;
   const d = y - FY0, gx = CX + (x - CX - d * 0.12) / (1 + d * 0.012), gy = FY0 - d / 2;
-  if (!inArch(gx, gy, CX, GATE.hw, GATE.ys, GATE.R) || portcullis(Math.round(gx), Math.round(gy))) return 0;
+  if (!inArch(gx, gy, CX, GATE.hw, GATE.ys, GATE.R) || (bars && portcullis(Math.round(gx), Math.round(gy)))) return 0;
   return d < 26 ? 1 : d < 56 ? 0.72 : 0.45;
 }
 
@@ -617,7 +620,7 @@ function paintShadows(p: Px) {
   }
 }
 
-function paintBackground(p: Px) {
+function paintBackground(p: Px, bars = true) {
   // Beyond the side walls: a crimson dark with pillars receding into it.
   p.rect(0, 0, p.w, p.h, P.abyss1);
   for (const x of [4, 18, 462, 476]) {
@@ -633,7 +636,7 @@ function paintBackground(p: Px) {
   skull(p, 424, 128); bone(p, 416, 132, 6);
   skull(p, 120, 250); bone(p, 404, 248, 5); bone(p, 292, 84, 4);
   paintShadows(p);
-  paintBackWall(p);
+  paintBackWall(p, bars);
   // Side wall tops (seen from above): the right wall's inner rim faces the light, the left one's is in shadow.
   for (const x of [FX0 - 12, FX1]) wallTop(p, x, 0, 12, T.height);
   p.rect(FX1, 9, 1, T.height, P.stone0);
@@ -848,10 +851,73 @@ function glowTexture(p: Px) {
     }
 }
 
+// ---------- the portcullis ----------
+
+// Box around the gate opening; the bars stop above the threshold slab (row 63).
+const GX = CX - GATE.hw, GY = 4, GW = GATE.hw * 2 + 1, GH = 59, GATE_RISE = 48;
+let BARS: Px | undefined; // the bars as painted in the hall, lights included; transparent elsewhere
+
+/** Paints the hall without its portcullis, and the portcullis alone as the pixels where the hall painted with it
+ *  differs: closed, the gate looks exactly as when it was part of the hall. */
+function paintHall(scene: Phaser.Scene) {
+  const open = new Px(T.width, T.height), shut = new Px(T.width, T.height);
+  paintBackground(open, false);
+  paintBackground(shut);
+  bake(scene, 'room-bg', T.width, T.height, (p) => p.d.set(open.d));
+  const bars = new Px(GW, GH);
+  for (let y = 0; y < GH; y++)
+    for (let x = 0; x < GW; x++) if (shut.get(GX + x, GY + y) !== open.get(GX + x, GY + y)) bars.p(x, y, shut.get(GX + x, GY + y));
+  BARS = bars;
+}
+
+/** The portcullis raised by `d` px: its bars slide up into the masonry, clipped to the opening. */
+function drawGate(scene: Phaser.Scene, d: number) {
+  const t = (scene.textures.exists('room-gate') ? scene.textures.get('room-gate') : scene.textures.createCanvas('room-gate', GW, GH)!) as Phaser.Textures.CanvasTexture;
+  const img = new ImageData(GW, GH);
+  for (let y = 0; y + d < GH; y++)
+    for (let x = 0; x < GW; x++) {
+      if (!inArch(GX + x, GY + y, CX, GATE.hw, GATE.ys, GATE.R)) continue;
+      const from = ((y + d) * GW + x) * 4;
+      img.data.set(BARS!.d.subarray(from, from + 4), (y * GW + x) * 4);
+    }
+  t.context.putImageData(img, 0, 0);
+  t.refresh();
+}
+
+/** The moonlight the bars keep off the floor (in the box at GLX, FY0), as paintLight's glow and paintShaft's sheen
+ *  would add it: drawn additive, it fills the stripes as the portcullis rises. */
+const GLX = CX - 60;
+function paintGateLight(p: Px) {
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      const k = gateSpill(GLX + x, FY0 + y, false) - gateSpill(GLX + x, FY0 + y);
+      if (k <= 0) continue;
+      p.p(x, y, 0x000000);
+      p.glow(x, y, P.moon1, k * 0.3);
+      p.glow(x, y, P.moon2, k * 0.08);
+    }
+}
+
+/** Winches the portcullis up over `ms`, in jerks of a few pixels, letting the moonlight in. */
+export function raiseGate(scene: Phaser.Scene, ms: number) {
+  const light = scene.children.getByName('room-gatelight') as Phaser.GameObjects.Image;
+  let last = 0;
+  scene.tweens.addCounter({ from: 0, to: 1, duration: ms, ease: 'Sine.easeInOut', onUpdate: (tw) => {
+    const d = 3 * Math.round(((tw.getValue() ?? 0) * GATE_RISE) / 3);
+    if (d !== last) drawGate(scene, (last = d));
+    light.setAlpha(d / GATE_RISE);
+  } });
+}
+
 // ---------- build ----------
 
 export function build(scene: Phaser.Scene): Room {
-  scene.add.image(0, 0, bake(scene, 'room-bg', T.width, T.height, paintBackground)).setOrigin(0).setDepth(-1000);
+  if (!BARS) paintHall(scene); // painted on the first build, kept across restarts
+  scene.add.image(0, 0, 'room-bg').setOrigin(0).setDepth(-1000);
+  drawGate(scene, 0); // the previous room left it open
+  scene.add.image(GX, GY, 'room-gate').setOrigin(0).setDepth(-999);
+  scene.add.image(GLX, FY0, bake(scene, 'room-gatelight', 140, 100, paintGateLight)).setOrigin(0).setDepth(-998)
+    .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setName('room-gatelight');
 
   const obstacles = scene.physics.add.staticGroup();
   for (const o of PROPS) {
@@ -881,6 +947,9 @@ export function build(scene: Phaser.Scene): Room {
     // The hero starts on the medallion and the wave rises around it, so fights play out in the open middle.
     heroStart: { x: CX, y: CY },
     spawns: [{ x: CX, y: 88 }, { x: 120, y: CY }, { x: 360, y: CY }],
+    medallion: { x: CX, y: CY },
+    gate: { x: CX, y: FY0 },
+    stairs: { x: CX, y: FY1 + 10 }, // feet off screen, the head showing above the steps
   };
   // Self-check: every start point is inside the hall and clear of every footprint (with a body's margin).
   for (const s of [room.heroStart, ...room.spawns])
