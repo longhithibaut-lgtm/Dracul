@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { dashStopsAt, inArc, nextCombo } from './logic.ts';
+import { dashStopsAt, inArc, keepDistance, nextCombo, rayDistance } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
+import * as Crossbow from './crossbow.ts';
 import * as Room from './room.ts';
 import * as Fx from './fx.ts';
 import * as Hud from './hud.ts';
@@ -15,6 +16,7 @@ export class RoomScene extends Phaser.Scene {
   health: number = T.hero.maxHealth;
   hero!: Sprite;
   enemies!: Phaser.Physics.Arcade.Group;
+  bolts!: Phaser.Physics.Arcade.Group;
 
   private room!: Room.Room;
   private hud!: Hud.Hud;
@@ -30,6 +32,7 @@ export class RoomScene extends Phaser.Scene {
   private hurtAt = -1e9;
   private dashRequested = false;
   private dead = false;
+  private wave = 0;
 
   constructor() {
     super('room');
@@ -42,6 +45,7 @@ export class RoomScene extends Phaser.Scene {
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
     this.dead = false;
+    this.wave = 0;
     this.dashRequested = false;
   }
 
@@ -57,6 +61,9 @@ export class RoomScene extends Phaser.Scene {
     this.physics.add.collider(this.enemies, this.room.obstacles);
     this.physics.add.collider(this.enemies, this.enemies);
     this.physics.add.overlap(this.hero, this.enemies, (_h, e) => this.hurt(e as Sprite));
+    this.bolts = this.physics.add.group();
+    // A bolt that lands is spent; one that misses (dash, invulnerability) flies on.
+    this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
 
     this.hud = Hud.create(this);
     this.hud.health(this.health, T.hero.maxHealth);
@@ -116,9 +123,23 @@ export class RoomScene extends Phaser.Scene {
 
     for (const e of this.enemies.getChildren() as Sprite[]) {
       if (!e.body?.enable) continue;
-      if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) this.stepEnemy(e, time);
-      Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
+      const bow = e.getData('kind') === 'crossbow';
+      if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
+        if (bow) this.stepCrossbow(e, time);
+        else this.stepEnemy(e, time);
+      }
+      if (bow) Crossbow.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'));
+      else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
+    }
+    // Bolts fly until the prop or wall they were aimed into.
+    for (const b of [...this.bolts.getChildren()] as Sprite[]) {
+      b.setDepth(b.y);
+      const { x0, y0, angle, reach } = b.data.values;
+      if (Phaser.Math.Distance.Between(x0, y0, b.body!.center.x, b.body!.center.y) < reach) continue;
+      b.setPosition(x0 + Math.cos(angle) * reach, y0 + Math.sin(angle) * reach - Crossbow.BOLT_HEIGHT);
+      Crossbow.boltHit(this, b);
+      Sfx.play(this, 'thunk');
     }
   }
 
@@ -164,6 +185,51 @@ export class RoomScene extends Phaser.Scene {
     }
   }
 
+  // Crossbowman: keeps its distance and strafes; aims (stops, telegraphs, then the line locks), shoots one bolt, reloads.
+  private stepCrossbow(e: Sprite, time: number) {
+    const C = T.crossbow;
+    const from = e.body!.center, to = this.hero.body!.center;
+    const toHero = Phaser.Math.Angle.BetweenPoints(from, to);
+    const dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    if (e.getData('state') === 'aim') {
+      // It tracks the hero, then holds its line for the last moments: a sidestep then dodges the bolt.
+      if (time < e.getData('fireAt') - C.lockMs) e.setData('facing', toHero);
+      const angle = e.getData('facing'), reach = this.boltReach(from, angle);
+      e.setData('reach', reach);
+      if (time < e.getData('fireAt')) return;
+      const b = Crossbow.bolt(this, this.bolts, from.x + Math.cos(angle) * 10, from.y + Math.sin(angle) * 10, angle);
+      this.physics.velocityFromRotation(angle, C.boltSpeed, b.body!.velocity);
+      b.setData({ x0: from.x, y0: from.y, angle, reach });
+      e.setData({ state: 'shoot', until: time + C.recoilMs, readyAt: time + C.reloadMs, bolt: b });
+      Sfx.play(this, 'twang');
+      return;
+    }
+    const others = (this.enemies.getChildren() as Sprite[]).filter((o) => o !== e && o.body?.enable);
+    // Fair shots: one crossbowman aims at a time, never with its last bolt still flying, and only along a clear line.
+    if (time >= e.getData('readyAt') && !e.getData('bolt')?.active && dist >= C.minShot && dist <= C.maxShot
+      && !others.some((o) => o.getData('state') === 'aim') && this.boltReach(from, toHero) >= dist) {
+      e.setVelocity(0).setData({ state: 'aim', fireAt: time + C.aimMs, facing: toHero, reach: dist });
+      Sfx.play(this, 'aim', (C.aimMs - C.lockMs) / 1000);
+      return;
+    }
+    const v = this.physics.velocityFromRotation(toHero + keepDistance(dist, C.near, C.far, e.getData('side')), C.speed, e.body!.velocity);
+    for (const o of others) {
+      const d = Phaser.Math.Distance.BetweenPoints(e, o);
+      if (d < T.enemy.spacing) v.add(new Phaser.Math.Vector2(e.x - o.x, e.y - o.y).setLength(C.speed * (1 - d / T.enemy.spacing)));
+    }
+    // Like circling ghouls, it turns back at walls, props and packmates, then holds its course a moment.
+    if (time >= e.getData('steadyUntil') && (!e.body!.blocked.none || v.length() < C.speed / 3))
+      e.setData({ side: -e.getData('side'), steadyUntil: time + 600 });
+    v.limit(C.speed);
+    e.setData({ state: 'chase', facing: toHero });
+  }
+
+  // How far a bolt flies from floor point `from` along `angle` before a prop or a wall stops it.
+  private boltReach(from: Phaser.Types.Math.Vector2Like, angle: number) {
+    const props = this.room.obstacles.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody);
+    return rayDistance({ x: from.x!, y: from.y! }, angle, this.room.bounds, props);
+  }
+
   private slash(angle: number) {
     const now = this.time.now;
     if (this.dead || now < this.slashReadyAt || now < this.dashUntil) return;
@@ -198,7 +264,7 @@ export class RoomScene extends Phaser.Scene {
     Sfx.play(this, 'hit', this.combo);
     if (hp > 0) return;
     e.disableBody(false, false);
-    Enemy.die(this, e);
+    (e.getData('kind') === 'crossbow' ? Crossbow : Enemy).die(this, e);
     Sfx.play(this, 'kill');
     if (!this.enemies.getChildren().some((o) => (o as Sprite).body?.enable)) this.time.delayedCall(1500, () => this.spawnWave());
   }
@@ -228,7 +294,19 @@ export class RoomScene extends Phaser.Scene {
 
   private spawnWave() {
     if (this.dead) return;
+    // From the second wave the Order joins in: crossbowmen (one, then two) take the spawn points farthest from the hero.
+    const far = (p: { x: number; y: number }) => Phaser.Math.Distance.BetweenPoints(p, this.hero);
+    const bows = [...this.room.spawns].sort((a, b) => far(b) - far(a)).slice(0, Math.min(2, ++this.wave - 1));
     for (const p of this.room.spawns) {
+      if (bows.includes(p)) {
+        Crossbow.telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
+        this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
+          if (this.dead) return;
+          const e = Crossbow.create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
+          e.setData({ kind: 'crossbow', hp: T.crossbow.hp, state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
+        });
+        continue;
+      }
       Enemy.telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
       Sfx.play(this, 'spawn');
       this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {

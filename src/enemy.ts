@@ -26,7 +26,7 @@ const PAL: Record<string, number> = {
   t: 0x3fa7a3, T: 0x1f4a5a,
   s: 0x0b0710, // ground shadow, drawn translucent
 };
-const BLOOD = { light: 0xe0284a, mid: 0xa3122f, dark: 0x5c0a1c, dry: 0x3e0820 }; // drops, pools and stains
+export const BLOOD = { light: 0xe0284a, mid: 0xa3122f, dark: 0x5c0a1c, dry: 0x3e0820 }; // drops, pools and stains
 // The hit flash rims the body in white and lifts the robe a tone instead of filling it white, so the struck thrall
 // stays a dark shape apart from the pale hero standing at it.
 const FLASH: Record<string, number> = { d: PAL.r, r: PAL.R, R: PAL.h, h: PAL.E };
@@ -598,7 +598,7 @@ function fly(scene: Scene, items: Flier[]) {
 }
 
 // Drops (blood by default) from the chest of a thrall at (x, y), flung around `angle`; they stain the floor where they land.
-function bleed(scene: Scene, x: number, y: number, angle: number, n: number, spread: number, power: number, z = 12,
+export function bleed(scene: Scene, x: number, y: number, angle: number, n: number, spread: number, power: number, z = 12,
   colors = [BLOOD.light, BLOOD.mid, BLOOD.mid, BLOOD.dark], big = 0.2) {
   const items: Flier[] = [];
   for (let i = 0; i < n; i++) {
@@ -619,13 +619,13 @@ function image(scene: Scene, x: number, y: number, frame: string, flipX: boolean
 }
 
 // Floor layer that keeps blood, robes and masks for the rest of the fight. Recreated after a scene restart.
-function stains(scene: Scene) {
+export function stains(scene: Scene) {
   return (scene.children.getByName('enemy-stains') as Phaser.GameObjects.RenderTexture | null)
     ?? scene.add.renderTexture(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setDepth(1).setName('enemy-stains');
 }
 
 // A blood pool with a lit rim along its top-left edge (light comes from the top left) and an optional dark core.
-function pool(x: number, y: number, rx: number, ry: number, fill: (c: number, x: number, y: number, w: number) => void, lit: number, body: number, core?: number) {
+export function pool(x: number, y: number, rx: number, ry: number, fill: (c: number, x: number, y: number, w: number) => void, lit: number, body: number, core?: number) {
   let top = true;
   blot(x, y, rx, ry, (px, py, w) => {
     fill(body, px, py, w);
@@ -637,7 +637,7 @@ function pool(x: number, y: number, rx: number, ry: number, fill: (c: number, x:
 }
 
 // A pixel ellipse drawn one row at a time, so it stays crisp at native resolution.
-function blot(cx: number, cy: number, rx: number, ry: number, row: (x: number, y: number, w: number) => void) {
+export function blot(cx: number, cy: number, rx: number, ry: number, row: (x: number, y: number, w: number) => void) {
   if (rx < 0.5 || ry < 0.5) return;
   for (let dy = -Math.floor(ry); dy <= Math.floor(ry); dy++) {
     const hw = Math.round(rx * Math.sqrt(1 - (dy / (ry + 0.5)) ** 2));
@@ -646,7 +646,7 @@ function blot(cx: number, cy: number, rx: number, ry: number, row: (x: number, y
 }
 
 // Calls fn(seconds elapsed) every frame for `ms`, then done(). Tweens stop with the scene, so nothing outlives a restart.
-function run(scene: Scene, ms: number, fn: (t: number) => void, done?: () => void) {
+export function run(scene: Scene, ms: number, fn: (t: number) => void, done?: () => void) {
   scene.tweens.addCounter({ from: 0, to: ms, duration: ms, ease: 'Linear',
     onUpdate: (tw) => fn((tw.getValue() ?? 0) / 1000), onComplete: () => (fn(ms / 1000), done?.()) });
 }

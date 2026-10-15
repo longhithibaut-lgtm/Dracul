@@ -96,6 +96,24 @@ export const recipes = {
     voice(o, { src: 'noise', filter: 'lowpass', ff: 1400, ff2: 300, gain: 0.9, attack: 0.01, dur: 0.18 });
     voice(o, { src: 'sawtooth', f: 160, f2: 70, filter: 'lowpass', ff: 800, trem: 40, gain: 0.5, dur: 0.12 });
   },
+  // Crossbow telegraph: a creaking wooden draw over ratchet ticks, then a bright click when the aim locks (`lock` s in).
+  aim(o: Play, lock: number) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 600, ff2: 1500, q: 7, trem: 28, gain: 1.8, attack: 0.06, dur: 0.32 });
+    bursts(o, [0.02, 0.09, 0.16, 0.23], { src: 'noise', filter: 'highpass', ff: 3200, q: 1, gain: 0.35, attack: 0.001, dur: 0.02 });
+    voice(o, { src: 'square', f: 2300, filter: 'bandpass', ff: 2300, q: 6, gain: 0.5, attack: 0.001, dur: 0.06, delay: lock });
+  },
+  // The bolt leaves: a taut string twang, the prod's knock and the bolt hissing away.
+  twang(o: Play) {
+    voice(o, { src: 'sawtooth', f: 300, f2: 150, filter: 'lowpass', ff: 3200, ff2: 600, q: 4, gain: 0.45, attack: 0.002, dur: 0.2 });
+    voice(o, { src: 'triangle', f: 150, f2: 90, gain: 0.6, attack: 0.002, dur: 0.12 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 3000, ff2: 1200, q: 1.5, gain: 0.5, attack: 0.01, dur: 0.14 });
+  },
+  // A bolt bites into stone or wood: a dry knock and the shaft quivering.
+  thunk(o: Play) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 1700, q: 3, gain: 0.9, attack: 0.001, dur: 0.05 });
+    voice(o, { src: 'sine', f: 320, f2: 120, gain: 0.5, dur: 0.07 });
+    voice(o, { src: 'triangle', f: 190, f2: 170, trem: 34, gain: 0.3, attack: 0.005, dur: 0.2 });
+  },
   // An enemy bursts: deep thump, a falling blast, then droplets splattering.
   kill(o: Play) {
     voice(o, { src: 'sine', f: 100, f2: 28, gain: 0.9, dur: 0.45 });

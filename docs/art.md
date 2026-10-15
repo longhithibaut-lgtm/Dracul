@@ -18,6 +18,7 @@ Référence : Hyper Light Drifter, sauf pour les salles : leur barre est la cryp
 | Sol (dalles cobalt) | `#1b2b60` `#21346f` `#293e80` |
 | Abîme hors des murs | `#1f0520` `#3d0a3a` `#5e1256` |
 | Robe des serviteurs | `#33102a` `#521030` `#7a1a3e` `#b03a5e` |
+| Ordre (humains) : or, tabard, acier, peau, bois | `#ffd66e` `#d9982e` `#8c5a1e` · `#fbf2dc` `#d9c7a0` `#9c8463` · `#e4eaf0` `#a0aabb` `#5a6176` · `#e9b78e` `#b57a52` · `#a66a3a` `#63391f` `#3c2418` |
 
 ## Règles
 
