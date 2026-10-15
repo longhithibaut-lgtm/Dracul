@@ -22,7 +22,7 @@ const PAL: Record<string, number> = {
   '0': 0x0b0710, '1': 0x1c1029, '2': 0x2e1838, '4': 0x8a6f8f,
   d: 0x33102a, r: 0x521030, R: 0x7a1a3e, h: 0xb03a5e,
   B: 0xe8dcc8, b: 0xb7a58f,
-  e: 0xe0284a, E: 0xff4f8b,
+  e: 0xe0284a, E: 0xff4f8b, W: 0xffe4ee,
   t: 0x3fa7a3, T: 0x1f4a5a,
   s: 0x0b0710, // ground shadow, drawn translucent
 };
@@ -39,12 +39,12 @@ const PARTS: Record<string, [x: number, y: number, rows: string]> = {
 ..hRrrrRRrrd...
 ..Rrrrrrrrrrd..
 .hRrr2222222d..
-.Rr2t00bBBB00..
-.Rrt0B0eBB0eBb.
-.Rrt0BBBBBBBBBb
-RRrdt0bBBBBBbb4
-Rrrdt00bbbbb4..
-.rrdtt0B000Btd.
+.Rr2T00bBBB00..
+.RrT0B0eBB0eBb.
+.RrT0BBBBBBBBBb
+RRrdT0bBBBBBbb4
+RrrdT00bbbbb4..
+.rrdTT0B000BTd.
 .......B...B...
 `],
   head_rage: [12, 8, `
@@ -54,12 +54,42 @@ Rrrdt00bbbbb4..
 ..hRrrrRRrrd...
 ..Rrrrrrrrrrd..
 .hRrr2222222d..
-.Rr2t00bBB00d..
-.Rrt0B0EBB0EBb.
-.Rrt0BBBBBBBBBb
-RRrdt0bBBBBBbb4
-Rrrdt0bB000Bb..
-.rrdtt0B000B0d.
+.Rr2T00bBB00d..
+.RrT0B0EBB0EBb.
+.RrT0BBBBBBBBBb
+RRrdT0bBBBBBbb4
+RrrdT0bB000Bb..
+.rrdTT0B000B0d.
+.......B...B...
+`],
+  head_glare: [12, 8, `
+...h.....h.....
+...Rh...hRd....
+..hRr..hRrd....
+..hRrrrRRrrd...
+..Rrrrrrrrrrd..
+.hRrr2222222d..
+.Rr2T0E0BBE00..
+.RrT0eE0B0Eeb..
+.RrT0BBBBBBBBBb
+RRrdT0bBBBBBbb4
+RrrdT0bB000Bb..
+.rrdTT0B000B0d.
+.......B...B...
+`],
+  head_flare: [12, 8, `
+...h.....h.....
+...Rh...hRd....
+..hRr..hRrd....
+..hRrrrRRrrd...
+..Rrrrrrrrrrd..
+.hRrr2222222d..
+.Rr2T0W0BBW00..
+.RrT0EW0B0WEb..
+.RrT0BBBBBBBBBb
+RRrdT0bBBBBBbb4
+RrrdT0bB000Bb..
+.rrdTT0B000B0d.
 .......B...B...
 `],
   head_hurt: [12, 8, `
@@ -69,12 +99,12 @@ Rrrdt0bB000Bb..
 ..hRrrrRRrrd...
 ..Rrrrrrrrrrd..
 .hRrr2222222d..
-.Rr2t0bBBBBB2..
-.Rrt0B0EBB0EBb.
-.Rrt0BBBBBBBBBb
-RRrdt0bBBBBBbb4
-Rrrdt0bB000Bb..
-.rrdtt0B000B0d.
+.Rr2T0bBBBBB2..
+.RrT0B0EBB0EBb.
+.RrT0BBBBBBBBBb
+RRrdT0bBBBBBbb4
+RrrdT0bB000Bb..
+.rrdTT0B000B0d.
 .......B...B...
 `],
   hood: [12, 8, `
@@ -84,12 +114,12 @@ Rrrdt0bB000Bb..
 ..hRrrrRRrrd..
 ..Rrrrrrrrrrd.
 .hRrr2222222d.
-.Rr2t0000002..
-.Rrt0000000d..
-.Rrt000000d...
-RRrdt0000d....
-Rrrdt000d.....
-.rrdtt0dd.....
+.Rr2T0000002..
+.RrT0000000d..
+.RrT000000d...
+RRrdT0000d....
+RrrdT000d.....
+.rrdTT0dd.....
 `],
   head_back: [12, 8, `
 ...h.....h.....
@@ -97,9 +127,9 @@ Rrrdt000d.....
 ..hRr..hRrd....
 ..hRrrrRRrrd...
 ..RRrrrrrrrrd..
-.hRRrrrrrrrrdt.
-.RRrrrrrrrrrdt4
-.RRrrrrrrrrddtb
+.hRRrrrrrrrrdT.
+.RRrrrrrrrrrdT4
+.RRrrrrrrrrddTb
 .RRrrrrrrrrdd..
 RRRrrrrrrrdd...
 dRrrrrrrrdd....
@@ -176,14 +206,14 @@ RRRRRrrrrrrdtttdrrrrdd
 .RRRRrrrrrrd2T2drrrrdd
 ..RRRrrrrrrrd2drrrrdd.
 ...RRrrrrrrrdtdrrrdd..
-....RRrrrdrrd2drrdd...
-.....Rrrrdrrdtdrrd....
-.....RRrrdrrd2drdd....
-.....Rrrrdrrd.drdd....
-.....Rrrrdrrrdrrdd....
-.....RRrrdrrrdrrdd....
-....RRrrdrrrrdrrrdd...
-....Rr2drrrdrrrdrdd...
+....RRrrrdrrd2ddrdd...
+.....Rrrddrdd2dddd....
+.....Rrrdddrd2dddd2...
+.....Rrdddddd.ddd22...
+.....Rrdrddddddd22....
+....RRrdrdddddrdd2....
+....Rrddrdddddddd22...
+...Rr2dd2ddd2ddd222...
 `],
   hem0: [10, 32, `
 RR.Rr.rr.rr.rd.d
@@ -239,43 +269,40 @@ drrrr...
 ..B.B.B.
 .b..b..b
 `],
-  arm_far_up: [5, 3, `
-b..b..b.
-.B.B.B..
-.B0B0B..
-.01110..
-..0110..
-..011...
-..R11...
-..RRr...
-..RRrd..
-...Rrd..
-...RRr..
-....Rrd.
-....RRr.
-....Rrr.
-.....Rr.
-.....RRr
-.....Rrr
+  arm_cock: [2, 0, `
+B..B..B.....
+.B..B..B....
+..B..B.B....
+...B.B.B....
+...0B0B0....
+...01110....
+....0110....
+
+...hRR11....
+..hRRrr1....
+..RRrrrrr...
+.RRrrrdrrd..
+.Rrrrddrrrd.
+.rr2rrddrrr.
+.r2.r2ddrrr.
+.2..2..drrr.
+.......2drr.
+........2dr.
 `],
-  arm_near_up: [23, 3, `
-.b..b..b
-..B.B.B.
-..B0B0B.
-..01110.
-..0110..
-...110..
-...11d..
-...rdd..
-..rrdd..
-..rdd...
-..rrd...
-.rrd....
-.rdd....
-.rrd....
-rrd.....
-rrd.....
-rd......
+  arm_thrust: [20, 20, `
+..............BB...
+...RRRr......B.....
+..RRrrrrRRr0B......
+..rrrrrrrrd011BBB..
+..2dddrrdd20111..b.
+...222dd2..01BB....
+...........0..BB...
+................b..
+`],
+  legs_brace: [8, 32, `
+..21.........11...
+.211..........11..
+bBb............bBb
 `],
   shadow: [12, 31, `
 ...sssssssssss...
@@ -284,18 +311,6 @@ sssssssssssssssss
 sssssssssssssssss
 ..sssssssssssss..
 ......sssss......
-`],
-  glint_big: [28, 1, `
-..E..
-..B..
-EBBBE
-..B..
-..E..
-`],
-  glint_small: [29, 2, `
-.E.
-EBE
-.E.
 `],
   heap: [8, 27, `
 .......h.....h..........
@@ -321,11 +336,10 @@ const FRAMES: Record<string, Layer[]> = {
   walk1: [['shadow', 0, 0], ['arm_far', 0, -1], ['body', 0, -1], ['hem1', 0, -1], ['legs_w1', 0, 0], ['arm_near', 0, 0], ['head', 0, -1]],
   walk2: [['shadow', 0, 0], ['arm_far', 0, 1], ['body', 0, 0], ['hem0', 0, 0], ['legs_w2', 0, 0], ['arm_near', 0, -1], ['head', 0, 0]],
   walk3: [['shadow', 0, 0], ['arm_far', 0, 0], ['body', 0, -1], ['hem1', 0, -1], ['legs_w3', 0, 0], ['arm_near', 0, -1], ['head', 0, -1]],
-  wind0: [['shadow', 0, 0], ['arm_far', 0, 2], ['body', 0, 1], ['hem0', 0, 1], ['legs', 0, 0], ['arm_near', 0, 2], ['head', 0, 2]],
-  wind1: [['shadow', 0, 0], ['arm_far_up', 0, 0], ['body', 0, 0], ['hem0', 0, 0], ['legs', 0, 0], ['arm_near_up', 0, 0], ['head_rage', 0, -1], ['glint_big', 0, 0]],
-  wind2: [['shadow', 0, 0], ['arm_far_up', 1, 0], ['body', 1, 0], ['hem0', 1, 0], ['legs', 0, 0], ['arm_near_up', 1, 0], ['head_rage', 1, -1], ['glint_small', 1, 0]],
-  wind3: [['shadow', 0, 0], ['arm_far_up', 0, 0], ['body', 0, 0], ['hem0', 0, 0], ['legs', 0, 0], ['arm_near_up', 0, 0], ['head_rage', 0, -1]],
-  wind4: [['shadow', 0, 0], ['arm_far_up', 1, 0], ['body', 1, 0], ['hem0', 1, 0], ['legs', 0, 0], ['arm_near_up', 1, 0], ['head_rage', 1, -1]],
+  wind0: [['shadow', 0, 0], ['arm_cock', 3, 5], ['body', 0, 1, -0.05], ['hem0', 0, 1, -0.05], ['legs_brace', 0, 0], ['head_glare', 1, 2], ['arm_thrust', -4, 1]],
+  wind1: [['shadow', 0, 0], ['arm_cock', 0, 0], ['body', 0, 0, 0.15], ['hem0', 0, 0, 0.15], ['legs_brace', 0, 0], ['head_glare', 3, 1], ['arm_thrust', 0, 0]],
+  wind2: [['shadow', 0, 0], ['arm_cock', 1, 0], ['body', 1, 0, 0.15], ['hem0', 1, 0, 0.15], ['legs_brace', 0, 0], ['head_glare', 4, 1], ['arm_thrust', 1, 0]],
+  wind3: [['shadow', 0, 0], ['arm_cock', -1, 0], ['body', 0, 0, 0.15], ['hem0', 0, 0, 0.15], ['legs_brace', 0, 0], ['head_flare', 3, 1], ['arm_thrust', 0, 0]],
   lunge: [['shadow', 0, 0], ['lunge_far', 0, 0], ['lunge_body', 0, 0], ['head_rage', 5, 4], ['lunge_near', 1, 2]],
   hurt: [['shadow', 0, 0], ['arm_far_fling', 0, 0], ['body', 0, 0, -0.2], ['hem0', 0, 0, -0.2], ['legs', 0, 0], ['arm_near', -1, -1], ['head_hurt', -4, 0]],
   recover0: [['shadow', 0, 0], ['arm_far', 1, 3], ['body', 0, 2], ['hem0', 0, 1], ['legs', 0, 0], ['arm_near', 1, 3], ['head', 2, 4]],
@@ -335,8 +349,8 @@ const FRAMES: Record<string, Layer[]> = {
   mask: [['mask', 0, 0]],
 };
 // Seen from behind while it heads up the screen: the same poses with the back of the hood and robe ('b' suffix).
-const BACK: Record<string, string> = { head: 'head_back', head_rage: 'head_back', body: 'body_back' };
-for (const name of ['idle', 'walk0', 'walk1', 'walk2', 'walk3', 'wind0', 'wind1', 'wind2', 'wind3', 'wind4', 'recover0', 'recover1']) {
+const BACK: Record<string, string> = { head: 'head_back', head_glare: 'head_back', head_flare: 'head_back', body: 'body_back' };
+for (const name of ['idle', 'walk0', 'walk1', 'walk2', 'walk3', 'wind0', 'wind1', 'wind2', 'wind3', 'recover0', 'recover1']) {
   FRAMES[name + 'b'] = FRAMES[name].map(([part, ...rest]) => [BACK[part] ?? part, ...rest] as Layer);
 }
 
@@ -450,8 +464,8 @@ export function show(s: Sprite, state: EnemyState, facing: number, flash: boolea
   if (hurt < 220) f = 'hurt';
   else if (age < RISE_MS) f = 'rise' + Math.floor((age * 3) / RISE_MS);
   else if (state === 'windup') {
-    // crouch, claws up with a glint, tremble, and a last glint just before the lunge
-    f = t < 100 ? 'wind0' : t < 150 || t >= T.enemy.windupMs - 60 ? 'wind1' : t < 200 ? 'wind2' : Math.floor(t / 45) % 2 ? 'wind4' : 'wind3';
+    // coil back, then cock one claw behind the head and aim the other at the hero, trembling; the eyes flare just before the lunge
+    f = t < 80 ? 'wind0' : t >= T.enemy.windupMs - 60 ? 'wind3' : Math.floor(t / 50) % 2 ? 'wind2' : 'wind1';
   } else if (state === 'lunge') {
     f = 'lunge';
     trail(s, now);
