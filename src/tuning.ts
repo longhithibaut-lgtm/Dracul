@@ -39,4 +39,18 @@ export const T = {
     boltSpeed: 260,
     damage: 1,
   },
+
+  // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
+  lantern: {
+    hp: 3,
+    radius: 40, // half-width of the pool; it is an ellipse squashed like the ground
+    squash: 0.72,
+    graceMs: 400, // stepping into the light is free this long, then it burns
+    burnEveryMs: 900,
+    damage: 1,
+    telegraphMs: 900,
+    fromWave: 2, // one lantern from this wave on, two from `twoFromWave`
+    twoFromWave: 4,
+    clear: 1.3, // never planted with the hero inside this much of its pool
+  },
 } as const;

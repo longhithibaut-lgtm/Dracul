@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { dashStopsAt, inArc, keepDistance, nextCombo, rayDistance } from './logic.ts';
+import { burnsAfter, dashStopsAt, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -8,6 +8,7 @@ import * as Room from './room.ts';
 import * as Fx from './fx.ts';
 import * as Hud from './hud.ts';
 import * as Sfx from './sfx.ts';
+import * as Lantern from './lantern.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 
@@ -33,6 +34,8 @@ export class RoomScene extends Phaser.Scene {
   private dashRequested = false;
   private dead = false;
   private wave = 0;
+  private lanterns: Lantern.Lantern[] = [];
+  private litMs = 0; // time the hero has stood in holy light, back to 0 when he steps out
 
   constructor() {
     super('room');
@@ -45,8 +48,9 @@ export class RoomScene extends Phaser.Scene {
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
     this.dead = false;
-    this.wave = 0;
     this.dashRequested = false;
+    this.wave = this.litMs = 0;
+    this.lanterns = [];
   }
 
   create() {
@@ -120,6 +124,17 @@ export class RoomScene extends Phaser.Scene {
     // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy.
     this.hero.setDepth(this.hero.y + (time < this.slashUntil ? 12 : 0));
     this.hud.dashReady(time >= this.dashReadyAt);
+
+    // Holy light: free for a grace on stepping in, then it burns on a steady beat until he steps out (or mists through).
+    if (this.lanterns.some((l) => Lantern.lights(l, this.hero.body!.center))) {
+      const L = T.lantern, before = burnsAfter(this.litMs, L.graceMs, L.burnEveryMs);
+      this.litMs += delta;
+      Lantern.sizzle(this, this.hero);
+      if (burnsAfter(this.litMs, L.graceMs, L.burnEveryMs) > before && this.damageHero(L.damage)) {
+        Lantern.sizzle(this, this.hero, true);
+        Sfx.play(this, 'burn');
+      }
+    } else this.litMs = 0;
 
     for (const e of this.enemies.getChildren() as Sprite[]) {
       if (!e.body?.enable) continue;
@@ -247,6 +262,11 @@ export class RoomScene extends Phaser.Scene {
       hits++;
       this.hitEnemy(e, angle);
     }
+    for (const l of [...this.lanterns]) { // aimed at its glass, about the hero's chest height
+      if (!l.lit || !inArc(this.hero, angle, { x: l.x, y: l.y - 5 }, T.slash.range, T.slash.arcDeg)) continue;
+      hits++;
+      this.hitLantern(l, angle);
+    }
     if (!hits) return;
     // Hit-stop: freeze physics briefly so the impact reads; tweens and timers keep running.
     this.physics.pause();
@@ -267,6 +287,24 @@ export class RoomScene extends Phaser.Scene {
     (e.getData('kind') === 'crossbow' ? Crossbow : Enemy).die(this, e);
     Sfx.play(this, 'kill');
     if (!this.enemies.getChildren().some((o) => (o as Sprite).body?.enable)) this.time.delayedCall(1500, () => this.spawnWave());
+  }
+
+  private hitLantern(l: Lantern.Lantern, angle: number) {
+    l.hp -= T.slash.damage;
+    Sfx.play(this, 'shatter', Number(l.hp <= 0));
+    if (l.hp > 0) return Lantern.hit(this, l, angle);
+    Lantern.shatter(this, l, angle);
+    this.lanterns.splice(this.lanterns.indexOf(l), 1);
+  }
+
+  /** The Order plants a lantern on the free spot nearest the hero that leaves him out of its light. */
+  private addLantern() {
+    const L = T.lantern, p = pickSpot(Lantern.SPOTS, this.hero.body!.center, this.lanterns, L.radius, L.radius * L.squash, L.clear);
+    if (!p) return;
+    const l = Lantern.create(this, this.room.obstacles, p.x, p.y, L.telegraphMs);
+    this.lanterns.push(l);
+    Sfx.play(this, 'holy');
+    return l;
   }
 
   private hurt(e: Sprite) {
@@ -297,6 +335,8 @@ export class RoomScene extends Phaser.Scene {
     // From the second wave the Order joins in: crossbowmen (one, then two) take the spawn points farthest from the hero.
     const far = (p: { x: number; y: number }) => Phaser.Math.Distance.BetweenPoints(p, this.hero);
     const bows = [...this.room.spawns].sort((a, b) => far(b) - far(a)).slice(0, Math.min(2, ++this.wave - 1));
+    const lanterns = this.wave >= T.lantern.twoFromWave ? 2 : this.wave >= T.lantern.fromWave ? 1 : 0;
+    while (this.lanterns.length < lanterns && this.addLantern());
     for (const p of this.room.spawns) {
       if (bows.includes(p)) {
         Crossbow.telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);

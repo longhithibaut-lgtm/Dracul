@@ -19,7 +19,9 @@ await page.waitForFunction(() => window.game?.scene.isActive('room'));
 // [name, arg, expected length to -60 dB, range in ms]
 const sounds = [['slash', 0, 60, 140], ['slash', 1, 60, 140], ['slash', 2, 120, 240], ['hit', 0, 60, 140], ['hit', 2, 100, 200],
   ['dash', 0, 120, 240], ['hurt', 0, 150, 280], ['windup', 0, 300, 450], ['lunge', 0, 80, 200], ['kill', 0, 250, 450],
-  ['spawn', 0, 400, 700], ['death', 0, 900, 1600], ['aim', 0.45, 450, 600], ['twang', 0, 120, 260], ['thunk', 0, 120, 260]];
+  ['spawn', 0, 400, 700], ['death', 0, 900, 1600], ['aim', 0.45, 450, 600], ['twang', 0, 120, 260], ['thunk', 0, 120, 260],
+  ['holy', 0, 500, 900], ['burn', 0, 250, 420], ['shatter', 0, 80, 180],
+  ['shatter', 1, 350, 600]];
 const results = await page.evaluate(async (sounds) => {
   const m = await import('/src/sfx.ts');
   const rate = 44100;
@@ -52,7 +54,8 @@ const results = await page.evaluate(async (sounds) => {
   // and crossbows aim, shoot and hit.
   const pile = [['slash', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['kill', 0, 0], ['hurt', 0, 0.01],
     ['windup', 0, 0], ['lunge', 0, 0.02], ['spawn', 0, 0], ['spawn', 0, 0], ['spawn', 0, 0], ['spawn', 0, 0], ['death', 0, 0.02],
-    ['aim', 0.45, 0], ['twang', 0, 0.01], ['twang', 0, 0], ['thunk', 0, 0.02]];
+    ['aim', 0.45, 0], ['twang', 0, 0.01], ['twang', 0, 0], ['thunk', 0, 0.02],
+    ['burn', 0, 0], ['shatter', 1, 0], ['holy', 0, 0]];
   out.push(await render(pile, 2), (await render(pile, 2, true)).peak);
   return out;
 }, sounds);
