@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 // How the hero looks. Gameplay calls create() once and show() every frame; everything visual lives here.
-export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; hurt: boolean; invulnerable: boolean; facing: number };
+export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; biting: boolean; hurt: boolean; invulnerable: boolean; facing: number };
 
 // Palette "Nuit de sang" (docs/art.md), one char per colour. In a grid '.' leaves the pixel below, ',' erases it;
 // x is the translucent ground shadow.
@@ -330,6 +330,39 @@ dsdd.........
 `)]],
 };
 
+// The bite, side view only (gameplay latches him side-on): hunched over the prey, head bowed into its throat with the
+// jaw open on a fang, the cape flared up and back like a bat wing, the near hand clawed on its shoulder. Legs included,
+// drawn from the frame's left edge, row 2.
+const BITE = grid(`
+e..........................
+ee.........................
+eee........................
+eree.......................
+erree......................
+errree.....................
+eRrrree.............kkkk...
+eRRrrreee..........kssskkk.
+eRRRrrrreee.......kssssskk.
+eRRRRRrrrreeeRRRe.wkkkskkk.
+.rrrrrrrrrrrrRRdddskkkkWek.
+..rRRRRRRRrrRRddddsskkWWWW.
+...rRRRRrrRRRddssdssswWW.W.
+....rRRrRRRRddsssssssssss..
+....rrrRRRRRddsssddddddddWW
+...r..rRRRRrddssd.......W.W
+........rRRrdssss..........
+.........rRrddss...........
+.........rrRRdss...........
+........r..rdds............
+...........ddRss...........
+..........dd...ss..........
+.........dd.....ss.........
+........kkd......sk........
+.......kkk.......kkk.......
+`);
+/** Where the hero stands to bite: this far beside the prey's sprite centre, so his mouth lands on its neck. */
+export const BITE_REACH = 8;
+
 const IDLE_BOB = [0, 0, 1, 1];
 const RUN_BOB = [0, 1, 0, 0, 1, 0];
 
@@ -361,6 +394,7 @@ function frames(): Record<string, Layer[]> {
     });
     MIST.forEach((_, i) => (f[`${v}-dash${i}`] = f[`${v}-run${d.run.length === 6 ? 2 : 1}`]));
   }
+  f['side-bite'] = [[0, 2, BITE]];
   return f;
 }
 
@@ -444,7 +478,7 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
   const follow = () => shadow.setPosition(s.x, s.y).setDepth(s.depth - 0.5);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
   s.once(Phaser.GameObjects.Events.DESTROY, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow));
-  const was = { moving: false, dashing: false, slashing: false, hurt: false, invulnerable: false, facing: 0 };
+  const was = { moving: false, dashing: false, slashing: false, biting: false, hurt: false, invulnerable: false, facing: 0 };
   states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9 });
   return s;
 }
@@ -462,6 +496,7 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   let frame = `${now % 3600 < 140 ? 'blink' : 'idle'}${Math.floor(now / 260) % 4}`;
   // The body turns to mist during the dash and re-forms just after (fx.ts ghosts the intact run pose instead).
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
+  else if (look.biting && view === 'side') frame = 'bite';
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${st.swing}`;
   else if (now - st.dashEnd < 70) frame = 'dash0';
   else if (look.moving) { const n = VIEWS[view].run.length; frame = `run${Math.floor(now / (540 / n)) % n}`; } // one stride pair per 540ms in every view

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { burnsAfter, dashStopsAt, ellipseDist, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, ellipseDist, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
 
 describe('inArc', () => {
   const o = { x: 0, y: 0 };
@@ -15,6 +15,23 @@ describe('inArc', () => {
     expect(inArc(o, 0, t, 30, 90)).toBe(true);
     expect(inArc(o, 0, t, 30, 60)).toBe(false);
     expect(inArc(o, Math.PI, { x: -25, y: -4 }, 30, 90)).toBe(true);
+  });
+});
+
+describe('biteTarget', () => {
+  const o = { x: 0, y: 0 };
+  const human = (x: number, y: number, hp: number) => ({ x, y, hp, human: true });
+
+  it('bites the nearest weakened human ahead, in reach', () => {
+    const near = human(15, 2, 1), far = human(24, 0, 1);
+    expect(biteTarget(o, 0, [far, near], 26, 140, 1)).toBe(near);
+  });
+
+  it('never a healthy human, a ghoul, one out of reach or behind', () => {
+    expect(biteTarget(o, 0, [human(15, 0, 2)], 26, 140, 1)).toBeUndefined(); // not weakened yet
+    expect(biteTarget(o, 0, [{ x: 15, y: 0, hp: 1, human: false }], 26, 140, 1)).toBeUndefined(); // dead blood
+    expect(biteTarget(o, 0, [human(30, 0, 1)], 26, 140, 1)).toBeUndefined();
+    expect(biteTarget(o, 0, [human(-15, 0, 1)], 26, 140, 1)).toBeUndefined();
   });
 });
 

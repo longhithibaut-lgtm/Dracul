@@ -7,6 +7,16 @@ export const T = {
   hero: { maxHealth: 5, speed: 95, hurtInvulnMs: 800 },
   dash: { speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22 }, // stopShort: halts this far from an enemy it'd end on
   slash: { range: 30, arcDeg: 130, damage: 1, cooldownMs: 210, comboWindowMs: 450, knockback: 140, hitStopMs: 40 },
+  // La Morsure: the only heal. On a weakened human only; the hero is held at its throat, open to every blow, while it drains.
+  bite: {
+    weakAt: 1, // a human with this much hp or less can be bitten
+    range: 26, arcDeg: 140,
+    lungeMs: 70, // the snap onto the prey
+    hitStopMs: 60,
+    drainMs: 450, // latched: neither the hero nor the prey can act
+    heal: 1,
+    whiffCooldownMs: 300, // a bite with no valid prey: a teeth snap in place
+  },
 
   enemy: {
     hp: 3,

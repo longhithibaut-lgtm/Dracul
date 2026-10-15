@@ -271,6 +271,74 @@ export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle:
   }).once('destroy', () => ghosts.forEach((gh) => gh.strips.forEach((s) => s.destroy())));
 }
 
+/** A bite at nothing: two rows of bone-white fangs clamp shut in front of the face, a small glint where they meet. */
+export function snap(scene: Phaser.Scene, x: number, y: number, angle: number) {
+  const cx = Math.round(x + Math.cos(angle) * 11), cy = Math.round(y - 5 + Math.sin(angle) * 7);
+  animate(scene, ABOVE, 170, (g, t) => {
+    const gap = Math.max(0, Math.round(4 * (1 - t / 60))), c = t < 60 ? HOT : MIST[0];
+    if (t < 130) for (const s of [-1, 1]) { // upper jaw comes down, lower jaw comes up
+      const fy = cy + s * (gap + 1);
+      g.fillStyle(c).fillRect(cx - 3, fy + s, 7, 1);
+      for (const fx of s < 0 ? [-2, 2] : [-1, 1]) px(g, cx + fx, fy, c);
+    }
+    if (t >= 55 && t < 110) star(g, cx, cy, 0, 3 - (t - 55) / 25, 2 - (t - 55) / 30, 1);
+  });
+}
+
+/** The fangs sink in at the throat (x, y): a short shake, a white-hot star and a few drops of blood spurting free. */
+export function bite(scene: Phaser.Scene, x: number, y: number) {
+  const cam = scene.cameras.main;
+  cam.shake(90, new Phaser.Math.Vector2(2 / cam.width, 1.5 / cam.height));
+  const drops = Array.from({ length: 8 }, () => ({ vx: rnd(-40, 40), vy: rnd(-90, -30), c: Math.random() < 0.3 ? GLOW : RED }));
+  animate(scene, ABOVE, 300, (g, t) => {
+    if (t < 100) {
+      const k = Math.max(0, (t - 40) / 60);
+      star(g, x, y, Math.PI / 4, 5 * (1 - k), 4 * (1 - k), 2);
+    }
+    const s = t / 1000;
+    for (const d of drops) px(g, x + d.vx * s, y + d.vy * s + (GRAVITY / 2) * s * s, t < 200 ? d.c : BLOOD);
+  });
+}
+
+/**
+ * Drinking: blood is pulled out of the prey's whole body (around `from`) into the bite at `mouth`, in three pulls over
+ * `ms`: motes dark as they leave the body, glowing as they reach the mouth. Drawn just over the prey, under the hero
+ * bent on it, so they vanish into him.
+ */
+export function drain(scene: Phaser.Scene, from: P, mouth: P, ms: number) {
+  const pull = ms / 3;
+  const motes = Array.from({ length: 27 }, (_, i) => ({ t0: (i % 3) * pull + rnd(0, pull * 0.4), x: from.x + rnd(-7, 7), y: from.y + rnd(-6, 9), life: rnd(130, 190) }));
+  animate(scene, from.y + 1, ms, (g, t) => {
+    for (const m of motes) {
+      const k = (t - m.t0) / m.life;
+      if (k < 0 || k >= 1) continue;
+      const at = (k: number) => ({ x: m.x + (mouth.x - m.x) * k * k, y: m.y + (mouth.y - m.y) * k * k }); // sucked in, faster and faster
+      line(g, at(Math.max(0, k - 0.2)), at(k), (j) => (k < 0.35 ? (j < 0.5 ? DRIED : BLOOD) : k < 0.7 ? (j < 0.5 ? BLOOD : RED) : j < 0.5 ? RED : GLOW));
+    }
+  });
+}
+
+/** Blood regained: the hero flushes rose (never white then red, which is being hurt), a ring spreads at his feet and
+ *  warm motes rise off him. */
+export function heal(scene: Phaser.Scene, hero: Phaser.GameObjects.Sprite) {
+  const flush = scene.add.image(hero.x, hero.y, hero.texture, hero.frame.name).setTint(GLOW).setTintMode(Phaser.TintModes.FILL);
+  const motes = Array.from({ length: 14 }, () => ({ x: rnd(-7, 7), y: rnd(-9, 7), rise: rnd(10, 24), end: rnd(260, 520), c: Math.random() < 0.4 ? HOT : GLOW }));
+  animate(scene, FLOOR, 360, (g, t) => {
+    const k = t / 360, r = 5 + 11 * ease(k);
+    ellipse(g, hero.x, hero.y + 10, r, r * 0.4, (x, y) => hash(Math.floor((Math.atan2(y * 2.5, x) + 4) * 3), 7) > k * 1.4 - 0.4, k < 0.3 ? HOT : GLOW);
+  });
+  animate(scene, ABOVE, 520, (g, t) => {
+    // The flush follows the hero and his pose, fading out.
+    flush.setPosition(hero.x, hero.y).setFrame(hero.frame.name).setFlipX(hero.flipX).setDepth(hero.depth + 0.1)
+      .setAlpha(Math.max(0, 0.8 * (1 - t / 320)));
+    for (const m of motes) {
+      if (t >= m.end) continue;
+      const k = Phaser.Math.Easing.Sine.Out(t / m.end);
+      g.fillStyle(t / m.end < 0.6 ? m.c : DEEP).fillRect(Math.round(hero.x + m.x), Math.round(hero.y + m.y - m.rise * k), 1, 2);
+    }
+  }).once('destroy', () => flush.destroy());
+}
+
 export function hurt(scene: Phaser.Scene) {
   const cam = scene.cameras.main, w = cam.width, h = cam.height;
   cam.shake(130, new Phaser.Math.Vector2(3 / w, 3 / h));

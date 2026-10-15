@@ -147,6 +147,31 @@ export const recipes = {
     voice(o, { src: 'noise', filter: 'highpass', ff: 2500, ff2: 6000, trem: 38, gain: 0.7, attack: 0.01, dur: 0.38 });
     bursts(o, [0, 0.04, 0.09, 0.13, 0.2, 0.27], { src: 'noise', filter: 'bandpass', ff: 4500, q: 3, gain: 0.5, attack: 0.001, dur: 0.02 });
   },
+  // The bite latches: fangs piercing (two tight clicks), a wet resonant squelch and a soft thump.
+  bite(o: Play) {
+    bursts(o, [0, 0.011], { src: 'noise', filter: 'highpass', ff: 3000, q: 0.7, gain: 0.45, attack: 0.001, dur: 0.02 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 1100, ff2: 260, q: 6, gain: 1.1, attack: 0.004, dur: 0.17, delay: 0.012 });
+    voice(o, { src: 'sine', f: 140, f2: 55, gain: 0.7, dur: 0.13 });
+  },
+  // Drinking: three sucking pulls (a filtered slurp rising), each with a low gulp, like a slowing heartbeat.
+  drain(o: Play) {
+    for (const delay of [0.02, 0.17, 0.32]) {
+      voice(o, { src: 'noise', filter: 'bandpass', ff: 280, ff2: 950, q: 5, gain: 1.1, attack: 0.04, dur: 0.11, delay });
+      voice(o, { src: 'sine', f: 75, f2: 115, gain: 0.45, attack: 0.03, dur: 0.09, delay: delay + 0.05 });
+    }
+  },
+  // Blood regained: a warm rising chord (an octave sweep of a fifth over a soft low saw), never the holy bell's purity.
+  heal(o: Play) {
+    voice(o, { src: 'triangle', f: 262, f2: 523, gain: 0.45, attack: 0.08, dur: 0.42 });
+    voice(o, { src: 'sine', f: 392, f2: 784, gain: 0.22, attack: 0.12, dur: 0.38 });
+    voice(o, { src: 'sawtooth', f: 131, f2: 262, filter: 'lowpass', ff: 500, ff2: 1400, gain: 0.22, attack: 0.1, dur: 0.42 });
+  },
+  // A bite at nothing: a quick breath of the lunge, then dry teeth clicking shut.
+  snap(o: Play) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 1200, ff2: 2600, q: 1, gain: 0.35, attack: 0.02, dur: 0.06 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 3600, q: 8, gain: 2, attack: 0.001, dur: 0.03, delay: 0.05 });
+    voice(o, { src: 'square', f: 1900, f2: 1300, filter: 'bandpass', ff: 1900, q: 10, gain: 0.2, attack: 0.001, dur: 0.025, delay: 0.05 });
+  },
   // A lantern struck: a glass tink and an iron clank. Broken (arg 1): glass bursts, shards tinkle, its light dies down.
   shatter(o: Play, broken: number) {
     voice(o, { src: 'triangle', f: 2100, gain: 0.4, dur: 0.14 });

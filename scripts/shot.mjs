@@ -2,8 +2,9 @@
 // Usage: npm run shot [-- --out=shots --port=5199]
 // Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
 // hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (taken at 3/5 health, dash spent)
-// light.png (a lit lantern, the hero at the edge of its holy light) and crossbow.png (a crossbowman aiming).
-// Exit code 1 if the page logged an error.
+// light.png (a lit lantern, the hero at the edge of its holy light), crossbow.png (a crossbowman aiming), weak.png (a
+// weakened crossbowman, its heartbeat drop on the beat) and bite.png (the hero latched onto it, mid-drain).
+// Exit code 1 if the page logged an error or the combat, crossbow or bite frame is missing.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
@@ -164,8 +165,48 @@ let bow = null;
   await freeze(false);
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; state: ${JSON.stringify(await state())}`);
+// La Morsure. A crossbowman left alone with one blood (weakened, as after one slash) and the hero kept out of frame:
+// its hunch, bloodied tabard and beating drop. Then the hero bites it through the real bite, caught mid-drain.
+let bit = null;
+{
+  const p = await page.evaluate(() => {
+    const s = window.game.scene.getScene('room');
+    const prey = s.enemies.getChildren().find((e) => e.body?.enable && e.getData('kind') === 'crossbow');
+    if (s.dead || !prey) return null;
+    for (const e of s.enemies.getChildren().slice()) if (e !== prey) { e.getData('aimG')?.destroy(); e.destroy(); }
+    s.bolts.clear(true, true);
+    s.invulnUntil = 0; // nothing left can hurt him, and an invulnerable hero blinks
+    prey.body.reset(256, 226); // below the medallion, out of every lantern's light
+    prey.setVelocity(0).setData({ hp: 1, state: 'chase', until: Infinity, facing: Math.PI });
+    s.hero.body.reset(prey.x - 45, prey.y - 1);
+    s.facing = 0;
+    return { x: prey.x, y: prey.y, phase: prey.getData('phase') };
+  });
+  if (p) {
+    await page.waitForFunction((phase) => { const n = (window.game.scene.getScene('room').time.now + phase) % 700; return n > 10 && n < 60; }, p.phase);
+    await freeze(true);
+    await shot('weak', clip(p.x, p.y - 10, 240, 200));
+    await freeze(false);
+    const hp = await page.evaluate(({ x, y }) => {
+      const s = window.game.scene.getScene('room');
+      s.health = 3;
+      s.hud.health(3, 5);
+      s.hero.body.reset(x - 20, y - 1);
+      s.bite(0);
+      return s.health;
+    }, p);
+    await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.time.now - s.biteAt > 300; });
+    await freeze(true);
+    const latched = await page.evaluate(() => !!window.game.scene.getScene('room').prey);
+    if (latched) await shot('bite', clip(p.x - 6, p.y - 8, 240, 200));
+    await freeze(false);
+    await page.waitForFunction(() => !window.game.scene.getScene('room').prey, null, { timeout: 3000 }).catch(() => {});
+    bit = latched && `${hp} -> ${await page.evaluate(() => window.game.scene.getScene('room').health)} blood`;
+  }
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit ? 1 : 0);

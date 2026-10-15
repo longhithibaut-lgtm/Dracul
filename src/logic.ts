@@ -16,6 +16,14 @@ export function inArc(
   return Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) <= (arcDeg * Math.PI) / 360;
 }
 
+/** The prey of a bite: the nearest human with `weakAt` hp or less, within `range` and the arc centred on `facing`. */
+export function biteTarget<E extends { x: number; y: number; hp: number; human: boolean }>(
+  origin: { x: number; y: number }, facing: number, candidates: E[], range: number, arcDeg: number, weakAt: number,
+): E | undefined {
+  const d = (e: E) => Math.hypot(e.x - origin.x, e.y - origin.y);
+  return candidates.filter((e) => e.human && e.hp <= weakAt && inArc(origin, facing, e, range, arcDeg)).sort((a, b) => d(a) - d(b))[0];
+}
+
 /** Next combo step (0, 1, 2): chains while attacks land inside the window, else restarts. */
 export function nextCombo(prev: number, msSinceLast: number, windowMs: number): number {
   return msSinceLast <= windowMs ? (prev + 1) % 3 : 0;

@@ -4,7 +4,7 @@ import { BLOOD, bleed, blot, pool, run, stains } from './enemy.ts';
 
 // How the Order's crossbowman looks: a human in a steel kettle hat and a white tabard with the gold cross of the
 // Dawn, carrying a crossbow. Gameplay owns the AI state; this file only shows it (and its bolts).
-export type CrossbowState = 'chase' | 'aim' | 'shoot';
+export type CrossbowState = 'chase' | 'aim' | 'shoot' | 'held'; // held: in the hero's bite
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
@@ -82,6 +82,20 @@ smWWWWWGWWwsm
 ..WWWWWWWWv..
 ..WWWWWWWwv..
 ..gGGGGGGgo..
+`],
+  // Weakened: the slash wound bleeds through the tabard, a red stain running down to the hem.
+  body_weak: [13, 19, `
+...msmsmsm...
+.ssWWWWWWWss.
+smWWWWWGWrwsm
+smWWWWGGrrRsm
+smWWWWWGrRRsm
+.mWWWWWWrRwm.
+.mWWWWWWWrwm.
+..LLLLGLLrL..
+..WWWWWWWrv..
+..WWWWWWWRv..
+..gGGGGGGgr..
 `],
   legs: [15, 30, `
 .nn...nn.
@@ -200,11 +214,21 @@ const FRAMES: Record<string, Layer[]> = {
   lock: [['shadow', 0, 0], ['arm_far_aim', 1, 0], ['legs_brace', 0, 0], ['body', 0, 0, 0.05], ['helm', 1, 2], ['face', 1, 2], ['xbow', 3, -5], ['arm_near_aim', 1, 0], ['glint', 2, 0]],
   shot: [['shadow', 0, 0], ['arm_far_aim', 0, -2], ['legs_brace', 0, 0], ['body', 0, 0, -0.1], ['helm', -1, 1], ['face', -1, 1], ['xbow_shot', 2, -7], ['arm_near_aim', 0, -2]],
   hurt: [['shadow', 0, 0], ['arm_far', 0, 0], ['legs', 0, 0], ['body', 0, 0, -0.2], ['xbow', -3, 2], ['arm_near', -2, 0], ['helm', -4, 0], ['face_hurt', -4, 0]],
+  // In the bite: the crossbow dropped (it lies by the corpse), the head thrown back, the throat bared to the fangs.
+  held: [['shadow', 0, 0], ['arm_far', 0, 0], ['legs', 0, 0], ['body', 0, 0, -0.2], ['arm_near', -2, 0], ['helm', -4, 0], ['face_hurt', -4, 0]],
   corpse: [['corpse', 0, 0]],
 };
 // Seen from behind while heading up the screen: the face gives way to the mail coif.
 for (const name of ['idle', 'walk0', 'walk1', 'walk2', 'walk3']) {
   FRAMES[name + 'b'] = FRAMES[name].map(([part, ...rest]) => [part === 'face' ? 'nape' : part, ...rest] as Layer);
+}
+// Weakened ('~'): the same frames bloodied, the head sunk into hunched shoulders and the crossbow sagging.
+for (const name of Object.keys(FRAMES)) {
+  if (name === 'corpse') continue;
+  const sag = name !== 'hurt' && name !== 'held';
+  FRAMES[name + '~'] = FRAMES[name].map(([part, dx, dy, shear]): Layer => part === 'body' ? ['body_weak', dx, dy, shear]
+    : sag && ['helm', 'face', 'nape'].includes(part) ? [part, dx + 1, dy + 1, shear]
+    : sag && part.startsWith('xbow') ? [part, dx, dy + 1, shear] : [part, dx, dy, shear]);
 }
 // Frames sunk into the floor and cut at the feet: buckling at the knees before falling.
 const SUNK: Record<string, [frame: string, depth: number]> = { kneel: ['hurt', 6] };
@@ -336,8 +360,9 @@ export function telegraphSpawn(scene: Scene, x: number, y: number, ms: number) {
   }, () => g.destroy());
 }
 
-/** Shows the crossbowman; while it aims, `reach` is how far its bolt would fly along `facing` (the aim line). */
-export function show(s: Sprite, state: CrossbowState, facing: number, flash: boolean, reach: number) {
+/** Shows the crossbowman; while it aims, `reach` is how far its bolt would fly along `facing` (the aim line). `weak`:
+ *  hurt enough to be bitten. */
+export function show(s: Sprite, state: CrossbowState, facing: number, flash: boolean, reach: number, weak: boolean) {
   const now = s.scene.time.now;
   const c = Math.cos(facing);
   if (Math.abs(c) > 0.2) s.setFlipX(c < 0);
@@ -352,14 +377,49 @@ export function show(s: Sprite, state: CrossbowState, facing: number, flash: boo
   const age = now - s.getData('born');
   const C = T.crossbow;
   let f: string;
-  if (hurt < 220) f = 'hurt';
+  if (state === 'held') f = 'held';
+  else if (hurt < 220) f = 'hurt';
   else if (state === 'aim') f = t < 100 ? 'raise' : t >= C.aimMs - C.lockMs ? 'lock' : 'aim';
   else if (state === 'shoot') f = 'shot';
   else f = s.body!.velocity.lengthSq() > 25 ? 'walk' + (Math.floor((now + s.getData('phase')) / 130) % 4) : 'idle';
   if (Math.sin(facing) < -0.5 && FRAMES[f + 'b']) f += 'b';
+  if (weak) f += '~';
   // It appears in a flash of the Dawn's light, then the white rim pops on each hit.
   s.setFrame(age < 120 || (flash && hurt > 0 && hurt < 50) ? f + '!' : f);
   aimLine(s, state === 'aim' && hurt >= 220 ? t : -1, facing, reach);
+  if (weak && state !== 'held') mark(s.getData('aimG'), s.x + (s.flipX ? -1 : 1), s.y - 19, now + s.getData('phase')); // over the hunched head
+}
+
+// The tell of a human weak enough to bite: a blood drop over its head, like a drop of the hero's health, beating like
+// a racing heart (lub-dub) and swelling to a bright, bigger drop on each beat. Blood red in a dark rim: never the gold
+// of the Order, nor a white hit flash. o rim, R r e blood dark to light, g glow, H glint.
+const MARK_PAL: Record<string, number> = { o: PAL[0], R: 0x5c0a1c, r: 0xa3122f, e: 0xe0284a, g: 0xff4f8b, H: 0xffe4ee };
+const MARK = [`
+...o...
+..oeo..
+.oerro.
+oerrrro
+oerrrRo
+oerrRRo
+.oRRRo.
+..ooo..
+`, `
+....o....
+...oHo...
+..oHgeo..
+.oHgeeeo.
+.ogeeeeo.
+ogeeeeero
+oeeeeeero
+oeeeeerro
+.oeeerro.
+..orrro..
+...ooo...
+`].map((m) => m.trim().split('\n'));
+function mark(g: Phaser.GameObjects.Graphics, x: number, bottom: number, t: number) {
+  const beat = t % 700, rows = MARK[Number(beat < 80 || (beat >= 160 && beat < 240))];
+  const x0 = Math.round(x) - (rows[0].length >> 1), y0 = Math.round(bottom) - rows.length;
+  rows.forEach((row, j) => [...row].forEach((c, i) => c !== '.' && g.fillStyle(MARK_PAL[c]).fillRect(x0 + i, y0 + j, 1, 1)));
 }
 
 // The telegraph: a dotted gold line along the bolt's path, marching toward the target, that turns solid and
