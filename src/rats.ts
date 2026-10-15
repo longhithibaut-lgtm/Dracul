@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import * as Font from './font.ts';
 import { blot } from './enemy.ts';
-import { GIFTS, SLOTS, SLOT_ICONS, type GiftId } from './gifts.ts';
+import { GIFTS, ICONS, KINDS, kind, replacing, type GiftId } from './gifts.ts';
+import { replaced } from './logic.ts';
 
-// How the Rat house shows: Vesna la Grise's gift waiting on the medallion, the gift cards, the rats of Nuée and the
-// plague of Griffes pestilentes. Gameplay decides what happens; this file only draws it.
+// How the Rat house shows: Vesna la Grise's gift waiting on the medallion, the gift cards, the rats of Nuée and of
+// the Glyphe du nid, and la Peste (on enemies, on shards, leaping with Contagion). Gameplay decides what happens; this
+// file only draws it.
 
 type Scene = Phaser.Scene;
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -127,13 +129,16 @@ export function pickup(scene: Scene, x: number, y: number): Pickup {
 
 // ---------- the gift cards ----------
 
-const CARD = { w: 128, h: 82, gap: 12 };
+const CARD = { w: 128, gap: 12 };
 const TEXT_W = CARD.w - 16;
+/** The lines of a card: what the gift does, then, if it replaces `old` held in its slot, which one. */
+const lines = (id: GiftId, old?: GiftId) => [Font.wrap(GIFTS[id].text, TEXT_W), old ? Font.wrap(replacing(old), TEXT_W) : []];
 
-/** One card, normal or `hot` (hovered, chosen), at x offset `ox` of its texture: a frame of silver over a blood
- *  trim, the key that picks it, the slot's icon and name on a blood band, the gift's name and what it does. */
-function paintCard(put: Put, ox: number, id: GiftId, key: number, hot: boolean) {
-  const { w: W, h: H } = CARD, g = GIFTS[id], at: Put = (x, y, c) => put(ox + x, y, c);
+/** One card `H` tall, normal or `hot` (hovered, chosen), at x offset `ox` of its texture: a frame of silver over a
+ *  blood trim, the key that picks it, its slot's icon and name (or talent's) on a blood band, the gift's name, what it
+ *  does and, set a little apart in red, the gift it would replace. */
+function paintCard(put: Put, ox: number, id: GiftId, key: number, hot: boolean, H: number, old?: GiftId) {
+  const W = CARD.w, g = GIFTS[id], at: Put = (x, y, c) => put(ox + x, y, c);
   const rim = hot ? BONE : SILVER, shade = hot ? SILVER : GREY, trim = hot ? BLOOD[2] : BLOOD[1];
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
@@ -145,19 +150,21 @@ function paintCard(put: Put, ox: number, id: GiftId, key: number, hot: boolean) 
   for (let y = 5; y < 16; y++) for (let x = 5; x < 14; x++) at(x, y, x === 5 || x === 13 || y === 5 || y === 15 ? shade : VOID);
   const k = String(key);
   Font.draw(k, 5 + Math.floor((9 - Font.width(k)) / 2), 5, (x, y) => at(x, y, BONE));
-  // Slot: icon and name, centred on the band.
-  const slot = SLOTS[g.slot].toUpperCase(), sx = Math.floor((W - 11 - Font.width(slot)) / 2);
-  grid(at, sx, 6, SLOT_ICONS[g.slot], ICON);
-  Font.draw(slot, sx + 11, 4, (x, y) => at(x, y, SILVER));
-  // Name, a rule with a silver diamond, then the effect.
+  // Kind: icon and name, centred on the band.
+  const band = KINDS[kind(id)].toUpperCase(), sx = Math.floor((W - 11 - Font.width(band)) / 2);
+  grid(at, sx, 6, ICONS[kind(id)], ICON);
+  Font.draw(band, sx + 11, 4, (x, y) => at(x, y, SILVER));
+  // Name, a rule with a silver diamond, the effect, then what it replaces.
   Font.draw(g.name, Math.floor((W - Font.width(g.name)) / 2), 21, (x, y) => at(x, y, BONE));
   for (let x = 16; x < W - 16; x++) at(x, 35, trim);
   grid(at, W / 2 - 2, 34, ['.#.', '###', '.#.'], { '#': rim });
-  Font.wrap(g.text, TEXT_W).forEach((l, i) => Font.draw(l, Math.floor((W - Font.width(l)) / 2), 39 + i * 12, (x, y) => at(x, y, BONE_DIM)));
+  const [text, foot] = lines(id, old);
+  [...text, ...foot].forEach((l, i) => Font.draw(l, Math.floor((W - Font.width(l)) / 2), 39 + i * Font.LINE + (i < text.length ? 0 : 3),
+    (x, y) => at(x, y, i < text.length ? BONE_DIM : BLOOD[2])));
 }
-const card = (scene: Scene, id: GiftId, key: number) =>
-  bake(scene, `rat-card:${id}:${key}`, CARD.w * 2, CARD.h, (put) => [false, true].forEach((hot, i) => paintCard(put, i * CARD.w, id, key, hot)),
-    [['n', 0, 0, CARD.w, CARD.h], ['h', CARD.w, 0, CARD.w, CARD.h]]);
+const card = (scene: Scene, id: GiftId, key: number, h: number, old?: GiftId) =>
+  bake(scene, `rat-card:${id}:${key}:${h}:${old}`, CARD.w * 2, h, (put) => [false, true].forEach((hot, i) => paintCard(put, i * CARD.w, id, key, hot, h, old)),
+    [['n', 0, 0, CARD.w, h], ['h', CARD.w, 0, CARD.w, h]]);
 
 export type Cards = {
   at(x: number, y: number): number; // the card under a point, or -1
@@ -165,16 +172,20 @@ export type Cards = {
   choose(i: number, done: () => void): boolean; // false when it cannot be chosen (yet)
 };
 
-/** The choice of gifts over the dimmed room: Vesna's coin, a heading, one card per gift sliding in, a hint. */
-export function cards(scene: Scene, ids: GiftId[]): Cards {
+/** The choice of gifts `ids` over the dimmed room, the hero holding `held`: Vesna's coin, a heading, one card per
+ *  gift sliding in, all as tall as the fullest, a hint. */
+export function cards(scene: Scene, ids: GiftId[], held: readonly GiftId[]): Cards {
   const born = scene.time.now, n = ids.length, top = 56;
+  const olds = ids.map((id) => replaced(GIFTS, held, id));
+  // 82 with three lines of text, like most.
+  const h = 46 + Math.max(...ids.map((id, i) => lines(id, olds[i]).flat().length * Font.LINE + (olds[i] ? 3 : 0)));
   const dim = scene.add.rectangle(0, 0, T.width, T.height, VOID, 0.78).setOrigin(0).setDepth(UI);
   const crest = scene.add.image(T.width / 2, top, coin(scene)).setOrigin(0.5, 0).setDepth(UI + 1);
   const head = scene.add.image(T.width / 2, top + 22, Font.bake(scene, ['Don de la Maison du Rat'], SILVER, VOID)).setOrigin(0.5, 0).setDepth(UI + 1);
   const x0 = Math.round((T.width - n * CARD.w - (n - 1) * CARD.gap) / 2), y = top + 44;
-  const imgs = ids.map((id, i) => scene.add.image(x0 + i * (CARD.w + CARD.gap), y, card(scene, id, i + 1), 'n').setOrigin(0).setDepth(UI + 2));
+  const imgs = ids.map((id, i) => scene.add.image(x0 + i * (CARD.w + CARD.gap), y, card(scene, id, i + 1, h, olds[i]), 'n').setOrigin(0).setDepth(UI + 2));
   const keys = ids.map((_, i) => i + 1).join(', ');
-  const hint = scene.add.image(T.width / 2, y + CARD.h + 6, Font.bake(scene, [`${keys} ou clic`], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
+  const hint = scene.add.image(T.width / 2, y + h + 6, Font.bake(scene, [`${keys} ou clic`], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
   const all = [dim, crest, head, ...imgs, hint];
   scene.tweens.add({ targets: dim, alpha: { from: 0, to: dim.alpha }, duration: 160 });
   scene.tweens.add({ targets: [crest, head, hint], alpha: { from: 0, to: 1 }, duration: 160 });
@@ -183,7 +194,7 @@ export function cards(scene: Scene, ids: GiftId[]): Cards {
   let hot = -1, picked = false;
   const show = (i: number) => imgs.forEach((im, k) => im.setFrame(k === i ? 'h' : 'n').setY(y - (k === i ? 3 : 0)));
   return {
-    at: (px, py) => imgs.findIndex((im) => px >= im.x && px < im.x + CARD.w && py >= y - 3 && py < y + CARD.h),
+    at: (px, py) => imgs.findIndex((im) => px >= im.x && px < im.x + CARD.w && py >= y - 3 && py < y + h),
     hover(i) {
       if (picked || !ready() || i === hot) return;
       show((hot = i));
@@ -247,7 +258,27 @@ export function vanish(scene: Scene, r: Phaser.GameObjects.Sprite) {
   r.destroy();
 }
 
-// ---------- Griffes pestilentes: the plague ----------
+// ---------- la Peste ----------
+
+/** Éclats pestilents: a shard in flight (its floor point; drawn 11 px above it, see Fx.shard) sheds wisps of plague,
+ *  over it, until it is spent. */
+export function plagueShard(scene: Scene, b: Phaser.GameObjects.Zone) {
+  b.once(Phaser.GameObjects.Events.DESTROY, loop(scene, () =>
+    motes(scene, b.x, b.y - 11, 1, [Math.random() < 0.6 ? PLAGUE[0] : PLAGUE[1]], b.y + 4, 3, 8, 2), []));
+}
+
+/** Contagion: a clot of plague leaps in an arc from floor point (x, y), where a sick enemy died, onto `e`, and bursts. */
+export function leap(scene: Scene, x: number, y: number, e: Sprite) {
+  const blob = scene.add.rectangle(x - 1, y - 7, 3, 3, PLAGUE[0]).setOrigin(0).setDepth(9_000); // over the characters
+  scene.tweens.addCounter({ from: 0, to: 1, duration: 320, onUpdate: (tw) => {
+    const k = tw.getValue() ?? 0;
+    blob.setPosition(Math.round(x + (e.x - x) * k) - 1, Math.round(y + (e.y - y) * k - 6 - Math.sin(k * Math.PI) * 16) - 1);
+    motes(scene, blob.x + 1, blob.y + 1, 1, [Math.random() < 0.5 ? PLAGUE[0] : PLAGUE[1]], blob.depth - 1, 2, 4, 2);
+  }, onComplete: () => {
+    blob.destroy();
+    motes(scene, e.x, e.y - 6, 8, PLAGUE, e.y + 1, 6, 8);
+  } });
+}
 
 /** An infected enemy: a sickly cast that throbs, and wisps of plague rising off it. Called every frame while it lasts. */
 export function plagued(scene: Scene, e: Sprite, now: number) {

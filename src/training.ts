@@ -1,7 +1,7 @@
 // The training room (key T): a DOM panel over the game to call enemies in, toggle the gifts and tune the hero live.
 // The knobs change T itself, so a tuned value holds for the whole session, normal runs included, until a reload.
 import { T } from './tuning.ts';
-import { GIFTS, GIFT_IDS, type GiftId } from './gifts.ts';
+import { GIFTS, GIFT_IDS, KINDS, kind, type GiftId } from './gifts.ts';
 
 export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern';
 /** Survive the scene restarts (a death in training starts the training room again). */
@@ -39,7 +39,7 @@ const CSS = `
 #training{position:fixed;top:8px;right:8px;width:260px;max-height:calc(100% - 16px);overflow:auto;box-sizing:border-box;z-index:10;
   padding:8px 10px;background:#170d22ee;border:1px solid #2e1838;color:#e8dcc8;font:13px/1.35 Georgia,"Times New Roman",serif}
 #training summary{cursor:pointer;font-weight:700;color:#e0284a;letter-spacing:.06em}
-#training summary small{color:#a8929f;font-weight:400;letter-spacing:0}
+#training small{color:#a8929f;font-weight:400;letter-spacing:0}
 #training h3{margin:10px 0 4px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#a8929f}
 #training .row{display:flex;flex-wrap:wrap;gap:4px}
 #training button{font:inherit;color:inherit;background:#0b0710;border:1px solid #2e1838;padding:3px 6px;cursor:pointer}
@@ -54,6 +54,9 @@ const CSS = `
 
 /** Opens the panel; returns what closes it. */
 export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean): void }) {
+  // Every gift can be ticked, several in one slot too: the one-per-slot rule is the run's, not the training room's.
+  const gifts = (slotted: boolean) => GIFT_IDS.filter((id) => !!GIFTS[id].slot === slotted).map((id) =>
+    `<label><input type="checkbox" data-gift="${id}"${api.gifts.includes(id) ? ' checked' : ''}> ${GIFTS[id].name}${slotted ? ` <small>· ${KINDS[kind(id)]}</small>` : ''}</label>`).join('');
   const root = document.createElement('aside');
   root.id = 'training';
   root.innerHTML = `<style>${CSS}</style><details open><summary>ENTRAÎNEMENT <small>· T pour quitter</small></summary>
@@ -63,8 +66,8 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
     <h3>Héros</h3>
     <label><input type="checkbox" data-opt="god"> Invincible</label>
     <div class="row"><button type="button" data-act="heal">Soigner</button></div>
-    <h3>Dons du Rat</h3>
-    ${GIFT_IDS.map((id) => `<label><input type="checkbox" data-gift="${id}"${api.gifts.includes(id) ? ' checked' : ''}> ${GIFTS[id].name}</label>`).join('')}
+    <h3>Dons du Rat : emplacements</h3>${gifts(true)}
+    <h3>Dons du Rat : talents</h3>${gifts(false)}
     <h3>Réglages</h3>
     ${KNOBS.map(([l, g, k, min, max, step]) => `<label class="knob">${l}<output>${tuned[g][k]}</output><input type="range" data-knob="${g}.${k}" min="${min}" max="${max}" step="${step}" value="${tuned[g][k]}"></label>`).join('')}
     <textarea readonly rows="3" aria-label="Réglages modifiés" placeholder="Les réglages modifiés s'affichent ici : copie-les dans le chat."></textarea>

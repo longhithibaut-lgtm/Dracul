@@ -98,9 +98,28 @@ export function pickSpot(spots: P[], hero: P, taken: P[], rx: number, ry: number
     .sort((a, b) => d(a) - d(b))[0];
 }
 
-/** Up to `n` distinct items of `pool` not in `taken`, in random order (`rnd` in [0, 1), injected for tests). */
-export function drawGifts<K>(pool: readonly K[], taken: readonly K[], n: number, rnd: () => number): K[] {
-  const left = pool.filter((g) => !taken.includes(g));
+type Gifts<K extends string> = Record<K, { slot?: string; requires?: readonly string[] }>;
+
+/** The gifts that may be offered: not held, and holding one of those they require, if any. */
+export function offerable<K extends string>(defs: Gifts<K>, held: readonly K[]): K[] {
+  return (Object.keys(defs) as K[]).filter((g) => !held.includes(g) && (defs[g].requires?.some((r) => held.includes(r as K)) ?? true));
+}
+
+/** The held gift that taking `id` would replace: the one in its slot. A talent (no slot) replaces nothing. */
+export function replaced<K extends string>(defs: Gifts<K>, held: readonly K[], id: K): K | undefined {
+  const slot = defs[id].slot;
+  return slot ? held.find((g) => g !== id && defs[g].slot === slot) : undefined;
+}
+
+/** The gifts held once `id` is taken: at most one per slot, so a slot gift replaces the one in its slot; talents stack. */
+export function take<K extends string>(defs: Gifts<K>, held: readonly K[], id: K): K[] {
+  const old = replaced(defs, held, id);
+  return [...held.filter((g) => g !== old), id];
+}
+
+/** Up to `n` items of `pool`, in random order (`rnd` in [0, 1), injected for tests). */
+export function drawGifts<K>(pool: readonly K[], n: number, rnd: () => number): K[] {
+  const left = [...pool];
   for (let i = left.length - 1; i > 0; i--) { // Fisher-Yates
     const j = Math.floor(rnd() * (i + 1));
     [left[i], left[j]] = [left[j], left[i]];

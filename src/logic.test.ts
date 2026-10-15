@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, burnsAfter, dashStopsAt, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
-import { GIFTS, GIFT_IDS, SLOTS } from './gifts.ts';
+import { biteTarget, burnsAfter, dashStopsAt, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, offerable, pickSpot, rayDistance, replaced, take } from './logic.ts';
+import { GIFTS, GIFT_IDS, KINDS, kind, replacing, shelf } from './gifts.ts';
 import { missing, width, wrap } from './font.ts';
 
 describe('inArc', () => {
@@ -140,23 +140,49 @@ describe('gifts', () => {
   const seq = (...v: number[]) => () => v.shift() ?? 0;
 
   it('draws distinct untaken gifts, as many as are left', () => {
-    const taken = ['griffes', 'fuite'] as const;
-    const d = drawGifts(GIFT_IDS, taken, 3, Math.random);
+    const held = ['griffes', 'fuite'] as const;
+    const d = drawGifts(offerable(GIFTS, held), 3, Math.random);
     expect(new Set(d).size).toBe(3);
-    expect(d.some((g) => (taken as readonly string[]).includes(g))).toBe(false);
-    expect(drawGifts(GIFT_IDS, GIFT_IDS.slice(0, -1), 3, Math.random)).toEqual(GIFT_IDS.slice(-1));
-    expect(drawGifts(GIFT_IDS, GIFT_IDS, 3, Math.random)).toEqual([]);
+    expect(d.some((g) => (held as readonly string[]).includes(g))).toBe(false);
+    expect(drawGifts(offerable(GIFTS, GIFT_IDS.slice(0, -1)), 3, Math.random)).toEqual(GIFT_IDS.slice(-1));
+    expect(drawGifts(offerable(GIFTS, GIFT_IDS), 3, Math.random)).toEqual([]);
   });
 
   it('follows the injected random function', () => {
-    expect(drawGifts(['a', 'b', 'c'], [], 3, seq(0.99, 0.99))).toEqual(['a', 'b', 'c']); // every swap in place
-    expect(drawGifts(['a', 'b', 'c'], [], 3, seq(0, 0))).toEqual(['b', 'c', 'a']);
+    expect(drawGifts(['a', 'b', 'c'], 3, seq(0.99, 0.99))).toEqual(['a', 'b', 'c']); // every swap in place
+    expect(drawGifts(['a', 'b', 'c'], 3, seq(0, 0))).toEqual(['b', 'c', 'a']);
+  });
+
+  // A made-up second house sharing the claws slot, until one exists.
+  const defs = { a: { slot: 'griffes' }, b: { slot: 'tir' }, wolf: { slot: 'griffes' }, t: {}, u: {}, needs: { requires: ['a', 'b'] } };
+
+  it('one gift per slot: a slot gift replaces the one in its slot, talents stack', () => {
+    expect(replaced(defs, ['a', 't'], 'wolf')).toBe('a');
+    expect(take(defs, ['a', 'b', 't'], 'wolf')).toEqual(['b', 't', 'wolf']);
+    expect(take(defs, ['wolf', 't'], 'a')).toEqual(['t', 'a']);
+    expect(replaced(defs, ['a', 'b'], 't')).toBeUndefined();
+    expect(take(defs, ['a', 't'], 'u')).toEqual(['a', 't', 'u']);
+    expect(take(defs, ['t'], 'b')).toEqual(['t', 'b']); // an empty slot
+  });
+
+  it('offers a gift with a prerequisite only once one of them is held', () => {
+    expect(offerable(defs, ['t'])).not.toContain('needs');
+    expect(offerable(defs, ['b'])).toContain('needs');
+    expect(offerable(defs, ['a', 'needs'])).not.toContain('needs');
+    expect(offerable(GIFTS, [])).not.toContain('contagion');
+    expect(offerable(GIFTS, ['eclats'])).toContain('contagion');
+    for (const g of Object.values(GIFTS)) expect(GIFT_IDS).toEqual(expect.arrayContaining([...(g.requires ?? [])]));
+  });
+
+  it('shelves slot gifts in slot order, then talents as taken', () => {
+    expect(shelf(['fuite', 'nuee', 'rongeur', 'griffes', 'nid'])).toEqual(['griffes', 'nid', 'nuee', 'fuite', 'rongeur']);
   });
 
   it('every gift text is in the typeface and wraps to card width', () => {
-    for (const g of Object.values(GIFTS)) {
-      expect(missing(g.name + g.text + SLOTS[g.slot])).toEqual([]);
-      expect(wrap(g.text, 112).every((l) => width(l) <= 112)).toBe(true);
+    for (const id of GIFT_IDS) {
+      const g = GIFTS[id];
+      expect(missing(g.name + g.text + KINDS[kind(id)].toUpperCase() + replacing(id))).toEqual([]);
+      for (const t of [g.text, replacing(id)]) expect(wrap(t, 112).every((l) => width(l) <= 112)).toBe(true);
     }
     expect(missing('Don de la Maison du Rat · Vesna la Grise · Salle 9')).toEqual(['·']);
   });

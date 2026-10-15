@@ -1,13 +1,13 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
 // Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
-// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (3/5 health, dash spent, 2 gifts),
+// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (3/5 health, dash spent, 5 gifts),
 // light.png (a lit lantern, the hero at the edge of its holy light), crossbow.png (a crossbowman aiming), weak.png (a
 // weakened crossbowman, its heartbeat drop on the beat), bite.png (the hero latched onto it, mid-drain), gifts.png
-// (full frame, the room cleared and the three gift cards open, the second hovered), gate.png (the portcullis up),
-// training.png (full frame: the training room, its panel, enemies called in from it), tir.png (the hero mid-throw,
-// a shard of blood in flight toward a ghoul) and glyph.png (the glyph cast with E at the pointer, binding two ghouls,
-// the hero beside it).
+// (full frame, the room cleared and the three gift cards open, TIR, GLYPHE and TALENT, the second hovered), gate.png
+// (the portcullis up), training.png (full frame: the training room, its panel, enemies called in from it), tir.png
+// (the hero mid-throw, a plagued shard of blood in flight toward a ghoul) and glyph.png (the glyph cast with E at the
+// pointer, binding two ghouls, the hero beside it).
 // Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -118,9 +118,10 @@ for (let i = 0; i < 200 && !captured; i++) {
   captured = true;
 }
 
-// HUD in a representative mid-fight state, like the reference: 3 of 5 health, dash just spent, two gifts shown.
+// HUD in a representative mid-fight state, like the reference: 3 of 5 health, dash just spent, five gifts shown (one
+// per slot, then a talent).
 if (captured) {
-  await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.health = 3; s.hud.health(3, 5); s.hud.gifts(['griffes', 'brume']); });
+  await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.health = 3; s.hud.health(3, 5); s.hud.gifts(['rongeur', 'nid', 'griffes', 'eclats', 'nuee']); });
   await page.waitForTimeout(900); // let the lost-health animation settle
   await page.keyboard.press('Space', { delay: 100 }); // held across a couple of frames, see above
   await page.waitForTimeout(100);
@@ -210,7 +211,8 @@ let bit = null;
 }
 
 // The room cleared and its gift taken: the cards open. The bot never clears a room on its own, so the fight is
-// moved on to the room's last wave and its enemies are killed; then the hero is put on the gift.
+// moved on to the room's last wave and its enemies are killed; then the hero is put on the gift. Every gift but three
+// is held, so the draw is always the same: Éclats pestilents (TIR), Glyphe du nid (GLYPHE), Éclats rongeurs (TALENT).
 const room = () => page.evaluate(() => { const s = window.game.scene.getScene('room'); return { phase: s.phase, no: s.roomNo, gifts: s.gifts }; });
 let gifts = false, gate = false;
 {
@@ -218,6 +220,8 @@ let gifts = false, gate = false;
   await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable), null, { timeout: 8000 }).catch(() => {});
   await page.evaluate(() => {
     const s = window.game.scene.getScene('room');
+    s.gifts = ['griffes', 'nuee', 'rongeur', 'fuite', 'morsure', 'survivant', 'contagion'];
+    s.hud.gifts(s.gifts);
     s.wave = s.roomNo * 3; // T.run.wavesPerRoom
     for (const e of s.enemies.getChildren().filter((e) => e.body?.enable)) s.kill(e);
   });
@@ -245,14 +249,14 @@ let gifts = false, gate = false;
   }
 }
 
-// The training room (key T): its panel calls enemies in, freezes them and hands out a gift.
+// The training room (key T): its panel calls enemies in, freezes them and hands out gifts.
 let training = false;
 {
   await page.keyboard.press('t');
   if (await page.waitForSelector('#training', { timeout: 5000 }).catch(() => null)) {
     for (const s of ['ghoul', 'weak', 'lantern']) await page.click(`#training [data-spawn="${s}"]`);
     await page.click('#training [data-opt="passive"]');
-    await page.click('#training [data-gift="nuee"]');
+    for (const g of ['nuee', 'eclats', 'perce']) await page.click(`#training [data-gift="${g}"]`);
     await page.waitForTimeout(1200); // past the spawn telegraphs
     training = await page.evaluate(() => {
       const s = window.game.scene.getScene('room');
@@ -264,17 +268,21 @@ let training = false;
   }
 }
 
-// Le Tir, in the training room (its dummies hold still): the hero flicks a shard at a ghoul on his row, caught mid-throw
-// with the shard in flight; then it must land.
+// Le Tir, in the training room (its dummies hold still), with Éclats pestilents and Éclats rongeurs: the hero flicks a
+// shard at a ghoul on his row, caught mid-throw with the plagued shard in flight; then it must land, infect the ghoul
+// and fly on through it into the weakened crossbowman behind.
 let tir = null;
 if (training) {
   const p = await page.evaluate(() => {
     const s = window.game.scene.getScene('room');
-    const g = s.enemies.getChildren().find((e) => e.body?.enable && e.getData('kind') !== 'crossbow');
-    if (!g) return null;
+    const live = s.enemies.getChildren().filter((e) => e.body?.enable);
+    const g = live.find((e) => e.getData('kind') !== 'crossbow'), w = live.find((e) => e.getData('kind') === 'crossbow');
+    if (!g || !w) return null;
     s.hero.body.reset(170, 160); // across the medallion, out of every lantern's light
     g.body.reset(236, 160);
-    return { x: 203, y: 156, hp: g.getData('hp') };
+    w.body.reset(290, 160);
+    w.body.reset(290, 160 + g.body.center.y - w.body.center.y); // feet in line with the ghoul's
+    return { x: 203, y: 156, hp: g.getData('hp'), whp: w.getData('hp') };
   });
   if (p) {
     await page.waitForTimeout(100); // a physics step puts the bodies back under their sprites
@@ -285,9 +293,12 @@ if (training) {
     if (flying) await shot('tir', clip(p.x, p.y, 400, 200));
     await page.evaluate(() => (window.game.scene.getScene('room').shotUntil = 0));
     await freeze(false);
-    await page.waitForTimeout(500);
-    const hp = await page.evaluate(() => window.game.scene.getScene('room').enemies.getChildren().find((e) => e.body?.enable && e.getData('kind') !== 'crossbow')?.getData('hp'));
-    tir = flying && hp < p.hp && `ghoul ${p.hp} -> ${hp} hp`;
+    await page.waitForTimeout(700);
+    const [g, w] = await page.evaluate(() => ['ghoul', 'crossbow'].map((k) => {
+      const e = window.game.scene.getScene('room').enemies.getChildren().find((e) => e.body?.enable && (e.getData('kind') ?? 'ghoul') === k);
+      return e && { hp: e.getData('hp'), plagueAt: e.getData('plagueAt') };
+    }));
+    tir = flying && g?.hp < p.hp && g.plagueAt > 0 && w?.hp < p.whp && `ghoul ${p.hp} -> ${g.hp} hp, plagued; pierced into the crossbowman ${p.whp} -> ${w.hp} hp`;
   }
 }
 

@@ -90,10 +90,12 @@ export const T = {
     titleMs: 1200, // "Salle N" stays up this long; the first wave comes when it is gone
   },
 
-  // Gifts of the Rat house, each taken at most once per run.
+  // Gifts of the Rat house (gifts.ts), each taken at most once per run.
   gifts: {
-    plagueMs: 2000, plagueDamage: 1, // Griffes pestilentes: an infected enemy loses this much more, this long after
-    rats: 3, ratSpeed: 150, ratLifeMs: 2500, ratDamage: 1, // Nuée: rats released by a dash (no more than `rats` at once)
+    plagueMs: 2000, plagueDamage: 1, // la Peste (claws, shards, Contagion): an infected enemy loses this much, this long after
+    contagion: 40, // Contagion: the plague of a sick enemy that dies leaps to the enemies this close to it
+    // Nuée and Glyphe du nid: rats released by a dash (no more than `rats` of the dash's at once) or by the glyph arming.
+    rats: 3, ratSpeed: 150, ratLifeMs: 2500, ratDamage: 1,
     dashRecharge: 1.4, // Fuite du rat: the dash recharges this many times faster
     gnaw: 1, // Rongeur: extra damage of the combo's third blow
     blood: 1, // Survivant: extra max health, healed once when taken

@@ -1,18 +1,19 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import * as Font from './font.ts';
-import { SLOT_ICONS, type Slot } from './gifts.ts';
+import { ICONS, kind, shelf, type GiftId } from './gifts.ts';
 
 // Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
 // recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, beside them
-// the glyph's blood seal that fills back up over its cooldown, and a shelf with the slot icon of each gift taken.
+// the glyph's blood seal that fills back up over its cooldown, and a shelf with the icon of each gift taken (its slot,
+// or talent): slot gifts first, in slot order.
 // Also the title card of a new room ("Salle 2"), centred.
 // Gameplay pushes values in; it never reads from here. Redrawn every frame into one Graphics, in native pixels.
 export type Hud = {
   health(current: number, max: number): void;
   dashReady(ready: boolean, readyAt: number): void; // readyAt: when a spent dash is back
   glyphReady(ready: boolean, readyAt: number): void; // the same for the glyph
-  gifts(slots: Slot[]): void;
+  gifts(held: readonly GiftId[]): void;
   title(text: string): void;
 };
 
@@ -140,7 +141,8 @@ export function create(scene: Phaser.Scene): Hud {
   let shards: Shard[] = [];
   let ready = true, spentAt = -1e9, readyAt = -1e9, dueAt = 0;
   const glyph = { ready: true, spentAt: -1e9, readyAt: -1e9, dueAt: 0 };
-  let slots: Slot[] | undefined, giftAt = -1e9, title = '', titleAt = -1e9; // slots: undefined until first set
+  // gifts: undefined until first set; fresh: the one just taken.
+  let gifts: GiftId[] | undefined, fresh: GiftId | undefined, giftAt = -1e9, title = '', titleAt = -1e9;
 
   // Draws a pixel grid, one rectangle per horizontal run, rows from `fromRow` down.
   const grid = (x: number, y: number, rows: string[], px: Record<string, number>, fromRow = 0) => {
@@ -229,12 +231,12 @@ export function create(scene: Phaser.Scene): Hud {
       }
     }
 
-    // Gifts taken: a shelf of slot icons under the tile; the newest pops white.
-    if (slots?.length) {
-      const y = y0 + 22, n = slots.length;
+    // Gifts taken: a shelf of their icons under the tile; the newest pops white.
+    if (gifts?.length) {
+      const y = y0 + 22, n = gifts.length;
       g.fillStyle(C.night, 0.9).fillRect(x0 + 20, y, n * 9 + 3, 11);
       g.fillStyle(C.dusk).fillRect(x0 + 20, y, n * 9 + 3, 1);
-      slots.forEach((s, i) => grid(x0 + 22 + i * 9, y + 2, SLOT_ICONS[s], i === n - 1 && now - giftAt < 120 ? POP : ICON));
+      gifts.forEach((id, i) => grid(x0 + 22 + i * 9, y + 2, ICONS[kind(id)], id === fresh && now - giftAt < 120 ? POP : ICON));
     }
 
     // Title card: bone letters between two red rules, then it steps out.
@@ -295,9 +297,9 @@ export function create(scene: Phaser.Scene): Hud {
       if (r) glyph.readyAt = scene.time.now;
       else glyph.spentAt = scene.time.now;
     },
-    gifts(s) {
-      if (slots && s.length > slots.length) giftAt = scene.time.now; // a gift taken now, not the ones a room starts with
-      slots = [...s];
+    gifts(held) {
+      if (gifts && (fresh = held.find((g) => !gifts!.includes(g)))) giftAt = scene.time.now; // not the ones a room starts with
+      gifts = shelf(held);
     },
     title(t) {
       title = t;

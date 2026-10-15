@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { biteTarget, burnsAfter, dashStopsAt, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, offerable, pickSpot, rayDistance, take } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -12,7 +12,7 @@ import * as Lantern from './lantern.ts';
 import * as Glyph from './glyph.ts';
 import * as Rats from './rats.ts';
 import * as Training from './training.ts';
-import { GIFTS, GIFT_IDS, type GiftId } from './gifts.ts';
+import { GIFTS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 /** What a run carries from room to room, through scene.restart(data); {} starts a new run. */
@@ -59,11 +59,12 @@ export class RoomScene extends Phaser.Scene {
   private cards?: Rats.Cards;
   private offer: GiftId[] = [];
   private gateUpAt = Infinity;
-  private rats: { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until: number }[] = [];
+  private rats: { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until: number; nest: boolean }[] = [];
   private training = false; // the training room (key T): no waves, enemies on demand, see training.ts
   private glyph?: Glyph.Glyph; // the blood sigil on the floor, from its cast until it has crumbled
   private glyphReadyAt = 0;
   private castUntil = 0; // the hero's cast pose
+  private nestAt = Infinity; // Glyphe du nid: when the glyph arms and lets its rats out
 
   constructor() {
     super('room');
@@ -94,6 +95,7 @@ export class RoomScene extends Phaser.Scene {
     this.rats = [];
     this.glyph = undefined; // the last scene's is ended on its shutdown
     this.glyphReadyAt = this.castUntil = 0;
+    this.nestAt = Infinity;
   }
 
   create() {
@@ -120,7 +122,7 @@ export class RoomScene extends Phaser.Scene {
 
     this.hud = Hud.create(this);
     this.hud.health(this.health, this.maxHealth());
-    this.hud.gifts(this.gifts.map((g) => GIFTS[g].slot));
+    this.hud.gifts(this.gifts);
 
     this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,K,F,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
     // Left click slashes, right click shoots, both toward the pointer; J and K do the same toward where he faces. F bites,
@@ -177,11 +179,11 @@ export class RoomScene extends Phaser.Scene {
           this.health = this.maxHealth();
           this.hud.health(this.health, this.health);
         },
-        toggle: (id, on) => {
+        toggle: (id, on) => { // free: no one-per-slot rule here
           this.gifts = on ? [...this.gifts, id] : this.gifts.filter((g) => g !== id);
           this.health = Math.min(this.health + (on && id === 'survivant' ? T.gifts.blood : 0), this.maxHealth());
           this.hud.health(this.health, this.maxHealth());
-          this.hud.gifts(this.gifts.map((g) => GIFTS[g].slot));
+          this.hud.gifts(this.gifts);
         },
       }));
       return;
@@ -211,7 +213,7 @@ export class RoomScene extends Phaser.Scene {
       Fx.dash(this, this.hero, this.facing);
       Sfx.play(this, 'dash');
       this.physics.velocityFromRotation(this.facing, T.dash.speed, this.hero.body!.velocity);
-      if (this.gifts.includes('nuee')) this.releaseRats();
+      if (this.gifts.includes('nuee')) this.releaseRats(this.hero.body!.center, T.gifts.rats - this.rats.filter((r) => !r.nest).length);
     } else if (time - delta < this.dashUntil) {
       // The mist halts at contact with an enemy it would otherwise end on, so hero and target stay two shapes. Bodies,
       // not sprites: physics has already moved them this frame, including the dash's last step. Never for a lunging
@@ -266,14 +268,14 @@ export class RoomScene extends Phaser.Scene {
     const held: Sprite[] = []; // bound by the glyph this frame
     for (const e of this.enemies.getChildren() as Sprite[]) {
       if (!e.body?.enable) continue;
-      // Griffes pestilentes: an infected enemy smokes, then the plague takes its due.
+      // La Peste: an infected enemy smokes, then the plague takes its due.
       const sick = e.getData('plagueAt');
       if (sick && time < sick) Rats.plagued(this, e, time);
       else if (sick) {
-        e.setData('plagueAt', 0);
         Rats.plague(this, e);
         Sfx.play(this, 'hit');
-        this.hurtEnemy(e, T.gifts.plagueDamage);
+        this.hurtEnemy(e, T.gifts.plagueDamage); // still sick if it dies of it, for Contagion
+        e.setData('plagueAt', 0);
         if (!e.body?.enable) continue;
       }
       const bow = e.getData('kind') === 'crossbow';
@@ -295,6 +297,11 @@ export class RoomScene extends Phaser.Scene {
     }
     if (this.glyph) {
       if (held.length && this.glyph.caughtAt < 0) Sfx.play(this, 'bind'); // once per glyph
+      // Glyphe du nid: as it arms, rats burst out of its centre. On the clock the glyph keeps, not a timer's.
+      if (time >= this.nestAt) {
+        this.nestAt = Infinity;
+        this.releaseRats(this.glyph, T.gifts.rats, true);
+      }
       if (!Glyph.show(this.glyph, time, held)) this.glyph = undefined;
     }
     this.stepRats(time, delta);
@@ -443,8 +450,9 @@ export class RoomScene extends Phaser.Scene {
     return true;
   }
 
-  /** Le Tir: a shard of blood flicked toward `angle`, without limit. It flies until the first enemy it touches, or the
-   *  lantern, prop or wall it was thrown into. */
+  /** Le Tir: a shard of blood flicked toward `angle`, without limit. It flies until the first enemy it touches (through
+   *  them all with Éclats rongeurs), or the lantern, prop or wall it was thrown into. It carries the gifts it was
+   *  thrown with. */
   private shoot(angle: number) {
     const now = this.time.now, S = T.shot;
     if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
@@ -454,26 +462,31 @@ export class RoomScene extends Phaser.Scene {
     const from = this.hero.body!.center, reach = this.boltReach(from, angle);
     // It leaves from the hand, flung out ahead of him.
     const b = this.add.zone(from.x + Math.cos(angle) * 10, from.y + Math.sin(angle) * 10, 8, 8);
-    b.setData({ x0: from.x, y0: from.y, angle, reach });
+    const plague = this.gifts.includes('eclats');
+    b.setData({ x0: from.x, y0: from.y, angle, reach, plague, pierce: this.gifts.includes('perce'), hit: [] });
     this.shards.add(b);
     this.physics.velocityFromRotation(angle, S.speed, (b.body as Phaser.Physics.Arcade.Body).velocity);
     Fx.shard(this, b, angle, (reach / S.speed) * 1000);
+    if (plague) Rats.plagueShard(this, b);
     Sfx.play(this, 'shoot');
     return true;
   }
 
   /** A shard lands on an enemy: a light blow (flash, a flinch, small knockback) without hit-stop. Unlike a claw it never
-   *  interrupts a windup or an aim, so an endless tir can't keep an enemy pinned. Not a claw: no plague. */
+   *  interrupts a windup or an aim, so an endless tir can't keep an enemy pinned. A piercing shard flies on, striking
+   *  each enemy once. */
   private shardHit(b: Phaser.GameObjects.Zone, e: Sprite) {
-    if (!b.active || !e.body?.enable) return;
-    const { x, y } = b, angle = b.getData('angle');
-    b.destroy();
+    if (!b.active || !e.body?.enable || b.getData('hit').includes(e)) return;
+    const { x, y } = b, { angle, plague, pierce, hit } = b.data.values;
+    if (pierce) hit.push(e);
+    else b.destroy();
     if (e !== this.prey) { // a prey stays held in the bite
       e.setData('stunnedUntil', Math.max(e.getData('stunnedUntil'), this.time.now + T.shot.stunMs));
       this.physics.velocityFromRotation(angle, T.shot.knockback, e.body.velocity);
     }
     Fx.splat(this, x, y, angle, true);
     Sfx.play(this, 'splat');
+    if (plague) this.infect(e);
     this.hurtEnemy(e, T.shot.damage);
   }
 
@@ -485,8 +498,16 @@ export class RoomScene extends Phaser.Scene {
     this.physics.velocityFromRotation(angle, kb, e.body!.velocity);
     Fx.hit(this, e.x, e.y, angle);
     Sfx.play(this, 'hit', this.combo);
-    if (this.gifts.includes('griffes') && !e.getData('plagueAt')) e.setData('plagueAt', now + T.gifts.plagueMs);
+    if (this.gifts.includes('griffes')) this.infect(e);
     this.hurtEnemy(e, damage);
+  }
+
+  /** La Peste, from any source (claws, shards, Contagion): T.gifts.plagueMs later the enemy loses T.gifts.plagueDamage
+   *  hp (see update()). An enemy already sick stays as it is. Returns true when it fell sick. */
+  private infect(e: Sprite) {
+    if (!e.body?.enable || e.getData('plagueAt')) return false;
+    e.setData('plagueAt', this.time.now + T.gifts.plagueMs);
+    return true;
   }
 
   /** Damage to an enemy from any source (claws, plague, rats): it flashes, and dies through kill(). */
@@ -503,6 +524,10 @@ export class RoomScene extends Phaser.Scene {
     e.disableBody(false, false);
     (e.getData('kind') === 'crossbow' ? Crossbow : Enemy).die(this, e);
     Sfx.play(this, 'kill');
+    // Contagion: a sick enemy's plague leaps onto those around it.
+    if (e.getData('plagueAt') && this.gifts.includes('contagion'))
+      for (const o of this.enemies.getChildren() as Sprite[])
+        if (Phaser.Math.Distance.BetweenPoints(o, e) < T.gifts.contagion && this.infect(o)) Rats.leap(this, e.x, e.y, o);
     if (this.training) return;
     if ((this.enemies.getChildren() as Sprite[]).some((o) => o.body?.enable)) return;
     if (this.wave < this.roomNo * T.run.wavesPerRoom) this.time.delayedCall(1500, () => this.spawnWave());
@@ -566,6 +591,7 @@ export class RoomScene extends Phaser.Scene {
     const at = glyphSpot(feet, to, G.range, { x: b.x + rx, y: b.y + ry, width: b.width - 2 * rx, height: b.height - 2 * ry });
     this.glyph?.end();
     this.glyph = Glyph.cast(this, at.x, at.y, feet);
+    this.nestAt = this.gifts.includes('nid') ? now + G.armMs : Infinity;
     this.glyphReadyAt = now + G.cooldownMs;
     this.castUntil = now + G.castMs;
     this.facing = Math.atan2(at.y - feet.y, at.x - feet.x);
@@ -586,13 +612,13 @@ export class RoomScene extends Phaser.Scene {
       this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
       this.time.delayedCall(T.run.giftDelayMs, () => {
         if (this.dead) return;
-        if (GIFT_IDS.every((g) => this.gifts.includes(g))) this.openGate();
+        if (!offerable(GIFTS, this.gifts).length) this.openGate();
         else this.pickup = Rats.pickup(this, this.room.medallion.x, this.room.medallion.y);
       });
     });
   }
 
-  /** The hero steps on the gift: the action pauses and up to three untaken gifts are offered. */
+  /** The hero steps on the gift: the action pauses and up to three gifts that may be offered are. */
   private openGifts() {
     this.phase = 'choose';
     this.hero.setVelocity(0);
@@ -600,11 +626,12 @@ export class RoomScene extends Phaser.Scene {
     this.pickup!.take();
     this.pickup = undefined;
     Sfx.play(this, 'gift');
-    this.offer = drawGifts(GIFT_IDS, this.gifts, 3, Math.random);
-    this.cards = Rats.cards(this, this.offer);
+    this.offer = drawGifts(offerable(GIFTS, this.gifts), 3, Math.random);
+    this.cards = Rats.cards(this, this.offer, this.gifts);
   }
 
-  /** Card `i` of the offer is taken (a key or a click); the cards close, the action resumes, the gate rises. */
+  /** Card `i` of the offer is taken (a key or a click), replacing the gift in its slot if any; the cards close, the
+   *  action resumes, the gate rises. */
   private pick(i: number) {
     if (!this.cards?.choose(i, () => {
       this.cards = undefined;
@@ -612,10 +639,10 @@ export class RoomScene extends Phaser.Scene {
       this.openGate();
     })) return;
     const id = this.offer[i];
-    this.gifts.push(id);
+    this.gifts = take(GIFTS, this.gifts, id);
     if (id === 'survivant') this.health += T.gifts.blood;
     this.hud.health(this.health, this.maxHealth());
-    this.hud.gifts(this.gifts.map((g) => GIFTS[g].slot));
+    this.hud.gifts(this.gifts);
     Sfx.play(this, 'gift', 1);
   }
 
@@ -643,11 +670,10 @@ export class RoomScene extends Phaser.Scene {
     return T.dash.cooldownMs / (this.gifts.includes('fuite') ? T.gifts.dashRecharge : 1);
   }
 
-  /** Nuée: the mist lets rats loose, up to `rats` at a time. */
-  private releaseRats() {
-    const at = this.hero.body!.center;
-    for (let i = this.rats.length; i < T.gifts.rats; i++)
-      this.rats.push({ s: Rats.rat(this, at.x + Phaser.Math.Between(-6, 6), at.y + Phaser.Math.Between(-3, 3)), heading: Math.random() * 2 * Math.PI, phase: i * 2.1, until: this.time.now + T.gifts.ratLifeMs });
+  /** `n` rats let loose at floor point `at`: by the mist (Nuée) or out of the glyph's `nest` (Glyphe du nid). */
+  private releaseRats(at: { x: number; y: number }, n: number, nest = false) {
+    for (let i = 0; i < n; i++)
+      this.rats.push({ s: Rats.rat(this, at.x + Phaser.Math.Between(-6, 6), at.y + Phaser.Math.Between(-3, 3)), heading: Math.random() * 2 * Math.PI, phase: i * 2.1, until: this.time.now + T.gifts.ratLifeMs, nest });
   }
 
   /** Each rat zigzags at the enemy nearest to it and bites once; with none left it runs off and is gone. */
