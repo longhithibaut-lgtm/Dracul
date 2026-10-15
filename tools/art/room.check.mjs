@@ -1,0 +1,59 @@
+// Room layout check in headless Chromium: the hero can walk away from its start in every direction,
+// and wherever it waits (behind props, in corners) every enemy reaches it instead of sticking on an obstacle.
+// Usage: node tools/art/room.check.mjs   (exit code 1 on a failure or a page error)
+import { createServer } from 'vite';
+import { chromium } from 'playwright';
+
+const server = await createServer({ server: { port: 5206, strictPort: true }, logLevel: 'error' });
+await server.listen();
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+await page.goto('http://localhost:5206/');
+await page.waitForFunction(() => window.game?.scene.isActive('room'));
+
+const state = () => page.evaluate(() => {
+  const s = window.game.scene.getScene('room');
+  return { x: s.hero.x, y: s.hero.y, e: s.enemies.getChildren().filter((e) => e.body?.enable).map((e) => [e.x, e.y]) };
+});
+const restart = async (x, y) => {
+  await page.evaluate(() => window.game.scene.getScene('room').scene.restart());
+  await page.waitForTimeout(200);
+  if (x !== undefined) await page.evaluate(([x, y]) => {
+    const s = window.game.scene.getScene('room');
+    s.hero.body.reset(x, y);
+    s.health = 999; // the hero must survive the wait
+  }, [x, y]);
+};
+let failed = 0;
+
+for (const k of ['a', 'd', 'w', 's']) {
+  await restart();
+  const a = await state();
+  await page.keyboard.down(k);
+  await page.waitForTimeout(600);
+  await page.keyboard.up(k);
+  const b = await state();
+  const moved = Math.hypot(b.x - a.x, b.y - a.y);
+  if (moved < 15) failed++;
+  console.log(`walk ${k} from start: ${Math.round(moved)}px`);
+}
+
+// An enemy is stuck if it stays far from the hero and does not move between two late samples.
+for (const [x, y] of [[240, 222], [96, 205], [392, 205], [92, 110], [388, 110], [56, 245], [424, 245], [240, 75]]) {
+  await restart(x, y);
+  await page.waitForTimeout(11000);
+  const a = await state();
+  await page.waitForTimeout(1500);
+  const b = await state();
+  const stuck = b.e.filter(([ex, ey], i) => Math.hypot(ex - b.x, ey - b.y) > 48 && a.e[i] && Math.hypot(ex - a.e[i][0], ey - a.e[i][1]) < 3);
+  if (stuck.length) failed++;
+  console.log(`hero waiting at ${x},${y}: ${stuck.length ? `STUCK ${JSON.stringify(stuck.map((p) => p.map(Math.round)))}` : 'every enemy reached it'}`);
+}
+
+console.log(errors.length ? `page errors:\n${errors.join('\n')}` : 'no page errors');
+await browser.close();
+await server.close();
+process.exit(failed || errors.length ? 1 : 0);
