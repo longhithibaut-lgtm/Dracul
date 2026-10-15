@@ -246,7 +246,7 @@ RR.rr.rr.rr.rd.d
   arm_far: [5, 19, `
 ...R...
 ..RRr..
-..Rrd..
+..rrd..
 ..rd...
 ..rd...
 .01d...
@@ -389,12 +389,15 @@ for (const name of ['idle', 'walk0', 'walk1', 'walk2', 'walk3', 'wind0', 'wind1'
   FRAMES[name + 'b'] = FRAMES[name].map(([part, ...rest]) => [BACK[part] ?? part, ...rest] as Layer);
 }
 
+// Parts that get a dark seam where a later part overlaps them (hem, legs and loose pieces stay seamless).
+const SEAMED = /^(wing|body|head|hood|arm|lunge)/;
+
 // Frames sunk into the floor and cut at the feet: climbing out of the spawn pool, and the emptied robe collapsing.
 const SUNK: Record<string, [frame: string, depth: number]> = { rise0: ['idle', 18], rise1: ['idle', 11], rise2: ['idle', 5], slump: ['robe', 7] };
 
 // Stacks parts back to front. Shear leans every row above the feet by that many px per row (the recoil).
-function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch: string, part: string) => void) {
-  for (const [part, dx, dy, shear = 0] of layers) {
+function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch: string, part: string, k: number) => void) {
+  layers.forEach(([part, dx, dy, shear = 0], k) => {
     const [px, py, rows] = PARTS[part];
     const lift = part === 'shadow' ? 0 : sink;
     rows.trim().split('\n').forEach((row, j) => {
@@ -406,15 +409,15 @@ function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch:
         if (ch === '.') return;
         const edge = ch === 's' ? 0 : 1; // body pixels keep a free border for the outline
         if (!(ch in PAL) || x < edge || x >= SIZE - edge || y < edge || y >= SIZE - edge) throw new Error(`enemy art: bad pixel '${ch}' in ${part}`);
-        plot(x, y, ch, part);
+        plot(x, y, ch, part, k);
       });
     });
-  }
+  });
 }
 
 // Bakes every frame three times: as drawn, as a white hit flash ('!') and as a flat lunge after-image ('~').
 // The body gets a 1px near-black outline so it reads against any floor, red rings included (the shadow is not body),
-// and the wings get one where they pass behind the body, so they read as separate shapes.
+// and each wing, arm, hood and robe gets one where it passes behind another, so they read as separate shapes.
 function bake(scene: Scene) {
   const names = [...Object.keys(FRAMES), ...Object.keys(SUNK)];
   const tex = scene.textures.createCanvas('enemy', SIZE * names.length, SIZE * 3)!;
@@ -424,15 +427,16 @@ function bake(scene: Scene) {
     const x0 = n * SIZE;
     const [base, sink] = SUNK[name] ?? [name, 0];
     const grid: string[] = [];
-    const wing: boolean[] = [];
-    compose(FRAMES[base], sink, (x, y, ch, part) => ((grid[y * SIZE + x] = ch), (wing[y * SIZE + x] = part.startsWith('wing'))));
+    const layer: number[] = [];
+    compose(FRAMES[base], sink, (x, y, ch, part, k) => ((grid[y * SIZE + x] = ch), (layer[y * SIZE + x] = SEAMED.test(part) ? k : -1)));
     const body = (x: number, y: number) => x >= 0 && x < SIZE && y >= 0 && y < SIZE && (grid[y * SIZE + x] ?? 's') !== 's';
-    const front = (x: number, y: number) => body(x, y) && !wing[y * SIZE + x];
+    const above = (x: number, y: number, k: number) => body(x, y) && layer[y * SIZE + x] > k;
     for (let y = 0; y < SIZE; y++) {
       for (let x = 0; x < SIZE; x++) {
         const ch = grid[y * SIZE + x];
         if (body(x, y)) {
-          const seam = wing[y * SIZE + x] && (front(x - 1, y) || front(x + 1, y) || front(x, y - 1) || front(x, y + 1));
+          const k = layer[y * SIZE + x];
+          const seam = k >= 0 && (above(x - 1, y, k) || above(x + 1, y, k) || above(x, y - 1, k) || above(x, y + 1, k));
           put(x0 + x, y, seam ? PAL[0] : PAL[ch]);
           put(x0 + x, SIZE + y, seam ? PAL[0] : FLASH[ch] ?? 0xffffff);
           put(x0 + x, 2 * SIZE + y, PAL.h);
