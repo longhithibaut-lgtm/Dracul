@@ -4,8 +4,9 @@
 // hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (3/5 health, dash spent, 2 gifts),
 // light.png (a lit lantern, the hero at the edge of its holy light), crossbow.png (a crossbowman aiming), weak.png (a
 // weakened crossbowman, its heartbeat drop on the beat), bite.png (the hero latched onto it, mid-drain), gifts.png
-// (full frame, the room cleared and the three gift cards open, the second hovered), gate.png (the portcullis up) and
-// training.png (full frame: the training room, its panel, enemies called in from it).
+// (full frame, the room cleared and the three gift cards open, the second hovered), gate.png (the portcullis up),
+// training.png (full frame: the training room, its panel, enemies called in from it) and glyph.png (the glyph cast
+// with E at the pointer, binding two ghouls, the hero beside it).
 // Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -262,8 +263,32 @@ let training = false;
   }
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
+// Le Glyphe, in the training room (dummies stay put): two ghouls called in and set side by side, the hero beside them
+// casts it at them with E, the pointer on the floor between them; caught once both are bound and the snap is over.
+let glyph = false;
+if (training) {
+  await page.click('#training [data-act="clear"]');
+  for (let i = 0; i < 2; i++) await page.click('#training [data-spawn="ghoul"]');
+  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().filter((e) => e.body?.enable).length === 2, null, { timeout: 5000 }).catch(() => {});
+  await page.evaluate(() => {
+    const s = window.game.scene.getScene('room');
+    const [a, b] = s.enemies.getChildren().filter((e) => e.body?.enable);
+    a?.body.reset(312, 190); // sprite centres: feet 10 px lower
+    b?.body.reset(335, 202);
+    s.hero.body.reset(275, 201);
+  });
+  await page.mouse.move(322 * X, 206 * X);
+  await page.waitForTimeout(100); // the pointer is read on Phaser's next step
+  await page.keyboard.press('e');
+  glyph = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.glyph?.chains.size === 2 && s.time.now - s.glyph.caughtAt > 300; }, null, { timeout: 5000 })
+    .then(() => true, () => false);
+  await freeze(true);
+  await shot('glyph', clip(300, 195, 480, 320));
+  await freeze(false);
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow || !bit || !gifts || !training ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !glyph ? 1 : 0);

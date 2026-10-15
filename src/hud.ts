@@ -4,12 +4,14 @@ import * as Font from './font.ts';
 import { SLOT_ICONS, type Slot } from './gifts.ts';
 
 // Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
-// recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, and a shelf
-// with the slot icon of each gift taken. Also the title card of a new room ("Salle 2"), centred.
+// recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, beside them
+// the glyph's blood seal that fills back up over its cooldown, and a shelf with the slot icon of each gift taken.
+// Also the title card of a new room ("Salle 2"), centred.
 // Gameplay pushes values in; it never reads from here. Redrawn every frame into one Graphics, in native pixels.
 export type Hud = {
   health(current: number, max: number): void;
   dashReady(ready: boolean, readyAt: number): void; // readyAt: when a spent dash is back
+  glyphReady(ready: boolean, readyAt: number): void; // the same for the glyph
   gifts(slots: Slot[]): void;
   title(text: string): void;
 };
@@ -98,6 +100,23 @@ const EMPTY = [
   '..EEE..',
 ];
 
+// The glyph's seal: a blood disc with the sigil's fang triangle cut in it. L lit rim, R rim, D shaded rim, F disc, V the
+// triangle (bone once the glyph is ready).
+const SEAL = [
+  '....LLR....',
+  '..LLFFFRR..',
+  '.LFFFFFFFD.',
+  '.LVVVVVVVD.',
+  'LFFVFFFVFFD',
+  'LFFFVFVFFFD',
+  'RFFFFVFFFFD',
+  '.RFFFFFFFD.',
+  '.DFFFFFFFD.',
+  '..DDFFFDD..',
+  '....DDD....',
+];
+const SEAL_W = 11 + 3; // with its gap from the drops
+
 const X0 = 8, Y0 = 6; // top-left corner of the HUD
 const PITCH = 8; // drop spacing: 7 px drop + 1 px gap
 const PIPS = 3, PIP_GAP = 3; // dash pips under the drops
@@ -120,6 +139,7 @@ export function create(scene: Phaser.Scene): Hud {
   const changedAt: number[] = []; // per drop: when it was last lost or regained
   let shards: Shard[] = [];
   let ready = true, spentAt = -1e9, readyAt = -1e9, dueAt = 0;
+  const glyph = { ready: true, spentAt: -1e9, readyAt: -1e9, dueAt: 0 };
   let slots: Slot[] | undefined, giftAt = -1e9, title = '', titleAt = -1e9; // slots: undefined until first set
 
   // Draws a pixel grid, one rectangle per horizontal run, rows from `fromRow` down.
@@ -144,7 +164,7 @@ export function create(scene: Phaser.Scene): Hud {
     const x0 = X0 + (sinceHit < 160 ? [1, -1, 1, -1][Math.floor(sinceHit / 40)] : 0), y0 = Y0;
 
     const row = max * PITCH - 1; // width of the drop row, shared by the pip row
-    const lintel = row + 24; // banner, then the tile with 2 px padding
+    const lintel = row + 24 + SEAL_W; // banner, then the tile (drops, the seal) with 2 px padding
     g.fillStyle(C.bone).fillRect(x0, y0, lintel, 1);
     g.fillStyle(C.boneDim).fillRect(x0, y0 + 1, lintel, 1);
     grid(x0 - 3, y0 - 1, FINIAL, { O: C.bone, o: C.boneDim });
@@ -171,6 +191,19 @@ export function create(scene: Phaser.Scene): Hud {
       g.fillStyle(p < 1 ? C.stoneMid : pop ? C.moon : C.bone).fillRect(x + 1, y, pw - 2, 1).fillRect(x, y + 1, pw, 1);
       g.fillStyle(p < 1 ? C.stoneMid : pop ? C.moon : C.boneDim).fillRect(x, y + 2, pw, 1).fillRect(x + 1, y + 3, pw - 2, 1);
       if (p < 1) g.fillStyle(C.void).fillRect(x + 1, y + 1, pw - 2, 2).fillStyle(C.boneDim).fillRect(x + 1, y + 1, Math.round((pw - 2) * p), 2);
+    }
+
+    // Glyph: the seal empties when cast and fills back with blood from the bottom over the cooldown, flashes bone when
+    // it is back, then shows its triangle in bone.
+    {
+      const x = x0 + 22 + row + 3, y = y0 + 6, k = glyph.ready ? 1 : Math.min(1, (now - glyph.spentAt) / Math.max(1, glyph.dueAt - glyph.spentAt));
+      const lit = { L: C.glow, R: C.blood[2], D: C.blood[1], F: C.blood[0], V: glyph.ready ? C.bone : C.dusk };
+      if (now - glyph.readyAt < 90) grid(x, y, SEAL, { L: C.bone, R: C.bone, D: C.bone, F: C.bone, V: C.bone });
+      else if (k >= 1) grid(x, y, SEAL, lit);
+      else {
+        grid(x, y, SEAL, { L: C.stoneMid, R: C.stoneMid, D: C.stoneMid, F: C.void, V: C.dusk });
+        grid(x, y, SEAL, lit, Math.round(SEAL.length * (1 - k)));
+      }
     }
 
     for (let i = 0; i < max; i++) {
@@ -254,6 +287,13 @@ export function create(scene: Phaser.Scene): Hud {
       ready = r;
       if (r) readyAt = scene.time.now;
       else spentAt = scene.time.now;
+    },
+    glyphReady(r, at) {
+      glyph.dueAt = at;
+      if (r === glyph.ready) return;
+      glyph.ready = r;
+      if (r) glyph.readyAt = scene.time.now;
+      else glyph.spentAt = scene.time.now;
     },
     gifts(s) {
       if (slots && s.length > slots.length) giftAt = scene.time.now; // a gift taken now, not the ones a room starts with

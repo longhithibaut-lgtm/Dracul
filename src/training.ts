@@ -23,6 +23,9 @@ const KNOBS = [
   ['Griffes : gel à l\'impact (ms)', 'slash', 'hitStopMs', 0, 150, 5],
   ['Morsure : portée', 'bite', 'range', 14, 50, 1],
   ['Morsure : durée (ms)', 'bite', 'drainMs', 150, 1000, 25],
+  ['Glyphe : rayon', 'glyph', 'radius', 15, 60, 1],
+  ['Glyphe : durée (ms)', 'glyph', 'holdMs', 500, 6000, 100],
+  ['Glyphe : recharge (ms)', 'glyph', 'cooldownMs', 0, 10000, 250],
 ] as const;
 
 const tuned = T as unknown as Record<string, Record<string, number>>;

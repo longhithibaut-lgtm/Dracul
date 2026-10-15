@@ -78,6 +78,14 @@ export function ellipseDist(c: P, p: P, rx: number, ry: number): number {
   return Math.hypot((p.x - c.x) / rx, (p.y - c.y) / ry);
 }
 
+/** Where a glyph cast from `from` at `to` lands: no farther than `range` from `from`, then kept inside `box`. Clamping
+ *  into a box that holds `from` never takes the spot farther away, so both hold whenever `from` is in the box. */
+export function glyphSpot(from: P, to: P, range: number, box: Box): P {
+  const d = Math.hypot(to.x - from.x, to.y - from.y), k = d > range ? range / d : 1;
+  const clamp = (v: number, lo: number, len: number) => Math.min(Math.max(v, lo), lo + len);
+  return { x: clamp(from.x + (to.x - from.x) * k, box.x, box.width), y: clamp(from.y + (to.y - from.y) * k, box.y, box.height) };
+}
+
 /** Burns landed after `ms` spent in holy light: none during a grace on stepping in, then one every `everyMs`. */
 export function burnsAfter(ms: number, graceMs: number, everyMs: number): number {
   return ms < graceMs ? 0 : 1 + Math.floor((ms - graceMs) / everyMs);

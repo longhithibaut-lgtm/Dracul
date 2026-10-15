@@ -18,6 +18,17 @@ export const T = {
     whiffCooldownMs: 300, // a bite with no valid prey: a teeth snap in place
   },
 
+  // Le Glyphe: a blood sigil cast on the floor; once drawn, every enemy standing in it is bound (stops dead, cannot attack).
+  glyph: {
+    range: 110, // cast at the pointer, no farther than this from the hero's feet
+    near: 60, // cast from the keyboard: this far ahead of him
+    radius: 30, // half-width; an ellipse squashed like the ground (T.lantern.squash)
+    armMs: 350, // the sigil draws itself, binding nothing yet
+    holdMs: 2500, // then it binds, this long
+    cooldownMs: 5000, // from one cast to the next
+    castMs: 220, // the hero's cast pose
+  },
+
   enemy: {
     hp: 3,
     speed: 42,

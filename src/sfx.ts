@@ -172,6 +172,20 @@ export const recipes = {
     voice(o, { src: 'noise', filter: 'bandpass', ff: 3600, q: 8, gain: 2, attack: 0.001, dur: 0.03, delay: 0.05 });
     voice(o, { src: 'square', f: 1900, f2: 1300, filter: 'bandpass', ff: 1900, q: 10, gain: 0.2, attack: 0.001, dur: 0.025, delay: 0.05 });
   },
+  // Le Glyphe burns into the floor: a low diminished chord (D, F, A flat) swelling under breathy whispers.
+  glyph(o: Play) {
+    for (const [f, gain] of [[73.4, 0.24], [87.3, 0.18], [103.8, 0.16]]) voice(o, { src: 'sawtooth', f, filter: 'lowpass', ff: 260, ff2: 900, q: 2, gain, attack: 0.16, dur: 0.75 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 900, ff2: 2300, q: 4, trem: 7, gain: 0.6, attack: 0.22, dur: 0.6 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 2600, ff2: 1500, q: 6, trem: 11, gain: 0.35, attack: 0.18, dur: 0.5, delay: 0.08 });
+  },
+  // The glyph catches: chains rattle tight, then snap taut with an iron clank, a ringing link and a low jolt.
+  bind(o: Play) {
+    bursts(o, [0, 0.022, 0.04, 0.055], { src: 'noise', filter: 'bandpass', ff: 3600, q: 6, gain: 0.45, attack: 0.001, dur: 0.03 });
+    voice(o, { src: 'noise', filter: 'highpass', ff: 2200, gain: 0.6, attack: 0.001, dur: 0.05, delay: 0.07 });
+    voice(o, { src: 'square', f: 420, f2: 370, filter: 'bandpass', ff: 1700, q: 5, gain: 0.4, attack: 0.001, dur: 0.18, delay: 0.07 });
+    voice(o, { src: 'triangle', f: 1270, gain: 0.14, attack: 0.002, dur: 0.28, delay: 0.07 });
+    voice(o, { src: 'sine', f: 110, f2: 48, gain: 0.6, dur: 0.18, delay: 0.07 });
+  },
   // A lantern struck: a glass tink and an iron clank. Broken (arg 1): glass bursts, shards tinkle, its light dies down.
   shatter(o: Play, broken: number) {
     voice(o, { src: 'triangle', f: 2100, gain: 0.4, dur: 0.14 });
