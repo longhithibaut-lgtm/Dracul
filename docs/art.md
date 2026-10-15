@@ -10,7 +10,7 @@ Référence : Hyper Light Drifter. Résolution native 480×270, affichée ×4 en
 | Pierre | `#3b2a4a` `#5a4468` `#8a6f8f` |
 | Os, peau pâle | `#e8dcc8` `#b7a58f` |
 | Sang | `#5c0a1c` `#a3122f` `#e0284a` |
-| Lueurs (magie, coups) | `#ff4f8b` `#ffe4ee` (cœur blanc des coups) |
+| Lueurs (magie, coups) | `#ff4f8b` `#8f195e` `#ffe4ee` (cœur blanc des coups) |
 | Lune (accent froid) | `#1f4a5a` `#3fa7a3` `#8ff0dc` |
 | Bougies, feu | `#ffb347` |
 
