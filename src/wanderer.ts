@@ -48,40 +48,52 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
   return s;
 }
 
-// The tail: LINKS links of LINK px, hung from the frame's neck point. Verlet, in native px per 60 Hz frame.
+// The tail: LINKS links of LINK px hung from the frame's neck point, simulated in that point's frame of reference so
+// that a new pose or view moves it whole: only the body's own travel drags it (Verlet, native px per 60 Hz frame).
 const LINKS = 7, LINK = 2, GRAVITY = 0.18, DAMP = 0.86;
+const DEPTH = 0.35; // up and down the screen is mostly into and out of the room: it drags the tail that much less
 const LIGHT = { x: -Math.SQRT1_2, y: -Math.SQRT1_2 }; // the light comes from the top left, like on every sprite
 
 function scarf(scene: Phaser.Scene, s: Phaser.Physics.Arcade.Sprite) {
   const g = scene.add.graphics();
-  let pts: { x: number; y: number; px: number; py: number }[] | undefined;
+  const hang = () => Array.from({ length: LINKS + 1 }, (_, i) => ({ x: 0, y: i * LINK, px: 0, py: i * LINK }));
+  let pts = hang(), last = { x: s.x, y: s.y, flip: s.flipX };
   const step = (time: number, delta: number) => {
     const name = s.frame.name, at = neck.get(name);
     g.clear();
     if (!at || !s.visible) return;
+    const dt = Math.min(delta, 50) / (1000 / 60), mx = s.x - last.x, my = s.y - last.y;
+    if (Math.hypot(mx, my) > 40) pts = hang(); // a teleport, not a motion (a dash at 20 fps covers 17 px)
+    else if (s.flipX !== last.flip) for (const p of pts) { p.x = -p.x; p.px = -p.px; } // he turned round: mirror it
+    last = { x: s.x, y: s.y, flip: s.flipX };
+    // Sub-steps of at most one 60 Hz frame, so a slow machine (or a headless capture) gets the same scarf.
+    const steps = Math.ceil(dt), sdt = dt / steps, sx = mx / steps, sy = my / steps;
+    for (let n = 0; n < steps; n++) {
+      // The body moved under the tail: in the neck's frame the tail keeps its place and its speed in the world.
+      for (const p of pts.slice(1)) { p.x -= sx; p.px -= sx; p.y -= sy * DEPTH; p.py -= sy * DEPTH; }
+      // Running sideways it flies out flat behind him and ripples, a wave running down to the tip; running up or down
+      // the screen it only sways; standing, it hangs.
+      const run = Math.min(1, Math.abs(sx) / sdt / 1.6), move = Math.min(1, Math.hypot(sx, sy) / sdt / 1.6), t = time - (steps - 1 - n) * sdt * (1000 / 60);
+      for (let i = 1; i <= LINKS; i++) {
+        const p = pts[i], q = pts[i - 1], k = DAMP ** sdt, vx = (p.x - p.px) * k, vy = (p.y - p.py) * k;
+        const len = Math.hypot(p.x - q.x, p.y - q.y) || 1e-6, wave = Math.sin(t / 70 - i * 0.9) * (0.06 * run + 0.03 * move) * (i / LINKS);
+        const nx = -(p.y - q.y) / len, ny = (p.x - q.x) / len; // across the link: the ripple pushes that way
+        p.px = p.x;
+        p.py = p.y;
+        p.x += vx + nx * wave * sdt * sdt;
+        p.y += vy + ny * wave * sdt * sdt + GRAVITY * (1 - 0.8 * run) * sdt * sdt;
+      }
+      for (let c = 0; c < 4; c++) for (let i = 1; i <= LINKS; i++) { // each link pulls its child back to length
+        const a = pts[i - 1], b = pts[i], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1e-6;
+        b.x -= (dx * (d - LINK)) / d;
+        b.y -= (dy * (d - LINK)) / d;
+      }
+    }
+    // A ribbon shaded across its width (light, mid, dark as on the sheet), the mid line painted last so it wins; it
+    // narrows to 2 px for its last third and ends in a fringe of two threads.
     const tl = s.getTopLeft(), ax = Math.round(tl.x!) + (s.flipX ? FW - 1 - at[0] : at[0]), ay = Math.round(tl.y!) + at[1];
-    pts ??= Array.from({ length: LINKS + 1 }, (_, i) => ({ x: ax, y: ay + i * LINK, px: ax, py: ay + i * LINK }));
-    const dt = Math.min(delta, 50) / (1000 / 60);
-    // Moving, it streams out behind him with a flutter; at rest, it hangs.
-    const speed = Math.hypot(ax - pts[0].x, ay - pts[0].y) / dt, lift = Math.min(1, speed / 2.5);
-    pts[0] = { x: ax, y: ay, px: ax, py: ay };
-    for (let i = 1; i <= LINKS; i++) {
-      const p = pts[i], vx = (p.x - p.px) * DAMP ** dt, vy = (p.y - p.py) * DAMP ** dt;
-      p.px = p.x;
-      p.py = p.y;
-      p.x += vx;
-      p.y += vy + (GRAVITY * (1 - 0.85 * lift) + Math.sin(time / 90 + i) * 0.25 * lift) * dt * dt;
-    }
-    for (let n = 0; n < 4; n++) for (let i = 1; i <= LINKS; i++) { // each link pulls its child back to length
-      const a = pts[i - 1], b = pts[i], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1e-6;
-      b.x -= (dx * (d - LINK)) / d;
-      b.y -= (dy * (d - LINK)) / d;
-      // Up the screen is away into the room: running at the camera, the tail trails behind his back, not over his head.
-      b.y = Math.max(b.y, ay - 3);
-    }
-    // A 3 px ribbon shaded across its width (light, mid, dark as on the sheet), the mid line drawn last so it wins.
     const px = new Map<string, number>();
-    const put = (x: number, y: number, c: number, keep = true) => { const k = `${Math.round(x)},${Math.round(y)}`; if (keep || !px.has(k)) px.set(k, c); };
+    const put = (x: number, y: number, c: number, keep = true) => { const k = `${Math.round(ax + x)},${Math.round(ay + y)}`; if (keep || !px.has(k)) px.set(k, c); };
     for (const pass of [0, 1]) for (let i = 1; i <= LINKS; i++) {
       const a = pts[i - 1], b = pts[i], len = Math.hypot(b.x - a.x, b.y - a.y) || 1e-6;
       const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len, lit = nx * LIGHT.x + ny * LIGHT.y > 0 ? 1 : -1;
@@ -90,14 +102,16 @@ function scarf(scene: Phaser.Scene, s: Phaser.Physics.Arcade.Sprite) {
         if (pass) put(x, y, TONE.v);
         else {
           put(x + nx * lit, y + ny * lit, TONE.V, false);
-          put(x - nx * lit, y - ny * lit, TONE.u, false);
+          if (i <= LINKS * 0.66) put(x - nx * lit, y - ny * lit, TONE.u, false);
         }
       }
     }
-    const tip = pts[LINKS], last = pts[LINKS - 1], tl2 = Math.hypot(tip.x - last.x, tip.y - last.y) || 1e-6;
-    const ux = (tip.x - last.x) / tl2, uy = (tip.y - last.y) / tl2; // a fringe of two threads past the end
-    put(tip.x + ux * 1.5 - uy, tip.y + uy * 1.5 + ux, TONE.u);
-    put(tip.x + ux * 1.5 + uy, tip.y + uy * 1.5 - ux, TONE.u);
+    const tip = pts[LINKS], prev = pts[LINKS - 1], tlen = Math.hypot(tip.x - prev.x, tip.y - prev.y) || 1e-6;
+    const ux = (tip.x - prev.x) / tlen, uy = (tip.y - prev.y) / tlen;
+    for (const side of [-1, 1]) {
+      put(tip.x + ux - uy * side * 0.6, tip.y + uy + ux * side * 0.6, TONE.u);
+      put(tip.x + ux * 2 - uy * side, tip.y + uy * 2 + ux * side, TONE.u);
+    }
     for (const [k, c] of px) {
       const [x, y] = k.split(',').map(Number);
       g.fillStyle(c).fillRect(x, y, 1, 1);
