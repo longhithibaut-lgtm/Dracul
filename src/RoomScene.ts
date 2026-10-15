@@ -27,6 +27,7 @@ export class RoomScene extends Phaser.Scene {
   private combo = 0;
   private invulnUntil = 0;
   private hurtAt = -1e9;
+  private dashRequested = false;
   private dead = false;
 
   constructor() {
@@ -40,6 +41,7 @@ export class RoomScene extends Phaser.Scene {
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
     this.dead = false;
+    this.dashRequested = false;
   }
 
   create() {
@@ -61,6 +63,8 @@ export class RoomScene extends Phaser.Scene {
     this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.slash(Math.atan2(p.worldY - this.hero.y, p.worldX - this.hero.x)));
     this.keys.J.on('down', () => this.slash(this.facing));
+    // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
+    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashRequested = true));
 
     this.time.delayedCall(900, () => this.spawnWave());
   }
@@ -72,7 +76,8 @@ export class RoomScene extends Phaser.Scene {
     const y = Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
     if ((x || y) && time >= this.slashUntil) this.facing = Math.atan2(y, x);
 
-    const wantsDash = Phaser.Input.Keyboard.JustDown(k.SPACE) || Phaser.Input.Keyboard.JustDown(k.SHIFT);
+    const wantsDash = this.dashRequested;
+    this.dashRequested = false;
     if (wantsDash && time >= this.dashReadyAt) {
       this.dashUntil = time + T.dash.durationMs;
       this.dashReadyAt = this.dashUntil + T.dash.cooldownMs;
