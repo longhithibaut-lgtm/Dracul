@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inArc, nextCombo } from './logic.ts';
+import { dashStopsAt, inArc, nextCombo } from './logic.ts';
 
 describe('inArc', () => {
   const o = { x: 0, y: 0 };
@@ -24,5 +24,21 @@ describe('nextCombo', () => {
     expect(nextCombo(1, 100, 450)).toBe(2);
     expect(nextCombo(2, 100, 450)).toBe(0);
     expect(nextCombo(1, 900, 450)).toBe(0);
+  });
+});
+
+describe('dashStopsAt', () => {
+  const v = { x: 100, y: 0 }; // 0.1 s covers 10 px
+
+  it('stops at contact with a target the dash would end on, including on its last frame', () => {
+    expect(dashStopsAt({ x: 0, y: 0 }, v, 0.4, { x: 30, y: 0 }, 20)).toBe(false); // not in contact yet
+    expect(dashStopsAt({ x: 12, y: 0 }, v, 0.28, { x: 30, y: 0 }, 20)).toBe(true);
+    expect(dashStopsAt({ x: 25, y: 0 }, v, 0, { x: 40, y: 0 }, 20)).toBe(true);
+  });
+
+  it('passes through targets mid-path and never stops for one behind or off to the side', () => {
+    expect(dashStopsAt({ x: 0, y: 0 }, v, 0.4, { x: 10, y: 0 }, 20)).toBe(false);
+    expect(dashStopsAt({ x: 12, y: 0 }, v, 0.28, { x: 2, y: 0 }, 20)).toBe(false);
+    expect(dashStopsAt({ x: 12, y: 0 }, v, 0.28, { x: 30, y: 25 }, 20)).toBe(false);
   });
 });

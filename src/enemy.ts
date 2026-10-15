@@ -27,8 +27,9 @@ const PAL: Record<string, number> = {
   s: 0x0b0710, // ground shadow, drawn translucent
 };
 const BLOOD = { light: 0xe0284a, mid: 0xa3122f, dark: 0x5c0a1c, dry: 0x3e0820 }; // drops, pools and stains
-// The hit flash is white, but the darkest tones stay faintly grey so the face and claws still read in a still frame.
-const FLASH: Record<string, number> = { '0': 0x9a8496, '1': 0x9a8496, '2': 0xd6c6d2, d: 0xf0e6ec, e: PAL.e, E: PAL.e };
+// The hit flash rims the body in white and lifts the robe a tone instead of filling it white, so the struck thrall
+// stays a dark shape apart from the pale hero standing at it.
+const FLASH: Record<string, number> = { d: PAL.r, r: PAL.R, R: PAL.h, h: PAL.E };
 
 // Pixel grids placed at (x, y) in the 40x40 frame; '.' is transparent.
 const PARTS: Record<string, [x: number, y: number, rows: string]> = {
@@ -415,7 +416,7 @@ function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch:
   });
 }
 
-// Bakes every frame three times: as drawn, as a white hit flash ('!') and as a flat lunge after-image ('~').
+// Bakes every frame three times: as drawn, as a white-rimmed hit flash ('!') and as a flat lunge after-image ('~').
 // The body gets a 1px near-black outline so it reads against any floor, red rings included (the shadow is not body),
 // and each wing, arm, hood and robe gets one where it passes behind another, so they read as separate shapes.
 function bake(scene: Scene) {
@@ -438,11 +439,11 @@ function bake(scene: Scene) {
           const k = layer[y * SIZE + x];
           const seam = k >= 0 && (above(x - 1, y, k) || above(x + 1, y, k) || above(x, y - 1, k) || above(x, y + 1, k));
           put(x0 + x, y, seam ? PAL[0] : PAL[ch]);
-          put(x0 + x, SIZE + y, seam ? PAL[0] : FLASH[ch] ?? 0xffffff);
+          put(x0 + x, SIZE + y, seam ? PAL[0] : FLASH[ch] ?? PAL[ch]);
           put(x0 + x, 2 * SIZE + y, PAL.h);
         } else if (body(x - 1, y) || body(x + 1, y) || body(x, y - 1) || body(x, y + 1)) {
           put(x0 + x, y, PAL[0]);
-          put(x0 + x, SIZE + y, PAL[0]);
+          put(x0 + x, SIZE + y, PAL.W);
         } else if (ch === 's') {
           put(x0 + x, y, PAL.s, 140);
           put(x0 + x, SIZE + y, PAL.s, 140);
@@ -530,7 +531,7 @@ export function show(s: Sprite, state: EnemyState, facing: number, flash: boolea
   } else if (state === 'recover') f = t > 200 && Math.floor(t / 180) % 2 ? 'recover1' : 'recover0';
   else f = s.body!.velocity.lengthSq() > 25 ? 'walk' + (Math.floor((now + s.getData('phase')) / 120) % 4) : 'idle';
   if (Math.sin(facing) < -0.5 && FRAMES[f + 'b']) f += 'b';
-  s.setFrame(flash && hurt > 0 && hurt < 50 ? f + '!' : f); // impact frame in colour, then a white pop of a few frames
+  s.setFrame(flash && hurt > 0 && hurt < 50 ? f + '!' : f); // impact frame in colour, then a white-rim pop for a few frames
 }
 
 // After-images left behind during the lunge.

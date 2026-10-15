@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { inArc, nextCombo } from './logic.ts';
+import { dashStopsAt, inArc, nextCombo } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Room from './room.ts';
@@ -69,7 +69,7 @@ export class RoomScene extends Phaser.Scene {
     this.time.delayedCall(900, () => this.spawnWave());
   }
 
-  update(time: number) {
+  update(time: number, delta: number) {
     if (this.dead) return;
     const k = this.keys;
     const x = Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
@@ -83,7 +83,22 @@ export class RoomScene extends Phaser.Scene {
       this.dashReadyAt = this.dashUntil + T.dash.cooldownMs;
       Fx.dash(this, this.hero, this.facing);
       this.physics.velocityFromRotation(this.facing, T.dash.speed, this.hero.body!.velocity);
-    } else if (time >= this.dashUntil) {
+    } else if (time - delta < this.dashUntil) {
+      // The mist halts at contact with an enemy it would otherwise end on, so hero and target stay two shapes. Bodies,
+      // not sprites: physics has already moved them this frame, including the dash's last step. Never for a lunging
+      // enemy: dashing through a lunge is the dodge.
+      const b = this.hero.body!, left = Math.max(0, this.dashUntil - time) / 1000;
+      const e = (this.enemies.getChildren() as Sprite[]).find((e) => e.body?.enable && e.getData('state') !== 'lunge'
+        && dashStopsAt(b.center, b.velocity, left, e.body.center, T.dash.stopShort));
+      if (e) {
+        // Back out to exact contact; physics moves the sprite to its body after update().
+        const c = e.body!.center, back = new Phaser.Math.Vector2(b.center.x - c.x, b.center.y - c.y).setLength(T.dash.stopShort);
+        b.position.add(back.add(c).subtract(b.center));
+        this.dashUntil = time;
+        this.dashReadyAt = time + T.dash.cooldownMs;
+      }
+    }
+    if (time >= this.dashUntil) {
       this.hero.setVelocity(x, y);
       this.hero.body!.velocity.normalize().scale(time < this.slashUntil ? T.hero.speed * 0.3 : T.hero.speed);
     }

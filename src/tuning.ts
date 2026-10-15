@@ -5,7 +5,7 @@ export const T = {
   height: 270,
 
   hero: { maxHealth: 5, speed: 95, hurtInvulnMs: 800 },
-  dash: { speed: 330, durationMs: 130, cooldownMs: 380 },
+  dash: { speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22 }, // stopShort: halts this far from an enemy it'd end on
   slash: { range: 30, arcDeg: 130, damage: 1, cooldownMs: 210, comboWindowMs: 450, knockback: 140, hitStopMs: 40 },
 
   enemy: {
