@@ -18,7 +18,7 @@ export class RoomScene extends Phaser.Scene {
   private room!: Room.Room;
   private hud!: Hud.Hud;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
-  private facing = -Math.PI / 2;
+  private facing = Math.PI / 2;
   private dashUntil = 0;
   private dashReadyAt = 0;
   private slashReadyAt = 0;
@@ -37,7 +37,7 @@ export class RoomScene extends Phaser.Scene {
   init() {
     // The scene instance is reused on restart, so run state is reset here.
     this.health = T.hero.maxHealth;
-    this.facing = -Math.PI / 2;
+    this.facing = Math.PI / 2; // start facing the camera
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
     this.dead = false;
