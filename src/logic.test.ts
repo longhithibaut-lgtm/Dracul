@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { burnsAfter, dashStopsAt, ellipseDist, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
+import { burnsAfter, dashStopsAt, drawGifts, ellipseDist, inArc, keepDistance, nextCombo, pickSpot, rayDistance } from './logic.ts';
+import { GIFTS, GIFT_IDS, SLOTS } from './gifts.ts';
+import { missing, width, wrap } from './font.ts';
 
 describe('inArc', () => {
   const o = { x: 0, y: 0 };
@@ -91,5 +93,31 @@ describe('holy light', () => {
     expect(pickSpot(spots, { x: 10, y: 0 }, [], 40, 29, 1.3)).toEqual({ x: 70, y: 0 }); // (0,0) would light him
     expect(pickSpot(spots, { x: 10, y: 0 }, [{ x: 70, y: 0 }], 40, 29, 1.3)).toEqual({ x: 200, y: 0 });
     expect(pickSpot(spots.slice(0, 1), { x: 10, y: 0 }, [], 40, 29, 1.3)).toBeUndefined();
+  });
+});
+
+describe('gifts', () => {
+  const seq = (...v: number[]) => () => v.shift() ?? 0;
+
+  it('draws distinct untaken gifts, as many as are left', () => {
+    const taken = ['griffes', 'fuite'] as const;
+    const d = drawGifts(GIFT_IDS, taken, 3, Math.random);
+    expect(new Set(d).size).toBe(3);
+    expect(d.some((g) => (taken as readonly string[]).includes(g))).toBe(false);
+    expect(drawGifts(GIFT_IDS, GIFT_IDS.slice(0, 4), 3, Math.random)).toEqual([GIFT_IDS[4]]);
+    expect(drawGifts(GIFT_IDS, GIFT_IDS, 3, Math.random)).toEqual([]);
+  });
+
+  it('follows the injected random function', () => {
+    expect(drawGifts(['a', 'b', 'c'], [], 3, seq(0.99, 0.99))).toEqual(['a', 'b', 'c']); // every swap in place
+    expect(drawGifts(['a', 'b', 'c'], [], 3, seq(0, 0))).toEqual(['b', 'c', 'a']);
+  });
+
+  it('every gift text is in the typeface and wraps to card width', () => {
+    for (const g of Object.values(GIFTS)) {
+      expect(missing(g.name + g.text + SLOTS[g.slot])).toEqual([]);
+      expect(wrap(g.text, 112).every((l) => width(l) <= 112)).toBe(true);
+    }
+    expect(missing('Don de la Maison du Rat · Vesna la Grise · Salle 9')).toEqual(['·']);
   });
 });

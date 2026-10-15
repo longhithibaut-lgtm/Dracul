@@ -158,15 +158,40 @@ export const recipes = {
     voice(o, { src: 'sine', f: 1568, f2: 196, gain: 0.25, attack: 0.01, dur: 0.55 }); // the light going out
     for (let i = 0; i < 6; i++) voice(o, { src: 'sine', f: 2600 + Math.random() * 2400, gain: 0.18, dur: 0.06, delay: 0.05 + i * 0.05 + Math.random() * 0.03 });
   },
+  // The room is cleared: a deep blow, then open fifths climbing (stark, not cheerful) over a breath of air.
+  clear(o: Play) {
+    voice(o, { src: 'sine', f: 70, f2: 40, gain: 0.5, dur: 0.5 });
+    for (const [f, delay] of [[196, 0], [294, 0.11], [392, 0.22]]) voice(o, { src: 'triangle', f, gain: 0.32, attack: 0.008, dur: 0.85, delay });
+    voice(o, { src: 'sawtooth', f: 98, filter: 'lowpass', ff: 300, ff2: 900, q: 2, gain: 0.25, attack: 0.25, dur: 0.9 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 700, ff2: 2800, q: 1, gain: 0.25, attack: 0.2, dur: 0.6 });
+  },
+  // A gift of the Rat house: rats scurry and squeak, and a coin rings, Vesna being a fence. Confirmed (arg 1): a
+  // low thump gives the choice its weight.
+  gift(o: Play, confirm: number) {
+    bursts(o, [0, 0.03, 0.055, 0.09, 0.11], { src: 'noise', filter: 'bandpass', ff: 4200, q: 4, gain: 0.35, attack: 0.001, dur: 0.02 });
+    bursts(o, [0.05, 0.16], { src: 'sine', f: 2300, f2: 3600, gain: 0.22, attack: 0.004, dur: 0.06 });
+    for (const [f, gain, dur] of [[2093, 0.3, 0.45], [3136, 0.15, 0.3], [5274, 0.06, 0.15]]) voice(o, { src: 'triangle', f, gain, attack: 0.002, dur, delay: 0.2 });
+    if (confirm) voice(o, { src: 'sine', f: 140, f2: 60, gain: 0.45, dur: 0.25 });
+  },
+  // The portcullis winches up: a clank, a chain rattling over a grinding rumble, then it locks in place.
+  gate(o: Play) {
+    voice(o, { src: 'square', f: 110, f2: 80, filter: 'lowpass', ff: 900, q: 3, gain: 0.4, attack: 0.002, dur: 0.15 });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: 260, q: 2, trem: 9, gain: 0.5, attack: 0.15, dur: 1.0 });
+    bursts(o, Array.from({ length: 14 }, (_, i) => 0.06 + i * 0.065 + Math.random() * 0.02),
+      { src: 'noise', filter: 'bandpass', ff: 3000, q: 6, gain: 0.3, attack: 0.001, dur: 0.03 });
+    voice(o, { src: 'sine', f: 75, f2: 45, gain: 0.45, dur: 0.2, delay: 1.0 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 1500, q: 3, gain: 0.4, attack: 0.001, dur: 0.06, delay: 1.0 });
+  },
 };
 export type SfxName = keyof typeof recipes;
 
-// Master gain (-6 dB) into a tanh soft clipper that can never output more than 0.89: overlapping sounds saturate
+// Master gain (-6 dB) into a tanh soft clipper that never outputs more than 0.89: overlapping sounds saturate
 // instead of clipping, and a single sound keeps its transients (a DynamicsCompressor squashed the hits by 10 dB).
+// The curve tops out at 0.87: the 2x oversampling filters overshoot it by up to 2 % when a pile-up saturates.
 export function bus(ctx: BaseAudioContext, dst: AudioNode): Bus {
   const master = ctx.createGain(), clip = ctx.createWaveShaper(), range = 4; // the curve spans ±4 of master output
   master.gain.value = 0.5 / range;
-  clip.curve = Float32Array.from({ length: 2049 }, (_, i) => 0.89 * Math.tanh(((i / 1024 - 1) * range) / 0.89));
+  clip.curve = Float32Array.from({ length: 2049 }, (_, i) => 0.87 * Math.tanh(((i / 1024 - 1) * range) / 0.87));
   clip.oversample = '2x';
   master.connect(clip).connect(dst);
   const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);

@@ -81,3 +81,13 @@ export function pickSpot(spots: P[], hero: P, taken: P[], rx: number, ry: number
   return spots.filter((s) => !taken.some((t) => t.x === s.x && t.y === s.y) && ellipseDist(s, hero, rx, ry) > clear)
     .sort((a, b) => d(a) - d(b))[0];
 }
+
+/** Up to `n` distinct items of `pool` not in `taken`, in random order (`rnd` in [0, 1), injected for tests). */
+export function drawGifts<K>(pool: readonly K[], taken: readonly K[], n: number, rnd: () => number): K[] {
+  const left = pool.filter((g) => !taken.includes(g));
+  for (let i = left.length - 1; i > 0; i--) { // Fisher-Yates
+    const j = Math.floor(rnd() * (i + 1));
+    [left[i], left[j]] = [left[j], left[i]];
+  }
+  return left.slice(0, n);
+}

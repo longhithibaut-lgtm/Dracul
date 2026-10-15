@@ -1,16 +1,26 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
+import * as Font from './font.ts';
+import { SLOT_ICONS, type Slot } from './gifts.ts';
 
 // Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
-// recharges, one blood drop per health point, and under them three dash pips that refill over the cooldown.
+// recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, and a shelf
+// with the slot icon of each gift taken. Also the title card of a new room ("Salle 2"), centred.
 // Gameplay pushes values in; it never reads from here. Redrawn every frame into one Graphics, in native pixels.
-export type Hud = { health(current: number, max: number): void; dashReady(ready: boolean): void };
+export type Hud = {
+  health(current: number, max: number): void;
+  dashReady(ready: boolean, readyAt: number): void; // readyAt: when a spent dash is back
+  gifts(slots: Slot[]): void;
+  title(text: string): void;
+};
 
-// "Nuit de sang" palette (docs/art.md).
+// "Nuit de sang" palette (docs/art.md), plus the Rat house's silver and grey for the gift icons.
 const C = {
   void: 0x0b0710, night: 0x1c1029, dusk: 0x2e1838, stoneMid: 0x5a4468,
   bone: 0xe8dcc8, boneDim: 0xb7a58f, blood: [0x5c0a1c, 0xa3122f, 0xe0284a], glow: 0xff4f8b, moon: 0x8ff0dc,
+  silver: 0xd4cdd2, grey: 0x948a91,
 };
+const ICON = { S: C.silver, s: C.grey, r: C.blood[2], d: C.blood[1] }, POP = { S: C.bone, s: C.bone, r: C.bone, d: C.bone };
 
 // Swallowtail banner hanging from the lintel. B cloth, L lit edge, r shaded edge, d shadow under the rod.
 const BANNER = [
@@ -109,7 +119,8 @@ export function create(scene: Phaser.Scene): Hud {
   let hp = 0, max = 0, hitAt = -1e9;
   const changedAt: number[] = []; // per drop: when it was last lost or regained
   let shards: Shard[] = [];
-  let ready = true, spentAt = -1e9, readyAt = -1e9;
+  let ready = true, spentAt = -1e9, readyAt = -1e9, dueAt = 0;
+  let slots: Slot[] | undefined, giftAt = -1e9, title = '', titleAt = -1e9; // slots: undefined until first set
 
   // Draws a pixel grid, one rectangle per horizontal run, rows from `fromRow` down.
   const grid = (x: number, y: number, rows: string[], px: Record<string, number>, fromRow = 0) => {
@@ -140,7 +151,7 @@ export function create(scene: Phaser.Scene): Hud {
     grid(x0 + lintel, y0 - 1, FINIAL, { O: C.bone, o: C.boneDim });
 
     // Dash: the bat dims and the pips empty when it is used, then refill one by one over the cooldown.
-    const charge = ready ? 1 : Math.min(1, (now - spentAt) / (T.dash.durationMs + T.dash.cooldownMs));
+    const charge = ready ? 1 : Math.min(1, (now - spentAt) / Math.max(1, dueAt - spentAt));
     const pop = now - readyAt < 90;
     grid(x0, y0 + 2, BANNER, { B: C.blood[0], L: C.blood[1], r: C.dusk, d: C.night });
     grid(x0 + 2, y0 + 7, BAT, pop ? { X: C.moon, x: C.moon } : ready ? { X: C.bone, x: C.boneDim } : { X: C.night, x: C.night });
@@ -185,6 +196,29 @@ export function create(scene: Phaser.Scene): Hud {
       }
     }
 
+    // Gifts taken: a shelf of slot icons under the tile; the newest pops white.
+    if (slots?.length) {
+      const y = y0 + 22, n = slots.length;
+      g.fillStyle(C.night, 0.9).fillRect(x0 + 20, y, n * 9 + 3, 11);
+      g.fillStyle(C.dusk).fillRect(x0 + 20, y, n * 9 + 3, 1);
+      slots.forEach((s, i) => grid(x0 + 22 + i * 9, y + 2, SLOT_ICONS[s], i === n - 1 && now - giftAt < 120 ? POP : ICON));
+    }
+
+    // Title card: bone letters between two red rules, then it steps out.
+    const tt = now - titleAt, out = T.run.titleMs - 200;
+    if (tt < T.run.titleMs) {
+      const a = tt < out ? 1 : 1 - Math.ceil((tt - out) / 67) / 3, w = Font.width(title, 2);
+      const x = Math.round((T.width - w) / 2), y = 112;
+      for (const side of [-1, 1]) {
+        const rx = side < 0 ? x - 46 : x + w + 8;
+        g.fillStyle(C.blood[1], a).fillRect(rx, y + 5, 38, 1);
+        g.fillStyle(C.silver, a).fillRect(side < 0 ? rx - 2 : rx + 38, y + 4, 2, 3);
+      }
+      for (const [c, d] of [[C.void, 1], [C.bone, 0]]) {
+        g.fillStyle(c, a);
+        Font.draw(title, x + d, y + d, (px, py) => g.fillRect(px, py, 1, 1), 2);
+      }
+    }
   };
 
   scene.events.on(Phaser.Scenes.Events.ADDED_TO_SCENE, ignoreNew);
@@ -214,11 +248,20 @@ export function create(scene: Phaser.Scene): Hud {
       for (let i = hp; i < current; i++) changedAt[i] = now + (i - hp) * 60;
       hp = current;
     },
-    dashReady(r) {
+    dashReady(r, at) {
+      dueAt = at;
       if (r === ready) return;
       ready = r;
       if (r) readyAt = scene.time.now;
       else spentAt = scene.time.now;
+    },
+    gifts(s) {
+      if (slots && s.length > slots.length) giftAt = scene.time.now; // a gift taken now, not the ones a room starts with
+      slots = [...s];
+    },
+    title(t) {
+      title = t;
+      titleAt = scene.time.now;
     },
   };
 }
