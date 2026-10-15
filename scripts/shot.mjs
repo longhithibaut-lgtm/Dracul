@@ -1,6 +1,7 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
-// Writes room.png and combat.png (full frames) plus crops: hero.png, enemy.png, fx.png, and hud.png (taken at 3/5 health, dash spent).
+// Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
+// hero.png, enemy.png, fx.png, and hud.png (taken at 3/5 health, dash spent).
 // Exit code 1 if the page logged an error.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -49,28 +50,38 @@ await shot('room');
 await shot('hero', clip(s.hx, s.hy - 4, 240, 200));
 await freeze(false);
 
-// Walk to the nearest enemy and slash it; capture the frame right after a hit lands.
+// Line up horizontally with an enemy, mist-dash in and slash, like the reference frame: the capture shows the dash
+// trail, the swing and the impact together.
 await page.waitForFunction(() => window.game.scene.getScene('room').enemies.countActive() > 0);
 let captured = false;
-for (let i = 0; i < 120 && !captured; i++) {
+for (let i = 0; i < 200 && !captured; i++) {
   s = await state();
   if (!s.enemies.length) { await page.waitForTimeout(100); continue; }
   const dist = (e) => Math.hypot(e.x - s.hx, e.y - s.hy);
-  const e = s.enemies.reduce((a, b) => (dist(a) < dist(b) ? a : b));
-  if (dist(e) > 24) {
+  const side = s.enemies.filter((e) => Math.abs(e.x - s.hx) > 20);
+  const e = (side.length ? side : s.enemies).reduce((a, b) => (dist(a) < dist(b) ? a : b));
+  const dx = e.x - s.hx, dy = e.y - s.hy;
+  if (Math.abs(dy) > 6 || Math.abs(dx) > 72) {
     const keys = [];
-    if (e.x > s.hx + 4) keys.push('d'); else if (e.x < s.hx - 4) keys.push('a');
-    if (e.y > s.hy + 4) keys.push('s'); else if (e.y < s.hy - 4) keys.push('w');
-    await hold(keys, 80);
+    if (Math.abs(dx) > 72) keys.push(dx > 0 ? 'd' : 'a');
+    if (Math.abs(dy) > 6) keys.push(dy > 0 ? 's' : 'w');
+    await hold(keys, 60);
     continue;
   }
-  await page.mouse.click(e.x * X, e.y * X);
-  await page.waitForTimeout(50);
-  await freeze(true);
+  if (Math.abs(dx) < 50) { await hold([dx > 0 ? 'a' : 'd'], 60); continue; } // back off for a run-up
+  const pre = { x: s.hx, y: s.hy };
+  await page.keyboard.down(dx > 0 ? 'd' : 'a');
+  await page.keyboard.press('Space');
+  await page.keyboard.up(dx > 0 ? 'd' : 'a');
+  await page.waitForTimeout(140); // dash lasts 130 ms
   s = await state();
   const target = s.enemies.length ? s.enemies.reduce((a, b) => (dist(a) < dist(b) ? a : b)) : e;
+  await page.mouse.click(target.x * X, target.y * X);
+  await page.waitForTimeout(40);
+  await freeze(true);
+  s = await state();
   await shot('combat');
-  await shot('fx', clip(s.hx, s.hy, 480, 270));
+  await shot('fx', clip((pre.x + target.x) / 2, s.hy, 480, 270));
   await shot('enemy', clip(target.x, target.y - 4, 240, 200));
   await freeze(false);
   captured = true;
