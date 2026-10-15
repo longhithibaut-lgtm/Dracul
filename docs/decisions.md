@@ -12,3 +12,5 @@ et la nouvelle dit ce qu'elle remplace.
 | 2026-10-15 | Salles : la barre est la crypte validée par l'utilisateur (`docs/references/salle-crypte.png`), plus Hyper Light Drifter | L'utilisateur préfère la version de la manche 1 ; les halos lui conviennent |
 | 2026-10-15 | Lore « L'Aube éternelle » : les vampires contre l'Ordre humain, quatre maisons liées aux formes de la nuit, chefs à libérer qui rejoignent le refuge (`docs/lore.md`) | Ennemis humains variés et lumière qui brûle ; un refuge vivant grâce aux vampires sauvés |
 | 2026-10-15 | Le héros est le Sans-Maison | Choix de l'utilisateur ; justifie qu'il reçoive les Dons de toutes les maisons |
+| 2026-10-15 | La Maison du Rat aide le héros dès la première fuite ; les trois autres se débloquent en libérant leur chef | Choix de l'utilisateur ; on gagne les maisons une à une |
+| 2026-10-15 | Chefs de maison : Vesna la Grise (Rat), Séverin d'Ombrelune (Brume), Magda Croc-de-Fer (Loup), Lucian Noctule (Chauve-souris) | L'utilisateur a laissé Claude choisir ; provisoires |

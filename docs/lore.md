@@ -22,7 +22,10 @@ sang. L'Ordre ne s'est pas donné la peine de le sceller, et c'est pour ça qu'i
 
 Chaque maison est liée à une forme de la nuit, qui donne le style de ses Dons. Son chef est enchaîné dans un
 reliquaire à la fin d'une région ; le libérer (après le mini-boss) l'amène au refuge et débloque les Dons de sa
-maison pour les fuites suivantes. Au début, le héros n'a accès qu'à une seule maison.
+maison pour les fuites suivantes.
+
+**Dès la première fuite, seule la Maison du Rat aide le héros** : sa cheffe, prisonnière des catacombes, lui envoie
+ses rats en secret avant même d'être libérée. Les trois autres maisons se débloquent en libérant leur chef.
 
 | Maison | Forme | Style de Dons | Prisonnier dans… |
 |---|---|---|---|
@@ -32,6 +35,24 @@ maison pour les fuites suivantes. Au début, le héros n'a accès qu'à une seul
 | Maison de la Chauve-souris | chauve-souris | attaques à distance, vitesse | le clocher (région 4) |
 
 Les chefs prennent le Sans-Maison de haut au début, puis le respectent au fil des sauvetages.
+
+## Les chefs de maison
+
+Noms et personnalités choisis par Claude à la demande de l'utilisateur (provisoires, à valider en jouant).
+
+- **Vesna la Grise** (Maison du Rat) : vieille receleuse des souterrains, gouailleuse, pragmatique, qui sait tout ce
+  qui se trame sous la cathédrale. La seule à ne pas mépriser le Sans-Maison : sa maison aussi était la risée des
+  nobles. Au refuge, c'est la marchande, qui échange le sang récolté contre des améliorations.
+  *« Les nobles crachaient sur les rats, gamin. Les rats, eux, ont survécu. »*
+- **Séverin d'Ombrelune** (Maison de la Brume) : prince raffiné, ironique, distant, qui parle par sous-entendus. Le
+  plus méprisant au début, et le plus long à admettre qu'il doit sa liberté à un sans-maison. Au refuge, il entraîne
+  à l'esquive. *« Un sans-maison qui libère un prince. Le monde a vraiment perdu la raison. »*
+- **Magda Croc-de-Fer** (Maison du Loup) : guerrière franche et colérique, qui méprise la faiblesse plus que la
+  naissance. Une fois convaincue, la plus fidèle. Au refuge, elle tient l'arène des défis.
+  *« Ton nom ne vaut rien. Tes crocs, on va voir. »*
+- **Lucian Noctule** (Maison de la Chauve-souris) : le plus jeune des chefs, rêveur et mélancolique, qui n'a jamais
+  vu la surface. Enfermé au clocher, tout près de l'Ancêtre : c'est lui qui pourrait porter la révélation. Au
+  refuge, il cartographie la cathédrale. *« Là-haut, il paraît que la nuit avait des étoiles. »*
 
 ## Le refuge
 
@@ -60,8 +81,9 @@ Libérer l'Ancêtre en haut de la tour éteint l'Aube éternelle.
 
 ## Questions ouvertes
 
-- Le vrai nom du héros, son apparence (le sprite actuel a un air aristocrate ; un sans-maison pourrait imiter les
-  nobles qu'il admire, ou paraître plus usé).
+- Le vrai nom du héros.
+- Son apparence, deux pistes envisagées par l'utilisateur : une apparence qui évolue au fil de l'aventure, ou un
+  héros de base avec de l'équipement d'apparat. Les deux se combinent : chaque maison libérée pourrait offrir une
+  pièce d'apparat à ses couleurs (cape de rat, écharpe de brume, fourrure de loup, col en ailes de chauve-souris),
+  et le Sans-Maison finirait par porter les couleurs de toutes les maisons.
 - La révélation sur l'Ancêtre.
-- Les noms et les personnalités des quatre chefs de maison.
-- Quelle maison est disponible dès la première fuite.
