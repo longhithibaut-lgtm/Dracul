@@ -39,8 +39,8 @@ ee.....kkkk.....rr
 .eeeeeRdWtdRrrrRR.
 eeeeeeRddWdRrrrRRR
 RReeRRRddddRRrRRRR
-errrRrRdsddRrrRRRR
-errrRrRdsddRrRRRRR
+.rrrRrRdsddRrrRRR.
+.rrrRrRdsddRrRRRR.
 errrRRRdsddRRrRRRR
 errrRRRdsddRRrRRRR
 `),
@@ -103,6 +103,12 @@ errrrRR....RRrRRRR
   },
   up: {
     blink: null,
+    // Standing still, the hero glances back over the left shoulder: brow, red eye and jaw show past the hair.
+    glance: grid(`
+.ee,wWWkmsskk.wrR.
+..eeWeWwskkkkWrR..
+..eeewWWkkkkkrrR..
+`),
     body: grid(`
 ..................
 e................R
@@ -117,8 +123,8 @@ ee.....smms.....rR
 .eeeeeeeeeeeerrRR.
 eeeeeeeeeeeerrrRRR
 RReeRRReeRRRrRRRRR
-errrrRrrrrRrrRRRRR
-errrrRrrrrRrrRRRRR
+.rrrrRrrrrRrrRRRR.
+.rrrrRrrrrRrrRRRR.
 errrRrrrrRrrrRRRRR
 errrRrrrrRrrrRRRRR
 `),
@@ -168,7 +174,7 @@ er....r....R......
 .eeeeeeerRdWtd....
 eeeeeeeerRdddd....
 RReeRReRRRRdds....
-errrRrrrRRRddsW...
+.rrrRrrrRRRddsW...
 errrRrrRRRRdds....
 errrRrRRRRRdss....
 `),
@@ -337,8 +343,9 @@ function frames(): Record<string, Layer[]> {
       ...(blink && d.blink ? [[OX + d.blink[0], OY + dy + d.blink[1], [d.blink[2]]] as Layer] : []),
     ];
     IDLE_BOB.forEach((dy, i) => {
-      f[`${v}-idle${i}`] = pose(d.legs, dy, d.hems[i % 2], false);
-      f[`${v}-blink${i}`] = pose(d.legs, dy, d.hems[i % 2], true);
+      const glance: Layer[] = 'glance' in d ? [[OX, OY + 4 + dy, d.glance]] : [];
+      f[`${v}-idle${i}`] = [...pose(d.legs, dy, d.hems[i % 2], false), ...glance];
+      f[`${v}-blink${i}`] = [...pose(d.legs, dy, d.hems[i % 2], true), ...glance];
     });
     d.run.forEach((legs, i) => {
       const dy = d.run.length === 4 ? i % 2 : RUN_BOB[i];
