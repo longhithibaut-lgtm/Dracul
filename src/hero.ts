@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 // How the hero looks. Gameplay calls create() once and show() every frame; everything visual lives here.
-export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; invulnerable: boolean; facing: number };
+export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; invulnerable: boolean; facing: number };
 
 // Palette "Nuit de sang" (docs/art.md), one char per colour. In a grid '.' leaves the pixel below, ',' erases it;
 // x is the translucent ground shadow.
@@ -608,14 +608,14 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
   const follow = () => shadow.setPosition(s.x, s.y).setDepth(s.depth - 0.5);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
   s.once(Phaser.GameObjects.Events.DESTROY, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow));
-  const was = { moving: false, dashing: false, slashing: false, throwing: false, biting: false, casting: false, hurt: false, invulnerable: false, facing: 0 };
+  const was = { moving: false, dashing: false, slashing: false, combo: 0, throwing: false, biting: false, casting: false, hurt: false, invulnerable: false, facing: 0 };
   states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9 });
   return s;
 }
 
 export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   const st = states.get(s)!, now = s.scene.time.now;
-  if (look.slashing && !st.was.slashing) { st.slashAt = now; st.swing ^= 1; } // alternate the two swings
+  if (look.slashing && !st.was.slashing) st.slashAt = now;
   if (look.throwing && !st.was.throwing) st.swing ^= 1; // and the two throws
   if (look.hurt && !st.was.hurt) st.hurtAt = now;
   if (look.dashing && !st.was.dashing) st.dashAt = now;
@@ -629,7 +629,8 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
   else if (look.biting && view === 'side') frame = 'bite';
   else if (look.casting) frame = 'cast';
-  else if (look.slashing && now - st.slashAt < 150) frame = `slash${st.swing}`;
+  // The arm rakes the way the arc goes: fx.ts sweeps combo 1 back the other way; a sprite mirrored to face left mirrors it.
+  else if (look.slashing && now - st.slashAt < 150) frame = `slash${Number(look.combo === 1) ^ Number(view === 'side' && c < 0)}`;
   else if (look.throwing) frame = `throw${st.swing}`;
   else if (now - st.dashEnd < 70) frame = 'dash0';
   else if (look.moving) { const n = runs(s.texture, view); frame = `run${Math.floor(now / (540 / n)) % n}`; } // one stride pair per 540ms in every view

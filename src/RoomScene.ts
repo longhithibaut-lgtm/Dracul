@@ -250,7 +250,7 @@ export class RoomScene extends Phaser.Scene {
 
     if (this.queued && (time > this.queued.until || this.queued.act())) this.queued = undefined;
     Hero.show(this.hero, {
-      moving: (x || y) !== 0, dashing: time < this.dashUntil, slashing: time < this.slashUntil, throwing: time < this.shotUntil,
+      moving: (x || y) !== 0, dashing: time < this.dashUntil, slashing: time < this.slashUntil, combo: this.combo, throwing: time < this.shotUntil,
       biting: !!this.prey || time - this.biteAt < 130, casting: time < this.castUntil,
       hurt: time - this.hurtAt < 120, invulnerable: time < this.invulnUntil, facing: this.facing,
     });
