@@ -14,5 +14,9 @@ const game = new Phaser.Game({
   scene: [RoomScene],
 });
 
+// The installable app (public/manifest.webmanifest) needs a service worker; pages that may not register one (a framed
+// preview) just skip it.
+navigator.serviceWorker?.register('sw.js').catch(() => {});
+
 // Exposed for scripts/shot.mjs and for poking at the game from the browser console.
 (window as unknown as { game: Phaser.Game }).game = game;
