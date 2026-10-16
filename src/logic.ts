@@ -37,12 +37,14 @@ export function dashStrikes(now: number, dashUntil: number, lastSlashAt: number,
 
 /**
  * A blow of `amount` on an enemy with `hp`. A human it leaves weakened (`weakAt` or less, but alive) drops to its knees;
- * while it kneels, blows can't take its hp below what it knelt with, so it is left for the bite. Overkill still kills.
+ * while it kneels, blows can't take its hp below what it knelt with, so it is left for the bite. Only a human already
+ * weakened, back on its feet, can be killed.
  */
 export function wound(hp: number, amount: number, human: boolean, weakAt: number, kneeling: boolean): { hp: number; kneels: boolean } {
   if (kneeling) return { hp, kneels: false };
-  const next = hp - amount;
-  return { hp: next, kneels: human && hp > weakAt && next <= weakAt && next > 0 };
+  // A human still standing can't be killed outright: the blow stops at the weakened hp and he kneels for the bite.
+  const fresh = human && hp > weakAt, next = fresh ? Math.max(weakAt, hp - amount) : hp - amount;
+  return { hp: next, kneels: fresh && next <= weakAt };
 }
 
 type P = { x: number; y: number };

@@ -211,6 +211,7 @@ describe('wound', () => {
 
   it('kneeling, no blow takes hp away; overkill from above still kills', () => {
     expect(wound(1, 2, true, 1, true)).toEqual({ hp: 1, kneels: false });
-    expect(wound(2, 2, true, 1, false)).toEqual({ hp: 0, kneels: false });
+    expect(wound(2, 2, true, 1, false)).toEqual({ hp: 1, kneels: true }); // a heavy blow on a fresh human: he kneels
+    expect(wound(2, 2, false, 1, false)).toEqual({ hp: 0, kneels: false }); // a ghoul just dies
   });
 });
