@@ -13,6 +13,7 @@ import * as Glyph from './glyph.ts';
 import * as Rats from './rats.ts';
 import * as Training from './training.ts';
 import * as Wanderer from './wanderer.ts';
+import * as Touch from './touch.ts';
 import { GIFTS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -146,10 +147,11 @@ export class RoomScene extends Phaser.Scene {
       const to = { x: this.input.activePointer.worldX, y: this.input.activePointer.worldY };
       this.press(() => this.cast(to));
     });
-    this.input.keyboard!.on('keydown-L', () => {
+    const castAhead = () => {
       const f = this.hero.body!.center, to = { x: f.x + Math.cos(this.facing) * T.glyph.near, y: f.y + Math.sin(this.facing) * T.glyph.near };
       this.press(() => this.cast(to));
-    });
+    };
+    this.input.keyboard!.on('keydown-L', castAhead);
     this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
     // Gift cards: the 1, 2, 3 keys of the top row (by position, so AZERTY works unshifted) or of the numpad.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
@@ -157,7 +159,17 @@ export class RoomScene extends Phaser.Scene {
       if (n) this.pick(Number(n[1]) - 1);
     });
 
-    this.input.keyboard!.on('keydown-T', () => this.scene.restart((this.training ? {} : { training: true }) satisfies Run));
+    const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true }) satisfies Run);
+    this.input.keyboard!.on('keydown-T', toggleTraining);
+    // Touch screens: the same actions as J, K, L, F and Space, aimed where he faces, and T.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, Touch.controls((a) => {
+      if (a === 'slash') this.press(() => this.slash(this.facing));
+      else if (a === 'shoot') this.press(() => this.shoot(this.facing));
+      else if (a === 'bite') this.press(() => this.bite());
+      else if (a === 'cast') castAhead();
+      else if (a === 'dash') this.dashPressedAt = this.time.now;
+      else toggleTraining();
+    }));
     if (this.training) {
       this.hud.title('Entraînement');
       let calls = 0;
@@ -202,8 +214,8 @@ export class RoomScene extends Phaser.Scene {
     const k = this.keys;
     // Climbing in from the stairs or walking out through the gate, the hero moves on his own.
     const auto = this.phase === 'enter' || this.phase === 'leave';
-    const x = auto ? 0 : Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
-    const y = auto ? -1 : Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
+    const x = auto ? 0 : Phaser.Math.Clamp(Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown) + Touch.stick.x, -1, 1);
+    const y = auto ? -1 : Phaser.Math.Clamp(Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown) + Touch.stick.y, -1, 1);
     const posing = time < this.slashUntil || time < this.castUntil;
     if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
