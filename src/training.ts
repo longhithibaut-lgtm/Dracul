@@ -5,7 +5,7 @@ import { GIFTS, GIFT_IDS, KINDS, kind, type GiftId } from './gifts.ts';
 
 export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern';
 /** Survive the scene restarts (a death in training starts the training room again). */
-export const opts = { god: true, passive: false, wanderer: false }; // wanderer: the new hero, see wanderer.ts
+export const opts = { god: true, passive: false, wanderer: true }; // wanderer: the new hero (wanderer.ts); off = the old one
 
 const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne']];
 // [label, group, key, min, max, step]
@@ -65,7 +65,7 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
     <label><input type="checkbox" data-opt="passive"> Ennemis passifs (mannequins)</label>
     <h3>Héros</h3>
     <label><input type="checkbox" data-opt="god"> Invincible</label>
-    <label><input type="checkbox" data-opt="wanderer"> Nouveau héros (l'errant, en cours)</label>
+    <label><input type="checkbox" data-opt="wanderer"> Nouveau héros (décocher : l'ancien, pour comparer)</label>
     <div class="row"><button type="button" data-act="heal">Soigner</button></div>
     <h3>Dons du Rat : emplacements</h3>${gifts(true)}
     <h3>Dons du Rat : talents</h3>${gifts(false)}

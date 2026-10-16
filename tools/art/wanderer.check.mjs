@@ -20,9 +20,9 @@ await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.game?.scene.getScene('room')?.hero);
 await page.keyboard.press('t');
 await page.waitForSelector('#training');
-if (!old) {
+if (old) { // the new hero is the default: tick him off for the old one
   await page.click('#training [data-opt="wanderer"]');
-  await page.waitForFunction(() => window.game.scene.getScene('room').hero?.texture.key === 'wanderer');
+  await page.waitForFunction(() => window.game.scene.getScene('room').hero?.texture.key === 'hero');
 }
 await page.evaluate(() => (document.querySelector('#training').hidden = true));
 await page.waitForTimeout(1600); // the title card is gone
