@@ -1,7 +1,8 @@
 // Contact sheet of the new hero (the wanderer) moving in the game: idle facing down, running left (scarf streaming),
 // stopped (scarf falling back), running up (back view), running down, mid-dash: shots/wanderer.png (crops at x4, labelled).
-// Then a filmstrip of each view's run cycle, every frame in order: shots/walk.png. --old does the same for the old hero
-// (wanderer-old.png, walk-old.png), to compare. Usage: node tools/art/wanderer.check.mjs [--old] [--port=5207] [--out=shots].
+// Then a filmstrip of each view's run cycle, every frame in order: shots/walk.png; then the action poses with their
+// effects, a row per view and the bite: shots/poses.png. --old does the same for the old hero
+// (wanderer-old.png, walk-old.png, poses-old.png), to compare. Usage: node tools/art/wanderer.check.mjs [--old] [--port=5207] [--out=shots].
 // Exit code 1 on a page error.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -10,7 +11,7 @@ import { chromium } from 'playwright';
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
 const port = Number(arg('port', 5207)), out = arg('out', 'shots'), old = process.argv.includes('--old'), tag = old ? '-old' : '';
 await mkdir(out, { recursive: true });
-const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
+const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' }); // no reload mid-capture on an edit
 await server.listen();
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
@@ -30,11 +31,12 @@ await page.waitForTimeout(1600); // the title card is gone
 let tiles = [];
 // Each shot pauses the room scene, not the game loop: a slept loop wakes with a long frame the hero catches up in one
 // step, which the scarf would take for a lash.
-const snap = async (label) => {
-  const { x, y } = await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.scene.pause(); return { x: s.hero.x, y: s.hero.y }; });
+const snap = async (label, { w, h, dy } = { w: 200, h: 144, dy: 4 }) => {
+  // Not on a frame where an invulnerable hero blinks out (latched in a bite, he does).
+  const { x, y } = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); if (s.hero.alpha > 0.5) { s.scene.pause(); return { x: s.hero.x, y: s.hero.y }; } }).then((h) => h.jsonValue());
   await page.waitForTimeout(50); // a render of the paused frame
-  const cx = Math.max(25, Math.min(455, x)), cy = Math.max(18, Math.min(252, y - 4));
-  tiles.push({ label, png: (await page.screenshot({ clip: { x: (cx - 25) * 4, y: (cy - 18) * 4, width: 200, height: 144 } })).toString('base64') });
+  const hw = w / 8, hh = h / 8, cx = Math.max(hw, Math.min(480 - hw, x)), cy = Math.max(hh, Math.min(270 - hh, y - dy));
+  tiles.push({ label, w, h, png: (await page.screenshot({ clip: { x: (cx - hw) * 4, y: (cy - hh) * 4, width: w, height: h } })).toString('base64') });
   await page.evaluate(() => window.game.scene.getScene('room').scene.resume());
 };
 const hold = async (key, ms) => { await page.keyboard.down(key); await page.waitForTimeout(ms); };
@@ -61,7 +63,7 @@ await page.keyboard.up('s');
 const sheet = await browser.newPage({ viewport: { width: 1700, height: 400 } });
 const save = async (name, rows) => {
   await sheet.setContent(`<body style="margin:0;background:#0b0710;color:#e8dcc8;font:16px Georgia,serif;padding:8px;display:grid;gap:8px">${rows
-    .map((row) => `<div style="display:flex;flex-wrap:wrap;gap:8px">${row.map((t) => `<figure style="margin:0"><img src="data:image/png;base64,${t.png}" width="200" height="144" style="display:block;image-rendering:pixelated"><figcaption>${t.label}</figcaption></figure>`).join('')}</div>`)
+    .map((row) => `<div style="display:flex;flex-wrap:wrap;gap:8px">${row.map((t) => `<figure style="margin:0"><img src="data:image/png;base64,${t.png}" width="${t.w}" height="${t.h}" style="display:block;image-rendering:pixelated"><figcaption>${t.label}</figcaption></figure>`).join('')}</div>`)
     .join('')}</body>`);
   await sheet.screenshot({ path: `${out}/${name}${tag}.png`, fullPage: true });
 };
@@ -87,7 +89,48 @@ for (const [key, label] of [['a', 'profil'], ['s', 'face'], ['w', 'dos']]) {
   strips.push(tiles);
 }
 await save('walk', strips);
-console.log(errors.length ? `errors:\n${errors.join('\n')}` : `ok: ${out}/wanderer${tag}.png, ${out}/walk${tag}.png`);
+
+// The action poses, with their effects, a row per view: two slashes (a combo's first two swings), two throws, the cast;
+// last, the bite on a weakened crossbowman. Wider crops, the slash arc reaches 30 px out.
+const wide = { w: 320, h: 224, dy: 8 };
+const act = (f, arg) => page.evaluate(f, arg);
+const rows = [];
+for (const [a, label] of [[0, 'profil'], [Math.PI / 2, 'face'], [-Math.PI / 2, 'dos']]) {
+  tiles = [];
+  await act(() => { const s = window.game.scene.getScene('room'); s.hero.body.reset(240, 160); s.glyphReadyAt = 0; });
+  await page.waitForTimeout(400);
+  for (const [n, call, ms, gap] of [['coup 1', 'slash', 40, 120], ['coup 2', 'slash', 40, 500], ['tir 1', 'shoot', 30, 450], ['tir 2', 'shoot', 30, 450], ['glyphe', 'cast', 80, 400]]) {
+    await act(([a, call]) => {
+      const s = window.game.scene.getScene('room'), h = s.hero;
+      s[call](call === 'cast' ? { x: h.x + Math.cos(a) * 60, y: h.y + Math.sin(a) * 60 } : a);
+    }, [a, call]);
+    await page.waitForTimeout(ms);
+    await snap(`${label}, ${n}`, wide);
+    await page.waitForTimeout(gap);
+  }
+  rows.push(tiles);
+}
+tiles = [];
+await act(() => { const s = window.game.scene.getScene('room'); s.spawn({ x: 240, y: 150 }, 'crossbow', 1); });
+await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable));
+for (const side of [-1, 1]) {
+  await act((side) => {
+    const s = window.game.scene.getScene('room'), e = s.enemies.getChildren().find((e) => e.body?.enable);
+    s.hero.body.reset(e.x + side * 16, e.y);
+    s.facing = side < 0 ? 0 : Math.PI;
+    s.bite();
+  }, side);
+  await page.waitForTimeout(220);
+  await snap(`morsure ${side < 0 ? '→' : '←'}`, wide);
+  if (side < 0) { // a second weakened one for the other side
+    await page.waitForTimeout(800);
+    await act(() => window.game.scene.getScene('room').spawn({ x: 240, y: 150 }, 'crossbow', 1));
+    await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable));
+  }
+}
+rows.push(tiles);
+await save('poses', rows);
+console.log(errors.length ? `errors:\n${errors.join('\n')}` : `ok: ${out}/wanderer${tag}.png, ${out}/walk${tag}.png, ${out}/poses${tag}.png`);
 await browser.close();
 await server.close();
 process.exit(errors.length ? 1 : 0);

@@ -2,9 +2,9 @@ import Phaser from 'phaser';
 import * as Hero from './hero.ts';
 import { PALETTE, VIEWS, type Frame } from './wanderer.data.ts';
 
-// The new hero, the wanderer with the violet scarf, behind the training room's « Nouveau héros » box until every pose is
-// drawn. He is the old hero's sprite (physics body, shadow, Hero.show's animation logic) wearing another sheet; poses
-// this sheet doesn't have yet fall back to his idle pose. The scarf's tail is a rope simulated every frame.
+// The hero, the wanderer with the violet scarf (the training room's box brings the old one back to compare). He is the
+// old hero's sprite (physics body, shadow, Hero.show's animation logic) wearing another sheet. The scarf's tail is a
+// rope simulated every frame.
 
 const FW = 32, FH = 40;
 const ORIGIN_Y = 22 / FH; // soles (row 36) 14 px below the sprite's y, like the old hero's, so body and shadow line up
@@ -14,13 +14,15 @@ const TONE = { V: 0, v: 0, u: 0 }; // the scarf's three tones as Phaser colours,
 function bake(scene: Phaser.Scene) {
   const sheet: [string, Frame][] = [];
   for (const [view, v] of Object.entries(VIEWS)) {
-    // Every frame Hero.show may ask for: idle and blink 0-3, the run, dash 0-1, the action poses (idle for now).
+    // Every frame Hero.show may ask for: idle and blink 0-3, the run, dash 0-1, the action poses (the bite is side-on only).
     const add = (name: string, f: Frame) => sheet.push([`${view}-${name}`, f]);
     for (let k = 0; k < 4; k++) add(`idle${k}`, v.idle[k % v.idle.length]);
     for (let k = 0; k < 4; k++) add(`blink${k}`, (v.blink ?? v.idle)[k % (v.blink ?? v.idle).length]);
     v.run.forEach((f, k) => add(`run${k}`, f));
     for (let k = 0; k < 2; k++) add(`dash${k}`, v.run[k % v.run.length]);
-    for (const n of ['slash0', 'slash1', 'throw0', 'throw1', 'cast', 'bite']) add(n, v.idle[0]);
+    for (let k = 0; k < 2; k++) { add(`slash${k}`, v.slash[k]); add(`throw${k}`, v.throw[k]); }
+    add('cast', v.cast);
+    if (v.bite) add('bite', v.bite);
   }
   const tex = scene.textures.createCanvas('wanderer', FW * sheet.length, FH)!;
   const ctx = tex.context;
@@ -88,6 +90,7 @@ function scarf(scene: Phaser.Scene, s: Phaser.Physics.Arcade.Sprite) {
         b.x -= (dx * (d - LINK)) / d;
         b.y -= (dy * (d - LINK)) / d;
       }
+      for (const p of pts) p.y = Math.min(p.y, 36 - at[1]); // a low pose (the cast) lays it on the floor, at his soles' row
     }
     // A ribbon shaded across its width (light, mid, dark as on the sheet), the mid line painted last so it wins; it
     // narrows to 2 px for its last third and ends in a fringe of two threads.
