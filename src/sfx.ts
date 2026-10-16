@@ -62,18 +62,26 @@ function voice(o: Play, v: Voice) {
 const bursts = (o: Play, at: number[], v: Voice) => at.forEach((delay) => voice(o, { ...v, delay }));
 
 export const recipes = {
-  // Claws through air: a bandpassed swish, the finisher longer, lower and with body.
+  // Claws through air: a bandpassed swish; the finisher (2) longer, lower, with body and a low boom; the dash strike (3)
+  // the mist's airy rise snapping into a swish.
   slash(o: Play, combo: number) {
+    if (combo === 3) {
+      voice(o, { src: 'noise', filter: 'bandpass', ff: 900, ff2: 3400, q: 0.9, gain: 0.6, attack: 0.01, dur: 0.07 });
+      return voice(o, { src: 'noise', filter: 'bandpass', ff: 4800, ff2: 800, q: 2, gain: 1.3, attack: 0.008, dur: 0.14, delay: 0.03 });
+    }
     if (combo < 2) return voice(o, { src: 'noise', filter: 'bandpass', ff: combo ? 4400 : 3800, ff2: combo ? 1100 : 900, q: 2.5, gain: 1.2, attack: 0.012, dur: 0.12 });
-    voice(o, { src: 'noise', filter: 'bandpass', ff: 2600, ff2: 350, q: 1.5, gain: 1, attack: 0.025, dur: 0.22 });
-    voice(o, { src: 'sine', f: 180, f2: 55, gain: 0.5, attack: 0.02, dur: 0.2 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 2600, ff2: 300, q: 1.5, gain: 1.1, attack: 0.025, dur: 0.24 });
+    voice(o, { src: 'sine', f: 180, f2: 50, gain: 0.6, attack: 0.02, dur: 0.22 });
+    voice(o, { src: 'sine', f: 70, f2: 35, gain: 0.5, attack: 0.04, dur: 0.24 });
   },
-  // Wet impact (low thump + resonant squelch) and a bone crunch (three sharp clicks); heavier on the finisher.
+  // Wet impact (low thump + resonant squelch) and a bone crunch (sharp clicks); heavier on the dash strike (3) and
+  // heaviest on the finisher (2), which also lands a deep blow.
   hit(o: Play, combo: number) {
-    const s = combo === 2 ? 1.5 : 1;
+    const s = combo === 2 ? 1.6 : combo === 3 ? 1.25 : 1;
     voice(o, { src: 'sine', f: 150 / s, f2: 45 / s, gain: 0.9, dur: 0.12 * s });
     voice(o, { src: 'noise', filter: 'lowpass', ff: 1800, ff2: 250, q: 6, gain: 0.8, attack: 0.003, dur: 0.1 * s });
     bursts(o, s > 1 ? [0, 0.014, 0.031, 0.05] : [0, 0.014, 0.031], { src: 'noise', filter: 'highpass', ff: 2500, q: 0.7, gain: 0.45, attack: 0.001, dur: 0.025 });
+    if (combo === 2) voice(o, { src: 'sine', f: 62, f2: 30, gain: 0.8, attack: 0.003, dur: 0.2 });
   },
   // Mist dash: an airy rising whoosh with a breath of high hiss.
   dash(o: Play) {

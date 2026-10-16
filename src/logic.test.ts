@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, burnsAfter, dashStopsAt, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, offerable, pickSpot, rayDistance, replaced, take } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, offerable, pickSpot, rayDistance, replaced, take, wound } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, kind, replacing, shelf } from './gifts.ts';
 import { missing, width, wrap } from './font.ts';
 
@@ -185,5 +185,32 @@ describe('gifts', () => {
       for (const t of [g.text, replacing(id)]) expect(wrap(t, 112).every((l) => width(l) <= 112)).toBe(true);
     }
     expect(missing('Don de la Maison du Rat · Vesna la Grise · Salle 9')).toEqual(['·']);
+  });
+});
+
+describe('dashStrikes', () => {
+  it('at the end of the dash and up to the window after it, not later, and never before any dash', () => {
+    expect(dashStrikes(1100, 1100, 500, 120)).toBe(true); // pressed mid-dash, fired as it ends
+    expect(dashStrikes(1220, 1100, 500, 120)).toBe(true);
+    expect(dashStrikes(1221, 1100, 500, 120)).toBe(false);
+    expect(dashStrikes(50, 0, -1e9, 120)).toBe(false);
+  });
+
+  it('once per dash: the next slash in the window is an ordinary one', () => {
+    expect(dashStrikes(1200, 1100, 1100, 120)).toBe(false);
+  });
+});
+
+describe('wound', () => {
+  it('a human brought down to weakAt kneels; a ghoul or a human already weak does not', () => {
+    expect(wound(2, 1, true, 1, false)).toEqual({ hp: 1, kneels: true });
+    expect(wound(2, 0.5, true, 1, false)).toEqual({ hp: 1.5, kneels: false });
+    expect(wound(2, 1, false, 1, false)).toEqual({ hp: 1, kneels: false });
+    expect(wound(1, 1, true, 1, false)).toEqual({ hp: 0, kneels: false }); // after the kneel: killable
+  });
+
+  it('kneeling, no blow takes hp away; overkill from above still kills', () => {
+    expect(wound(1, 2, true, 1, true)).toEqual({ hp: 1, kneels: false });
+    expect(wound(2, 2, true, 1, false)).toEqual({ hp: 0, kneels: false });
   });
 });

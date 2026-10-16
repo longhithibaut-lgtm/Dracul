@@ -4,7 +4,7 @@ import { BLOOD, bleed, blot, pool, run, stains } from './enemy.ts';
 
 // How the Order's crossbowman looks: a human in a steel kettle hat and a white tabard with the gold cross of the
 // Dawn, carrying a crossbow. Gameplay owns the AI state; this file only shows it (and its bolts).
-export type CrossbowState = 'chase' | 'aim' | 'shoot' | 'held'; // held: in the hero's bite
+export type CrossbowState = 'chase' | 'aim' | 'shoot' | 'held' | 'kneel'; // held: in the hero's bite; kneel: just weakened
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
@@ -231,7 +231,8 @@ for (const name of Object.keys(FRAMES)) {
     : sag && part.startsWith('xbow') ? [part, dx, dy + 1, shear] : [part, dx, dy, shear]);
 }
 // Frames sunk into the floor and cut at the feet: buckling at the knees before falling.
-const SUNK: Record<string, [frame: string, depth: number]> = { kneel: ['hurt', 6] };
+// 'down~': on its knees, weakened, waiting for the bite.
+const SUNK: Record<string, [frame: string, depth: number]> = { kneel: ['hurt', 6], 'down~': ['idle~', 3] };
 
 // Stacks parts back to front. Shear leans every row above the feet by that many px per row.
 function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch: string) => void) {
@@ -378,6 +379,7 @@ export function show(s: Sprite, state: CrossbowState, facing: number, flash: boo
   const C = T.crossbow;
   let f: string;
   if (state === 'held') f = 'held';
+  else if (state === 'kneel') f = 'down'; // stays down when struck
   else if (hurt < 220) f = 'hurt';
   else if (state === 'aim') f = t < 100 ? 'raise' : t >= C.aimMs - C.lockMs ? 'lock' : 'aim';
   else if (state === 'shoot') f = 'shot';
@@ -387,7 +389,9 @@ export function show(s: Sprite, state: CrossbowState, facing: number, flash: boo
   // It appears in a flash of the Dawn's light, then the white rim pops on each hit.
   s.setFrame(age < 120 || (flash && hurt > 0 && hurt < 50) ? f + '!' : f);
   aimLine(s, state === 'aim' && hurt >= 220 ? t : -1, facing, reach);
-  if (weak && state !== 'held') mark(s.getData('aimG'), s.x + (s.flipX ? -1 : 1), s.y - 19, now + s.getData('phase')); // over the hunched head
+  // Over the hunched head; on its knees, lower and on a slower, failing beat.
+  const down = state === 'kneel';
+  if (weak && state !== 'held') mark(s.getData('aimG'), s.x + (s.flipX ? -1 : 1), s.y - (down ? 16 : 19), now + s.getData('phase'), down ? 1100 : 700);
 }
 
 // The tell of a human weak enough to bite: a blood drop over its head, like a drop of the hero's health, beating like
@@ -416,8 +420,8 @@ oeeeeerro
 ..orrro..
 ...ooo...
 `].map((m) => m.trim().split('\n'));
-function mark(g: Phaser.GameObjects.Graphics, x: number, bottom: number, t: number) {
-  const beat = t % 700, rows = MARK[Number(beat < 80 || (beat >= 160 && beat < 240))];
+function mark(g: Phaser.GameObjects.Graphics, x: number, bottom: number, t: number, period: number) {
+  const beat = t % period, rows = MARK[Number(beat < 80 || (beat >= 160 && beat < 240))];
   const x0 = Math.round(x) - (rows[0].length >> 1), y0 = Math.round(bottom) - rows.length;
   rows.forEach((row, j) => [...row].forEach((c, i) => c !== '.' && g.fillStyle(MARK_PAL[c]).fillRect(x0 + i, y0 + j, 1, 1)));
 }

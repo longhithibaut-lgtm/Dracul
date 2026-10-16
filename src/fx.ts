@@ -24,7 +24,7 @@ const hash = (x: number, y: number) => (((x * 73856093) ^ (y * 19349663)) >>> 0)
 
 // The last swing: impacts land in the same tick as their slash, so they can match its weight and direction, and
 // tell it that it landed.
-let swing = { heavy: false, dir: 1, landed: false };
+let swing = { heavy: false, mist: false, dir: 1, landed: false };
 
 /** Clears and redraws a Graphics every frame with the elapsed ms, for `ms`, then destroys it. */
 function animate(scene: Phaser.Scene, depth: number, ms: number, draw: (g: G, t: number) => void): G {
@@ -79,9 +79,11 @@ function ellipse(g: G, cx: number, cy: number, rx: number, ry: number, keep: (x:
  * A swing smear around (ox, oy), on the ground plane seen squashed. `u` runs 0..1 along the swing, from `a0` to `a1`
  * radians past the aim (in the swing's direction); the blade is at `head`, nothing is left before `tail`. Thick and
  * white at the blade, it tapers through pink and deep magenta to a 1 px dithered purple tail, so the direction of
- * travel reads in a single frame. Pixels on the far side of the body go to `back`, drawn behind the hero.
+ * travel reads in a single frame (`pal`: those five tones). Pixels on the far side of the body go to `back`, drawn
+ * behind the hero.
  */
-function crescent(front: G, back: G, ox: number, oy: number, aim: number, dir: number, a0: number, a1: number, R: number, W: number, head: number, tail: number) {
+const SWING = [HOT, GLOW, DEEP, ...DUSK], MIST_SWING = [HOT, MIST[0], MIST[1], MIST[2], MIST[3]];
+function crescent(front: G, back: G, ox: number, oy: number, aim: number, dir: number, a0: number, a1: number, R: number, W: number, head: number, tail: number, pal = SWING) {
   if (head <= tail) return;
   const r = Math.ceil(R) + 1, len = (a1 - a0) * R; // arc length in px
   for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -93,19 +95,23 @@ function crescent(front: G, back: G, ox: number, oy: number, aim: number, dir: n
     const v = R - Math.hypot(gx, gy); // depth below the outer edge
     if (v < 0 || v > w) continue;
     const odd = (ox + dx + oy + dy) & 1;
-    const c = (v < 1.3 && q < 0.5) || q < 0.14 ? HOT : q < 0.46 ? GLOW : q < 0.7 ? DEEP : q < 0.85 ? DUSK[odd] : odd ? -1 : DUSK[1];
+    const c = (v < 1.3 && q < 0.5) || q < 0.14 ? pal[0] : q < 0.46 ? pal[1] : q < 0.7 ? pal[2] : q < 0.85 ? pal[3 + odd] : odd ? -1 : pal[4];
     if (c >= 0) px(gy < 0 ? back : front, ox + dx, oy + dy, c);
   }
 }
 
+/** A claw swing; `combo` 0, 1, 2: swipe, back-swipe, then the finisher, wider, longer and heavier; 3: the dash strike,
+ *  a wide swipe whose smear trails off into the mist it came out of. */
 export function slash(scene: Phaser.Scene, x: number, y: number, angle: number, combo: number) {
-  const heavy = combo === 2;
-  const dir = combo === 1 ? -1 : 1; // swipe, back-swipe, then a wider, heavier finisher
-  swing = { heavy, dir, landed: false };
+  const heavy = combo === 2, mist = combo === 3;
+  const dir = combo === 1 ? -1 : 1;
+  swing = { heavy, mist, dir, landed: false };
   const sw = swing;
-  // The swing starts behind the body and follows through a little past the aim, so it wraps around the hero.
-  const R = heavy ? 31 : 27, W = heavy ? 13 : 10, a0 = Phaser.Math.DegToRad(heavy ? -165 : -125), a1 = Phaser.Math.DegToRad(heavy ? 45 : 30);
-  const swingMs = heavy ? 80 : 60, hold = 20, life = heavy ? 250 : 190;
+  // The swing starts behind the body and follows through a little past the aim, so it wraps around the hero. Its
+  // radius follows the reach (the ground ring is a little inside it).
+  const R = heavy ? T.slash.finisherRange - 1 : T.slash.range - 3, W = heavy ? 15 : mist ? 12 : 10;
+  const a0 = Phaser.Math.DegToRad(heavy ? -170 : mist ? -150 : -125), a1 = Phaser.Math.DegToRad(heavy ? 50 : mist ? 40 : 30);
+  const swingMs = heavy ? 80 : 60, hold = heavy ? 40 : 20, life = heavy ? 300 : mist ? 240 : 190;
   const ox = Math.round(x), oy = Math.round(y) + 1;
   const aim = Math.atan2(Math.sin(angle) / SQUASH, Math.cos(angle)); // the aim, on the ground plane
   const back = scene.add.graphics().setDepth(y - 0.5);
@@ -114,8 +120,10 @@ export function slash(scene: Phaser.Scene, x: number, y: number, angle: number, 
     const head = Math.min(1, 0.55 + 0.45 * ease(Math.min(1, t / swingMs))); // already a wide smear on its first frame
     const fade = Math.max(0, (t - swingMs - hold) / (life - swingMs - hold)); // 0 during the swing and a short hold, then 0..1
     // Follow-through: once the blade stops, the tail catches up with it while the smear thins.
-    crescent(g, back, ox, oy, aim, dir, a0, a1, R + 2 * fade, W * (1 - fade * fade), head, Math.min(head - 0.02, fade ** 0.7));
-    if (heavy) crescent(g, back, ox, oy, aim, dir, a0 + 0.5, a1, R - 10, 4 * (1 - fade), head - 0.1, fade);
+    crescent(g, back, ox, oy, aim, dir, a0, a1, R + 2 * fade, W * (1 - fade * fade), head, Math.min(head - 0.02, fade ** 0.7), mist ? MIST_SWING : SWING);
+    // Echoes inside the smear: the finisher's second blade, the dash strike's wake of mist.
+    if (heavy) crescent(g, back, ox, oy, aim, dir, a0 + 0.5, a1, R - 11, 5 * (1 - fade), head - 0.1, fade);
+    if (mist) crescent(g, back, ox, oy, aim, dir, a0, a1 - 0.3, R - 9, 3 * (1 - fade), head - 0.15, fade, [...MIST, MIST[3]]);
     // The blade's tip glints while it travels, and flashes where the swing ends unless an impact already does.
     const a = aim + dir * (a0 + head * (a1 - a0)), tx = ox + Math.cos(a) * (R - 1), ty = oy + Math.sin(a) * (R - 1) * SQUASH;
     if (t < swingMs) star(g, tx, ty, 0, 2, 2, 1);
@@ -124,16 +132,16 @@ export function slash(scene: Phaser.Scene, x: number, y: number, angle: number, 
 }
 
 export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
-  const { heavy, dir } = swing;
+  const { heavy, mist, dir } = swing;
   swing.landed = true;
   const cos = Math.cos(angle), sin = Math.sin(angle);
-  // Small, sharp shake, mostly along the blow.
-  const cam = scene.cameras.main, kick = heavy ? 3 : 2;
-  cam.shake(heavy ? 110 : 70, new Phaser.Math.Vector2((0.6 + kick * Math.abs(cos)) / cam.width, (0.6 + kick * Math.abs(sin)) / cam.height));
+  // Small, sharp shake, mostly along the blow; the finisher's is the hardest of the claws.
+  const cam = scene.cameras.main, kick = heavy ? 4 : mist ? 3 : 2;
+  cam.shake(heavy ? 150 : mist ? 90 : 70, new Phaser.Math.Vector2((0.6 + kick * Math.abs(cos)) / cam.width, (0.6 + kick * Math.abs(sin)) / cam.height));
 
   const ix = Math.round(x - cos * 5), iy = Math.round(y - sin * 5); // the blade meets the near side of the body
   const floorY = Math.round(y) + 9, z0 = Math.max(3, floorY - iy); // droplets start at the wound, above the feet
-  const sparks = Array.from({ length: heavy ? 10 : 7 }, () => ({ a: angle + rnd(-1.5, 1.5), s: rnd(280, 480), life: rnd(70, 140) }));
+  const sparks = Array.from({ length: heavy ? 14 : mist ? 10 : 7 }, () => ({ a: angle + rnd(-1.5, 1.5), s: rnd(280, heavy ? 560 : 480), life: rnd(70, heavy ? 180 : 140) }));
   const stains: { x: number; y: number; c: number; wet: number; dry: number }[] = [];
   const drops = Array.from({ length: heavy ? 22 : 14 }, () => {
     // The blade drags most droplets along the swing in slow arcs; a few jets shoot low and fast with the blow and
@@ -161,18 +169,18 @@ export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
     // Impact star: three frames at full size, then it shrinks away.
     if (t < 110) {
       const k = Math.max(0, (t - 50) / 60);
-      star(g, ix, iy, angle + Math.PI / 2, (heavy ? 9 : 7) * (1 - k), (heavy ? 7 : 5) * (1 - k), heavy ? 3 : 2);
+      star(g, ix, iy, angle + Math.PI / 2, (heavy ? 11 : 7) * (1 - k), (heavy ? 8 : 5) * (1 - k), heavy ? 3 : 2);
     }
-    // The finisher also sends a ring out, breaking up as it widens.
-    if (heavy && t < 160) {
-      const k = t / 160, r = 4 + 12 * ease(k);
-      ellipse(g, ix, iy, r, r, (ex, ey) => Math.floor((Math.atan2(ey, ex) + 4) * 3) % 4 > k * 4 - 1, k < 0.4 ? HOT : GLOW);
+    // The finisher also sends two rings out, breaking up as they widen; the dash strike one ring of mist.
+    for (const [delay, grow, colors] of heavy ? [[0, 16, [HOT, GLOW]], [40, 10, [GLOW, DEEP]]] as const : mist ? [[0, 12, [MIST[0], MIST[1]]]] as const : []) {
+      const k = (t - delay) / 160, r = 4 + grow * ease(Math.max(0, k));
+      if (k >= 0 && k < 1) ellipse(g, ix, iy, r, r, (ex, ey) => Math.floor((Math.atan2(ey, ex) + 4) * 3) % 4 > k * 4 - 1, k < 0.4 ? colors[0] : colors[1]);
     }
     for (const p of sparks) {
       if (t >= p.life) continue;
       const k = t / p.life, d = ((p.s * t) / 1000) * (1 - 0.5 * k), len = 1 + 5 * (1 - k);
       const c = Math.cos(p.a), s = Math.sin(p.a);
-      line(g, { x: ix + c * d, y: iy + s * d }, { x: ix + c * (d - len), y: iy + s * (d - len) }, (j) => (k < 0.5 && j < 0.5 ? HOT : k < 0.75 ? GLOW : RED));
+      line(g, { x: ix + c * d, y: iy + s * d }, { x: ix + c * (d - len), y: iy + s * (d - len) }, (j) => (k < 0.5 && j < 0.5 ? HOT : k < 0.75 ? (mist ? MIST[1] : GLOW) : mist ? MIST[2] : RED));
     }
     for (const d of drops) {
       if (t >= d.land) continue;

@@ -5,8 +5,16 @@ export const T = {
   height: 270,
 
   hero: { maxHealth: 5, speed: 95, hurtInvulnMs: 800, bufferMs: 150 }, // bufferMs: how early a press may come, see press()
-  dash: { speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22 }, // stopShort: halts this far from an enemy it'd end on
-  slash: { range: 30, arcDeg: 130, damage: 1, cooldownMs: 210, comboWindowMs: 450, knockback: 140, hitStopMs: 40 },
+  dash: {
+    speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22, // stopShort: halts this far from an enemy it'd end on
+    // The dash strike: a slash pressed during the dash (it waits for the end) or this soon after it. The combo's first blow.
+    strikeWindowMs: 120, strikeBonus: 1, strikeArcDeg: 180, strikeKnock: 1.5, // strikeKnock: x slash.knockback
+  },
+  slash: {
+    range: 30, arcDeg: 130, damage: 1, cooldownMs: 210, comboWindowMs: 450, knockback: 140, hitStopMs: 40,
+    // The combo's third blow, the finisher: heavier, wider and longer, but the next slash waits `finisherRecoveryMs` more.
+    finisherMult: 2, finisherRange: 36, finisherArcDeg: 170, finisherKnock: 1.6, finisherHitStopMs: 40, finisherRecoveryMs: 150,
+  },
   // Le Tir: a shard of blood flicked straight ahead, without limit; weaker and slower than the claws. It flies until the
   // first enemy, lantern, prop or wall in its way.
   // throwMs: the flick, at half speed. stunMs: a short flinch that never cancels a windup or an aim, so the tir can't pin.
@@ -20,6 +28,7 @@ export const T = {
     drainMs: 450, // latched: neither the hero nor the prey can act
     heal: 1,
     whiffCooldownMs: 300, // a bite with no valid prey: a teeth snap in place
+    kneelMs: 1500, // a human just weakened kneels this long: it can't act, move or die but by the bite
   },
 
   // Le Glyphe: a blood sigil cast on the floor; once drawn, every enemy standing in it is bound (stops dead, cannot attack).

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { biteTarget, burnsAfter, dashStopsAt, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, offerable, pickSpot, rayDistance, take } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, offerable, pickSpot, rayDistance, take, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -296,16 +296,18 @@ export class RoomScene extends Phaser.Scene {
       // Bound by the glyph, it stops dead, its lunge or aim cancelled, and cannot be shoved; it resumes once let go. A
       // prey in the hero's jaws is held by the bite instead.
       const bound = !!this.glyph && Glyph.binds(this.glyph, e.body.center, time);
-      e.setImmovable(bound || e === this.prey);
+      const kneeling = this.kneeling(e); // a human just weakened, down on its knees: see hurtEnemy()
+      e.setImmovable(bound || e === this.prey || kneeling);
       if (bound && e !== this.prey) {
         held.push(e);
         e.setVelocity(0).setData({ state: 'chase', until: 0 });
-      } else if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
+      } else if (kneeling) e.setVelocity(0);
+      else if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
         if (this.training && Training.opts.passive) e.setVelocity(0).setData('state', 'chase'); // a training dummy
         else if (bow) this.stepCrossbow(e, time);
         else this.stepEnemy(e, time);
       }
-      if (bow) Crossbow.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'), e.getData('hp') <= T.bite.weakAt);
+      if (bow) Crossbow.show(e, kneeling ? 'kneel' : e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'), e.getData('hp') <= T.bite.weakAt);
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
     }
@@ -431,36 +433,43 @@ export class RoomScene extends Phaser.Scene {
   /** Input buffer: an action pressed while the hero is still busy (mid-swing, dashing, cooling down...) is kept for
    *  T.hero.bufferMs and fired by update() the moment it can be, so a press a hair early is never lost. */
   private press(act: () => boolean) {
-    if (!act()) this.queued = { act, until: this.time.now + T.hero.bufferMs };
+    // Pressed mid-dash, it is kept until the dash is over: a slash then becomes the dash strike.
+    if (!act()) this.queued = { act, until: Math.max(this.time.now, this.dashUntil) + T.hero.bufferMs };
   }
 
+  /** The claws. Swipe, back-swipe, then the finisher (heavier, wider, longer, slower to recover from); a slash pressed
+   *  during the mist or just after it is the dash strike instead, which opens the combo. */
   private slash(angle: number) {
-    const now = this.time.now;
+    const now = this.time.now, S = T.slash, D = T.dash;
     if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.slashReadyAt || now < this.dashUntil) return false;
-    this.combo = nextCombo(this.combo, now - this.lastSlashAt, T.slash.comboWindowMs);
+    const dash = dashStrikes(now, this.dashUntil, this.lastSlashAt, D.strikeWindowMs);
+    this.combo = dash ? 0 : nextCombo(this.combo, now - this.lastSlashAt, S.comboWindowMs);
+    const fin = !dash && this.combo === 2, kind = dash ? 3 : this.combo; // kind 3: the dash strike, for effects and sounds
     this.lastSlashAt = now;
-    this.slashReadyAt = now + T.slash.cooldownMs;
-    this.slashUntil = now + T.slash.cooldownMs;
+    this.slashReadyAt = now + S.cooldownMs + (fin ? S.finisherRecoveryMs : 0);
+    this.slashUntil = now + S.cooldownMs;
     this.facing = angle;
-    Fx.slash(this, this.hero.x, this.hero.y, angle, this.combo);
-    Sfx.play(this, 'slash', this.combo);
+    Fx.slash(this, this.hero.x, this.hero.y, angle, kind);
+    Sfx.play(this, 'slash', kind);
 
-    const damage = T.slash.damage + (this.combo === 2 && this.gifts.includes('rongeur') ? T.gifts.gnaw : 0);
+    const range = fin ? S.finisherRange : S.range, arc = dash ? D.strikeArcDeg : fin ? S.finisherArcDeg : S.arcDeg;
+    const damage = dash ? S.damage + D.strikeBonus : fin ? S.damage * S.finisherMult + (this.gifts.includes('rongeur') ? T.gifts.gnaw : 0) : S.damage;
+    const knock = S.knockback * (dash ? D.strikeKnock : fin ? S.finisherKnock : 1);
     let hits = 0;
     for (const e of this.enemies.getChildren() as Sprite[]) {
-      if (!e.body?.enable || !inArc(this.hero, angle, e, T.slash.range, T.slash.arcDeg)) continue;
+      if (!e.body?.enable || !inArc(this.hero, angle, e, range, arc)) continue;
       hits++;
-      this.hitEnemy(e, angle, damage);
+      this.hitEnemy(e, angle, damage, knock, kind);
     }
     for (const l of [...this.lanterns]) { // aimed at its glass, about the hero's chest height
-      if (!l.lit || !inArc(this.hero, angle, { x: l.x, y: l.y - 5 }, T.slash.range, T.slash.arcDeg)) continue;
+      if (!l.lit || !inArc(this.hero, angle, { x: l.x, y: l.y - 5 }, range, arc)) continue;
       hits++;
       this.hitLantern(l, angle, damage);
     }
     if (!hits) return true;
     // Hit-stop: freeze physics briefly so the impact reads; tweens and timers keep running.
     this.physics.pause();
-    this.time.delayedCall(T.slash.hitStopMs, () => this.phase !== 'choose' && this.physics.resume());
+    this.time.delayedCall(S.hitStopMs + (fin ? S.finisherHitStopMs : 0), () => this.phase !== 'choose' && this.physics.resume());
     return true;
   }
 
@@ -494,7 +503,7 @@ export class RoomScene extends Phaser.Scene {
     const { x, y } = b, { angle, plague, pierce, hit } = b.data.values;
     if (pierce) hit.push(e);
     else b.destroy();
-    if (e !== this.prey) { // a prey stays held in the bite
+    if (e !== this.prey && !this.kneeling(e)) { // a prey stays held in the bite, a kneeling human down
       e.setData('stunnedUntil', Math.max(e.getData('stunnedUntil'), this.time.now + T.shot.stunMs));
       this.physics.velocityFromRotation(angle, T.shot.knockback, e.body.velocity);
     }
@@ -504,16 +513,20 @@ export class RoomScene extends Phaser.Scene {
     this.hurtEnemy(e, T.shot.damage);
   }
 
-  private hitEnemy(e: Sprite, angle: number, damage: number) {
+  /** A claw lands: `kind` is the slash's (combo step 0-2, 3 the dash strike). */
+  private hitEnemy(e: Sprite, angle: number, damage: number, knock: number, kind: number) {
     const now = this.time.now;
     // A hit interrupts whatever the enemy was doing, including a windup: aggression is rewarded.
     e.setData({ state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs });
-    const kb = this.combo === 2 ? T.slash.knockback * 1.6 : T.slash.knockback;
-    this.physics.velocityFromRotation(angle, kb, e.body!.velocity);
+    if (!this.kneeling(e)) this.physics.velocityFromRotation(angle, knock, e.body!.velocity);
     Fx.hit(this, e.x, e.y, angle);
-    Sfx.play(this, 'hit', this.combo);
+    Sfx.play(this, 'hit', kind);
     if (this.gifts.includes('griffes')) this.infect(e);
     this.hurtEnemy(e, damage);
+  }
+
+  private kneeling(e: Sprite) {
+    return this.time.now < e.getData('kneelUntil');
   }
 
   /** La Peste, from any source (claws, shards, Contagion): T.gifts.plagueMs later the enemy loses T.gifts.plagueDamage
@@ -524,11 +537,14 @@ export class RoomScene extends Phaser.Scene {
     return true;
   }
 
-  /** Damage to an enemy from any source (claws, plague, rats): it flashes, and dies through kill(). */
+  /** Damage to an enemy from any source (claws, shards, plague, rats): it flashes, and dies through kill(). A human it
+   *  weakens drops to its knees for T.bite.kneelMs, cut short in whatever it was doing; nothing but the bite kills it
+   *  meanwhile, so it is never killed by accident before the hero can drink. */
   private hurtEnemy(e: Sprite, amount: number) {
     if (!e.body?.enable) return;
-    const hp = e.getData('hp') - amount;
-    e.setData({ hp, flashUntil: this.time.now + 70 });
+    const now = this.time.now, { hp, kneels } = wound(e.getData('hp'), amount, !!e.getData('human'), T.bite.weakAt, this.kneeling(e));
+    e.setData({ hp, flashUntil: now + 70 });
+    if (kneels) e.setVelocity(0).setData({ state: 'chase', until: 0, kneelUntil: now + T.bite.kneelMs });
     if (hp <= 0) this.kill(e);
   }
 
@@ -570,7 +586,7 @@ export class RoomScene extends Phaser.Scene {
     // The bite is drawn side-on: he lands beside it, feet in line with its feet, face at its neck. It faces him.
     const side = this.hero.x < prey.x ? -1 : 1;
     this.facing = side < 0 ? 0 : Math.PI;
-    prey.setVelocity(0).setImmovable(true).setData({ state: 'held', until: Infinity, facing: this.facing + Math.PI });
+    prey.setVelocity(0).setImmovable(true).setData({ state: 'held', until: Infinity, kneelUntil: 0, facing: this.facing + Math.PI });
     this.hero.setVelocity(0);
     // A tween, not velocity: he must land exactly at the throat (physics reads the moved sprite on its next step).
     this.tweens.add({ targets: this.hero, x: prey.x + side * Hero.BITE_REACH, y: prey.y - 1, duration: B.lungeMs, ease: 'Quad.easeOut' });
@@ -769,7 +785,7 @@ export class RoomScene extends Phaser.Scene {
     this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
       if (this.dead) return;
       const e = (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
-      const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0 };
+      const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0 };
       if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
       else e.setData({ ...common, hp: hp ?? T.enemy.hp, restUntil: 0 });
     });

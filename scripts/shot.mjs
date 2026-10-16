@@ -101,7 +101,7 @@ for (let i = 0; i < 200 && !captured; i++) {
   const pre = { x: s.hx, y: s.hy };
   await page.keyboard.down(dx > 0 ? 'd' : 'a');
   // Space is held until the dash is over: Phaser drops a key pressed and released between two updates (slow frames
-  // in headless), and a slash during the dash is ignored.
+  // in headless). The click right after is the dash strike (mist-tinted swing).
   await page.keyboard.down('Space');
   await page.waitForFunction(() => { const r = window.game.scene.getScene('room'); return r.dashUntil > 0 && r.time.now >= r.dashUntil; });
   await page.keyboard.up('Space');

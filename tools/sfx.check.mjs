@@ -17,7 +17,7 @@ await page.goto('http://localhost:5207/');
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 
 // [name, arg, expected length to -60 dB, range in ms]
-const sounds = [['slash', 0, 60, 140], ['slash', 1, 60, 140], ['slash', 2, 120, 240], ['hit', 0, 60, 140], ['hit', 2, 100, 200],
+const sounds = [['slash', 0, 60, 140], ['slash', 1, 60, 140], ['slash', 2, 120, 260], ['slash', 3, 100, 200], ['hit', 0, 60, 140], ['hit', 2, 100, 220], ['hit', 3, 80, 180],
   ['dash', 0, 120, 240], ['hurt', 0, 150, 280], ['windup', 0, 300, 450], ['lunge', 0, 80, 200], ['kill', 0, 250, 450],
   ['spawn', 0, 400, 700], ['death', 0, 900, 1600], ['aim', 0.45, 450, 600], ['twang', 0, 120, 260], ['thunk', 0, 120, 260],
   ['holy', 0, 500, 900], ['burn', 0, 250, 420], ['shatter', 0, 80, 180],
@@ -56,7 +56,7 @@ const results = await page.evaluate(async (sounds) => {
   // Worst case: a finisher hitting three enemies (one dies) while the hero is hurt, an enemy winds up, a wave spawns
   // and crossbows aim, shoot and hit, a bite latches, drains and heals, a shard is thrown and bursts on an enemy and on a
   // wall, the room clears, a gift is taken, the gate rises and a glyph burns in and binds.
-  const pile = [['slash', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['kill', 0, 0], ['hurt', 0, 0.01],
+  const pile = [['slash', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['slash', 3, 0], ['hit', 3, 0], ['kill', 0, 0], ['hurt', 0, 0.01],
     ['windup', 0, 0], ['lunge', 0, 0.02], ['spawn', 0, 0], ['spawn', 0, 0], ['spawn', 0, 0], ['spawn', 0, 0], ['death', 0, 0.02],
     ['aim', 0.45, 0], ['twang', 0, 0.01], ['twang', 0, 0], ['thunk', 0, 0.02],
     ['burn', 0, 0], ['shatter', 1, 0], ['holy', 0, 0], ['bite', 0, 0], ['drain', 0, 0], ['heal', 0, 0.01], ['snap', 0, 0],

@@ -29,6 +29,22 @@ export function nextCombo(prev: number, msSinceLast: number, windowMs: number): 
   return msSinceLast <= windowMs ? (prev + 1) % 3 : 0;
 }
 
+/** True when a slash at `now` is a dash strike: pressed during the dash that ended at `dashUntil` (it waited for the
+ *  end) or at most `windowMs` after it, and the first slash since that dash (`lastSlashAt`). `dashUntil` 0: no dash yet. */
+export function dashStrikes(now: number, dashUntil: number, lastSlashAt: number, windowMs: number): boolean {
+  return dashUntil > 0 && lastSlashAt < dashUntil && now - dashUntil <= windowMs;
+}
+
+/**
+ * A blow of `amount` on an enemy with `hp`. A human it leaves weakened (`weakAt` or less, but alive) drops to its knees;
+ * while it kneels, blows can't take its hp below what it knelt with, so it is left for the bite. Overkill still kills.
+ */
+export function wound(hp: number, amount: number, human: boolean, weakAt: number, kneeling: boolean): { hp: number; kneels: boolean } {
+  if (kneeling) return { hp, kneels: false };
+  const next = hp - amount;
+  return { hp: next, kneels: human && hp > weakAt && next <= weakAt && next > 0 };
+}
+
 type P = { x: number; y: number };
 
 /**
