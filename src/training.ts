@@ -2,11 +2,13 @@
 // The knobs change T itself, so a tuned value holds for the whole session, normal runs included, until a reload.
 import { T } from './tuning.ts';
 import { GIFTS, GIFT_IDS, KINDS, kind, type GiftId } from './gifts.ts';
+import type { LayoutId } from './room.ts';
 
 export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern';
 /** Survive the scene restarts (a death in training starts the training room again). */
 export const opts = { god: true, passive: false, wanderer: true }; // wanderer: the new hero (wanderer.ts); off = the old one
 
+const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré']];
 const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne']];
 // [label, group, key, min, max, step]
 const KNOBS = [
@@ -58,13 +60,15 @@ const CSS = `
   font:11px/1.3 ui-monospace,monospace;resize:vertical}`;
 
 /** Opens the panel; returns what closes it. */
-export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean): void; restart(): void }) {
+export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean): void; restart(layout?: LayoutId): void }) {
   // Every gift can be ticked, several in one slot too: the one-per-slot rule is the run's, not the training room's.
   const gifts = (slotted: boolean) => GIFT_IDS.filter((id) => !!GIFTS[id].slot === slotted).map((id) =>
     `<label><input type="checkbox" data-gift="${id}"${api.gifts.includes(id) ? ' checked' : ''}> ${GIFTS[id].name}${slotted ? ` <small>· ${KINDS[kind(id)]}</small>` : ''}</label>`).join('');
   const root = document.createElement('aside');
   root.id = 'training';
   root.innerHTML = `<style>${CSS}</style><details open><summary>ENTRAÎNEMENT <small>· T pour quitter</small></summary>
+    <h3>Salle</h3>
+    <div class="row">${ROOMS.map(([id, l]) => `<button type="button" data-layout="${id}">${l}</button>`).join('')}</div>
     <h3>Ennemis</h3>
     <div class="row">${SPAWNS.map(([s, l]) => `<button type="button" data-spawn="${s}">+ ${l}</button>`).join('')}<button type="button" data-act="clear">Vider la salle</button></div>
     <label><input type="checkbox" data-opt="passive"> Ennemis passifs (mannequins)</label>
@@ -107,7 +111,8 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
   root.addEventListener('click', (ev) => {
     const b = (ev.target as HTMLElement).closest('button');
     if (!b) return;
-    if (b.dataset.spawn) api.spawn(b.dataset.spawn as Spawn);
+    if (b.dataset.layout) api.restart(b.dataset.layout as LayoutId);
+    else if (b.dataset.spawn) api.spawn(b.dataset.spawn as Spawn);
     else if (b.dataset.act === 'clear') api.clear();
     else if (b.dataset.act === 'heal') api.heal();
     else if (b.dataset.act === 'reset') knobs().forEach((i) => set(i, defaults[i.dataset.knob!])), show();

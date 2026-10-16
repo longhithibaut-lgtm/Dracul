@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, offerable, pickSpot, rayDistance, replaced, take, wound } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, stepsFrom, take, wound } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, kind, replacing, shelf } from './gifts.ts';
 import { missing, width, wrap } from './font.ts';
 
@@ -213,5 +213,40 @@ describe('wound', () => {
     expect(wound(1, 2, true, 1, true)).toEqual({ hp: 1, kneels: false });
     expect(wound(2, 2, true, 1, false)).toEqual({ hp: 1, kneels: true }); // a heavy blow on a fresh human: he kneels
     expect(wound(2, 2, false, 1, false)).toEqual({ hp: 0, kneels: false }); // a ghoul just dies
+  });
+});
+
+describe('nextLayout', () => {
+  const ids = ['hall', 'nave', 'ossuary'] as const;
+
+  it('room 1 is always the hall, whatever came before', () => {
+    expect(nextLayout(1, 'nave', ids, () => 0.99)).toBe('hall');
+  });
+
+  it('from room 2, any layout but the last one, each of them in turn', () => {
+    const seen = new Set<string>();
+    for (const prev of ids)
+      for (const r of [0, 0.3, 0.5, 0.7, 0.999]) {
+        const next = nextLayout(2, prev, ids, () => r);
+        expect(next).not.toBe(prev);
+        expect(ids).toContain(next);
+        seen.add(next);
+      }
+    expect(seen.size).toBe(3);
+  });
+});
+
+describe('stepsFrom', () => {
+  // 4x3, a wall down the second column but for its bottom cell: the way round goes under it.
+  const open = [true, false, true, true, true, false, true, true, true, true, true, true];
+
+  it('counts the steps round closed cells, never cutting their corners', () => {
+    const d = stepsFrom(open, 4, 0);
+    expect(d[9]).toBe(3); // down, down, right: not diagonally past the wall's foot
+    expect(d[2]).toBe(6); // then right, up, up
+  });
+
+  it('Infinity where no way leads', () => {
+    expect(stepsFrom([true, false, true], 3, 0)[2]).toBe(Infinity);
   });
 });

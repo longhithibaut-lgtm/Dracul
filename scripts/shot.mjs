@@ -7,7 +7,8 @@
 // (full frame, the room cleared and the three gift cards open, TIR, GLYPHE and TALENT, the second hovered), gate.png
 // (the portcullis up), training.png (full frame: the training room, its panel, enemies called in from it), tir.png
 // (the hero mid-throw, a plagued shard of blood in flight toward a ghoul) and glyph.png (the glyph cast with E at the
-// pointer, binding two ghouls, the hero beside it).
+// pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png and rooms-ossuary.png (each
+// room layout, full frame, empty).
 // Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -327,8 +328,23 @@ if (training) {
   await freeze(false);
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
+// Every room layout, full frame and empty: as a run's room 1, its first wave called off.
+const layouts = [];
+for (const id of ['hall', 'nave', 'ossuary']) {
+  await page.evaluate((layout) => window.game.scene.getScene('room').scene.restart({ layout }), id);
+  await page.waitForFunction((id) => { const s = window.game.scene.getScene('room'); return s.layout === id && !s.training; }, id);
+  await page.evaluate(() => window.game.scene.getScene('room').time.removeAllEvents()); // no wave: the room empty
+  await page.waitForTimeout(400);
+  await freeze(true);
+  if (await page.evaluate((id) => window.game.scene.getScene('room').layout === id && !document.querySelector('#training'), id)) {
+    await shot(`rooms-${id}`);
+    layouts.push(id);
+  }
+  await freeze(false);
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; rooms: ${layouts.join(', ') || 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !tir || !glyph ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !tir || !glyph || layouts.length < 3 ? 1 : 0);

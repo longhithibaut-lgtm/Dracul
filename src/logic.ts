@@ -144,3 +144,29 @@ export function drawGifts<K>(pool: readonly K[], n: number, rnd: () => number): 
   }
   return left.slice(0, n);
 }
+
+/** The layout of room `room` of a run: the first of `ids` for room 1, then any but `prev` (the last room's). */
+export function nextLayout<K>(room: number, prev: K, ids: readonly K[], rnd: () => number): K {
+  if (room <= 1) return ids[0];
+  const left = ids.filter((id) => id !== prev);
+  return left[Math.floor(rnd() * left.length)];
+}
+
+/** Steps from cell `goal` to every cell of a grid `cols` wide, walking through `open` cells only, 8 ways but never
+ *  cutting a corner; Infinity where it can't get. The goal itself may be closed (someone standing on a brink). */
+export function stepsFrom(open: readonly boolean[], cols: number, goal: number): number[] {
+  const rows = open.length / cols, d = open.map(() => Infinity), queue = [goal];
+  d[goal] = 0;
+  for (let i = 0; i < queue.length; i++) {
+    const c = queue[i], x = c % cols, y = (c - x) / cols;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy, n = nx + ny * cols;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows || !open[n] || d[n] !== Infinity) continue;
+        if (dx && dy && (!open[nx + y * cols] || !open[x + ny * cols])) continue;
+        d[n] = d[c] + 1;
+        queue.push(n);
+      }
+  }
+  return d;
+}

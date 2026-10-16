@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, offerable, pickSpot, rayDistance, take, wound } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -18,10 +18,11 @@ import { GIFTS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 /** What a run carries from room to room, through scene.restart(data); {} starts a new run. */
-type Run = { room?: number; health?: number; gifts?: GiftId[]; training?: boolean };
+type Run = { room?: number; layout?: Room.LayoutId; health?: number; gifts?: GiftId[]; training?: boolean };
 // A room: the hero climbs in (from room 2), fights its waves, takes the gift of the Rat house on the medallion (cards
 // open, the action pauses), then walks out through the portcullis it raised.
 type Phase = 'enter' | 'fight' | 'gift' | 'choose' | 'exit' | 'leave';
+const NAV = 8; // walk grid cell, px
 
 // Gameplay only: movement, combat, enemy AI, waves, the run. Every visual decision lives in the modules above.
 export class RoomScene extends Phaser.Scene {
@@ -32,6 +33,13 @@ export class RoomScene extends Phaser.Scene {
   shards!: Phaser.Physics.Arcade.Group; // Le Tir in flight: bodies on the floor, drawn by Fx.shard
 
   private room!: Room.Room;
+  private layout: Room.LayoutId = 'hall';
+  // Walking round the pits: a grid of NAV px cells over the floor, open where a body fits; steps to the hero's cell.
+  navOpen: boolean[] = [];
+  private navCols = 0;
+  private navFrom = -1;
+  private nav: number[] = [];
+  private pitBoxes: { x: number; y: number; width: number; height: number }[] = [];
   private hud!: Hud.Hud;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private facing = Math.PI / 2;
@@ -75,6 +83,8 @@ export class RoomScene extends Phaser.Scene {
   init(data: Run) {
     // The scene instance is reused on restart, so every field is reset here; the run carries on through `data`.
     this.roomNo = data.room ?? 1;
+    this.layout = data.layout ?? 'hall';
+    this.navFrom = -1;
     this.training = !!data.training;
     this.gifts = [...(data.gifts ?? [])];
     this.health = data.health ?? this.maxHealth();
@@ -104,16 +114,18 @@ export class RoomScene extends Phaser.Scene {
     // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
     this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
     this.physics.resume();
-    this.room = Room.build(this);
+    this.room = Room.build(this, this.layout);
     const b = this.room.bounds;
     this.physics.world.setBounds(b.x, b.y, b.width, b.height);
+    this.walkGrid();
 
     const start = this.phase === 'enter' ? this.room.stairs : this.room.heroStart;
     this.hero = (Training.opts.wanderer ? Wanderer : Hero).create(this, start.x, start.y);
     this.hero.setCollideWorldBounds(this.phase !== 'enter');
     this.enemies = this.physics.add.group();
-    this.physics.add.collider(this.hero, this.room.obstacles);
-    this.physics.add.collider(this.enemies, this.room.obstacles);
+    // Pits stop walkers (the mist too) but not what flies: bolts and shards only stop on obstacles (boltReach).
+    this.physics.add.collider(this.hero, [this.room.obstacles, this.room.pits]);
+    this.physics.add.collider(this.enemies, [this.room.obstacles, this.room.pits]);
     this.physics.add.collider(this.enemies, this.enemies);
     this.physics.add.overlap(this.hero, this.enemies, (_h, e) => this.hurt(e as Sprite));
     this.bolts = this.physics.add.group();
@@ -159,7 +171,7 @@ export class RoomScene extends Phaser.Scene {
       if (n) this.pick(Number(n[1]) - 1);
     });
 
-    const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true }) satisfies Run);
+    const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true }) satisfies Run); // in the hall: its panel picks a room
     this.input.keyboard!.on('keydown-T', toggleTraining);
     // Touch screens: the same actions as J, K, L, F and Space, aimed where he faces, and T.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, Touch.controls((a) => {
@@ -188,7 +200,7 @@ export class RoomScene extends Phaser.Scene {
           this.bolts.clear(true, true);
           this.shards.clear(true, true);
         },
-        restart: () => this.scene.restart({ training: true, gifts: this.gifts } satisfies Run),
+        restart: (layout = this.layout) => this.scene.restart({ training: true, gifts: this.gifts, layout } satisfies Run),
         heal: () => {
           this.health = this.maxHealth();
           this.hud.health(this.health, this.health);
@@ -362,14 +374,15 @@ export class RoomScene extends Phaser.Scene {
         // One attacker at a time, and never twice in a row: the others wait their turn on a ring around the hero
         // instead of piling onto him.
         const waiting = time < e.getData('restUntil') || pack.some((o) => o.getData('state') === 'windup' || o.getData('state') === 'lunge');
-        if (!waiting && dist <= E.lungeRange) {
+        const way = this.wayToHero(e); // round the pits
+        if (!waiting && dist <= E.lungeRange && way.straight) {
           e.setVelocity(0).setData({ state: 'windup', until: time + E.windupMs, facing: toHero });
           Sfx.play(this, 'windup');
           break;
         }
         // A waiting enemy on the ring circles the hero, or backs off if too close.
         const turn = !waiting || dist > E.holdRange ? 0 : (dist < E.holdRange - 12 ? Math.PI : Math.PI / 2) * e.getData('side');
-        const v = this.physics.velocityFromRotation(toHero + turn, E.speed, e.body!.velocity);
+        const v = this.physics.velocityFromRotation(way.angle + turn, E.speed, e.body!.velocity);
         // Close packmates push each other apart, so the pack surrounds the hero instead of stacking.
         for (const o of pack) {
           const d = Phaser.Math.Distance.BetweenPoints(e, o);
@@ -428,6 +441,48 @@ export class RoomScene extends Phaser.Scene {
   private boltReach(from: Phaser.Types.Math.Vector2Like, angle: number) {
     const props = this.room.obstacles.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody);
     return rayDistance({ x: from.x!, y: from.y! }, angle, this.room.bounds, props);
+  }
+
+  /** The walk grid: a cell is open where a ghoul's feet (12x6) fit at its centre, clear of pits and props. */
+  private walkGrid() {
+    const b = this.room.bounds, boxes = [this.room.pits, this.room.obstacles].flatMap((g) => g.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody));
+    this.navCols = Math.ceil(b.width / NAV);
+    this.navOpen = Array.from({ length: this.navCols * Math.ceil(b.height / NAV) }, (_, c) => {
+      const x = b.x + (c % this.navCols) * NAV + NAV / 2, y = b.y + Math.floor(c / this.navCols) * NAV + NAV / 2;
+      return y + 3 <= b.bottom && x + 6 <= b.right && boxes.every((o) => x + 6 <= o.x || x - 6 >= o.right || y + 3 <= o.y || y - 3 >= o.bottom);
+    });
+    // For a straight walk to cross no pit, a body's half-width away from them.
+    this.pitBoxes = this.room.pits.getChildren().map((o) => {
+      const p = o.body as Phaser.Physics.Arcade.StaticBody;
+      return { x: p.x - 6, y: p.y - 3, width: p.width + 12, height: p.height + 6 };
+    });
+  }
+
+  cellOf(p: Phaser.Types.Math.Vector2Like) {
+    const b = this.room.bounds, col = Phaser.Math.Clamp(Math.floor((p.x! - b.x) / NAV), 0, this.navCols - 1);
+    return col + Phaser.Math.Clamp(Math.floor((p.y! - b.y) / NAV), 0, this.navOpen.length / this.navCols - 1) * this.navCols;
+  }
+
+  /** Steps from every cell of the walk grid to floor point `p` (Infinity: no way there). */
+  stepsTo(p: Phaser.Types.Math.Vector2Like) {
+    return stepsFrom(this.navOpen, this.navCols, this.cellOf(p));
+  }
+
+  /** Where an enemy walks to reach the hero: straight at him, unless a pit lies across the way (`straight` false); then
+   *  toward the next cell of the shortest walk round it. */
+  private wayToHero(e: Sprite): { angle: number; straight: boolean } {
+    const from = e.body!.center, to = this.hero.body!.center, angle = Phaser.Math.Angle.BetweenPoints(from, to);
+    if (!this.pitBoxes.length || rayDistance(from, angle, this.room.bounds, this.pitBoxes) >= Phaser.Math.Distance.BetweenPoints(from, to))
+      return { angle, straight: true };
+    const goal = this.cellOf(to);
+    if (goal !== this.navFrom) [this.navFrom, this.nav] = [goal, this.stepsTo(to)];
+    const c = this.cellOf(from), cols = this.navCols, x = c % cols;
+    let best = -1;
+    for (const n of [c - cols - 1, c - cols, c - cols + 1, c - 1, c + 1, c + cols - 1, c + cols, c + cols + 1])
+      if (Math.abs((n % cols) - x) <= 1 && this.nav[n] < (this.nav[best] ?? Infinity)) best = n;
+    if (best < 0) return { angle, straight: false };
+    const b = this.room.bounds, cx = b.x + (best % cols) * NAV + NAV / 2, cy = b.y + Math.floor(best / cols) * NAV + NAV / 2;
+    return { angle: Phaser.Math.Angle.Between(from.x, from.y, cx, cy), straight: false };
   }
 
   /** Input buffer: an action pressed while the hero is still busy (mid-swing, dashing, cooling down...) is kept for
@@ -683,13 +738,13 @@ export class RoomScene extends Phaser.Scene {
     Sfx.play(this, 'gate');
   }
 
-  /** Into the open gate: fade to black, then the next room (the same hall, for now), health and gifts kept. */
+  /** Into the open gate: fade to black, then the next room (another layout than this one), health and gifts kept. */
   private leave() {
     this.phase = 'leave';
     this.hero.setCollideWorldBounds(false);
     this.cameras.main.fadeOut(T.run.fadeMs);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
-      this.scene.restart({ room: this.roomNo + 1, health: this.health, gifts: this.gifts } satisfies Run));
+      this.scene.restart({ room: this.roomNo + 1, layout: nextLayout(this.roomNo + 1, this.layout, Room.LAYOUTS, Math.random), health: this.health, gifts: this.gifts } satisfies Run));
   }
 
   private maxHealth() {
@@ -735,7 +790,7 @@ export class RoomScene extends Phaser.Scene {
 
   /** The Order plants a lantern on the free spot nearest the hero that leaves him out of its light. */
   private addLantern() {
-    const L = T.lantern, p = pickSpot(Lantern.SPOTS, this.hero.body!.center, this.lanterns, L.radius, L.radius * L.squash, L.clear);
+    const L = T.lantern, p = pickSpot(this.room.spots, this.hero.body!.center, this.lanterns, L.radius, L.radius * L.squash, L.clear);
     if (!p) return;
     const l = Lantern.create(this, this.room.obstacles, p.x, p.y, L.telegraphMs);
     this.lanterns.push(l);
@@ -763,7 +818,7 @@ export class RoomScene extends Phaser.Scene {
     Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
     // A new run (room 1, no gifts), or back to the training room.
-    this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts } : {}) satisfies Run));
+    this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, layout: this.layout } : {}) satisfies Run));
     return true;
   }
 

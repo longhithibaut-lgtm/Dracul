@@ -18,10 +18,6 @@ export type Lantern = {
   light: Lamp; img?: Phaser.GameObjects.Image; zone?: Phaser.GameObjects.Zone; timer: Phaser.Time.TimerEvent; stutterUntil: number;
 };
 
-// Spots around the medallion, clear of the room's props, spawn points and the hero start (checked against room.ts),
-// leaving dark lanes between pools (48 px across, 26 px down) and the medallion itself dark.
-export const SPOTS: P[] = [{ x: 176, y: 125 }, { x: 304, y: 125 }, { x: 176, y: 209 }, { x: 304, y: 209 }];
-
 // Palette "Ordre / lumière sacrée" (docs/art.md): white-hot to bronze gold, the Order's pale stone, iron.
 const PAL: Record<string, number> = {
   W: 0xfff6d8, Y: 0xffd75e, G: 0xc8902a, g: 0x7a4a1c,
