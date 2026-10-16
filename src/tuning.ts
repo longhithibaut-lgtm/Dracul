@@ -88,8 +88,9 @@ export const T = {
     clear: 1.3, // never planted with the hero inside this much of its pool
   },
 
-  // The Eternal Dawn over the cloister's garth: it burns like a lantern's pool, but slower, the garth being wide.
-  dawn: { graceMs: 700, burnEveryMs: 1100, damage: 1 },
+  // The Eternal Dawn over the cloister's garth: free for a few seconds (the hero sees the danger build), then it burns
+  // on a steady beat until he is back in the shade.
+  dawn: { graceMs: 2500, burnEveryMs: 1000, damage: 1 },
 
   // A run is a string of rooms; the wave count carries on from room to room, so difficulty keeps climbing.
   run: {

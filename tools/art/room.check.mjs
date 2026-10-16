@@ -14,7 +14,9 @@ const WAITS = {
   nave: [[240, 222], [96, 176], [392, 170], [72, 100], [404, 100], [140, 240], [240, 75]],
   ossuary: [[72, 222], [72, 108], [420, 182], [312, 240], [200, 104], [150, 192], [240, 75]],
   chapel: [[240, 75], [140, 210], [340, 174], [56, 245], [424, 245], [140, 140], [420, 100]],
-  cloister: [[240, 75], [56, 245], [424, 245], [72, 120], [416, 120], [178, 128], [290, 158], [378, 196]],
+  // Three screens tall: the well's garden and the south walk, the graves and the first gallery, the yews and the north walk.
+  cloister: [[56, 745], [424, 760], [190, 660], [300, 700], [130, 700], [340, 664], [60, 420], [300, 470], [140, 444],
+    [420, 520], [240, 540], [240, 75], [60, 160], [420, 250], [300, 196], [240, 306]],
 };
 const only = arg('only', '');
 const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
@@ -41,6 +43,12 @@ for (const layout of Object.keys(WAITS).filter((l) => !only || l === only)) {
       const s = window.game.scene.getScene('room');
       s.hero.body.reset(x, y);
       s.health = 999; // the hero must survive the wait
+      // The first wave rises again with him there (a tall room's, in the part he waits in): a slow first frame may have
+      // let its timer beat this reset.
+      s.time.removeAllEvents();
+      s.enemies.clear(true, true);
+      s.wave = 0;
+      s.spawnWave();
     }, [x, y]);
   };
   console.log(`--- ${layout}`);

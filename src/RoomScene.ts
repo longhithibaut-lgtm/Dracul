@@ -75,6 +75,7 @@ export class RoomScene extends Phaser.Scene {
   private glyphReadyAt = 0;
   private castUntil = 0; // the hero's cast pose
   private nestAt = Infinity; // Glyphe du nid: when the glyph arms and lets its rats out
+  private waveDue = false; // a tall room's next wave, waiting for the hero to climb into its part
 
   constructor() {
     super('room');
@@ -108,6 +109,7 @@ export class RoomScene extends Phaser.Scene {
     this.glyph = undefined; // the last scene's is ended on its shutdown
     this.glyphReadyAt = this.castUntil = 0;
     this.nestAt = Infinity;
+    this.waveDue = false;
   }
 
   create() {
@@ -121,6 +123,8 @@ export class RoomScene extends Phaser.Scene {
 
     const start = this.phase === 'enter' ? this.room.stairs : this.room.heroStart;
     this.hero = (Training.opts.wanderer ? Wanderer : Hero).create(this, start.x, start.y);
+    // A room taller than the screen (the cloister): the camera climbs with the hero, smoothly, kept inside the room.
+    if (this.room.height > T.height) this.cameras.main.setBounds(0, 0, T.width, this.room.height).startFollow(this.hero, true, 1, 0.08);
     this.hero.setCollideWorldBounds(this.phase !== 'enter');
     this.enemies = this.physics.add.group();
     // Pits stop walkers (the mist too) but not what flies: bolts and shards only stop on obstacles (boltReach).
@@ -141,14 +145,16 @@ export class RoomScene extends Phaser.Scene {
     this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,K,F,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
     // Left click slashes, right click shoots, both toward the pointer; J and K do the same toward where he faces. F bites,
     // unaimed. While the gift cards are open, a click picks one.
+    // The cards sit on the screen, the rest in the room under the camera.
+    const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.cards) return this.pick(this.cards.at(p.worldX, p.worldY));
-      const a = Math.atan2(p.worldY - this.hero.y, p.worldX - this.hero.x);
+      if (this.cards) return this.pick(this.cards.at(p.x, p.y));
+      const w = world(p), a = Math.atan2(w.y - this.hero.y, w.x - this.hero.x);
       if (p.button === 0) this.press(() => this.slash(a));
       else if (p.button === 2) this.press(() => this.shoot(a));
     });
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.worldX, p.worldY)));
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.x, p.y)));
     this.keys.J.on('down', () => { const a = this.facing; this.press(() => this.slash(a)); });
     this.keys.K.on('down', () => { const a = this.facing; this.press(() => this.shoot(a)); });
     this.keys.F.on('down', () => this.press(() => this.bite()));
@@ -156,7 +162,7 @@ export class RoomScene extends Phaser.Scene {
     for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashPressedAt = this.time.now));
     // Le Glyphe: E casts it at the pointer, L ahead of the hero (keyboard only).
     this.input.keyboard!.on('keydown-E', () => {
-      const to = { x: this.input.activePointer.worldX, y: this.input.activePointer.worldY };
+      const to = world(this.input.activePointer);
       this.press(() => this.cast(to));
     });
     const castAhead = () => {
@@ -189,8 +195,9 @@ export class RoomScene extends Phaser.Scene {
         gifts: this.gifts,
         spawn: (k) => {
           if (k === 'lantern') return void this.addLantern();
-          // Each call takes the next spawn point not on top of the hero, so two calls never stack two enemies.
-          const free = this.room.spawns.filter((p) => Phaser.Math.Distance.BetweenPoints(p, this.hero) > 50);
+          // Each call takes the next spawn point on screen and not on top of the hero, so two calls never stack two enemies.
+          const view = this.cameras.main.worldView;
+          const free = this.room.spawns.filter((p) => view.contains(p.x, p.y) && Phaser.Math.Distance.BetweenPoints(p, this.hero) > 50);
           const p = free[calls++ % free.length] ?? this.room.spawns[0];
           this.spawn(p, k === 'ghoul' ? 'ghoul' : 'crossbow', k === 'weak' ? T.bite.weakAt : undefined);
         },
@@ -282,21 +289,26 @@ export class RoomScene extends Phaser.Scene {
       this.phase = 'fight';
       this.hero.setCollideWorldBounds(true);
     }
+    if (this.waveDue) this.spawnWave();
     if (this.phase === 'gift' && this.pickup?.ready && Phaser.Math.Distance.BetweenPoints(feet.center, this.pickup) < 10) this.openGifts();
     if (this.phase === 'exit' && time >= this.gateUpAt && feet.top <= this.room.bounds.top + 1 && Math.abs(feet.center.x - this.room.gate.x) < 14) this.leave();
 
     // Holy light (a lantern's pool, the chapel's stained glass, the Dawn): free for a grace on stepping in, then it burns
-    // on a steady beat until he steps out (or mists through); the room's own light at its own pace.
+    // on a steady beat until he steps out (or mists through); the room's own light at its own pace. The Dawn's grace is
+    // long, so the danger is shown building up all through it.
     const c = this.hero.body!.center, lamp = this.lanterns.some((l) => Lantern.lights(l, c));
+    let dawn = false;
     if (lamp || this.room.holy(c.x, c.y)) {
       const L = lamp ? T.lantern : this.room.burn, before = burnsAfter(this.litMs, L.graceMs, L.burnEveryMs);
       this.litMs += delta;
-      Lantern.sizzle(this, this.hero);
+      dawn = L === T.dawn;
+      if (!dawn) Lantern.sizzle(this, this.hero);
       if (burnsAfter(this.litMs, L.graceMs, L.burnEveryMs) > before && this.damageHero(L.damage)) {
         Lantern.sizzle(this, this.hero, true);
         Sfx.play(this, 'burn');
       }
     } else this.litMs = 0;
+    Lantern.exposure(this, this.hero, dawn ? this.litMs : 0, T.dawn.graceMs, T.dawn.burnEveryMs);
 
     const held: Sprite[] = []; // bound by the glyph this frame
     for (const e of this.enemies.getChildren() as Sprite[]) {
@@ -425,8 +437,9 @@ export class RoomScene extends Phaser.Scene {
       return;
     }
     const others = (this.enemies.getChildren() as Sprite[]).filter((o) => o !== e && o.body?.enable);
-    // Fair shots: one crossbowman aims at a time, never with its last bolt still flying, and only along a clear line.
-    if (time >= e.getData('readyAt') && !e.getData('bolt')?.active && dist >= C.minShot && dist <= C.maxShot
+    // Fair shots: one crossbowman aims at a time, never with its last bolt still flying, only along a clear line, and
+    // never from off the screen (a tall room).
+    if (time >= e.getData('readyAt') && !e.getData('bolt')?.active && dist >= C.minShot && dist <= C.maxShot && this.cameras.main.worldView.contains(from.x, from.y)
       && !others.some((o) => o.getData('state') === 'aim') && this.boltReach(from, toHero) >= dist) {
       e.setVelocity(0).setData({ state: 'aim', fireAt: time + C.aimMs, facing: toHero, reach: dist });
       Sfx.play(this, 'aim', (C.aimMs - C.lockMs) / 1000);
@@ -795,9 +808,9 @@ export class RoomScene extends Phaser.Scene {
     this.lanterns.splice(this.lanterns.indexOf(l), 1);
   }
 
-  /** The Order plants a lantern on the free spot nearest the hero that leaves him out of its light. */
-  private addLantern() {
-    const L = T.lantern, p = pickSpot(this.room.spots, this.hero.body!.center, this.lanterns, L.radius, L.radius * L.squash, L.clear);
+  /** The Order plants a lantern on the free spot (of `spots`) nearest the hero that leaves him out of its light. */
+  private addLantern(spots = this.room.spots) {
+    const L = T.lantern, p = pickSpot(spots, this.hero.body!.center, this.lanterns, L.radius, L.radius * L.squash, L.clear);
     if (!p) return;
     const l = Lantern.create(this, this.room.obstacles, p.x, p.y, L.telegraphMs);
     this.lanterns.push(l);
@@ -829,14 +842,25 @@ export class RoomScene extends Phaser.Scene {
     return true;
   }
 
+  /** The part of the room a feet line `y` is in (the hero's by default): 0 at the bottom, one more past each line. */
+  private section(y = this.hero.body!.bottom) {
+    return this.room.sections.filter((l) => y < l).length;
+  }
+
   private spawnWave() {
     if (this.dead) return;
+    // A tall room's waves follow the hero up: the next one waits until he has climbed into its part, then rises from
+    // the spawn points of the part he is in, and its lanterns are counted and planted there.
+    const part = this.section(), here = (p: { y: number }) => this.section(p.y) === part;
+    this.waveDue = part < Math.min(this.wave - (this.roomNo - 1) * T.run.wavesPerRoom, this.room.sections.length);
+    if (this.waveDue) return;
+    const spawns = this.room.spawns.filter((p) => here({ y: p.y + 8 })); // sprite position -> feet
     // From the second wave the Order joins in: crossbowmen (one, then two) take the spawn points farthest from the hero.
     const far = (p: { x: number; y: number }) => Phaser.Math.Distance.BetweenPoints(p, this.hero);
-    const bows = [...this.room.spawns].sort((a, b) => far(b) - far(a)).slice(0, Math.min(2, ++this.wave - 1));
+    const bows = [...spawns].sort((a, b) => far(b) - far(a)).slice(0, Math.min(2, ++this.wave - 1));
     const lanterns = this.wave >= T.lantern.twoFromWave ? 2 : this.wave >= T.lantern.fromWave ? 1 : 0;
-    while (this.lanterns.length < lanterns && this.addLantern());
-    for (const p of this.room.spawns) this.spawn(p, bows.includes(p) ? 'crossbow' : 'ghoul');
+    while (this.lanterns.filter(here).length < lanterns && this.addLantern(this.room.spots.filter(here)));
+    for (const p of spawns) this.spawn(p, bows.includes(p) ? 'crossbow' : 'ghoul');
   }
 
   /** An enemy rises at `p` after its telegraph: a ghoul, or a crossbowman of the Order (`hp` to start it weakened). */

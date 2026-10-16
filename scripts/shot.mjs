@@ -7,8 +7,10 @@
 // (full frame, the room cleared and the three gift cards open, TIR, GLYPHE and TALENT, the second hovered), gate.png
 // (the portcullis up), training.png (full frame: the training room, its panel, enemies called in from it), tir.png
 // (the hero mid-throw, a plagued shard of blood in flight toward a ghoul) and glyph.png (the glyph cast with E at the
-// pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png, rooms-ossuary.png, rooms-chapel.png and rooms-cloister.png (each
-// room layout, full frame, empty).
+// pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png, rooms-ossuary.png and
+// rooms-chapel.png (each room layout, full frame, empty), rooms-cloister-1.png to rooms-cloister-3.png (the cloister is
+// three screens tall: from the stairs up to the church door) and dawn.png (the hero standing in the cloister's Eternal
+// Dawn, the danger building before the first burn: smoke, glow, gauge).
 // Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -328,23 +330,47 @@ if (training) {
   await freeze(false);
 }
 
-// Every room layout, full frame and empty: as a run's room 1, its first wave called off.
+// Every room layout, full frame and empty: as a run's room 1, its first wave called off. The camera is moved up the
+// tall cloister, a screen at a time.
 const layouts = [];
 for (const id of ['hall', 'nave', 'ossuary', 'chapel', 'cloister']) {
   await page.evaluate((layout) => window.game.scene.getScene('room').scene.restart({ layout }), id);
   await page.waitForFunction((id) => { const s = window.game.scene.getScene('room'); return s.layout === id && !s.training; }, id);
   await page.evaluate(() => window.game.scene.getScene('room').time.removeAllEvents()); // no wave: the room empty
   await page.waitForTimeout(400);
-  await freeze(true);
-  if (await page.evaluate((id) => window.game.scene.getScene('room').layout === id && !document.querySelector('#training'), id)) {
-    await shot(`rooms-${id}`);
-    layouts.push(id);
+  if (!(await page.evaluate((id) => window.game.scene.getScene('room').layout === id && !document.querySelector('#training'), id))) continue;
+  const screens = await page.evaluate(() => window.game.scene.getScene('room').room.height / 270);
+  for (let i = 0; i < screens; i++) {
+    await page.evaluate((y) => { const c = window.game.scene.getScene('room').cameras.main; c.stopFollow(); c.setScroll(0, y); }, (screens - 1 - i) * 270);
+    await page.waitForTimeout(100);
+    await freeze(true);
+    await shot(screens > 1 ? `rooms-${id}-${i + 1}` : `rooms-${id}`);
+    await freeze(false);
   }
-  await freeze(false);
+  layouts.push(id);
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; rooms: ${layouts.join(', ') || 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
+// The Eternal Dawn over the cloister: the hero stands in it, 1.8 s into its 2.5 s grace.
+let dawn = false;
+if (layouts.at(-1) === 'cloister') {
+  const at = { x: 330, y: 470 }; // the graves' garden, in the light
+  if (await page.evaluate(({ x, y }) => {
+    const s = window.game.scene.getScene('room');
+    s.hero.body.reset(x, y);
+    s.cameras.main.setScroll(0, y - 135);
+    s.litMs = 0;
+    return s.room.holy(x, y + 8);
+  }, at)) {
+    await page.waitForFunction(() => window.game.scene.getScene('room').litMs > 1800);
+    await freeze(true);
+    await shot('dawn', clip(at.x, 135 - 6, 240, 200));
+    await freeze(false);
+    dawn = true;
+  }
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; rooms: ${layouts.join(', ') || 'NO'}; dawn: ${dawn ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !tir || !glyph || layouts.length < 3 ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !tir || !glyph || layouts.length < 3 || !dawn ? 1 : 0);

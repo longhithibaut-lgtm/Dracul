@@ -37,7 +37,7 @@ const KNOBS = [
   ['Glyphe : rayon', 'glyph', 'radius', 15, 60, 1],
   ['Glyphe : durée (ms)', 'glyph', 'holdMs', 500, 6000, 100],
   ['Glyphe : recharge (ms)', 'glyph', 'cooldownMs', 0, 10000, 250],
-  ['Aube (cloître) : grâce avant de brûler (ms)', 'dawn', 'graceMs', 0, 2000, 50],
+  ['Aube (cloître) : grâce avant de brûler (ms)', 'dawn', 'graceMs', 0, 5000, 100],
   ['Aube (cloître) : une brûlure toutes les (ms)', 'dawn', 'burnEveryMs', 300, 3000, 50],
 ] as const;
 

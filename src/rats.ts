@@ -187,6 +187,7 @@ export function cards(scene: Scene, ids: GiftId[], held: readonly GiftId[]): Car
   const keys = ids.map((_, i) => i + 1).join(', ');
   const hint = scene.add.image(T.width / 2, y + h + 6, Font.bake(scene, [`${keys} ou clic`], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
   const all = [dim, crest, head, ...imgs, hint];
+  all.forEach((o) => o.setScrollFactor(0)); // on the screen, wherever the camera is in a tall room
   scene.tweens.add({ targets: dim, alpha: { from: 0, to: dim.alpha }, duration: 160 });
   scene.tweens.add({ targets: [crest, head, hint], alpha: { from: 0, to: 1 }, duration: 160 });
   imgs.forEach((im, i) => scene.tweens.add({ targets: im, y: { from: y + 10, to: y }, alpha: { from: 0, to: 1 }, delay: 60 * i, duration: 180, ease: 'Cubic.easeOut' }));

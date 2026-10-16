@@ -228,11 +228,11 @@ export function shatter(scene: Scene, l: Lantern, angle: number) {
   } });
 }
 
-/** The hero in holy light smokes: dark wisps and white embers rise off him; `burst` when a burn lands. */
-export function sizzle(scene: Scene, hero: Phaser.GameObjects.Sprite, burst = false) {
+/** The hero in holy light smokes: dark wisps and white embers rise off him, `n` of them; `burst` when a burn lands. */
+export function sizzle(scene: Scene, hero: Phaser.GameObjects.Sprite, burst = false, n = 2) {
   const life = burst ? 900 : 700, x = hero.x, y = hero.y;
   // Dark smoke and white embers: both read on the lit gold floor, the embers also on the dark hero.
-  const bits = Array.from({ length: burst ? 24 : 2 }, () => {
+  const bits = Array.from({ length: burst ? 24 : n }, () => {
     const ember = Math.random() < 0.5;
     return { x: Phaser.Math.Between(-5, 5), y: Phaser.Math.Between(-10, 4), rise: Phaser.Math.Between(12, burst ? 28 : 22), drift: Phaser.Math.FloatBetween(-3, 3),
       end: Phaser.Math.Between(400, life), ember, c: Phaser.Utils.Array.GetRandom(ember ? [PAL.W, PAL.W, PAL.Y] : [PAL.k, PAL.K, PAL.I]) };
@@ -244,4 +244,28 @@ export function sizzle(scene: Scene, hero: Phaser.GameObjects.Sprite, burst = fa
       g.fillStyle(b.c).fillRect(bx, by, 1, b.ember ? 2 : 1); // embers streak up
     }
   });
+}
+
+const gauges = new WeakMap<Scene, G>();
+/**
+ * The Eternal Dawn on the hero, `ms` into it (0: in the shade), free for `graceMs`, then burning every `everyMs`. The
+ * danger builds where the eye already is: smoke then embers thicken off him, his body glows hotter and hotter, and a
+ * gauge over his head fills from bronze to white-hot; once it burns, the gauge beats red on each burn's rhythm.
+ */
+export function exposure(scene: Scene, hero: Phaser.GameObjects.Sprite, ms: number, graceMs: number, everyMs: number) {
+  let g = gauges.get(scene);
+  if (!g?.active) gauges.set(scene, (g = scene.add.graphics().setDepth(ABOVE)));
+  g.clear();
+  if (ms <= 0) return;
+  const k = Math.min(1, ms / graceMs), burning = ms >= graceMs, beat = burning ? ((ms - graceMs) % everyMs) / everyMs : 0;
+  if (Math.random() < 0.2 + 0.8 * k) sizzle(scene, hero, false, burning ? 4 : 1 + Math.round(2 * k));
+  // The glow creeps on (an added tint, so the hurt flash, a fill tint, keeps the upper hand).
+  if (!hero.isTinted) hero.setTint(Phaser.Display.Color.GetColor(Math.round(170 * k ** 1.5), Math.round(80 * k ** 1.5), Math.round(20 * k ** 1.5)))
+    .setTintMode(Phaser.TintModes.ADD);
+  const x = Math.round(hero.x) - 7, y = Math.round(hero.y) - 24, w = burning ? 13 : Math.round(13 * k);
+  const fill = burning ? (beat > 0.8 && Math.floor(ms / 60) % 2 ? PAL.W : 0xe0284a) : k > 0.85 && Math.floor(ms / 80) % 2 ? PAL.W : k > 0.6 ? PAL.Y : PAL.G;
+  g.fillStyle(PAL['0']).fillRect(x - 1, y - 1, 15, 4);
+  g.fillStyle(PAL.k).fillRect(x, y, 13, 2);
+  g.fillStyle(fill).fillRect(x, y, w, 2);
+  g.fillStyle(PAL.W, 0.6).fillRect(x, y, w, 1);
 }

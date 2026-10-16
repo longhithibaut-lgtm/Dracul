@@ -16,6 +16,8 @@ export type Room = {
   holy(x: number, y: number): boolean; // a floor point in holy light that never goes out (stained glass, the open sky)
   burn: { graceMs: number; burnEveryMs: number; damage: number }; // how that light burns: like a lantern, or the Dawn's
   arcades: Phaser.GameObjects.Image[]; // the cloister's: their bottom row is their feet line; see through one from behind
+  height: number; // of the whole room: one screen, or the cloister's three (the camera follows the hero up it)
+  sections: number[]; // feet lines the hero climbs past into the room's next part, bottom first (none: one part)
 };
 
 // Crypt rooms seen in HLD's three-quarter view, all one shell: a back wall with lancets, ossuaries and a portcullis
@@ -636,26 +638,49 @@ type Layout = {
   heroStart: P; spawns: P[]; spots: P[];
   gift?: P; // where the gift rises, if not on the medallion
   windows?: P[]; // tips of the stained-glass panes of holy light on the floor, see pane()
-  open?: true; // under the sky: painted by paintCloister, lit by the Dawn (the fields above about the crypt go unused)
+  open?: true; // under the sky: painted by paintCloister, lit by the Dawn, three screens tall (the crypt's fields above go unused)
+  sections?: number[]; // see Room
   decor(p: Px): void; // wear, gore, bones on the floor, before the props cast their shadows
 };
 const NAVE_ROSETTE = 0.6;
 
-// The cloister, in floor coordinates (x, y on the floor, h up from it). Two covered walks, north and south, behind
-// arcades of round arches on paired colonnettes; between them the garth, open to the sky, crossed by two gravel paths
-// that meet at a roofed well.
-const ARC = { n: 100, s: 220, d: 6, spring: 16, r: 16, top: 36, eave: 42 }; // feet lines, wall depth, arches, roof
+// The cloister, in floor coordinates (x, y on the floor, h up from it): a long garth open to the sky, three screens
+// tall, climbed from the stairs at the bottom to the church door at the top. Covered walks behind arcades of round
+// arches on paired colonnettes run across it: the north walk along the church, two cross galleries that cut the garth
+// in three gardens, and the south walk the stairs come up into. The well's garden, the monks' graves under their
+// cypresses, the great yews before the church.
+const CH = 3 * T.height, CFY1 = CH - 14; // the cloister's height, its floor's front edge
+// Feet lines, wall depth, arches, roof; walk: how deep a cross gallery's covered walk runs behind its arcade.
+const ARC = { n: 100, s: CFY1 - 36, d: 6, spring: 16, r: 16, top: 36, eave: 42, walk: 30 };
+const CROSS = [560, 330]; // the cross galleries' south feet lines, bottom first: each a walk between two arcades
+const ARCADES = [ARC.n, ...CROSS.flatMap((c) => [c - ARC.walk + ARC.d, c]), ARC.s]; // every arcade's feet line
+/** True under a walk's roof: the north and south walks, and the cross galleries'. */
+const roofed = (y: number) => y < ARC.n || y >= ARC.s - ARC.d || CROSS.some((c) => y >= c - ARC.walk && y < c);
 const BAYS = Array.from({ length: 9 }, (_, k) => 80 + k * 40); // centres of the openings, 32 px wide between piers
-const WELL = { x: CX, y: 158 };
+const WELL = { x: CX, y: 662 };
 type Tree = { x: number; y: number; rx: number; ry: number; rh: number; h: number; seed: number }; // trunk foot, canopy
+const yew = (x: number, y: number, r: number, seed: number): Tree => ({ x, y, rx: r, ry: r * 0.66, rh: r * 0.7, h: r * 1.4, seed });
+const cypress = (x: number, y: number, seed: number, tall = 0): Tree => ({ x, y, rx: 7, ry: 6, rh: 26 + tall, h: 33 + tall, seed });
 const TREES: Tree[] = [
-  { x: 120, y: 134, rx: 21, ry: 14, rh: 15, h: 30, seed: 1 }, // yews
-  { x: 352, y: 194, rx: 18, ry: 12, rh: 14, h: 27, seed: 2 },
-  { x: 306, y: 124, rx: 7, ry: 6, rh: 27, h: 34, seed: 3 }, // cypresses
-  { x: 92, y: 196, rx: 7, ry: 6, rh: 25, h: 32, seed: 4 },
+  // The well's garden.
+  yew(110, 616, 24, 1), yew(358, 712, 22, 2), yew(392, 604, 20, 3), cypress(298, 618, 4), cypress(80, 716, 5), cypress(196, 700, 6, -4),
+  yew(96, 668, 18, 7), yew(372, 662, 18, 8), yew(276, 708, 16, 9), yew(150, 722, 16, 50),
+  // The monks' graves, along an avenue of cypresses.
+  ...[382, 440, 498].flatMap((y, i) => [cypress(CX - 32, y, 10 + i, 6), cypress(CX + 32, y, 20 + i, 6)]),
+  yew(84, 354, 22, 30), yew(396, 358, 20, 31), yew(82, 512, 20, 32), yew(394, 508, 22, 33), yew(118, 430, 20, 34), yew(366, 430, 20, 35),
+  yew(306, 372, 16, 36), yew(176, 486, 16, 37),
+  // The great yews before the church.
+  yew(CX - 82, 158, 30, 40), yew(CX + 86, 146, 26, 41), yew(CX - 92, 246, 26, 42), yew(CX + 106, 240, 30, 43),
+  yew(272, 212, 18, 44), yew(96, 186, 18, 45), yew(390, 195, 18, 46), yew(200, 270, 20, 47), yew(262, 136, 18, 48),
 ];
-// Low box hedges along the cross path: walkers go round them, shots fly over.
-const HEDGES: Box[] = [{ x: 150, y: 140, w: 56, h: 8 }, { x: 274, y: 140, w: 56, h: 8 }, { x: 150, y: 174, w: 56, h: 8 }, { x: 274, y: 174, w: 56, h: 8 }];
+// Monks' graves: a low mound with a stone cross at its head (the cross's foot here).
+const GRAVES = [76, 116, 156, 324, 364, 404].flatMap((x) => [400, 456].map((y) => ({ x, y: y + (x % 3) * 2 })));
+// Low box hedges round the well's cross path and the beds before the church: walkers go round them, shots fly over.
+// Their ends sit 2 px off where a walk-grid cell's ghoul would just touch them (a ghoul steered there caught on a corner).
+const HEDGES: Box[] = [
+  { x: 148, y: WELL.y - 18, w: 56, h: 8 }, { x: 276, y: WELL.y - 18, w: 56, h: 8 }, { x: 148, y: WELL.y + 16, w: 56, h: 8 }, { x: 276, y: WELL.y + 16, w: 56, h: 8 },
+  { x: 176, y: 180, w: 40, h: 8 }, { x: 264, y: 180, w: 40, h: 8 },
+];
 
 const LAYOUT: Record<LayoutId, Layout> = {
   // The validated hall: fights in the open middle, around the great medallion.
@@ -741,25 +766,31 @@ const LAYOUT: Record<LayoutId, Layout> = {
     windows: [{ x: 196, y: 118 }, { x: 262, y: 166 }, { x: 52, y: 118 }, { x: 384, y: 184 }],
     decor: chapelDecor,
   },
-  // Le cloître sous l'Aube: the garth is open to the Eternal Dawn, which burns the vampire wherever it falls; only shade
-  // protects (the covered walks, the west range's wall, the trees, the well, the hedges). The gate is the church door at
-  // the back of the north walk, the stairs come up into the south walk, and the fight goes from shade to shade.
+  // Le cloître sous l'Aube: the garth is open to the Eternal Dawn, which burns the vampire who lingers where it falls;
+  // shade protects (the covered walks, the west range's wall, the trees, the well, the hedges, the graves' crosses). The
+  // stairs come up into the south walk, the gate is the church door at the back of the north walk, three screens up.
+  // Each garden between two galleries has its wave, rising as the hero climbs into it.
   cloister: {
     props: [
-      ...[ARC.n, ARC.s].flatMap((y) => [{ x: 52, w: 24 }, ...BAYS.slice(1).map((c) => ({ x: c - 20, w: 8 })), { x: 428, w: 24 }]
+      ...ARCADES.flatMap((y) => [{ x: 52, w: 24 }, ...BAYS.slice(1).map((c) => ({ x: c - 20, w: 8 })), { x: 428, w: 24 }]
         .map((b) => ({ kind: 'block' as const, y, h: ARC.d, ...b }))),
       ...TREES.map((t) => ({ kind: 'block' as const, x: t.x, y: t.y + 2, w: 6, h: 4 })),
+      ...GRAVES.map((g) => ({ kind: 'block' as const, x: g.x, y: g.y + 2, w: 6, h: 4 })),
       { kind: 'block', x: WELL.x, y: WELL.y + 8, w: 26, h: 16 },
     ],
     pits: HEDGES,
     candles: [],
     medallion: 0, frame: false,
     pool: [CX, CY, 1, 1],
-    heroStart: { x: CX, y: 228 },
-    spawns: [{ x: 120, y: 76 }, { x: 360, y: 76 }, { x: 420, y: 176 }],
-    spots: [{ x: 180, y: 80 }, { x: 300, y: 80 }, { x: 140, y: 240 }, { x: 340, y: 240 }],
-    gift: { x: CX, y: 106 },
+    heroStart: { x: CX, y: CFY1 - 28 },
+    // A part's spawns lie a few steps ahead of the hero as he comes into it, in view.
+    spawns: [{ x: 180, y: 612 }, { x: 330, y: 610 }, { x: 420, y: 690 },
+      { x: 140, y: 500 }, { x: 340, y: 494 }, { x: CX, y: 466 },
+      { x: 140, y: 214 }, { x: 378, y: 236 }, { x: CX, y: 240 }],
+    spots: [{ x: 150, y: 118 }, { x: 330, y: 118 }, { x: 150, y: 348 }, { x: 330, y: 348 }, { x: 150, y: 578 }, { x: 330, y: 578 }, { x: 130, y: 778 }, { x: 350, y: 778 }],
+    gift: { x: CX, y: 112 },
     open: true,
+    sections: CROSS.map((c) => c - ARC.d), // into a cross gallery's walk
     decor() {},
   },
 };
@@ -1029,7 +1060,7 @@ function paintBackground(p: Px, L: Layout, bars = true) {
 
 // What stands in the cloister, as one model in floor coordinates, casts every shade the Eternal Dawn leaves: the
 // ground's look, Room.holy() and the lit and dark sides of what stands all read it.
-const SUN = { x: 0.6, y: 0.4 }; // from the upper left: a shadow runs this far right and down per pixel of height
+const SUN = { x: 1.2, y: 0.6 }; // low, from the upper left: a shadow runs this far right and down per pixel of height
 
 // Along an arcade: how far from the nearest bay's centre; true in an opening (the end walls have none).
 const bayOffset = (x: number) => x + 0.5 - BAYS[0] - 40 * Math.round((x + 0.5 - BAYS[0]) / 40);
@@ -1054,20 +1085,47 @@ function wellAt(x: number, y: number, h: number) {
   return 0;
 }
 
-const hedgeAt = (x: number, y: number, h: number) => (h < 7 && HEDGES.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) ? 8 : 0);
+const hedgeAt = (x: number, y: number, h: number) => (h < 9 && HEDGES.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) ? 8 : 0);
+
+/** A grave's stone cross, facing south: 9 its stone (a stepped base, the shaft, the arms), else 0. */
+const crossAt = (g: P, x: number, y: number, h: number) => {
+  const dx = Math.abs(x - g.x), dy = Math.abs(y - g.y);
+  return (h < 2 && dx < 3 && dy < 2) || (dy < 1 && (dx < 1 ? h < 15 : dx < 4 && h >= 9 && h < 11)) ? 9 : 0;
+};
+
+
+type Solid = (x: number, y: number, h: number) => unknown;
+let NEAR: Solid[][] | undefined; // what stands in the garth, by 16 px cell from (-64, -64), 40 cells across
+/** The trees, hedges, crosses or well whose footprint may reach the floor point: the model's rays test only those. */
+function near(x: number, y: number) {
+  if (!NEAR) {
+    const all: [Box, Solid][] = [
+      ...TREES.map((t): [Box, Solid] => [{ x: t.x - t.rx * 1.25, y: t.y - t.ry * 1.25, w: t.rx * 2.5, h: t.ry * 2.5 },
+        (x, y, h) => Math.abs(h - t.h) < t.rh * 1.25 && treeAt(t, x, y, h)]), // the canopy: its trunk casts no shade worth it
+      ...HEDGES.map((b): [Box, Solid] => [b, hedgeAt]),
+      ...GRAVES.map((g): [Box, Solid] => [{ x: g.x - 4, y: g.y - 2, w: 8, h: 4 }, (x, y, h) => crossAt(g, x, y, h)]),
+      [{ x: WELL.x - 16, y: WELL.y - 9, w: 32, h: 18 }, wellAt],
+    ];
+    NEAR = Array.from({ length: 40 * 60 }, (_, c) => {
+      const x = (c % 40) * 16 - 64, y = Math.floor(c / 40) * 16 - 64;
+      return all.filter(([b]) => b.x < x + 16 && b.x + b.w > x && b.y < y + 16 && b.y + b.h > y).map(([, s]) => s);
+    });
+  }
+  const i = Math.floor((x + 64) / 16), j = Math.floor((y + 64) / 16);
+  return i >= 0 && i < 40 && j >= 0 && j < 60 ? NEAR[j * 40 + i] : [];
+}
 
 function solid(x: number, y: number, h: number) {
-  if (x < FX0 && h < 26) return true; // the west range's wall
-  if (h >= ARC.top) { if (h < ARC.eave && (y < ARC.n || y >= ARC.s - ARC.d)) return true; } // the walks' roofs
-  else if (((y >= ARC.n - ARC.d && y < ARC.n) || (y >= ARC.s - ARC.d && y < ARC.s)) && !opening(x, h)) return true; // arcades
-  if (hedgeAt(x, y, h) || (Math.abs(x - WELL.x) < 16 && Math.abs(y - WELL.y) < 9 && wellAt(x, y, h))) return true;
-  for (const t of TREES) if (Math.abs(x - t.x) < t.rx * 1.25 && Math.abs(y - t.y) < t.ry * 1.25 && Math.abs(h - t.h) < t.rh * 1.25 && treeAt(t, x, y, h)) return true;
+  if (x < FX0 && h < 52) return true; // the west range's wall
+  if (h >= ARC.top) { if (h < ARC.eave && roofed(y)) return true; } // the walks' roofs
+  else if (ARCADES.some((a) => y >= a - ARC.d && y < a) && !opening(x, h)) return true; // arcades
+  for (const s of near(x, y)) if (s(x, y, h)) return true;
   return false;
 }
 
 /** True when nothing stands between the point and the Dawn; `from`: how far toward it to start looking. */
 function sunlit(x: number, y: number, h: number, from = 1) {
-  for (let u = from; h + u < 64; u++) if (solid(x - SUN.x * u, y - SUN.y * u, h + u)) return false;
+  for (let u = from; h + u < 72; u++) if (solid(x - SUN.x * u, y - SUN.y * u, h + u)) return false;
   return true;
 }
 
@@ -1076,11 +1134,11 @@ let SKY: Uint8Array | undefined; // the floor in the Dawn's light, 1 per pixel, 
 function dawn(x: number, y: number) {
   const W = FX1 - FX0;
   if (!SKY) {
-    SKY = new Uint8Array(W * (FY1 - FY0));
-    for (let j = 0; j < FY1 - FY0; j++) for (let i = 0; i < W; i++) SKY[j * W + i] = sunlit(FX0 + i + 0.5, FY0 + j + 0.5, 0, 0.5) ? 1 : 0;
+    SKY = new Uint8Array(W * (CFY1 - FY0));
+    for (let j = 0; j < CFY1 - FY0; j++) for (let i = 0; i < W; i++) SKY[j * W + i] = sunlit(FX0 + i + 0.5, FY0 + j + 0.5, 0, 0.5) ? 1 : 0;
   }
   x = Math.floor(x); y = Math.floor(y);
-  return x >= FX0 && x < FX1 && y >= FY0 && y < FY1 && SKY[(y - FY0) * W + x - FX0] === 1;
+  return x >= FX0 && x < FX1 && y >= FY0 && y < CFY1 && SKY[(y - FY0) * W + x - FX0] === 1;
 }
 
 /** The Dawn on a colour: it soaks the blue away and pours pale gold on. Shade: the same colour sunk in the cool night. */
@@ -1088,11 +1146,12 @@ const inSun = (c: number) => mix(mix(c, 0xffd75e, 0.5), 0xfff6d8, 0.3);
 const inShade = (c: number) => mix(mix(c, P.floor1, 0.55), P.void0, 0.25);
 
 /** Paints what `at` makes stand (a material per point, 0 for air) as the camera sees it, into the box x0, y0, x1, y1 of
- *  p, whose pixel (0, 0) is the screen point (ox, oy): down each pixel's line of sight, the first solid point. */
-function render(p: Px, ox: number, oy: number, at: (x: number, y: number, h: number) => number, box = [0, 0, p.w, p.h]) {
+ *  p, whose pixel (0, 0) is the screen point (ox, oy): down each pixel's line of sight, the first solid point. All of it
+ *  stands on the floor between y0 and y1 (the sight lines are only followed there). */
+function render(p: Px, ox: number, oy: number, at: (x: number, y: number, h: number) => number, box = [0, 0, p.w, p.h], y0 = -1e9, y1 = 1e9) {
   for (let j = box[1]; j < box[3]; j++)
     for (let i = box[0]; i < box[2]; i++)
-      for (let h = 64; h >= 0; h -= 0.5) {
+      for (let h = Math.min(72, Math.floor((y1 - oy - j - 0.5) * 2) / 2); h >= 0 && oy + j + 0.5 + h >= y0; h -= 0.5) {
         const x = ox + i + 0.5, y = oy + j + 0.5 + h, m = at(x, y, h);
         if (m) { p.p(i, j, standing(m, x, y, h)); break; }
       }
@@ -1105,6 +1164,7 @@ function standing(m: number, x: number, y: number, h: number) {
     case 1: return lit ? (n > 0.62 ? 0xbfb45a : n > 0.38 ? 0x7d8a3a : 0x4f6230) : n > 0.55 ? 0x183842 : 0x0f2128; // leaves
     case 2: return lit ? 0x8c5a1e : k > 0.5 ? 0x3c2418 : 0x2a1810; // bark
     case 3: { const c = h > 8 ? 0xc0b4a0 : k > 0.8 ? 0x8a7c74 : 0xa89a8c; return lit ? inSun(c) : mix(inShade(c), c, 0.3); } // rim stones
+    case 9: { const c = h < 2 ? 0x8a7c74 : k > 0.75 ? 0x9c8e86 : 0xb0a290; return lit ? inSun(c) : mix(inShade(c), c, 0.3); } // a cross
     case 4: return lit ? 0xa66a3a : 0x3c2418; // oak
     case 5: case 7: { // tiles, in rows down the slope; the west slope faces the Dawn
       const c = Math.floor(Math.abs(x - WELL.x)) % 3 === 2 ? P.wall0 : m === 5 ? P.wall2 : P.wall1;
@@ -1116,18 +1176,27 @@ function standing(m: number, x: number, y: number, h: number) {
 }
 
 /** An arcade seen from the south, its feet line at `a`: paired colonnettes, round arches of alternating pale and red
- *  voussoirs, a cornice and the edge of the walk's tiled roof. Its face is in shade; the flanks and tops the Dawn
- *  reaches are lit (the model says which). */
-function paintArcade(p: Px, a: number) {
-  const H = ARC.eave, back = a - ARC.d / 2;
+ *  voussoirs, a cornice and the edge of the walk's tiled roof, which runs `roof` rows back over it (a cross gallery's,
+ *  seen from above; one row per pixel of floor). Its face is in shade; the flanks and tops the Dawn reaches are lit (the
+ *  model says which). */
+function paintArcade(p: Px, a: number, roof = 0) {
+  const H = ARC.eave + roof, wall = a - ARC.d / 2;
   for (let j = 0; j <= H; j++)
     for (let i = 0; i < p.w; i++) {
       const x = FX0 + i, h = H - j, end = x < 64 || x >= 416;
       const o = bayOffset(x); // from the nearest bay's centre
       const lx = x + 0.5 - 60 - 40 * Math.round((x + 0.5 - 60) / 40); // from the nearest pier's centre
       const rr = Math.hypot(o, h - ARC.spring), turn = (Math.atan2(h - ARC.spring, o) / Math.PI) * 9;
-      let c = -1, top = false, flank = false;
-      if (h >= 37) { // the roof: rounded tile ends, then the tiles running back
+      let c = -1, top = false, flank = false, deep = 0; // deep: how far a gap between tiles stays dark in the light
+      if (h > ARC.eave) { // a cross gallery's gabled roof from above, `r` rows back: the long south slope, the ridge, the north slope
+        const r = h - ARC.eave, ridge = Math.round(roof * 0.7), u = (x + 600) % 6; // rows of Roman tiles, 6 px apart
+        if (r === roof) { c = P.wall0; deep = 0.5; } // the far eave
+        else if (r > ridge + 1) { c = u === 5 ? P.wall1 : mix(P.wall2, P.bone1, 0.15); deep = u === 5 ? 0.3 : 0; } // facing the Dawn
+        else if (r === ridge + 1) c = x % 8 ? mix(P.wall2, P.bone1, 0.25) : P.wall1; // ridge tiles
+        else if (r === ridge) { c = P.wall0; deep = 0.5; }
+        else { c = u === 5 ? P.wall0 : u === 0 ? P.wall2 : P.wall1; deep = u === 5 ? 0.5 : r % 4 === 0 ? 0.3 : u === 4 ? 0.15 : 0; } // courses of tiles
+        top = true;
+      } else if (h >= 37) { // the roof: rounded tile ends, then the tiles running back
         c = h < 39 ? ((x + (h === 38 ? 2 : 0)) % 4 === 0 ? P.wall0 : h === 38 ? P.wall2 : P.wall1) : (x + Math.floor(h / 2) * 2) % 4 === 0 ? P.wall1 : h % 2 ? P.wall2 : mix(P.wall1, P.wall2, 0.5);
         top = h >= 39;
       } else if (h >= 34) { c = h === 34 ? 0x7a6c66 : 0xc0b4a0; top = h === 36; } // cornice
@@ -1142,14 +1211,21 @@ function paintArcade(p: Px, a: number) {
         c = bx % 10 === 0 || h % 5 === 4 ? 0x7a6c66 : hash(Math.floor(bx / 10), Math.floor(h / 5), 7) < 0.3 ? 0x9c8e86 : 0xa89a8c;
       }
       if (c < 0) continue;
-      const lit = (top && sunlit(x + 0.5, back, h >= 37 ? ARC.eave : h + 0.5)) || (flank && sunlit(x - 0.5, back, h)); // the roof from its top
-      p.p(i, j, lit ? inSun(c) : mix(inShade(c), c, 0.3)); // the garth's glare lights the face a little
+      const lit = (top && sunlit(x + 0.5, wall - Math.max(0, h - ARC.eave), h >= 37 ? ARC.eave : h + 0.5)) || (flank && sunlit(x - 0.5, wall, h)); // the roof from its top
+      p.p(i, j, mix(lit ? inSun(c) : mix(inShade(c), c, 0.3), P.void1, deep)); // the garth's glare lights the face a little
     }
 }
 
+/** The church door, the way on: up into the church, by its candles, under the Order's sun for keystone. */
+function door(p: Px, bars: boolean) {
+  gate(p, bars, [P.void1, mix(P.void2, 0x7a4a1c, 0.5), 0xc8902a]);
+  p.rect(CX - 5, 10, 11, 8, inShade(0xa89a8c));
+  p.grid(CX - 3, 10, ['...Y...', '.Y.Y.Y.', '..YWY..', 'YYWWWYY', '..YWY..', '.Y.Y.Y.', '...Y...'], { Y: 0x8c5a1e, W: 0xc8902a });
+}
+
 /** The open-air room's background: the ranges' roofs beyond the side walls, the church's south wall with its door at
- *  the back, the walks' flagstones, the garth (two gravel paths crossing at the well, four lawns, box hedges), each in
- *  the Dawn's light or sunk in shade. */
+ *  the back, the walks' flagstones, the garth (its long path, the well's cross path, lawns, box hedges, graves), each
+ *  in the Dawn's light or sunk in shade. */
 function paintCloister(p: Px, bars: boolean) {
   // Beyond the side walls, the tiled roofs of the ranges round the cloister, in the light.
   for (let y = 0; y < p.h; y++)
@@ -1177,24 +1253,24 @@ function paintCloister(p: Px, bars: boolean) {
     p.fill(c - 10, 10, c + 10, 54, (x, y) => inArch(x, y, c, 6, 26, 10) && y < 50 && ((x + y) % 4 === 0 || (x - y + 400) % 4 === 0), P.void0);
     p.fill(c - 10, 10, c + 10, 54, (x, y) => inArch(x, y, c, 6, 26, 10) && y < 50 && y > 36 && hash(x, y, 8) > 0.9, mix(P.void1, 0x7a4a1c, 0.6));
   }
-  gate(p, bars, [P.void1, mix(P.void2, 0x7a4a1c, 0.5), 0xc8902a]); // up into the church, by its candles
-  p.rect(CX - 5, 10, 11, 8, inShade(0xa89a8c)); // the Order's sun for keystone
-  p.grid(CX - 3, 10, ['...Y...', '.Y.Y.Y.', '..YWY..', 'YYWWWYY', '..YWY..', '.Y.Y.Y.', '...Y...'], { Y: 0x8c5a1e, W: 0xc8902a });
-  // The floor: the walks' flagstones, a drip course along each arcade, gravel paths, kerbs, lawns.
+  door(p, bars);
+  // The floor: the walks' flagstones, a drip course along each arcade, gravel paths, kerbs, lawns, the monks' graves.
   const flag = (x: number, y: number, w: number, h: number) => {
     const r = Math.floor((y - FY0) / h), fx = x + (r % 2) * (w / 2), v = hash(Math.floor(fx / w), r, w);
     const c = v < 0.3 ? 0x7c7484 : v > 0.75 ? 0x9a90a0 : 0x8a8292;
     return (y - FY0) % h === 0 || fx % w === 0 ? mix(c, P.void0, 0.3) : hash(x, y, 17) < 0.04 ? mix(c, P.void0, 0.15) : c;
   };
+  const zone = (y: number) => (roofed(y) ? 2 : roofed(y - 4) || roofed(y + 4) ? 1 : 0); // a walk, its drip course, the garth
+  // One path up the whole garth from the stairs to the church door; another crosses it at the well.
   const path = (x: number, y: number) => Math.abs(x + 0.5 - CX) < 10 || Math.abs(y + 0.5 - WELL.y) < 8 || Math.hypot((x + 0.5 - CX) / 32, (y + 0.5 - WELL.y) / 20) < 1;
-  const G0 = ARC.n + 4, G1 = ARC.s - ARC.d - 4; // the garth between the drip courses
-  for (let y = FY0; y < FY1; y++)
+  for (let y = FY0; y < CFY1; y++)
     for (let x = FX0; x < FX1; x++) {
       let c: number;
-      if (y < ARC.n || y >= ARC.s - ARC.d) c = flag(x, y, 16, 16);
-      else if (y < G0 || y >= G1) c = flag(x, y, 8, 4);
+      const z = zone(y);
+      if (z === 2) c = flag(x, y, 16, 16);
+      else if (z === 1) c = flag(x, y, 8, 4);
       else if (path(x, y)) { const g = hash(x, y, 11); c = g < 0.2 ? 0x8c806e : g > 0.85 ? 0xd8ccb8 : 0xb4a690; }
-      else if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([i, j]) => path(x + i, y + j)) || y === G0 || y === G1 - 1) c = 0x7a6c66; // kerb
+      else if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([i, j]) => path(x + i, y + j)) || zone(y - 1) || zone(y + 1)) c = 0x7a6c66; // kerb
       else {
         const n = noise(x, y, 6, 12) + (hash(x, y, 13) - 0.5) * 0.25;
         c = n < 0.4 ? 0x4a5a28 : n < 0.62 ? 0x56662e : 0x627236;
@@ -1205,9 +1281,16 @@ function paintCloister(p: Px, bars: boolean) {
       }
       p.p(x, y, c);
     }
+  // Each grave a low mound of earth below its cross, lit on its upper left, in its own shadow down its lower right.
+  for (const g of GRAVES)
+    for (let y = g.y; y < g.y + 14; y++)
+      for (let x = g.x - 7; x < g.x + 7; x++) {
+        const dx = (x + 0.5 - g.x) / 6, dy = (y + 0.5 - g.y - 7) / 5.5;
+        if (Math.hypot(dx, dy) < 1) p.p(x, y, dx + dy < -0.7 ? 0x8c5a1e : dx + dy > 0.6 ? 0x3c2418 : hash(x, y, 19) < 0.15 ? 0x56662e : 0x63391f); // and a few blades of grass
+      }
   // The Dawn: everything it reaches turns pale gold, white-hot away from the shade, with a hard yellow rim on the shade's
   // edge (the holy light's steps, as under a lantern); the rest sinks into the cool night.
-  const W = FX1 - FX0, H = FY1 - FY0, d = new Uint8Array(W * H); // steps from the shade, up to 6
+  const W = FX1 - FX0, H = CFY1 - FY0, d = new Uint8Array(W * H); // steps from the shade, up to 6
   for (let i = 0; i < W * H; i++) d[i] = dawn(FX0 + (i % W), FY0 + Math.floor(i / W)) ? 6 : 0;
   for (let k = 1; k < 6; k++)
     for (let i = 0; i < W * H; i++)
@@ -1216,20 +1299,24 @@ function paintCloister(p: Px, bars: boolean) {
     const x = FX0 + (i % W), y = FY0 + Math.floor(i / W), c = p.get(x, y);
     p.p(x, y, d[i] === 0 ? inShade(c) : d[i] === 1 ? mix(inSun(c), 0xffd75e, 0.6) : d[i] < 5 ? inSun(c) : mix(inSun(c), 0xfff6d8, 0.2));
   }
-  for (const b of HEDGES) render(p, 0, 0, hedgeAt, [b.x, b.y - 8, b.x + b.w, b.y + b.h]);
+  for (const b of HEDGES) render(p, 0, 0, hedgeAt, [b.x, b.y - 10, b.x + b.w, b.y + b.h]);
 }
 
-/** What stands in the cloister, sorted with the characters: the two arcades (returned), the trees, the well. */
+/** What stands in the cloister, sorted with the characters: the arcades (returned), the trees, the well, the crosses. */
 function cloisterProps(scene: Phaser.Scene) {
-  const arcades = [ARC.n, ARC.s].map((a) =>
-    scene.add.image(FX0, a - ARC.eave, bake(scene, `room-arcade-${a}`, FX1 - FX0, ARC.eave + 1, (p) => paintArcade(p, a))).setOrigin(0).setDepth(a - 11));
-  const stand = (key: string, x0: number, y0: number, x1: number, y1: number, at: (x: number, y: number, h: number) => number) =>
-    scene.add.image(x0, y0, bake(scene, key, x1 - x0, y1 - y0, (p) => render(p, x0, y0, at))).setOrigin(0).setDepth(y1 - 11);
+  const arcades = ARCADES.map((a) => {
+    const roof = CROSS.includes(a) ? ARC.walk : 0; // a cross gallery's is seen running back over its walk
+    return scene.add.image(FX0, a - ARC.eave - roof, bake(scene, `room-arcade-${a}`, FX1 - FX0, ARC.eave + roof + 1, (p) => paintArcade(p, a, roof))).setOrigin(0).setDepth(a - 11);
+  });
+  // Each stands on the floor between its feet line and `reach` px up, which bounds the sight lines followed.
+  const stand = (key: string, x0: number, y0: number, x1: number, y1: number, reach: number, at: (x: number, y: number, h: number) => number) =>
+    scene.add.image(x0, y0, bake(scene, key, x1 - x0, y1 - y0, (p) => render(p, x0, y0, at, undefined, y1 - reach, y1))).setOrigin(0).setDepth(y1 - 11);
   for (const t of TREES) { // the canopy's ragged skin reaches out to 1.22 times its radii
     const k = 1.25;
-    stand(`room-tree-${t.seed}`, Math.floor(t.x - t.rx * k), Math.floor(t.y - (t.h + (t.rh + t.ry) * k)), Math.ceil(t.x + t.rx * k), t.y + 3, (x, y, h) => treeAt(t, x, y, h));
+    stand(`room-tree-${t.seed}`, Math.floor(t.x - t.rx * k), Math.floor(t.y - (t.h + (t.rh + t.ry) * k)), Math.ceil(t.x + t.rx * k), t.y + 3, t.ry * 2 * k + 3, (x, y, h) => treeAt(t, x, y, h));
   }
-  stand('room-well', WELL.x - 16, WELL.y - 44, WELL.x + 17, WELL.y + 9, wellAt);
+  stand('room-well', WELL.x - 16, WELL.y - 44, WELL.x + 17, WELL.y + 9, 18, wellAt);
+  GRAVES.forEach((g, i) => stand(`room-cross-${i}`, g.x - 5, g.y - 17, g.x + 5, g.y + 2, 4, (x, y, h) => crossAt(g, x, y, h)));
   return arcades;
 }
 
@@ -1528,11 +1615,16 @@ let BARS: Px;
 /** Paints the layout's room without its portcullis, and the portcullis alone as the pixels where the room painted with
  *  it differs: closed, the gate looks exactly as when it was part of the room. */
 function paintHall(scene: Phaser.Scene, id: LayoutId) {
-  const open = new Px(T.width, T.height), shut = new Px(T.width, T.height);
-  const paint = LAYOUT[id].open ? paintCloister : (p: Px, bars: boolean) => paintBackground(p, LAYOUT[id], bars);
-  paint(open, false);
-  paint(shut, true);
-  bake(scene, `room-bg-${id}`, T.width, T.height, (p) => p.d.set(open.d));
+  const L = LAYOUT[id], h = L.open ? CH : T.height, open = new Px(T.width, h), shut = new Px(T.width, h);
+  if (L.open) { // painted once (it is slow), then the shut door over a copy: nothing else touches the door's box
+    paintCloister(open, false);
+    shut.d.set(open.d);
+    door(shut, true);
+  } else {
+    paintBackground(open, L, false);
+    paintBackground(shut, L, true);
+  }
+  bake(scene, `room-bg-${id}`, T.width, h, (p) => p.d.set(open.d));
   const bars = new Px(GW, GH);
   for (let y = 0; y < GH; y++)
     for (let x = 0; x < GW; x++) if (shut.get(GX + x, GY + y) !== open.get(GX + x, GY + y)) bars.p(x, y, shut.get(GX + x, GY + y));
@@ -1581,7 +1673,7 @@ export function raiseGate(scene: Phaser.Scene, ms: number) {
 // ---------- build ----------
 
 export function build(scene: Phaser.Scene, id: LayoutId): Room {
-  const L = LAYOUT[id];
+  const L = LAYOUT[id], height = L.open ? CH : T.height, fy1 = height - T.height + FY1; // the cloister is three screens tall
   if (!BARS_OF[id]) paintHall(scene, id); // painted on the layout's first build, kept across restarts
   BARS = BARS_OF[id]!;
   scene.add.image(0, 0, `room-bg-${id}`).setOrigin(0).setDepth(-1000);
@@ -1616,13 +1708,13 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
   const pits = scene.physics.add.staticGroup();
   for (const b of L.pits) pits.add(scene.add.zone(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h));
 
-  scene.add.image(0, 0, bake(scene, `room-shaft-${id}`, T.width, T.height, (p) => paintShaft(p, L))).setOrigin(0).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
+  if (!L.open) scene.add.image(0, 0, bake(scene, `room-shaft-${id}`, T.width, T.height, (p) => paintShaft(p, L))).setOrigin(0).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
   atmosphere(scene, L);
-  scene.add.image(0, 0, bake(scene, 'room-front', T.width, T.height, paintFront)).setOrigin(0).setDepth(8500);
-  scene.add.image(0, 0, bake(scene, 'room-vignette', T.width, T.height, paintVignette)).setOrigin(0).setDepth(10_000);
+  scene.add.image(0, height - T.height, bake(scene, 'room-front', T.width, T.height, paintFront)).setOrigin(0).setDepth(8500);
+  scene.add.image(0, 0, bake(scene, 'room-vignette', T.width, T.height, paintVignette)).setOrigin(0).setDepth(10_000).setScrollFactor(0);
 
   const room: Room = {
-    bounds: new Phaser.Geom.Rectangle(FX0, FY0, FX1 - FX0, FY1 - FY0),
+    bounds: new Phaser.Geom.Rectangle(FX0, FY0, FX1 - FX0, fy1 - FY0),
     obstacles,
     pits,
     heroStart: L.heroStart,
@@ -1630,10 +1722,12 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
     spots: L.spots,
     medallion: L.gift ?? { x: CX, y: CY },
     gate: { x: CX, y: FY0 },
-    stairs: { x: CX, y: FY1 + 10 }, // feet off screen, the head showing above the steps
+    stairs: { x: CX, y: fy1 + 10 }, // feet off screen, the head showing above the steps
     holy: L.open ? dawn : (x, y) => !!L.windows && pane(L.windows, Math.floor(x), Math.floor(y)) > 0,
     burn: L.open ? T.dawn : T.lantern,
     arcades,
+    height,
+    sections: L.sections ?? [],
   };
   // Self-check: every start point is inside the room and clear of every footprint and pit (with a body's margin), and
   // so is every lantern spot.
@@ -1643,7 +1737,7 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
   for (const s of room.spots) console.assert(clear(s, 0), 'room: lantern spot blocked', id, s);
   // And the holy light leaves dark the hero's start, the gift, the lane up from the stairs to the start and the way on
   // from the gift to the gate.
-  const lane = Array.from({ length: Math.floor((FY1 - room.heroStart.y - 8) / 8) + 1 }, (_, i) => ({ x: CX, y: FY1 - i * 8 }));
+  const lane = Array.from({ length: Math.floor((fy1 - room.heroStart.y - 8) / 8) + 1 }, (_, i) => ({ x: CX, y: fy1 - i * 8 }));
   for (let y = room.medallion.y; y > FY0; y -= 4) lane.push({ x: room.gate.x, y });
   for (const s of [{ x: room.heroStart.x, y: room.heroStart.y + 8 }, room.medallion, ...lane]) console.assert(!room.holy(s.x, s.y), 'room: lit spot', id, s);
   return room;
@@ -1672,7 +1766,7 @@ function atmosphere(scene: Phaser.Scene, L: Layout) {
   const source = {
     getRandomPoint(out: Phaser.Types.Math.Vector2Like) {
       for (let i = 0; i < 20; i++) {
-        if (L.open) { pt.set(FX0 + Math.random() * (FX1 - FX0), FY0 + Math.random() * (FY1 - FY0)); if (dawn(pt.x, pt.y)) break; continue; }
+        if (L.open) { pt.set(FX0 + Math.random() * (FX1 - FX0), FY0 + Math.random() * (CFY1 - FY0)); if (dawn(pt.x, pt.y)) break; continue; }
         pt.set(L.windows ? Math.random() * 440 : 100 + Math.random() * 220, (L.windows ? 60 : 10) + Math.random() * 160);
         if (L.windows ? shaftAt(L.windows, pt.x, pt.y) > 0.3 : BEAMS.some((b) => inBeam(pt.x, pt.y, b))) break;
       }
@@ -1682,7 +1776,7 @@ function atmosphere(scene: Phaser.Scene, L: Layout) {
   scene.add.particles(0, 0, dot, {
     emitZone: { type: 'random', source } as Phaser.Types.GameObjects.Particles.EmitZoneData,
     lifespan: { min: 3000, max: 6000 }, speedX: { min: 1, max: 5 }, speedY: { min: -2, max: 4 },
-    alpha: { values: [0, 0.9, 0] }, tint: L.open ? 0xfff6d8 : L.windows ? 0xffd75e : P.moon2, frequency: 90, advance: 6000,
+    alpha: { values: [0, 0.9, 0] }, tint: L.open ? 0xfff6d8 : L.windows ? 0xffd75e : P.moon2, frequency: L.open ? 30 : 90, advance: 6000, // the cloister: three screens of it
   }).setDepth(8001).setBlendMode(Phaser.BlendModes.ADD);
   // Sparks of the abyss drifting up out of each hole, over its far edge (the cloister's pits are hedges).
   for (const b of L.open ? [] : L.pits)
