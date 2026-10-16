@@ -273,6 +273,11 @@ export class RoomScene extends Phaser.Scene {
     this.hud.glyphReady(time >= this.glyphReadyAt, this.glyphReadyAt);
 
     const feet = this.hero.body!;
+    // An arcade the hero is behind fades, so he is never lost behind it.
+    for (const a of this.room.arcades) {
+      const behind = feet.bottom > a.y && feet.bottom < a.y + a.height - 1;
+      a.setAlpha(Phaser.Math.Linear(a.alpha, behind ? 0.35 : 1, Math.min(1, delta / 100)));
+    }
     if (this.phase === 'enter' && feet.bottom < this.room.bounds.bottom - 16) {
       this.phase = 'fight';
       this.hero.setCollideWorldBounds(true);
@@ -280,11 +285,11 @@ export class RoomScene extends Phaser.Scene {
     if (this.phase === 'gift' && this.pickup?.ready && Phaser.Math.Distance.BetweenPoints(feet.center, this.pickup) < 10) this.openGifts();
     if (this.phase === 'exit' && time >= this.gateUpAt && feet.top <= this.room.bounds.top + 1 && Math.abs(feet.center.x - this.room.gate.x) < 14) this.leave();
 
-    // Holy light (a lantern's pool, the chapel's stained glass): free for a grace on stepping in, then it burns on a steady
-    // beat until he steps out (or mists through).
-    const c = this.hero.body!.center;
-    if (this.room.holy(c.x, c.y) || this.lanterns.some((l) => Lantern.lights(l, c))) {
-      const L = T.lantern, before = burnsAfter(this.litMs, L.graceMs, L.burnEveryMs);
+    // Holy light (a lantern's pool, the chapel's stained glass, the Dawn): free for a grace on stepping in, then it burns
+    // on a steady beat until he steps out (or mists through); the room's own light at its own pace.
+    const c = this.hero.body!.center, lamp = this.lanterns.some((l) => Lantern.lights(l, c));
+    if (lamp || this.room.holy(c.x, c.y)) {
+      const L = lamp ? T.lantern : this.room.burn, before = burnsAfter(this.litMs, L.graceMs, L.burnEveryMs);
       this.litMs += delta;
       Lantern.sizzle(this, this.hero);
       if (burnsAfter(this.litMs, L.graceMs, L.burnEveryMs) > before && this.damageHero(L.damage)) {
