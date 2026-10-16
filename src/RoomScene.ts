@@ -280,8 +280,10 @@ export class RoomScene extends Phaser.Scene {
     if (this.phase === 'gift' && this.pickup?.ready && Phaser.Math.Distance.BetweenPoints(feet.center, this.pickup) < 10) this.openGifts();
     if (this.phase === 'exit' && time >= this.gateUpAt && feet.top <= this.room.bounds.top + 1 && Math.abs(feet.center.x - this.room.gate.x) < 14) this.leave();
 
-    // Holy light: free for a grace on stepping in, then it burns on a steady beat until he steps out (or mists through).
-    if (this.lanterns.some((l) => Lantern.lights(l, this.hero.body!.center))) {
+    // Holy light (a lantern's pool, the chapel's stained glass): free for a grace on stepping in, then it burns on a steady
+    // beat until he steps out (or mists through).
+    const c = this.hero.body!.center;
+    if (this.room.holy(c.x, c.y) || this.lanterns.some((l) => Lantern.lights(l, c))) {
       const L = T.lantern, before = burnsAfter(this.litMs, L.graceMs, L.burnEveryMs);
       this.litMs += delta;
       Lantern.sizzle(this, this.hero);

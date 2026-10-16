@@ -7,7 +7,7 @@
 // (full frame, the room cleared and the three gift cards open, TIR, GLYPHE and TALENT, the second hovered), gate.png
 // (the portcullis up), training.png (full frame: the training room, its panel, enemies called in from it), tir.png
 // (the hero mid-throw, a plagued shard of blood in flight toward a ghoul) and glyph.png (the glyph cast with E at the
-// pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png and rooms-ossuary.png (each
+// pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png, rooms-ossuary.png and rooms-chapel.png (each
 // room layout, full frame, empty).
 // Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir } from 'node:fs/promises';
@@ -330,7 +330,7 @@ if (training) {
 
 // Every room layout, full frame and empty: as a run's room 1, its first wave called off.
 const layouts = [];
-for (const id of ['hall', 'nave', 'ossuary']) {
+for (const id of ['hall', 'nave', 'ossuary', 'chapel']) {
   await page.evaluate((layout) => window.game.scene.getScene('room').scene.restart({ layout }), id);
   await page.waitForFunction((id) => { const s = window.game.scene.getScene('room'); return s.layout === id && !s.training; }, id);
   await page.evaluate(() => window.game.scene.getScene('room').time.removeAllEvents()); // no wave: the room empty
