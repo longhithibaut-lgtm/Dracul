@@ -43,6 +43,7 @@ export class RoomScene extends Phaser.Scene {
   private navCols = 0;
   private navHero = { goal: -1, steps: [] as number[] };
   private pitBoxes: { x: number; y: number; width: number; height: number }[] = [];
+  private blockBoxes: typeof this.pitBoxes = []; // the pits' and the props': the horde walks round both
   private hud!: Hud.Hud;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private facing = Math.PI / 2;
@@ -110,7 +111,6 @@ export class RoomScene extends Phaser.Scene {
     this.navHero.goal = -1;
     this.training = !!data.training;
     this.gifts = [...(data.gifts ?? [])];
-    this.health = data.health ?? this.maxHealth();
     this.facing = Math.PI / 2; // start facing the camera
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.shotReadyAt = this.shotUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
@@ -136,7 +136,7 @@ export class RoomScene extends Phaser.Scene {
     this.level = data.level ?? 1;
     this.blood = data.blood ?? 0;
     this.ups = { ...data.ups };
-    this.health = data.health ?? this.maxHealth(); // again: the upgrades count
+    this.health = data.health ?? this.maxHealth(); // once the gifts and upgrades are known
     this.owed = this.fightMs = this.spawned = this.planted = 0;
     this.roomMs = T.horde.roomMs + (this.roomNo - 1) * T.horde.roomMsStep;
     this.bowAt = T.horde.bowFirstMs;
@@ -149,6 +149,7 @@ export class RoomScene extends Phaser.Scene {
   create() {
     // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
     this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
+    this.time.paused = false; // a restart from the level-up cards (T)
     this.physics.resume();
     this.room = Room.build(this, this.layout);
     const b = this.room.bounds;
@@ -560,6 +561,10 @@ export class RoomScene extends Phaser.Scene {
       const p = o.body as Phaser.Physics.Arcade.StaticBody;
       return { x: p.x - 6, y: p.y - 3, width: p.width + 12, height: p.height + 6 };
     });
+    this.blockBoxes = [...this.pitBoxes, ...this.room.obstacles.getChildren().map((o) => {
+      const p = o.body as Phaser.Physics.Arcade.StaticBody;
+      return { x: p.x - 6, y: p.y - 3, width: p.width + 12, height: p.height + 6 };
+    })];
   }
 
   cellOf(p: Phaser.Types.Math.Vector2Like) {
@@ -572,10 +577,10 @@ export class RoomScene extends Phaser.Scene {
     return stepsFrom(this.navOpen, this.navCols, this.cellOf(p));
   }
 
-  /** Where an enemy walks to reach the hero: straight at him, unless a pit lies across the way (`straight` false); then
-   *  toward the next cell of the shortest walk round it. */
-  private wayToHero(e: Sprite) {
-    return this.wayTo(e.body!.center, this.hero.body!.center, this.pitBoxes, this.navHero);
+  /** Where an enemy walks to reach the hero: straight at him, unless a pit (or one of `boxes`) lies across the way
+   *  (`straight` false); then toward the next cell of the shortest walk round it. */
+  private wayToHero(e: Sprite, boxes = this.pitBoxes) {
+    return this.wayTo(e.body!.center, this.hero.body!.center, boxes, this.navHero);
   }
 
   /** The same from floor point `from` to `to`, round `boxes` (grown by a walker's half size), with the walk grid's
@@ -645,8 +650,8 @@ export class RoomScene extends Phaser.Scene {
     return seen;
   }
 
-  /** A ghoul of the horde: cheap to run by the dozen. It walks straight at the hero (round the pits on the shared walk
-   *  grid, slipping along a prop it is pressed against), packmates closer than T.horde.spacing pushing it aside; in
+  /** A ghoul of the horde: cheap to run by the dozen. It walks straight at the hero (round pits and props on the shared
+   *  walk grid, slipping aside a moment when the press holds it back), packmates closer than T.horde.spacing pushing it aside; in
    *  reach it winds up, lunges a short way (the only part that hurts), recovers and rests a moment. Many may swipe at
    *  once: the horde's threat is its numbers. */
   private stepGhoul(e: Sprite, time: number, live: Sprite[]) {
@@ -669,7 +674,7 @@ export class RoomScene extends Phaser.Scene {
     const speed = H.speed + (this.roomNo - 1) * H.speedPerRoom;
     if (!b.blocked.none && b.velocity.length() < speed / 3 && time >= (e.getData('slipUntil') ?? 0)) e.setData('slipUntil', time + 250);
     const slip = time < (e.getData('slipUntil') ?? 0) ? (Math.PI / 2) * e.getData('side') : 0;
-    const v = this.physics.velocityFromRotation(this.wayToHero(e).angle + slip, speed, b.velocity), sp = H.spacing;
+    const v = this.physics.velocityFromRotation(this.wayToHero(e, this.blockBoxes).angle + slip, speed, b.velocity), sp = H.spacing;
     for (const o of live) {
       const dx = e.x - o.x, dy = e.y - o.y;
       if (o === e || dx > sp || dx < -sp || dy > sp || dy < -sp) continue;
@@ -1184,7 +1189,8 @@ export class RoomScene extends Phaser.Scene {
     }
     const rise = () => {
       if (this.dead) return;
-      const old = horde ? this.pool.pop() : undefined;
+      let old = horde ? this.pool.pop() : undefined;
+      while (old && !old.scene) old = this.pool.pop(); // one destroyed meanwhile (a group cleared) is dropped
       const e = old ? Enemy.revive(this, old, p.x, p.y) : (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
       const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0, plagueAt: 0, slipUntil: 0 };
       if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
