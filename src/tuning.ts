@@ -103,12 +103,12 @@ export const T = {
   horde: {
     roomMs: 90000, roomMsStep: 10000, // room 1 lasts this long, each next room this much longer
     first: 10, // the opening rush, at once
-    rate: 1.2, rateEnd: 4.4, // ghouls a second at the start of room 1 and at its end (rising in between)...
+    rate: 1.5, rateEnd: 6, // ghouls a second at the start of room 1 and at its end (rising in between)...
     ratePerRoom: 0.4, // ...both this much higher each next room
     max: 60, // alive at once
     hp: 1, hpPerRoom: 0.5, // weaker than the old ghouls (T.enemy.hp): one or two blows
     speed: 38, speedPerRoom: 3,
-    spacing: 13, // packmates closer than this push apart
+    spacing: 18, // packmates closer than this push apart
     // Their swipe, telegraphed like the old lunge but short: within `reach` (sprite to sprite) it stops, winds up, lunges.
     reach: 20, windupMs: 420, lungeSpeed: 170, lungeMs: 110, recoverMs: 350, restMs: 600,
     margin: 24, // they rise this far beyond the edge of the view...
@@ -120,8 +120,8 @@ export const T = {
 
   // Blood and level-ups: every kill drops blood; the bar full, the game pauses on three upgrade cards (upgrades.ts).
   level: {
-    first: 30, step: 10, // drops the first level needs, and how many more each next one
-    magnet: 44, // drops this close are pulled to the hero...
+    first: 40, step: 12, // drops the first level needs, and how many more each next one
+    magnet: 36, // drops this close are pulled to the hero...
     pull: 240, // ...at up to this speed
     ghoul: 1, bow: 5, // drops' worth
   },

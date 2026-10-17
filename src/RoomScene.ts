@@ -409,6 +409,8 @@ export class RoomScene extends Phaser.Scene {
       if (bow) Crossbow.show(e, kneeling ? 'kneel' : e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'), e.getData('hp') <= T.bite.weakAt);
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
+      // A ghoul of the horde standing in front of the hero fades, so he is never lost in the press.
+      if (e.getData('horde')) e.setAlpha(e.y > this.hero.y && e.y - this.hero.y < 26 && Math.abs(e.x - this.hero.x) < 14 ? 0.4 : 1);
     }
     // Enemies off the screen (an upright phone, the tall cloister) are pointed at from its edge, an aiming crossbowman
     // loudest; on screen, they are not marked. In the horde only the Order's: the ghouls are everywhere.
