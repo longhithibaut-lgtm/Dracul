@@ -125,16 +125,16 @@ for (const [shape, opts] of Object.entries(SHAPES).filter(([s]) => !arg('only', 
     s.hud.gifts(s.gifts);
     s.fightMs = s.roomMs;
   });
-  // The blood of the horde, all drunk at the end, may buy a level first: its cards are taken as they come.
-  const gift = () => page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.pickup?.ready || s.offerUps.length; }, null, { timeout: 8000 }).catch(() => null);
-  while (await gift() && await run(() => window.game.scene.getScene('room').offerUps.length)) {
-    await page.waitForTimeout(600);
-    await page.keyboard.press('1');
-    await page.waitForTimeout(700);
+  // The blood of the horde, all drunk at the end, may buy levels first: their cards are taken as they come.
+  for (let i = 0; i < 30; i++) {
+    const st = await run(() => { const s = window.game.scene.getScene('room'); return { gift: !!s.pickup?.ready && !s.cards, level: s.offerUps.length > 0 }; });
+    if (st.gift) break;
+    if (st.level) { await page.waitForTimeout(600); await page.keyboard.press('1'); }
+    await page.waitForTimeout(500);
   }
   if (await run(() => window.game.scene.getScene('room').pickup?.ready)) {
     await run(() => { const s = window.game.scene.getScene('room'), m = s.room.medallion; s.hero.body.reset(m.x, m.y - 8); });
-    await page.waitForFunction(() => window.game.scene.getScene('room').cards);
+    await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.cards && !s.offerUps.length; });
     await page.waitForTimeout(600);
     await shot('gifts');
   } else errors.push(`${shape}: no gift`);
