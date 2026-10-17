@@ -2,12 +2,14 @@ import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import * as Font from './font.ts';
 import { ICONS, kind, shelf, type GiftId } from './gifts.ts';
+import { edgePip } from './logic.ts';
 
 // Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
 // recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, beside them
 // the glyph's blood seal that fills back up over its cooldown, and a shelf with the icon of each gift taken (its slot,
 // or talent): slot gifts first, in slot order.
-// Also the title card of a new room ("Salle 2"), centred.
+// Also the title card of a new room ("Salle 2"), centred, and a pip on the screen's edge pointing at each enemy off it.
+// It sits in the screen's safe area (clear of a phone's notch or rounded corners) and follows the view's size.
 // Gameplay pushes values in; it never reads from here. Redrawn every frame into one Graphics, in native pixels.
 export type Hud = {
   health(current: number, max: number): void;
@@ -15,6 +17,7 @@ export type Hud = {
   glyphReady(ready: boolean, readyAt: number): void; // the same for the glyph
   gifts(held: readonly GiftId[]): void;
   title(text: string): void;
+  threats(enemies: { x: number; y: number; aim: boolean }[]): void; // on the screen's coordinates; off it, a pip points at each
 };
 
 // "Nuit de sang" palette (docs/art.md), plus the Rat house's silver and grey for the gift icons.
@@ -118,12 +121,19 @@ const SEAL = [
 ];
 const SEAL_W = 11 + 3; // with its gap from the drops
 
-const X0 = 8, Y0 = 6; // top-left corner of the HUD
+const X0 = 8, Y0 = 6; // top-left corner of the HUD, in from the safe area's
 const PITCH = 8; // drop spacing: 7 px drop + 1 px gap
 const PIPS = 3, PIP_GAP = 3; // dash pips under the drops
 const FLASH_MS = 60; // a lost drop flashes white, cracks, then bursts
 const BURST_MS = 140;
 const FILL_MS = 120; // a regained drop fills from the bottom
+// An off-screen enemy's pip, tip outward: rows of a triangle from the tip (a straight way), or a corner (a diagonal).
+const PIP = 4;
+
+// The safe area's insets in CSS pixels (env(safe-area-inset-*), 0 off phones), read off a hidden probe.
+const probe = document.createElement('div');
+probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) 0 0 env(safe-area-inset-left,0px)';
+document.body.append(probe);
 
 type Shard = { x: number; y: number; vx: number; vy: number; c: number; t0: number; life: number; size: number };
 
@@ -131,7 +141,7 @@ export function create(scene: Phaser.Scene): Hud {
   const g = scene.add.graphics();
 
   // Own camera, so the HUD never shakes, flashes or zooms with the world camera.
-  const cam = scene.cameras.add(0, 0, T.width, T.height);
+  const cam = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height); // resized with the view by Phaser
   cam.ignore(scene.children.list.filter((o) => o !== g));
   scene.cameras.main.ignore(g);
   const ignoreNew = (o: Phaser.GameObjects.GameObject) => cam.ignore(o);
@@ -143,6 +153,14 @@ export function create(scene: Phaser.Scene): Hud {
   const glyph = { ready: true, spentAt: -1e9, readyAt: -1e9, dueAt: 0 };
   // gifts: undefined until first set; fresh: the one just taken.
   let gifts: GiftId[] | undefined, fresh: GiftId | undefined, giftAt = -1e9, title = '', titleAt = -1e9;
+  let threats: { x: number; y: number; aim: boolean }[] = [];
+  // The corner, in from the safe area (native px per CSS px: the scale manager's displayScale).
+  const corner = () => {
+    const css = getComputedStyle(probe), k = scene.scale.displayScale.x;
+    return { x: X0 + Math.ceil(parseFloat(css.paddingLeft) * k || 0), y: Y0 + Math.ceil(parseFloat(css.paddingTop) * k || 0) };
+  };
+  let at = corner();
+  const place = () => (at = corner());
 
   // Draws a pixel grid, one rectangle per horizontal run, rows from `fromRow` down.
   const grid = (x: number, y: number, rows: string[], px: Record<string, number>, fromRow = 0) => {
@@ -163,7 +181,7 @@ export function create(scene: Phaser.Scene): Hud {
     const now = scene.time.now;
     g.clear();
     const sinceHit = now - hitAt;
-    const x0 = X0 + (sinceHit < 160 ? [1, -1, 1, -1][Math.floor(sinceHit / 40)] : 0), y0 = Y0;
+    const x0 = at.x + (sinceHit < 160 ? [1, -1, 1, -1][Math.floor(sinceHit / 40)] : 0), y0 = at.y;
 
     const row = max * PITCH - 1; // width of the drop row, shared by the pip row
     const lintel = row + 24 + SEAL_W; // banner, then the tile (drops, the seal) with 2 px padding
@@ -243,7 +261,7 @@ export function create(scene: Phaser.Scene): Hud {
     const tt = now - titleAt, out = T.run.titleMs - 200;
     if (tt < T.run.titleMs) {
       const a = tt < out ? 1 : 1 - Math.ceil((tt - out) / 67) / 3, w = Font.width(title, 2);
-      const x = Math.round((T.width - w) / 2), y = 112;
+      const x = Math.round((scene.scale.width - w) / 2), y = Math.round(scene.scale.height / 2) - 23;
       for (const side of [-1, 1]) {
         const rx = side < 0 ? x - 46 : x + w + 8;
         g.fillStyle(C.blood[1], a).fillRect(rx, y + 5, 38, 1);
@@ -254,11 +272,28 @@ export function create(scene: Phaser.Scene): Hud {
         Font.draw(title, x + d, y + d, (px, py) => g.fillRect(px, py, 1, 1), 2);
       }
     }
+
+    // Enemies off the screen: a small triangle on its edge points at each, blood red; one aiming its crossbow blinks
+    // rose and white. Outlined in the void, so it reads on any floor.
+    for (const e of threats) {
+      const p = edgePip(e.x, e.y, scene.scale.width, scene.scale.height, PIP + 2);
+      if (!p) continue;
+      const tx = p.x + p.dx * PIP, ty = p.y + p.dy * PIP, cells: [number, number][] = [];
+      for (let a = 0; a <= PIP; a++)
+        for (let c = -a; c <= a; c++)
+          if (!p.dx || !p.dy) cells.push(p.dx ? [tx - p.dx * a, ty + c] : [tx + c, ty - p.dy * a]);
+          else if (c >= 0 && a - c <= PIP - 1) cells.push([tx - p.dx * c, ty - p.dy * (a - c)]);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const [x, y] of cells) g.fillStyle(C.void).fillRect(x + dx, y + dy, 1, 1);
+      g.fillStyle(e.aim ? (Math.floor(now / 90) % 2 ? C.glow : C.bone) : C.blood[2]);
+      for (const [x, y] of cells) g.fillRect(x, y, 1, 1);
+    }
   };
 
   scene.events.on(Phaser.Scenes.Events.ADDED_TO_SCENE, ignoreNew);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, draw);
+  scene.scale.on(Phaser.Scale.Events.RESIZE, place);
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    scene.scale.off(Phaser.Scale.Events.RESIZE, place);
     scene.events.off(Phaser.Scenes.Events.ADDED_TO_SCENE, ignoreNew);
     scene.events.off(Phaser.Scenes.Events.POST_UPDATE, draw);
   });
@@ -271,7 +306,7 @@ export function create(scene: Phaser.Scene): Hud {
       for (let i = current; i < hp; i++) {
         changedAt[i] = now;
         hitAt = now;
-        const x = X0 + 22 + i * PITCH, y = Y0 + 5;
+        const x = at.x + 22 + i * PITCH, y = at.y + 5;
         for (let k = 0; k < 9; k++) {
           shards.push({
             x: x + 1 + (k % 5), y: y + 6 + (k % 3), vx: (Math.random() - 0.5) * 30, vy: Math.random() * 30,
@@ -304,6 +339,9 @@ export function create(scene: Phaser.Scene): Hud {
     title(t) {
       title = t;
       titleAt = scene.time.now;
+    },
+    threats(list) {
+      threats = list;
     },
   };
 }

@@ -1,17 +1,25 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
+import { viewSize } from './logic.ts';
 import { RoomScene } from './RoomScene.ts';
 
+// The view follows the screen's shape, in native pixels: a 480x270 box along its long side (exactly 480x270 on 16:9,
+// x4 on 1080p), the other side grown to fill it, upright too. ENVELOP covers the screen, cropping the rounding's
+// fraction of a pixel, so there are never bars; nearest-neighbour scaling (pixelArt) keeps the pixels sharp.
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  width: T.width,
-  height: T.height,
-  pixelArt: true, // nearest-neighbour scaling: native 480x270 shown at x2/x3/x4
+  ...viewSize(innerWidth, innerHeight, T.width, T.height),
+  pixelArt: true,
   backgroundColor: '#000000',
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  scale: { mode: Phaser.Scale.ENVELOP, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 } } },
   parent: 'game', // falls back to <body> when there is no #game element
   scene: [RoomScene],
+});
+// Live, on a resize or a turn of the phone; the scene re-frames itself on the same event (RoomScene.frame).
+game.scale.on(Phaser.Scale.Events.RESIZE, () => {
+  const { width, height } = game.scale.parentSize, v = viewSize(width, height, T.width, T.height);
+  if (width && height && (v.width !== game.scale.width || v.height !== game.scale.height)) game.scale.setGameSize(v.width, v.height);
 });
 
 // The installable app (public/manifest.webmanifest) needs a service worker; pages that may not register one (a framed

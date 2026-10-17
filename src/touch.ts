@@ -1,5 +1,7 @@
 // On-screen controls for touch screens, as DOM over the canvas: a stick on the left to move, action buttons on the
-// right. Only on coarse pointers (phones, tablets), so a laptop keeps its keyboard and mouse.
+// right, Plein écran and Entraînement at the top right, clear of the HUD. The same thumb arc held sideways or upright
+// (the stick a little smaller upright, to leave the buttons room). Only on coarse pointers (phones, tablets), so a
+// laptop keeps its keyboard and mouse.
 
 /** The stick's tilt, each axis in [-1, 1]; 0 when released or inside the dead zone. */
 export const stick = { x: 0, y: 0 };
@@ -25,8 +27,10 @@ const CSS = `
 #touch .knob{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px;border-radius:50%;background:#5a446899;border:2px solid #8a6f8f}
 #touch button{border-radius:50%;border:2px solid #8a6f8f;background:#2e1838aa;color:inherit;font:inherit;padding:0}
 #touch button[data-a="slash"]{background:#5c0a1cbb;border-color:#e0284a}
-#touch button[data-a="training"],#touch button[data-a="full"]{border-radius:6px;padding:6px 10px;font-size:12px}
-#touch button.on{background:#e0284acc}`;
+#touch .top{position:absolute;display:flex;gap:8px;right:calc(12px + env(safe-area-inset-right,0px));top:calc(12px + env(safe-area-inset-top,0px))}
+#touch .top button{position:static;border-radius:6px;padding:6px 10px;font-size:12px}
+#touch button.on{background:#e0284acc}
+@media (orientation:portrait){#touch .pad{left:calc(12px + env(safe-area-inset-left,0px));width:128px;height:128px}}`;
 
 export function controls(act: (a: Action) => void): () => void {
   if (!matchMedia('(pointer: coarse)').matches) return () => {};
@@ -35,8 +39,7 @@ export function controls(act: (a: Action) => void): () => void {
   const inset = (side: 'right' | 'bottom', px: number) => `${side}:calc(${px}px + env(safe-area-inset-${side},0px))`;
   root.innerHTML = `<style>${CSS}</style><div class="pad" aria-label="Déplacement"><div class="knob"></div></div>${BUTTONS.map(([a, label, size, r, b]) =>
     `<button type="button" data-a="${a}" style="width:${size}px;height:${size}px;${inset('right', r)};${inset('bottom', b)}">${label}</button>`).join('')}
-    <button type="button" data-a="training" style="${inset('right', 12)};top:calc(12px + env(safe-area-inset-top,0px))">Entraînement</button>
-    <button type="button" data-a="full" style="left:calc(12px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px))">Plein écran</button>`;
+    <div class="top"><button type="button" data-a="full">Plein écran</button><button type="button" data-a="training">Entraînement</button></div>`;
 
   // The stick follows one finger, from wherever it lands on the pad.
   const pad = root.querySelector<HTMLElement>('.pad')!, knob = root.querySelector<HTMLElement>('.knob')!;
@@ -67,9 +70,7 @@ export function controls(act: (a: Action) => void): () => void {
   for (const b of root.querySelectorAll<HTMLButtonElement>('button')) {
     const a = b.dataset.a as Action | 'full';
     if (a === 'full') {
-      b.addEventListener('click', () => document.documentElement.requestFullscreen()
-        .then(() => (screen.orientation as ScreenOrientation & { lock?(o: string): Promise<void> }).lock?.('landscape'))
-        .catch(() => {})); // refused: the game simply stays as it is
+      b.addEventListener('click', () => document.documentElement.requestFullscreen().catch(() => {})); // refused: the game simply stays as it is
       continue;
     }
     let timer = 0;
@@ -86,7 +87,7 @@ export function controls(act: (a: Action) => void): () => void {
   }
   root.addEventListener('contextmenu', (e) => e.preventDefault()); // a long press must not open a menu
 
-  // Full screen, locked in landscape: hides the browser's and the app's bars where the page is allowed to (not every
+  // Full screen, either way up (the view follows the screen's shape): hides the browser's and the app's bars where the page is allowed to (not every
   // app view is); the button only shows where it can work, and goes away once in full screen.
   const full = root.querySelector<HTMLButtonElement>('[data-a="full"]')!;
   const showFull = () => (full.hidden = !document.fullscreenEnabled || !!document.fullscreenElement);

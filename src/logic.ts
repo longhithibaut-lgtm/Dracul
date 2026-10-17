@@ -170,3 +170,18 @@ export function stepsFrom(open: readonly boolean[], cols: number, goal: number):
   }
   return d;
 }
+
+/** The view, in native pixels, for a screen of `w` x `h` (any unit): a `bw` x `bh` box laid along the screen's long side
+ *  just fits, and the other side grows to the screen's shape, so there are never bars. A 16:9 screen shows the box. */
+export function viewSize(w: number, h: number, bw: number, bh: number): { width: number; height: number } {
+  const k = Math.min(Math.max(w, h) / bw, Math.min(w, h) / bh); // screen units per native pixel
+  return { width: Math.round(w / k), height: Math.round(h / k) };
+}
+
+/** Where to pin the marker of a point (`x`, `y`) outside a `w` x `h` screen: on the screen, `m` in from its edges, and
+ *  the way it lies (`dx`, `dy`: -1, 0 or 1 each). Undefined when the point is on the screen. */
+export function edgePip(x: number, y: number, w: number, h: number, m: number) {
+  const dx = x < 0 ? -1 : x > w ? 1 : 0, dy = y < 0 ? -1 : y > h ? 1 : 0;
+  if (!dx && !dy) return undefined;
+  return { x: Math.min(Math.max(x, m), w - m), y: Math.min(Math.max(y, m), h - m), dx, dy };
+}

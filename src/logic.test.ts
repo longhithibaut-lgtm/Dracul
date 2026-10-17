@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, stepsFrom, take, wound } from './logic.ts';
+import { biteTarget, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, stepsFrom, take, wound } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, kind, replacing, shelf } from './gifts.ts';
 import { missing, width, wrap } from './font.ts';
 
@@ -248,5 +248,23 @@ describe('stepsFrom', () => {
 
   it('Infinity where no way leads', () => {
     expect(stepsFrom([true, false, true], 3, 0)[2]).toBe(Infinity);
+  });
+});
+
+describe('viewSize', () => {
+  it('shows 480x270 on any 16:9 screen, and grows the other side to the screen', () => {
+    expect(viewSize(1920, 1080, 480, 270)).toEqual({ width: 480, height: 270 });
+    expect(viewSize(915, 412, 480, 270)).toEqual({ width: 600, height: 270 }); // 20:9 phone, landscape
+    expect(viewSize(412, 915, 480, 270)).toEqual({ width: 270, height: 600 }); // and upright
+    expect(viewSize(1024, 768, 480, 270)).toEqual({ width: 480, height: 360 }); // 4:3
+    expect(viewSize(2560, 1080, 480, 270)).toEqual({ width: 640, height: 270 }); // 21:9
+  });
+});
+
+describe('edgePip', () => {
+  it('pins a point off the screen to its edge, pointing its way', () => {
+    expect(edgePip(100, 50, 480, 270, 6)).toBeUndefined();
+    expect(edgePip(-40, 50, 480, 270, 6)).toEqual({ x: 6, y: 50, dx: -1, dy: 0 });
+    expect(edgePip(600, 400, 480, 270, 6)).toEqual({ x: 474, y: 264, dx: 1, dy: 1 });
   });
 });

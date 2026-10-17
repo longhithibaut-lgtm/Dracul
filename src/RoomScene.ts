@@ -123,8 +123,9 @@ export class RoomScene extends Phaser.Scene {
 
     const start = this.phase === 'enter' ? this.room.stairs : this.room.heroStart;
     this.hero = (Training.opts.wanderer ? Wanderer : Hero).create(this, start.x, start.y);
-    // A room taller than the screen (the cloister): the camera climbs with the hero, smoothly, kept inside the room.
-    if (this.room.height > T.height) this.cameras.main.setBounds(0, 0, T.width, this.room.height).startFollow(this.hero, true, 1, 0.08);
+    this.frame();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.frame, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.frame, this));
     this.hero.setCollideWorldBounds(this.phase !== 'enter');
     this.enemies = this.physics.add.group();
     // Pits stop walkers (the mist too) but not what flies: bolts and shards only stop on obstacles (boltReach).
@@ -226,6 +227,16 @@ export class RoomScene extends Phaser.Scene {
       this.hud.title(`Salle ${this.roomNo}`);
     }
     this.time.delayedCall(this.phase === 'enter' ? T.run.titleMs : 900, () => this.spawnWave());
+  }
+
+  /** Frames the room in the view (see main.ts), on creation and live on every resize: a turn of the phone mid-fight
+   *  keeps everything as it is. Along a side where the room is smaller than the view, it sits in the middle, its
+   *  surroundings round it; where it is larger (an upright phone, the tall cloister), the camera follows the hero,
+   *  smoothly, kept inside the room. */
+  private frame() {
+    const { width: w, height: h } = this.scale, rw = T.width, rh = this.room.height;
+    this.cameras.main.setBounds(Math.min(0, Math.floor((rw - w) / 2)), Math.min(0, Math.floor((rh - h) / 2)), Math.max(rw, w), Math.max(rh, h))
+      .startFollow(this.hero, true, 0.08, 0.08);
   }
 
   update(time: number, delta: number) {
@@ -342,6 +353,11 @@ export class RoomScene extends Phaser.Scene {
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
     }
+    // Enemies off the screen (an upright phone, the tall cloister) are pointed at from its edge, an aiming crossbowman
+    // loudest; on screen, they are not marked.
+    const view = this.cameras.main.worldView;
+    this.hud.threats((this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable)
+      .map((e) => ({ x: e.x - view.x, y: e.y - view.y, aim: e.getData('state') === 'aim' })));
     if (this.glyph) {
       if (held.length && this.glyph.caughtAt < 0) Sfx.play(this, 'bind'); // once per glyph
       // Glyphe du nid: as it arms, rats burst out of its centre. On the clock the glyph keeps, not a timer's.

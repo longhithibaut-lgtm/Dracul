@@ -173,42 +173,67 @@ export type Cards = {
 };
 
 /** The choice of gifts `ids` over the dimmed room, the hero holding `held`: Vesna's coin, a heading, one card per
- *  gift sliding in, all as tall as the fullest, a hint. */
+ *  gift sliding in, all as tall as the fullest, a hint. Laid out on the view, live: side by side, or stacked when it is
+ *  too narrow for that (an upright phone). */
 export function cards(scene: Scene, ids: GiftId[], held: readonly GiftId[]): Cards {
-  const born = scene.time.now, n = ids.length, top = 56;
+  const born = scene.time.now, n = ids.length;
   const olds = ids.map((id) => replaced(GIFTS, held, id));
   // 82 with three lines of text, like most.
   const h = 46 + Math.max(...ids.map((id, i) => lines(id, olds[i]).flat().length * Font.LINE + (olds[i] ? 3 : 0)));
   const dim = scene.add.rectangle(0, 0, T.width, T.height, VOID, 0.78).setOrigin(0).setDepth(UI);
-  const crest = scene.add.image(T.width / 2, top, coin(scene)).setOrigin(0.5, 0).setDepth(UI + 1);
-  const head = scene.add.image(T.width / 2, top + 22, Font.bake(scene, ['Don de la Maison du Rat'], SILVER, VOID)).setOrigin(0.5, 0).setDepth(UI + 1);
-  const x0 = Math.round((T.width - n * CARD.w - (n - 1) * CARD.gap) / 2), y = top + 44;
-  const imgs = ids.map((id, i) => scene.add.image(x0 + i * (CARD.w + CARD.gap), y, card(scene, id, i + 1, h, olds[i]), 'n').setOrigin(0).setDepth(UI + 2));
-  const keys = ids.map((_, i) => i + 1).join(', ');
-  const hint = scene.add.image(T.width / 2, y + h + 6, Font.bake(scene, [`${keys} ou clic`], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
+  const crest = scene.add.image(0, 0, coin(scene)).setOrigin(0.5, 0).setDepth(UI + 1);
+  const head = scene.add.image(0, 0, Font.bake(scene, ['Don de la Maison du Rat'], SILVER, VOID)).setOrigin(0.5, 0).setDepth(UI + 1);
+  const imgs = ids.map((id, i) => scene.add.image(0, 0, card(scene, id, i + 1, h, olds[i]), 'n').setOrigin(0).setDepth(UI + 2));
+  const keys = matchMedia('(pointer: coarse)').matches ? 'touche une carte' : `${ids.map((_, i) => i + 1).join(', ')} ou clic`;
+  const hint = scene.add.image(0, 0, Font.bake(scene, [keys], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
   const all = [dim, crest, head, ...imgs, hint];
   all.forEach((o) => o.setScrollFactor(0)); // on the screen, wherever the camera is in a tall room
+  let hot = -1, picked = false, xs: number[] = [], ys: number[] = [];
+  const slide = ids.map(() => 10); // each card rises this much into place as it comes in
+  const place = () => {
+    const W = scene.scale.width, H = scene.scale.height, row = n * CARD.w + (n - 1) * CARD.gap, stack = W < row + 16, gap = 6;
+    // Side by side as high as on a 16:9 screen, the block kept in the middle of a taller view; stacked, centred.
+    const top = stack ? Math.max(4, Math.round((H - 57 - n * h - (n - 1) * gap) / 2)) : 56 + Math.round((H - T.height) / 2);
+    xs = ids.map((_, i) => (stack ? Math.round((W - CARD.w) / 2) : Math.round((W - row) / 2) + i * (CARD.w + CARD.gap)));
+    ys = ids.map((_, i) => top + 44 + (stack ? i * (h + gap) : 0));
+    dim.setSize(W, H);
+    crest.setPosition(W / 2, top);
+    head.setPosition(W / 2, top + 22);
+    hint.setPosition(W / 2, ys[n - 1] + h + 6);
+    if (!picked) imgs.forEach((im, i) => im.setPosition(xs[i], ys[i] + slide[i] - (i === hot ? 3 : 0)));
+  };
+  place();
+  const off = () => scene.scale.off(Phaser.Scale.Events.RESIZE, place);
+  scene.scale.on(Phaser.Scale.Events.RESIZE, place);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
   scene.tweens.add({ targets: dim, alpha: { from: 0, to: dim.alpha }, duration: 160 });
   scene.tweens.add({ targets: [crest, head, hint], alpha: { from: 0, to: 1 }, duration: 160 });
-  imgs.forEach((im, i) => scene.tweens.add({ targets: im, y: { from: y + 10, to: y }, alpha: { from: 0, to: 1 }, delay: 60 * i, duration: 180, ease: 'Cubic.easeOut' }));
+  imgs.forEach((im, i) => {
+    scene.tweens.add({ targets: im, alpha: { from: 0, to: 1 }, delay: 60 * i, duration: 180, ease: 'Cubic.easeOut' });
+    scene.tweens.addCounter({ from: 10, to: 0, delay: 60 * i, duration: 180, ease: 'Cubic.easeOut', onUpdate: (tw) => { slide[i] = tw.getValue() ?? 0; place(); } });
+  });
   const ready = () => scene.time.now - born > 60 * n + 200; // a click that opened nothing yet never picks a card
-  let hot = -1, picked = false;
-  const show = (i: number) => imgs.forEach((im, k) => im.setFrame(k === i ? 'h' : 'n').setY(y - (k === i ? 3 : 0)));
+  const show = (i: number) => {
+    hot = i;
+    imgs.forEach((im, k) => im.setFrame(k === i ? 'h' : 'n'));
+    place();
+  };
   return {
-    at: (px, py) => imgs.findIndex((im) => px >= im.x && px < im.x + CARD.w && py >= y - 3 && py < y + h),
+    at: (px, py) => imgs.findIndex((_, i) => px >= xs[i] && px < xs[i] + CARD.w && py >= ys[i] - 3 && py < ys[i] + h),
     hover(i) {
       if (picked || !ready() || i === hot) return;
-      show((hot = i));
+      show(i);
     },
     choose(i, done) {
       if (picked || !ready() || !imgs[i]) return false;
-      picked = true;
       show(i);
+      picked = true;
       const im = imgs[i].setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       scene.time.delayedCall(70, () => im.clearTint());
       scene.tweens.add({ targets: imgs.filter((o) => o !== im), alpha: 0, duration: 150 });
-      scene.tweens.add({ targets: im, y: y - 8, delay: 300, duration: 260, ease: 'Cubic.easeIn' });
+      scene.tweens.add({ targets: im, y: ys[i] - 8, delay: 300, duration: 260, ease: 'Cubic.easeIn' });
       scene.tweens.add({ targets: [dim, crest, head, hint, im], alpha: 0, delay: 360, duration: 200, onComplete: () => {
+        off();
         all.forEach((o) => o.destroy());
         done();
       } });

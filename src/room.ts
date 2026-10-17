@@ -1318,6 +1318,47 @@ function cloisterProps(scene: Phaser.Scene) {
   return arcades;
 }
 
+// ---------- beyond the room ----------
+
+// A view larger than the room (a wide or an upright screen) shows its surroundings, never black: this far round a crypt
+// room, and on both sides of the cloister. Their own textures, laid under the room's, which stay as they were.
+const MARGIN = 300;
+
+/** Round a crypt room: its abyss runs on all round, the pillars receding into it at the pitch they have beyond the side
+ *  walls, sinking into the dark farther out; under the stairs, a dark well. */
+function paintAbyss(p: Px) {
+  for (let j = 0; j < p.h; j++)
+    for (let i = 0; i < p.w; i++) {
+      const x = i - MARGIN, y = j - MARGIN, d = Math.max(-x, x - T.width + 1, -y, y - T.height + 1);
+      if (d < 0) continue;
+      const s = (((x < CX ? x : x - 458) % 14) + 14) % 14; // the pillars as at x 0 and 14, 458 and 472
+      const well = y >= T.height && Math.abs(x + 0.5 - CX) < 23 ? Math.max(0, 1 - d / 60) : 0;
+      const c = s === 0 ? P.abyss2 : s < 8 ? P.abyss0 : P.abyss1;
+      p.p(i, j, mix(c, P.void0, Math.max(well, Math.min(0.8, d / 160 + (y >= T.height && x >= FX0 - 12 && x < FX1 + 12 ? 0.3 : 0)))));
+    }
+}
+
+/** On both sides of the cloister, the east and west ranges' gabled roofs seen from above, running its whole length,
+ *  their ridges 46 px out: Roman tiles in rows down each slope, the slope facing west in the Dawn's light, the other in
+ *  shade; beyond their far eaves, the night. */
+function paintRanges(p: Px) {
+  for (let y = 0; y < p.h; y++)
+    for (let i = 0; i < p.w; i++) {
+      const x = i - MARGIN, u = x < 0 ? -1 - x : x - CW; // out from the garth's edge
+      if (u < 0) continue;
+      const v = (y + 600) % 6, near = u < 46, lit = near === x >= 0; // the east range's near slope faces west
+      let c: number;
+      if (u < 2 || u === 92 || u === 93) c = P.wall0; // the eaves' gutters
+      else if (u === 46) c = y % 8 ? mix(P.wall2, P.bone1, 0.25) : P.wall1; // ridge tiles
+      else if (u === 47) c = P.wall0;
+      else if (u < 92) {
+        const t = v === 5 ? P.wall0 : v === 0 ? P.wall2 : u % 4 === 0 ? mix(P.wall1, P.wall0, 0.5) : P.wall1;
+        c = lit ? mix(t, 0xffd75e, 0.4) : inShade(t);
+      } else c = mix(inShade(noise(x, y, 6, 12) > 0.5 ? 0x4a5a28 : 0x3a4820), P.void0, Math.min(0.9, (u - 94) / 40 + 0.4));
+      p.p(i, y, c);
+    }
+}
+
 // ---------- props ----------
 
 /** Cylinder shading for a 16 px column, lit from the left. */
@@ -1676,6 +1717,13 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
   if (!BARS_OF[id]) paintHall(scene, id); // painted on the layout's first build, kept across restarts
   BARS = BARS_OF[id]!;
   scene.add.image(0, 0, `room-bg-${id}`).setOrigin(0).setDepth(-1000);
+  if (L.open) scene.add.image(-MARGIN, 0, bake(scene, 'room-ranges', CW + 2 * MARGIN, CH, paintRanges)).setOrigin(0).setDepth(-1001);
+  else {
+    const key = bake(scene, 'room-abyss', T.width + 2 * MARGIN, T.height + 2 * MARGIN, paintAbyss);
+    scene.add.image(-MARGIN, -MARGIN, key).setOrigin(0).setDepth(-1001);
+    // Below the front wall it is drawn over the room too: the hero climbing the stairs shows only above the steps.
+    scene.add.image(-MARGIN, -MARGIN, key).setOrigin(0).setDepth(8500).setCrop(0, MARGIN + T.height, T.width + 2 * MARGIN, MARGIN);
+  }
   drawGate(scene, 0); // the previous room left it open
   scene.add.image(GX, GY, 'room-gate').setOrigin(0).setDepth(-999);
   scene.add.image(GLX, FY0, bake(scene, 'room-gatelight', 140, 100, paintGateLight)).setOrigin(0).setDepth(-998)
@@ -1710,7 +1758,12 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
   if (!L.open) scene.add.image(0, 0, bake(scene, `room-shaft-${id}`, T.width, T.height, (p) => paintShaft(p, L))).setOrigin(0).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
   atmosphere(scene, L);
   scene.add.image(0, height - T.height, bake(scene, 'room-front', T.width, T.height, (p) => paintFront(p))).setOrigin(0).setDepth(8500);
-  scene.add.image(0, 0, bake(scene, 'room-vignette', T.width, T.height, paintVignette)).setOrigin(0).setDepth(10_000).setScrollFactor(0);
+  // The vignette frames the screen, whatever its shape: stretched to the view.
+  const vignette = scene.add.image(0, 0, bake(scene, 'room-vignette', T.width, T.height, paintVignette)).setOrigin(0).setDepth(10_000).setScrollFactor(0);
+  const fit = () => vignette.setDisplaySize(scene.scale.width, scene.scale.height);
+  fit();
+  scene.scale.on(Phaser.Scale.Events.RESIZE, fit);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.scale.off(Phaser.Scale.Events.RESIZE, fit));
 
   const room: Room = {
     bounds: L.open ? new Phaser.Geom.Rectangle(CM, FY0, CW - 2 * CM, fy1 - FY0) : new Phaser.Geom.Rectangle(FX0, FY0, FX1 - FX0, fy1 - FY0),
