@@ -187,19 +187,42 @@ export function edgePip(x: number, y: number, w: number, h: number, m: number) {
   return { x: Math.min(Math.max(x, m), w - m), y: Math.min(Math.max(y, m), h - m), dx, dy };
 }
 
-export type Gesture = 'wait' | 'drag' | 'press' | 'tap' | 'double' | 'flick';
-/**
- * What one finger is doing (L'ombre, see shadow.ts), `ms` after it touched down, having strayed at most `moved` from
- * where it landed and now `dist` from it, lifted (`up`) or not, `sinceTap` after the last tap was lifted. Distances in
- * CSS px. A finger that strays past `slopPx` is a drag, or a flick when it is lifted soon and fast; one that stays put
- * is a long press once held `pressMs`, else a tap when lifted, a double tap if it came soon after a tap.
- */
-export function gesture(
-  t: { ms: number; moved: number; dist: number; up: boolean; sinceTap: number },
-  k: { slopPx: number; pressMs: number; doubleMs: number; flickMs: number; flickPx: number; flickSpeed: number },
-): Gesture {
-  if (t.moved > k.slopPx) return t.up && t.ms <= k.flickMs && t.dist >= k.flickPx && t.dist / Math.max(t.ms, 1) >= k.flickSpeed ? 'flick' : 'drag';
-  if (t.ms >= k.pressMs) return 'press';
-  if (!t.up) return 'wait';
-  return t.sinceTap <= k.doubleMs ? 'double' : 'tap';
+/** The floating stick: a thumb at `at`, its stick's base at `base`, `radius` px of travel, a dead zone of `dead` (a
+ *  fraction of it). Returns the tilt (each axis in [-1, 1], 0 inside the dead zone) and the base, dragged along so the
+ *  thumb is never farther than `radius` from it. */
+export function stickTilt(base: P, at: P, radius: number, dead: number): { x: number; y: number; base: P } {
+  const dx = at.x - base.x, dy = at.y - base.y, d = Math.hypot(dx, dy);
+  if (d > radius) base = { x: at.x - (dx * radius) / d, y: at.y - (dy * radius) / d };
+  const k = d <= dead * radius ? 0 : 1 / Math.max(d, radius);
+  return { x: dx * k, y: dy * k, base };
+}
+
+/** A finger lifted `ms` after it landed, having strayed at most `moved` px: a tap (the mist) when short and still. */
+export const isTap = (ms: number, moved: number, tapMs: number, slopPx: number) => ms <= tapMs && moved <= slopPx;
+
+/** Blood `blood` banked at `level`, a level costing `first`, then `step` more each next one: the level reached and the
+ *  blood left over (several levels at once if it is enough). */
+export function levelUp(level: number, blood: number, first: number, step: number): { level: number; blood: number } {
+  for (let need = first + step * (level - 1); blood >= need; need += step) {
+    blood -= need;
+    level++;
+  }
+  return { level, blood };
+}
+
+/** Ghouls due `ms` into a room `len` ms long: `first` at once, then at a rate rising evenly from `r0` to `r1` a second. */
+export function hordeDue(ms: number, len: number, first: number, r0: number, r1: number): number {
+  const t = Math.min(ms, len) / 1000;
+  return Math.floor(first + r0 * t + ((r1 - r0) * t * t) / (2 * (len / 1000)));
+}
+
+/** The densest cluster of `ps`: the middle of the points within an ellipse (`rx`, `ry`) of the point that has most of
+ *  them, and how many they are. */
+export function densest(ps: P[], rx: number, ry: number): { x: number; y: number; n: number } {
+  let best = { x: 0, y: 0, n: 0 };
+  for (const p of ps) {
+    const near = ps.filter((q) => ellipseDist(p, q, rx, ry) <= 1);
+    if (near.length > best.n) best = { x: near.reduce((s, q) => s + q.x, 0) / near.length, y: near.reduce((s, q) => s + q.y, 0) / near.length, n: near.length };
+  }
+  return best;
 }

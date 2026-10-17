@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, edgePip, gesture, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, stepsFrom, take, wound } from './logic.ts';
+import { biteTarget, edgePip, isTap, stickTilt, levelUp, hordeDue, densest, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, stepsFrom, take, wound } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, kind, replacing, shelf } from './gifts.ts';
 import { missing, width, wrap } from './font.ts';
+import { UPS, UP_IDS, open } from './upgrades.ts';
+import { T } from './tuning.ts';
 
 describe('inArc', () => {
   const o = { x: 0, y: 0 };
@@ -269,25 +271,59 @@ describe('edgePip', () => {
   });
 });
 
-describe('gesture', () => {
-  const k = { slopPx: 10, pressMs: 450, doubleMs: 280, flickMs: 180, flickPx: 28, flickSpeed: 0.35 };
-  const g = (ms: number, moved: number, dist: number, up: boolean, sinceTap = Infinity) => gesture({ ms, moved, dist, up, sinceTap }, k);
-
-  it('a finger kept still: waits, then a tap when lifted, a double tap soon after a tap, a long press when held', () => {
-    expect(g(100, 3, 2, false)).toBe('wait');
-    expect(g(120, 3, 2, true)).toBe('tap');
-    expect(g(90, 2, 2, true, 150)).toBe('double');
-    expect(g(90, 2, 2, true, 400)).toBe('tap'); // too long after the first
-    expect(g(450, 8, 4, false)).toBe('press');
+describe('floating stick', () => {
+  it('tilts toward the thumb, nothing in the dead zone, full past the radius with the base dragged along', () => {
+    expect(stickTilt({ x: 0, y: 0 }, { x: 5, y: 0 }, 50, 0.2)).toEqual({ x: 0, y: 0, base: { x: 0, y: 0 } });
+    expect(stickTilt({ x: 0, y: 0 }, { x: 25, y: 0 }, 50, 0.2)).toEqual({ x: 0.5, y: 0, base: { x: 0, y: 0 } });
+    const far = stickTilt({ x: 0, y: 0 }, { x: 0, y: 80 }, 50, 0.2);
+    expect(far.y).toBeCloseTo(1);
+    expect(far.base).toEqual({ x: 0, y: 30 }); // the thumb stays on the ring
   });
 
-  it('a moving finger: a drag, or a flick when lifted soon, fast and far enough', () => {
-    expect(g(60, 14, 14, false)).toBe('drag'); // still down: a drag until lifted
-    expect(g(120, 60, 60, true)).toBe('flick');
-    expect(g(300, 60, 60, true)).toBe('drag'); // too long: a slow swipe
-    expect(g(120, 20, 20, true)).toBe('drag'); // too short
-    expect(g(170, 40, 40, true)).toBe('drag'); // too slow: 0.24 px/ms
-    expect(g(120, 60, 5, true)).toBe('drag'); // out and back: no direction
-    expect(g(600, 40, 40, false)).toBe('drag'); // moving wins over the long press
+  it('a short, still touch is a tap; a long or moving one is not', () => {
+    expect(isTap(120, 4, 200, 12)).toBe(true);
+    expect(isTap(400, 4, 200, 12)).toBe(false); // held: a thumb resting on the stick
+    expect(isTap(120, 30, 200, 12)).toBe(false); // a flick of the stick
+  });
+});
+
+describe('level-ups', () => {
+  it('each level costs `step` more blood than the last; the rest is kept', () => {
+    expect(levelUp(1, 13, 14, 8)).toEqual({ level: 1, blood: 13 });
+    expect(levelUp(1, 15, 14, 8)).toEqual({ level: 2, blood: 1 });
+    expect(levelUp(2, 22, 14, 8)).toEqual({ level: 3, blood: 0 });
+    expect(levelUp(1, 14 + 22 + 5, 14, 8)).toEqual({ level: 3, blood: 5 }); // two at once
+  });
+
+  it('upgrades stack up to the top level, then leave the draw', () => {
+    expect(open({})).toEqual(UP_IDS);
+    expect(open({ reach: T.ups.max - 1 })).toContain('reach');
+    expect(open({ reach: T.ups.max, claw: 2 })).not.toContain('reach');
+    expect(UP_IDS.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('every upgrade text is in the typeface and wraps to card width; every icon is 7x7', () => {
+    for (const id of UP_IDS) {
+      const u = UPS[id];
+      expect(missing(u.name + u.text + KINDS[u.kind].toUpperCase())).toEqual([]);
+      expect(wrap(u.text, 112).length).toBeLessThanOrEqual(3);
+      expect(u.icon.length === 7 && u.icon.every((r) => r.length === 7)).toBe(true);
+    }
+    expect(missing('Le sang monte : niveau 12 NIV 3 1:23')).toEqual([]);
+  });
+});
+
+describe('horde', () => {
+  it('the opening rush at once, then a rate rising from start to end of the room, none past it', () => {
+    expect(hordeDue(0, 90000, 8, 0.8, 2.4)).toBe(8);
+    expect(hordeDue(10000, 90000, 8, 0.8, 2.4)).toBe(Math.floor(8 + 8 + (1.6 * 100) / 180));
+    expect(hordeDue(90000, 90000, 8, 0.8, 2.4)).toBe(8 + 72 + 72);
+    expect(hordeDue(120000, 90000, 8, 0.8, 2.4)).toBe(152);
+  });
+
+  it('the glyph goes to the middle of the thickest cluster', () => {
+    const c = densest([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 104, y: 2 }, { x: 96, y: -2 }], 30, 20);
+    expect(c).toEqual({ x: 100, y: 0, n: 3 });
+    expect(densest([], 30, 20).n).toBe(0);
   });
 });
