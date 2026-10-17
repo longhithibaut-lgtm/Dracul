@@ -16,7 +16,7 @@ export type Room = {
   holy(x: number, y: number): boolean; // a floor point in holy light that never goes out (stained glass, the open sky)
   burn: { graceMs: number; burnEveryMs: number; damage: number }; // how that light burns: like a lantern, or the Dawn's
   arcades: Phaser.GameObjects.Image[]; // the cloister's: their bottom row is their feet line; see through one from behind
-  height: number; // of the whole room: one screen, or the cloister's three (the camera follows the hero up it)
+  height: number; // of the whole room: a crypt's (RH) or the cloister's three screens (the camera follows the hero up it)
   sections: number[]; // feet lines the hero climbs past into the room's next part, bottom first (none: one part)
 };
 
@@ -43,14 +43,18 @@ const P = {
   abyss0: 0x1f0520, abyss1: 0x3d0a3a, abyss2: 0x5e1256,
 };
 
+// A crypt room is as tall as the tallest common upright phone's view (21:9: 630 px), so it never shows a band above or
+// below it: 35 rows of slabs, climbed from the stairs at the bottom to the portcullis at the top.
+const RH = 638;
 // Floor rectangle = walkable bounds (feet). Walls: back face above FY0, side caps 12 px, front cap below FY1.
-const FX0 = 40, FX1 = 440, FY0 = 64, FY1 = 256;
+const FX0 = 40, FX1 = 440, FY0 = 64, FY1 = RH - 14;
 const CX = 240, CY = 160; // ritual medallion centre
 
-type Prop = { kind: 'pillar' | 'stump' | 'brazier' | 'coffin' | 'coffinOpen' | 'heap' | 'pew' | 'altar' | 'block'; x: number; y: number; w: number; h: number; tall?: number; flip?: boolean };
+type Prop = { kind: 'pillar' | 'stump' | 'fallen' | 'brazier' | 'coffin' | 'coffinOpen' | 'heap' | 'pew' | 'altar' | 'font' | 'block'; x: number; y: number; w: number; h: number; tall?: number; flip?: boolean };
 // x = footprint centre, y = footprint bottom (the feet line), w/h = footprint = static body. A stump's `tall` is its
-// texture height (58 by default: the shorter, the lower it broke), `flip` mirrors its break. A block is a bare footprint:
-// its look is painted with the rest of its layout (the cloister's piers, trunks, well).
+// texture height (58 by default: the shorter, the lower it broke), `flip` mirrors its break; a whole pillar's runs up to
+// the top of the room unless `tall` says how far it rises before the vault's dark swallows it. A block is a bare
+// footprint: its look is painted with the rest of its layout (the cloister's piers, trunks, well).
 const PROPS: Prop[] = [
   { kind: 'pillar', x: 92, y: 140, w: 24, h: 12 },
   { kind: 'stump', x: 388, y: 140, w: 24, h: 12 },
@@ -405,10 +409,11 @@ function paintFloor(p: Px) {
     const t = noise(tx, ty, 3, 2) * 0.7 + hash(tx, ty, 1) * 0.3;
     return t < 0.36 ? P.floor1 : t > 0.62 ? P.floor3 : P.floor2;
   };
-  for (let ty = 0; ty < 12; ty++)
+  const rows = (FY1 - FY0) / 16;
+  for (let ty = 0; ty < rows; ty++)
     for (let tx = 0; tx < 25; tx++) {
       const x = FX0 + tx * 16, y = FY0 + ty * 16;
-      const border = tx === 0 || tx === 24 || ty === 11;
+      const border = tx === 0 || tx === 24 || ty === rows - 1;
       const merged = !border && tx > 1 && hash(tx, ty, 2) < 0.3;
       const base = border ? P.wall1 : tone(merged ? tx - 1 : tx, ty);
       p.rect(x, y, 16, 16, base);
@@ -426,9 +431,10 @@ function paintFloor(p: Px) {
     }
 }
 
-/** The ritual medallion at the centre, `s` times the hall's (radius 50): a smooth disc in a ring of crimson voussoirs,
- *  a blood channel, an eight-point star, a drain; `frame`: the crimson inlaid square around it, with its runnels. */
-function medallion(p: Px, s: number, frame: boolean) {
+/** A ritual medallion centred on (CX, CY), `s` times the hall's (radius 50): a smooth disc in a ring of crimson voussoirs,
+ *  a blood channel, an eight-point star, a drain; `frame`: the crimson inlaid square around it, with its runnels, as
+ *  much smaller. */
+function medallion(p: Px, s: number, frame: boolean, CY: number) {
   const dist = (x: number, y: number) => Math.hypot(x + 0.5 - CX, y + 0.5 - CY);
   const ang = (x: number, y: number) => Math.atan2(y + 0.5 - CY, x + 0.5 - CX);
   const R = 50 * s, r0 = 41 * s, n = Math.round(24 * s), m = Math.ceil(R) + 4; // n voussoirs
@@ -468,11 +474,12 @@ function medallion(p: Px, s: number, frame: boolean) {
   if (!frame) return;
   // Crimson inlaid frame around it, broken at the four gaps where carved runnels lead in.
   const sq = (x: number, y: number) => Math.max(Math.abs(x + 0.5 - CX), Math.abs(y + 0.5 - CY));
-  const gap = (x: number, y: number) => Math.min(Math.abs(x + 0.5 - CX), Math.abs(y + 0.5 - CY)) < 7;
-  p.fill(CX - 64, CY - 64, CX + 64, CY + 64, (x, y) => sq(x, y) > 59 && sq(x, y) < 62 && !gap(x, y), mix(P.wall1, P.floor2, 0.45));
-  engrave(p, (x, y) => (Math.abs(sq(x, y) - 59.5) < 0.6 || Math.abs(sq(x, y) - 62.5) < 0.6) && !gap(x, y), CX - 64, CY - 64, CX + 64, CY + 64, 0.45);
+  const gap = (x: number, y: number) => Math.min(Math.abs(x + 0.5 - CX), Math.abs(y + 0.5 - CY)) < 7 * s;
+  const f0 = Math.round(59 * s) + 0.5, f1 = f0 + 3, k = Math.round(61 * s); // the frame's inner and outer edges, its corners
+  p.fill(CX - 64, CY - 64, CX + 64, CY + 64, (x, y) => sq(x, y) > f0 - 0.5 && sq(x, y) < f1 - 0.5 && !gap(x, y), mix(P.wall1, P.floor2, 0.45));
+  engrave(p, (x, y) => (Math.abs(sq(x, y) - f0) < 0.6 || Math.abs(sq(x, y) - f1) < 0.6) && !gap(x, y), CX - 64, CY - 64, CX + 64, CY + 64, 0.45);
   for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-    const ox = CX + sx * 61, oy = CY + sy * 61;
+    const ox = CX + sx * k, oy = CY + sy * k;
     p.rect(ox - 4, oy - 4, 8, 8, P.wall1);
     p.rect(ox - 2, oy - 2, 4, 4, P.blood0);
     p.rect(ox - 2, oy - 2, 4, 1, P.blood1);
@@ -481,7 +488,7 @@ function medallion(p: Px, s: number, frame: boolean) {
   for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]])
     engrave(p, (x, y) => {
       const along = (x + 0.5 - CX) * dx + (y + 0.5 - CY) * dy, across = (x + 0.5 - CX) * dy - (y + 0.5 - CY) * dx;
-      return Math.abs(Math.abs(across) - 2) < 0.6 && along > 50 && along < 66;
+      return Math.abs(Math.abs(across) - 2) < 0.6 && along > 50 * s && along < f1 + 3.5;
     }, CX - 68, CY - 68, CX + 68, CY + 68, 0.5);
 }
 
@@ -553,7 +560,7 @@ function paintWear(p: Px) {
   crack(414, 176, 2.3, 18);
   crack(130, 204, -0.3, 16);
   chips(p, [[344, 192], [120, 96], [184, 240], [312, 64]]);
-  grit(p, R, 110, (x, y) => Math.hypot(x - CX, y - CY) >= 52);
+  grit(p, R, 300, (x, y) => Math.hypot(x - CX, y - CY) >= 52 && Math.hypot(x - CX, y - 540) >= 32);
   // Rubble from the broken pillar.
   rubble(p, [[404, 146, 7, 4], [412, 150, 5, 3], [398, 152, 4, 3], [416, 142, 3, 2], [406, 156, 3, 2], [372, 150, 4, 3]]);
 }
@@ -632,17 +639,16 @@ type Layout = {
   props: Prop[];
   pits: Box[]; // boxes of fallen floor (= static bodies); touching or overlapping ones paint as one hole
   candles: [x: number, y: number, n: number][];
-  medallion: number; // its size, the hall's = 1
-  frame: boolean; // the crimson square around the medallion
-  pool: readonly [number, number, number, number]; // the moon pool on it: centre and radii
+  medallions: (readonly [y: number, size: number, frame: boolean])[]; // down the middle (the hall's great one: 1, framed)
+  pools: (readonly [number, number, number, number])[]; // moon pools on the floor: centre and radii
+  beams?: number[]; // how far down the room each set of moon shafts falls (default [0]: onto the top medallion)
   heroStart: P; spawns: P[]; spots: P[];
   gift?: P; // where the gift rises, if not on the medallion
   windows?: P[]; // tips of the stained-glass panes of holy light on the floor, see pane()
-  open?: true; // under the sky: painted by paintCloister, lit by the Dawn, three screens tall (the crypt's fields above go unused)
+  open?: true; // under the sky: painted by paintCloister, lit by the Dawn, three screens tall (the crypt's fields go unused)
   sections?: number[]; // see Room
   decor(p: Px): void; // wear, gore, bones on the floor, before the props cast their shadows
 };
-const NAVE_ROSETTE = 0.6;
 
 // The cloister, in floor coordinates (x, y on the floor, h up from it): a long garth open to the sky, three screens
 // tall, climbed from the stairs at the bottom to the church door at the top. Covered walks behind arcades of round
@@ -688,23 +694,46 @@ const HEDGES: Box[] = [
   { x: 168, y: 180, w: 48, h: 8 }, { x: 264, y: 180, w: 48, h: 8 },
 ];
 
+// A crypt room is climbed in three parts, each with its wave: the hero comes up the stairs into the first, the next
+// wave waits until he walks past a part's line (bottom first), then rises in front of him; the top part is the room as
+// it was one screen tall, with the gate, its medallion and the gift.
+const PARTS = [432, 248];
 const LAYOUT: Record<LayoutId, Layout> = {
-  // The validated hall: fights in the open middle, around the great medallion.
+  // The validated hall: fights in the open middle, around the great medallion. Down the room, a row of tombs between
+  // broken pillars, then by the stairs an antechamber round a smaller medallion between two braziers.
   hall: {
-    props: PROPS,
+    props: [
+      ...PROPS,
+      { kind: 'coffinOpen', x: 104, y: 384, w: 62, h: 14 },
+      { kind: 'coffin', x: 380, y: 384, w: 46, h: 14 },
+      { kind: 'stump', x: 172, y: 342, w: 24, h: 12, tall: 50 },
+      { kind: 'stump', x: 308, y: 342, w: 24, h: 12, tall: 40, flip: true },
+      { kind: 'pillar', x: 92, y: 490, w: 24, h: 12, tall: 124 },
+      { kind: 'stump', x: 388, y: 490, w: 24, h: 12, tall: 46, flip: true },
+      { kind: 'brazier', x: 182, y: 474, w: 12, h: 8 },
+      { kind: 'brazier', x: 298, y: 474, w: 12, h: 8 },
+    ],
     pits: [],
-    candles: [[54, 236, 3], [128, 240, 2], [62, 82, 3], [414, 80, 2], [334, 246, 3]],
-    medallion: 1, frame: true,
-    pool: [CX - 2, CY - 4, 84, 64],
-    // The hero starts on the medallion and the wave rises around it, so fights play out in the open middle.
-    heroStart: { x: CX, y: CY },
-    spawns: [{ x: CX, y: 88 }, { x: 120, y: CY }, { x: 360, y: CY }],
-    // Around the medallion, leaving dark lanes between pools (48 px across, 26 px down) and the medallion itself dark.
-    spots: [{ x: 176, y: 125 }, { x: 304, y: 125 }, { x: 176, y: 209 }, { x: 304, y: 209 }],
+    candles: [[54, 236, 3], [128, 240, 2], [62, 82, 3], [414, 80, 2], [334, 246, 3], [146, 300, 2], [58, 432, 3], [410, 436, 2], [56, 604, 3], [404, 608, 2], [150, 610, 2]],
+    medallions: [[CY, 1, true], [540, 0.6, true]],
+    pools: [[CX - 2, CY - 4, 84, 64], [CX, 536, 54, 42]],
+    beams: [0, 378],
+    // Room 1: the hero starts on the small medallion and the first wave rises around it, so fights play out in the open.
+    heroStart: { x: CX, y: 532 },
+    spawns: [{ x: CX, y: 460 }, { x: 128, y: 560 }, { x: 352, y: 560 },
+      { x: CX, y: 296 }, { x: 56, y: 340 }, { x: 424, y: 340 },
+      { x: CX, y: 88 }, { x: 120, y: CY }, { x: 360, y: CY }],
+    // Around the medallions and down the tombs, leaving dark lanes between pools (48 px across, 26 px down) and the
+    // medallions themselves dark.
+    spots: [{ x: 176, y: 125 }, { x: 304, y: 125 }, { x: 176, y: 209 }, { x: 304, y: 209 },
+      { x: 180, y: 292 }, { x: 300, y: 292 }, { x: 180, y: 404 }, { x: 300, y: 404 },
+      { x: 152, y: 532 }, { x: 328, y: 532 }, { x: 152, y: 604 }, { x: 328, y: 604 }],
+    sections: PARTS,
     decor: hallDecor,
   },
-  // La nef: a central lane down a runner, between two rows of pillars (whole at the back, snapped further down) that
-  // shelter the side aisles from bolts; crossbowmen rise in the aisles and shoot through the gaps.
+  // La nef: a central lane up a runner, between two rows of pillars (whole at the back, snapped further down, one fallen)
+  // that shelter the side aisles from bolts; crossbowmen rise in the aisles and shoot through the gaps. Halfway, the rows
+  // open on a crossing: a second rosette on the runner, a brazier at each end.
   nave: {
     props: [
       { kind: 'pillar', x: 168, y: 112, w: 24, h: 12 },
@@ -713,28 +742,53 @@ const LAYOUT: Record<LayoutId, Layout> = {
       { kind: 'stump', x: 312, y: 168, w: 24, h: 12, flip: true },
       { kind: 'stump', x: 168, y: 224, w: 24, h: 12, tall: 44, flip: true },
       { kind: 'stump', x: 312, y: 224, w: 24, h: 12, tall: 48 },
+      { kind: 'stump', x: 168, y: 280, w: 24, h: 12, tall: 52 },
+      { kind: 'stump', x: 312, y: 280, w: 24, h: 12, tall: 56, flip: true },
+      { kind: 'stump', x: 168, y: 336, w: 24, h: 12, tall: 36, flip: true },
+      { kind: 'stump', x: 312, y: 336, w: 24, h: 12, tall: 42 },
+      { kind: 'stump', x: 168, y: 504, w: 24, h: 12, tall: 46 },
+      { kind: 'stump', x: 312, y: 504, w: 24, h: 12, tall: 32, flip: true },
+      { kind: 'stump', x: 312, y: 560, w: 24, h: 12, tall: 52 },
+      { kind: 'stump', x: 168, y: 560, w: 24, h: 12, tall: 22 }, // only its plinth left: the pillar lies by it
+      { kind: 'fallen', x: 108, y: 568, w: 84, h: 10 },
       { kind: 'brazier', x: 198, y: 86, w: 12, h: 8 },
       { kind: 'brazier', x: 282, y: 86, w: 12, h: 8 },
+      { kind: 'brazier', x: 112, y: 424, w: 12, h: 8 },
+      { kind: 'brazier', x: 368, y: 424, w: 12, h: 8 },
       { kind: 'coffin', x: 98, y: 206, w: 46, h: 14 },
       { kind: 'coffinOpen', x: 386, y: 140, w: 62, h: 14 },
+      { kind: 'coffin', x: 98, y: 316, w: 46, h: 14 },
+      { kind: 'coffinOpen', x: 384, y: 588, w: 62, h: 14 },
     ],
     pits: [],
-    candles: [[58, 84, 3], [184, 120, 2], [290, 120, 2], [54, 240, 3], [408, 246, 2], [406, 82, 2]],
-    medallion: NAVE_ROSETTE, frame: false,
-    pool: [CX, CY - 2, 46, 40],
-    heroStart: { x: CX, y: CY },
-    spawns: [{ x: CX, y: 92 }, { x: 96, y: 134 }, { x: 386, y: 194 }],
-    spots: [{ x: 206, y: 130 }, { x: 274, y: 204 }, { x: 98, y: 98 }, { x: 384, y: 234 }],
+    candles: [[58, 84, 3], [184, 120, 2], [290, 120, 2], [54, 240, 3], [408, 246, 2], [406, 82, 2], [184, 290, 2], [290, 344, 2], [54, 452, 3], [410, 380, 2], [52, 604, 2], [184, 514, 3]],
+    medallions: [[CY, 0.6, false], [420, 0.5, false]],
+    pools: [[CX, CY - 2, 46, 40], [CX, 418, 42, 34]],
+    beams: [0, 258],
+    heroStart: { x: CX, y: 566 },
+    spawns: [{ x: CX, y: 470 }, { x: 96, y: 500 }, { x: 384, y: 500 },
+      { x: CX, y: 330 }, { x: 96, y: 380 }, { x: 384, y: 356 },
+      { x: CX, y: 92 }, { x: 96, y: 134 }, { x: 386, y: 194 }],
+    spots: [{ x: 206, y: 130 }, { x: 274, y: 204 }, { x: 98, y: 98 }, { x: 384, y: 234 },
+      { x: 206, y: 300 }, { x: 274, y: 380 }, { x: 98, y: 350 }, { x: 384, y: 290 },
+      { x: 206, y: 526 }, { x: 274, y: 594 }, { x: 98, y: 600 }, { x: 384, y: 470 }],
+    sections: [452, 248],
     decor: naveDecor,
   },
   // L'ossuaire effondré: the floor has fallen into the abyss along the walls and in holes; walkers go round, bolts and
-  // shards fly over. Few props, little cover, and the edges are where one gets cornered.
+  // shards fly over. Few props, little cover, and the edges are where one gets cornered. Halfway up, the great collapse
+  // cuts the room across: two bridges over it, one up the middle under a moon shaft, one along the east wall.
   ossuary: {
     props: [
       { kind: 'brazier', x: 198, y: 86, w: 12, h: 8 },
       { kind: 'brazier', x: 282, y: 86, w: 12, h: 8 },
       { kind: 'heap', x: 66, y: 86, w: 24, h: 8 },
       { kind: 'heap', x: 410, y: 238, w: 24, h: 8 },
+      { kind: 'brazier', x: 196, y: 402, w: 12, h: 8 },
+      { kind: 'brazier', x: 284, y: 402, w: 12, h: 8 },
+      { kind: 'heap', x: 420, y: 298, w: 24, h: 8 },
+      { kind: 'heap', x: 70, y: 604, w: 24, h: 8 },
+      { kind: 'heap', x: 250, y: 484, w: 24, h: 8 },
     ],
     pits: [
       { x: 40, y: 128, w: 80, h: 48 }, { x: 40, y: 172, w: 48, h: 28 }, { x: 96, y: 120, w: 32, h: 28 }, // west: against the wall
@@ -742,34 +796,60 @@ const LAYOUT: Record<LayoutId, Layout> = {
       { x: 152, y: 80, w: 32, h: 32 }, // back left
       { x: 280, y: 200, w: 64, h: 32 }, // front right, where the medallion's crack ran
       { x: 128, y: 216, w: 32, h: 24 }, // front left
+      // The great collapse, west and east of the middle bridge, short of the east wall.
+      { x: 40, y: 332, w: 172, h: 40 }, { x: 72, y: 318, w: 72, h: 18 }, { x: 120, y: 368, w: 64, h: 16 },
+      { x: 268, y: 332, w: 132, h: 40 }, { x: 300, y: 368, w: 56, h: 16 }, { x: 328, y: 320, w: 40, h: 14 },
+      // Down by the stairs: the floor gone along both walls and in two holes.
+      { x: 40, y: 468, w: 52, h: 64 }, { x: 40, y: 450, w: 28, h: 24 },
+      { x: 392, y: 500, w: 48, h: 72 }, { x: 372, y: 520, w: 24, h: 28 },
+      { x: 300, y: 446, w: 40, h: 26 }, { x: 140, y: 546, w: 40, h: 28 },
     ],
-    candles: [[62, 236, 3], [404, 80, 2], [296, 248, 2]],
-    medallion: 0.68, frame: false,
-    pool: [CX, CY - 2, 58, 46],
-    heroStart: { x: CX, y: CY },
-    spawns: [{ x: CX, y: 92 }, { x: 102, y: 100 }, { x: 392, y: 194 }],
-    spots: [{ x: 172, y: 154 }, { x: 306, y: 164 }, { x: 190, y: 226 }, { x: 318, y: 112 }],
+    candles: [[62, 236, 3], [404, 80, 2], [296, 248, 2], [176, 300, 2], [412, 430, 3], [58, 420, 2], [300, 600, 3], [110, 456, 2]],
+    medallions: [[CY, 0.68, false]],
+    pools: [[CX, CY - 2, 58, 46], [CX, 356, 34, 40]],
+    beams: [0, 194],
+    heroStart: { x: CX, y: 580 },
+    spawns: [{ x: CX, y: 446 }, { x: 120, y: 456 }, { x: 352, y: 516 },
+      { x: CX, y: 300 }, { x: 100, y: 410 }, { x: 380, y: 410 },
+      { x: CX, y: 92 }, { x: 102, y: 100 }, { x: 392, y: 194 }],
+    spots: [{ x: 172, y: 154 }, { x: 306, y: 164 }, { x: 190, y: 226 }, { x: 318, y: 112 },
+      { x: 150, y: 290 }, { x: 320, y: 290 }, { x: 150, y: 420 }, { x: 336, y: 420 },
+      { x: 196, y: 470 }, { x: 290, y: 540 }, { x: 116, y: 604 }, { x: 350, y: 604 }],
+    sections: [440, 248],
     decor: ossuaryDecor,
   },
-  // La chapelle aux vitraux: the Order's chapel. Stained glass high in the unseen left wall lays four panes of holy light
-  // on the floor that burn the vampire (not the ghouls, like a lantern's pool); the mist goes through unharmed. Two
-  // banks of pews face the altar at the back, low cover from bolts; the gift rises on the altar step.
+  // La chapelle aux vitraux: the Order's chapel. Stained glass high in the unseen left wall lays panes of holy light on
+  // the floor that burn the vampire (not the ghouls, like a lantern's pool); the mist goes through unharmed. Banks of
+  // pews face the altar at the back, low cover from bolts; the gift rises on the altar step. By the stairs, the font of
+  // the Order's holy water between two braziers.
   chapel: {
     props: [
       { kind: 'altar', x: CX, y: 104, w: 40, h: 10 },
       { kind: 'brazier', x: 184, y: 100, w: 12, h: 8 },
       { kind: 'brazier', x: 296, y: 100, w: 12, h: 8 },
-      ...[156, 192, 228].flatMap((y) => [{ kind: 'pew' as const, x: 140, y, w: 64, h: 8 }, { kind: 'pew' as const, x: 340, y, w: 64, h: 8 }]),
+      ...[156, 192, 228, 300, 336, 372].flatMap((y) => [{ kind: 'pew' as const, x: 140, y, w: 64, h: 8 }, { kind: 'pew' as const, x: 340, y, w: 64, h: 8 }]),
+      { kind: 'font', x: CX, y: 504, w: 26, h: 10 },
+      { kind: 'brazier', x: 184, y: 488, w: 12, h: 8 },
+      { kind: 'brazier', x: 296, y: 488, w: 12, h: 8 },
+      { kind: 'pew', x: 120, y: 572, w: 64, h: 8 },
+      { kind: 'pew', x: 360, y: 572, w: 64, h: 8 },
     ],
     pits: [],
-    candles: [[52, 80, 3], [418, 84, 2], [58, 242, 2], [412, 244, 3]],
-    medallion: 0, frame: false,
-    pool: [CX, 120, 30, 18],
-    heroStart: { x: CX, y: 140 },
-    spawns: [{ x: CX, y: 78 }, { x: 74, y: 210 }, { x: 406, y: 120 }],
-    spots: [{ x: 206, y: 222 }, { x: 276, y: 132 }, { x: 88, y: 240 }, { x: 400, y: 92 }],
+    candles: [[52, 80, 3], [418, 84, 2], [58, 242, 2], [412, 244, 3], [56, 432, 3], [414, 420, 2], [52, 610, 2], [414, 612, 3]],
+    medallions: [],
+    pools: [[CX, 120, 30, 18]],
+    heroStart: { x: CX, y: 566 },
+    spawns: [{ x: CX, y: 452 }, { x: 90, y: 516 }, { x: 390, y: 516 },
+      { x: CX, y: 290 }, { x: 74, y: 330 }, { x: 406, y: 306 },
+      { x: CX, y: 78 }, { x: 74, y: 210 }, { x: 406, y: 120 }],
+    spots: [{ x: 206, y: 222 }, { x: 276, y: 132 }, { x: 88, y: 240 }, { x: 400, y: 92 },
+      { x: 206, y: 352 }, { x: 276, y: 290 }, { x: 88, y: 410 }, { x: 400, y: 404 },
+      { x: 160, y: 536 }, { x: 320, y: 540 }, { x: 88, y: 470 }, { x: 400, y: 466 }],
     gift: { x: CX, y: 118 },
-    windows: [{ x: 196, y: 118 }, { x: 262, y: 166 }, { x: 52, y: 118 }, { x: 384, y: 184 }],
+    windows: [{ x: 196, y: 118 }, { x: 262, y: 166 }, { x: 52, y: 118 }, { x: 384, y: 184 },
+      { x: 60, y: 286 }, { x: 214, y: 300 }, { x: 386, y: 268 }, { x: 270, y: 396 },
+      { x: 112, y: 452 }, { x: 330, y: 478 }, { x: 56, y: 548 }],
+    sections: PARTS,
     decor: chapelDecor,
   },
   // Le cloître sous l'Aube: the garth is open to the Eternal Dawn, which burns the vampire who lingers where it falls;
@@ -786,8 +866,8 @@ const LAYOUT: Record<LayoutId, Layout> = {
     ],
     pits: HEDGES,
     candles: [],
-    medallion: 0, frame: false,
-    pool: [CX, CY, 1, 1],
+    medallions: [],
+    pools: [],
     heroStart: { x: CX, y: CFY1 - 28 },
     // A part's spawns lie a few steps ahead of the hero as he comes into it, in view.
     spawns: [{ x: 168, y: 612 }, { x: 348, y: 610 }, { x: 450, y: 690 },
@@ -826,15 +906,43 @@ function hallDecor(p: Px) {
   skull(p, 70, 152); bone(p, 77, 156, 5); bone(p, 64, 158, 4, true);
   skull(p, 424, 128); bone(p, 416, 132, 6);
   skull(p, 120, 250); bone(p, 404, 248, 5); bone(p, 292, 84, 4);
+  // Down the room: the tombs' graves set in the floor either side of the way up, between the coffins and the stumps.
+  ledger(p, 190, 296, false);
+  ledger(p, 262, 300, true);
+  ledger(p, 186, 372, false);
+  ledger(p, 266, 376, false);
+  ledger(p, 54, 292, true);
+  ledger(p, 398, 300, false);
+  const R = rng(9);
+  crackAt(p, R, 300, 606, -1.9, 22);
+  crackAt(p, R, 418, 548, 2.3, 18);
+  crackAt(p, R, 132, 446, -0.3, 16);
+  crackAt(p, R, 246, 420, 1.3, 14);
+  crackAt(p, R, 60, 290, 0.9, 14);
+  chips(p, [[344, 440], [126, 338], [184, 594], [296, 256], [56, 520], [404, 412]]);
+  rubble(p, [[402, 496, 7, 4], [412, 500, 5, 3], [396, 504, 4, 3], [374, 498, 4, 3], [416, 492, 3, 2],
+    [322, 348, 5, 3], [330, 352, 6, 4], [318, 357, 3, 2], [186, 348, 5, 3], [152, 352, 4, 3]]);
+  // Dragged from the open coffin by the stairs' way, and spilled round the small medallion.
+  pool(p, 350, 316, 11, 5, 34);
+  for (let i = 0; i < 7; i++) splat(p, 336 - i * 10, 324 + i * 6 + Math.sin(i) * 2, 3.2 - i * 0.3, 140 + i, P.blood0, mix(P.blood0, P.blood1, 0.5));
+  pool(p, 70, 592, 13, 6, 35);
+  pool(p, 134, 400, 8, 4, 36);
+  splat(p, 204, 506, 4, 56, P.blood0, P.blood1, P.blood2);
+  splat(p, 282, 572, 3, 57, P.blood0, mix(P.blood0, P.blood1, 0.5));
+  splat(p, 126, 452, 4, 58, P.blood0, mix(P.blood0, P.blood1, 0.4));
+  splat(p, 360, 446, 3, 59, P.blood0, P.blood1);
+  skull(p, 66, 462); bone(p, 73, 466, 5); bone(p, 60, 468, 4, true);
+  skull(p, 422, 572); bone(p, 414, 576, 6);
+  skull(p, 236, 266); bone(p, 344, 612, 5); bone(p, 60, 362, 4, true); skull(p, 420, 420);
 }
 
 /** The nave's runner: a rotten crimson carpet from the stairs to the gate, frayed, stained and worn bald in places,
- *  running under the rosette. */
+ *  running under the rosettes. */
 function runner(p: Px) {
-  const x0 = CX - 16, x1 = CX + 16, r = 50 * NAVE_ROSETTE + 3;
+  const x0 = CX - 16, x1 = CX + 16, under = (x: number, y: number) => LAYOUT.nave.medallions.some(([cy, s]) => Math.hypot(x + 0.5 - CX, y + 0.5 - cy) < 50 * s + 3);
   for (let y = FY0 + 3; y < FY1; y++)
     for (let x = x0; x < x1; x++) {
-      if (Math.hypot(x + 0.5 - CX, y + 0.5 - CY) < r) continue;
+      if (under(x, y)) continue;
       const e = Math.min(x - x0, x1 - 1 - x); // 0 on its edges
       if (e < 2 && noise(x, y, 3, 71) > 0.6 - e * 0.1) continue; // frayed
       const dx = Math.abs(x + 0.5 - CX), dy = Math.abs(((y - FY0 + 8) % 16) - 7.5), diamond = dx + dy;
@@ -846,9 +954,9 @@ function runner(p: Px) {
       if (noise(x, y, 4, 73) > 0.76) p.tint(x, y, P.void0, 0.3); // stains
     }
   // It lies on the slabs: a hairline of shadow along its right edge.
-  for (let y = FY0 + 3; y < FY1; y++) if (Math.hypot(x1 + 0.5 - CX, y + 0.5 - CY) >= r) p.tint(x1, y, P.void0, 0.4);
+  for (let y = FY0 + 3; y < FY1; y++) if (!under(x1, y)) p.tint(x1, y, P.void0, 0.4);
   // Rucked up in a few folds: a lit crest, a dark trough.
-  for (const y of [102, 206, 228])
+  for (const y of [102, 206, 228, 306, 362, 472, 538, 596])
     for (let x = x0 + 1; x < x1 - 1; x++) { p.tint(x, y - 1, P.blood2, 0.25); p.tint(x, y, P.void0, 0.35); }
 }
 
@@ -875,6 +983,33 @@ function naveDecor(p: Px) {
   skull(p, 66, 186); bone(p, 72, 191, 5); bone(p, 60, 190, 4, true);
   skull(p, 418, 112); bone(p, 410, 117, 6);
   skull(p, 136, 248); bone(p, 344, 250, 5); bone(p, 150, 84, 4);
+  // Down the nave: more graves in the aisles, the drums of the snapped pillars, and one pillar fallen whole across the
+  // left aisle by the stairs, its plinth left standing as a stub.
+  ledger(p, 60, 404, false);
+  ledger(p, 372, 300, true);
+  ledger(p, 64, 528, true);
+  ledger(p, 380, 400, false);
+  const S = rng(64);
+  crackAt(p, S, 120, 470, -0.4, 18);
+  crackAt(p, S, 370, 524, 2.5, 16);
+  crackAt(p, S, 206, 600, -1.5, 12);
+  crackAt(p, S, 288, 446, 1.1, 14);
+  crackAt(p, S, 110, 280, 0.4, 14);
+  chips(p, [[70, 352], [330, 470], [408, 440], [136, 580], [264, 312], [404, 610]]);
+  grit(p, S, 220, (x) => Math.abs(x - CX) > 18);
+  rubble(p, [[184, 272, 6, 4], [192, 278, 4, 3], [326, 270, 5, 3], [334, 276, 7, 4], [182, 328, 5, 3], [150, 340, 4, 3],
+    [326, 330, 4, 3], [296, 342, 5, 3], [184, 498, 5, 3], [190, 506, 4, 3], [326, 494, 6, 4], [336, 502, 4, 3], [292, 508, 3, 2],
+    [326, 552, 5, 3], [298, 566, 4, 3]]);
+  rubble(p, [[182, 562, 5, 3], [60, 574, 4, 3], [148, 574, 5, 3], [96, 580, 3, 2]]);
+  pool(p, 382, 572, 10, 5, 65);
+  for (let i = 0; i < 5; i++) splat(p, 368 - i * 9, 566 - i * 6, 3 - i * 0.4, 75 + i, P.blood0, mix(P.blood0, P.blood1, 0.5));
+  splat(p, 214, 460, 4, 80, P.blood0, P.blood1, P.blood2);
+  splat(p, 120, 336, 3, 81, P.blood0, mix(P.blood0, P.blood1, 0.5));
+  splat(p, 268, 552, 3, 82, P.blood0, P.blood1);
+  pool(p, 90, 440, 8, 4, 83);
+  skull(p, 70, 470); bone(p, 76, 475, 5);
+  skull(p, 412, 336); bone(p, 404, 341, 6); bone(p, 60, 612, 5);
+  skull(p, 140, 300); skull(p, 402, 518); bone(p, 396, 524, 4, true);
 }
 
 function ossuaryDecor(p: Px) {
@@ -890,16 +1025,26 @@ function ossuaryDecor(p: Px) {
   crackAt(p, R, 186, 94, 0.2, 12);
   crackAt(p, R, 162, 228, 0.1, 14);
   crackAt(p, R, 346, 214, 0.4, 16);
-  chips(p, [[216, 222], [296, 64], [120, 64], [344, 176], [72, 104]]);
-  grit(p, R, 140, () => true);
+  // And from the great collapse and the holes by the stairs.
+  crackAt(p, R, 214, 330, -1.2, 22, 0.5, 0.7);
+  crackAt(p, R, 268, 374, 1.6, 26, 0.5, 0.7);
+  crackAt(p, R, 404, 352, 1.4, 16);
+  crackAt(p, R, 94, 492, 0.2, 18);
+  crackAt(p, R, 390, 540, 2.9, 16);
+  crackAt(p, R, 180, 560, 0.3, 14);
+  crackAt(p, R, 336, 460, 2.2, 14);
+  chips(p, [[216, 222], [296, 64], [120, 64], [344, 176], [72, 104], [180, 288], [410, 410], [232, 588], [96, 600], [320, 504]]);
+  grit(p, R, 380, () => true);
   // Slabs broken up around the holes.
   rubble(p, [[124, 150, 6, 4], [130, 158, 4, 3], [122, 178, 3, 2], [96, 204, 5, 3], [348, 108, 5, 3], [352, 132, 4, 3],
-    [380, 166, 6, 4], [190, 104, 4, 3], [186, 82, 3, 2], [270, 216, 4, 3], [274, 204, 3, 2], [348, 238, 6, 4], [164, 236, 4, 3]]);
+    [380, 166, 6, 4], [190, 104, 4, 3], [186, 82, 3, 2], [270, 216, 4, 3], [274, 204, 3, 2], [348, 238, 6, 4], [164, 236, 4, 3],
+    [206, 318, 4, 3], [148, 312, 5, 3], [214, 384, 6, 4], [272, 390, 4, 3], [374, 314, 5, 3], [362, 390, 4, 3], [98, 470, 5, 3],
+    [96, 532, 4, 3], [342, 460, 4, 3], [366, 506, 6, 4], [186, 556, 4, 3], [136, 578, 5, 3]]);
   // The dead spilled out of the fallen ossuary niches: a skull and its bones here and there, none on the medallion.
   const S = rng(83), pit = (x: number, y: number) => L.pits.some((b) => x > b.x - 10 && x < b.x + b.w + 10 && y > b.y - 10 && y < b.y + b.h + 10);
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 70; i++) {
     const x = Math.floor(FX0 + 20 + S() * (FX1 - FX0 - 40)), y = Math.floor(FY0 + 8 + S() * (FY1 - FY0 - 30)), k = S();
-    if (pit(x, y) || Math.hypot(x - CX, y - CY) < 44 || Math.abs(x - CX) < 18) continue;
+    if (pit(x, y) || Math.hypot(x - CX, y - CY) < 44 || Math.abs(x - CX) < 18 || L.props.some((b) => Math.abs(x - b.x) < 20 && Math.abs(y - b.y) < 14)) continue;
     skull(p, x, y);
     if (k < 0.3) bone(p, x + 6, y + 1 + Math.floor(k * 12), 5);
     else if (k < 0.55) bone(p, x - 6, y + 4, 5), bone(p, x + 1, y + 6, 4, true);
@@ -909,6 +1054,10 @@ function ossuaryDecor(p: Px) {
   splat(p, 222, 196, 4, 84, P.blood0, P.blood1, P.blood2);
   splat(p, 330, 150, 3, 85, P.blood0, mix(P.blood0, P.blood1, 0.5));
   pool(p, 98, 236, 10, 5, 86);
+  splat(p, 236, 420, 4, 87, P.blood0, P.blood1, P.blood2);
+  splat(p, 120, 300, 3, 88, P.blood0, mix(P.blood0, P.blood1, 0.5));
+  splat(p, 330, 590, 4, 89, P.blood0, P.blood1);
+  pool(p, 372, 432, 9, 4, 90);
 }
 
 function chapelDecor(p: Px) {
@@ -916,8 +1065,16 @@ function chapelDecor(p: Px) {
   crackAt(p, R, 120, 248, -1.2, 14);
   crackAt(p, R, 420, 150, 2.4, 16);
   crackAt(p, R, 300, 238, -1.8, 12);
-  chips(p, [[72, 170], [330, 76], [150, 72], [420, 220]]);
-  grit(p, R, 90, (x) => Math.abs(x - CX) > 30);
+  crackAt(p, R, 100, 400, -0.6, 16);
+  crackAt(p, R, 410, 350, 2.2, 14);
+  crackAt(p, R, 290, 610, -1.6, 14);
+  crackAt(p, R, 70, 500, 0.8, 12);
+  chips(p, [[72, 170], [330, 76], [150, 72], [420, 220], [72, 362], [404, 520], [180, 604], [300, 420]]);
+  grit(p, R, 250, (x) => Math.abs(x - CX) > 30);
+  // The font's round step, worn pale where the faithful knelt.
+  p.ellipse(CX, 500, 24, 13, P.stone1);
+  p.ellipse(CX, 499, 21, 11, mix(P.stone1, P.stone2, 0.5));
+  engrave(p, (x, y) => Math.abs(Math.hypot((x + 0.5 - CX) / 24, (y + 0.5 - 500) / 13) - 1) < 0.05, CX - 26, 486, CX + 26, 514, 0.5);
   // The altar's dais: two pale steps the gift rises from.
   for (const [d, c] of [[0, P.stone1], [3, P.stone2]] as const) {
     p.rect(CX - 30 + d * 2, 96 + d, 60 - d * 4, 28 - d * 2, c);
@@ -926,7 +1083,7 @@ function chapelDecor(p: Px) {
   }
   engrave(p, (x, y) => Math.abs(Math.hypot(x + 0.5 - CX, (y + 0.5 - 118) * 1.6) - 7) < 0.6, CX - 10, 110, CX + 10, 126, 0.5);
   // Glass the Order's windows lost, glinting on the slabs, and the blood of whoever prayed here last.
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 110; i++) {
     const x = FX0 + 8 + Math.floor(R() * (FX1 - FX0 - 16)), y = FY0 + 6 + Math.floor(R() * (FY1 - FY0 - 12));
     if (Math.abs(x - CX) < 34 && y < 126) continue;
     p.p(x, y, GLASS[Math.floor(R() * GLASS.length)]);
@@ -937,6 +1094,12 @@ function chapelDecor(p: Px) {
   splat(p, 170, 132, 3, 104, P.blood0, mix(P.blood0, P.blood1, 0.5));
   skull(p, 424, 236); bone(p, 416, 240, 5);
   skull(p, 60, 136); bone(p, 66, 141, 4, true);
+  pool(p, 380, 352, 9, 4, 105);
+  splat(p, 150, 316, 3, 106, P.blood0, P.blood1, P.blood2);
+  splat(p, 300, 540, 4, 107, P.blood0, mix(P.blood0, P.blood1, 0.5));
+  splat(p, 196, 456, 3, 108, P.blood0, P.blood1);
+  skull(p, 420, 548); bone(p, 412, 552, 5);
+  skull(p, 64, 392); bone(p, 70, 397, 4, true); bone(p, 250, 612, 5);
 }
 
 /** Light sources baked into the background; braziers also get a flickering overlay. */
@@ -953,8 +1116,8 @@ function paintLight(p: Px, L: Layout) {
   for (let y = FY0; y < FY0 + 60; y++) for (let x = FX0; x < FX1; x++) p.glow(x, y, P.moon1, lancetSpill(x, y) * 0.2);
   // Moonlight pouring through the gate, striped by the portcullis.
   for (let y = FY0; y < FY0 + 100; y++) for (let x = CX - 60; x < CX + 80; x++) p.glow(x, y, P.moon1, gateSpill(x, y) * 0.3);
-  // The great moon pool on the medallion.
-  light(p, ...L.pool, P.moon1, [0.15, 0.32], 0.06, 4, 22);
+  // The great moon pool on the medallion, and those down the room.
+  for (const q of L.pools) light(p, ...q, P.moon1, [0.15, 0.32], 0.06, 4, 22);
   // Warm pools on the floor and the wall behind: fire pulls the cold floor toward its own colour, so it reads warm on blue.
   for (const b of L.props) if (b.kind === 'brazier') light(p, b.x, b.y - 14, 38, 30, mix(P.fire, P.blood2, 0.3), [0.12, 0.24, 0.36], 0.08, b.x, 12, 'tint');
   for (const [x, y, n] of L.candles) light(p, x + n * 1.5, y - 2, 10 + n * 2, 7 + n * 2, P.fire, [0.14, 0.28], 0.06, x, 8, 'tint');
@@ -972,7 +1135,7 @@ function paintLight(p: Px, L: Layout) {
 function paintShadows(p: Px, props: Prop[]) {
   for (const o of props) {
     const l = o.x - o.w / 2, r = o.x + o.w / 2;
-    const reach = o.kind === 'pillar' ? 34 : o.kind === 'stump' ? Math.round(((o.tall ?? 58) * 18) / 58) : o.kind === 'brazier' ? 10 : o.kind === 'heap' ? 8 : 9;
+    const reach = o.kind === 'pillar' ? Math.min(34, Math.round((o.tall ?? 140) / 4)) : o.kind === 'stump' ? Math.round(((o.tall ?? 58) * 18) / 58) : o.kind === 'brazier' ? 10 : o.kind === 'heap' ? 8 : 9;
     p.fill(l - 2, o.y - o.h, r + reach * 1.2, o.y + reach * 0.6, (x, y) => {
       const t = (y - o.y + o.h * 0.5) / (reach * 0.6);
       return t >= -0.6 && t <= 1 && x >= l + t * reach * 0.9 && x <= r + t * reach * 1.1;
@@ -1018,7 +1181,8 @@ function paintPits(p: Px, pits: Box[]) {
   }
   // A few slabs that went down with the floor, caught tilted on the way: the top face lit at its upper edge and
   // darker down its slope, its broken thickness below, the dark under it.
-  for (const [sx, sy, w, h, skew] of [[54, 150, 20, 13, 0.45], [404, 118, 18, 12, -0.5], [298, 212, 16, 10, 0.35], [58, 182, 12, 8, -0.3]])
+  for (const [sx, sy, w, h, skew] of [[54, 150, 20, 13, 0.45], [404, 118, 18, 12, -0.5], [298, 212, 16, 10, 0.35], [58, 182, 12, 8, -0.3],
+    [96, 340, 22, 13, 0.4], [330, 344, 18, 12, -0.45], [168, 352, 14, 9, 0.3], [404, 520, 16, 11, 0.3], [48, 488, 14, 9, -0.3]])
     for (let j = 0; j < h + 3; j++)
       for (let i = 0; i < w; i++) {
         const x = Math.round(sx + i + j * skew), y = sy + j;
@@ -1042,19 +1206,19 @@ function paintBackground(p: Px, L: Layout, bars = true) {
   // Beyond the side walls: a crimson dark with pillars receding into it.
   p.rect(0, 0, p.w, p.h, P.abyss1);
   for (const x of [4, 18, 462, 476]) {
-    p.rect(x - 4, 0, 8, T.height, P.abyss0);
-    p.rect(x - 4, 0, 1, T.height, P.abyss2);
+    p.rect(x - 4, 0, 8, p.h, P.abyss0);
+    p.rect(x - 4, 0, 1, p.h, P.abyss2);
   }
   paintFloor(p);
-  if (L.medallion) medallion(p, L.medallion, L.frame);
+  for (const [y, s, frame] of L.medallions) medallion(p, s, frame, y);
   L.decor(p);
   paintShadows(p, L.props);
   paintBackWall(p, bars);
   // Side wall tops (seen from above): the right wall's inner rim faces the light, the left one's is in shadow.
-  for (const x of [FX0 - 12, FX1]) wallTop(p, x, 0, 12, T.height);
-  p.rect(FX1, 9, 1, T.height, P.stone0);
-  p.rect(FX0 - 12, 0, 1, T.height, P.stone0);
-  p.rect(FX0 - 1, 9, 1, T.height, P.void0);
+  for (const x of [FX0 - 12, FX1]) wallTop(p, x, 0, 12, p.h);
+  p.rect(FX1, 9, 1, p.h, P.stone0);
+  p.rect(FX0 - 12, 0, 1, p.h, P.stone0);
+  p.rect(FX0 - 1, 9, 1, p.h, P.void0);
   p.rect(FX0, FY0, 2, FY1 - FY0, P.void0, 0.4);
   for (const [x, y, n] of L.candles) candles(p, x, y, n, x * 7 + y);
   cobweb(p, FX1 - 1, 10, 22);
@@ -1232,7 +1396,7 @@ function door(p: Px, bars: boolean) {
  *  walks' flagstones, the garth (its long path, the well's cross path, lawns, box hedges, graves), each in the Dawn's
  *  light or sunk in shade. */
 function paintCloister(p: Px, bars: boolean) {
-  paintFront(p, 0, CW, CH - T.height); // the front wall runs on to the edges (the shared overlay stops at the crypt's)
+  paintFront(p, 0, CW, CFY1); // the front wall runs on to the edges (the shared overlay stops at the crypt's)
   // The church's south wall, in shade: its roof's eave in the light on top, a corbel table, coursed ashlar, buttresses,
   // two tall windows dark from outside, and the door, the way on.
   for (let y = 0; y < FY0; y++)
@@ -1329,12 +1493,12 @@ const MARGIN = 300;
 function paintAbyss(p: Px) {
   for (let j = 0; j < p.h; j++)
     for (let i = 0; i < p.w; i++) {
-      const x = i - MARGIN, y = j - MARGIN, d = Math.max(-x, x - T.width + 1, -y, y - T.height + 1);
+      const x = i - MARGIN, y = j - MARGIN, d = Math.max(-x, x - T.width + 1, -y, y - RH + 1);
       if (d < 0) continue;
       const s = (((x < CX ? x : x - 458) % 14) + 14) % 14; // the pillars as at x 0 and 14, 458 and 472
-      const well = y >= T.height && Math.abs(x + 0.5 - CX) < 23 ? Math.max(0, 1 - d / 60) : 0;
+      const well = y >= RH && Math.abs(x + 0.5 - CX) < 23 ? Math.max(0, 1 - d / 60) : 0;
       const c = s === 0 ? P.abyss2 : s < 8 ? P.abyss0 : P.abyss1;
-      p.p(i, j, mix(c, P.void0, Math.max(well, Math.min(0.85, d / 110 + (y >= T.height && x >= FX0 - 12 && x < FX1 + 12 ? 0.3 : 0)))));
+      p.p(i, j, mix(c, P.void0, Math.max(well, Math.min(0.85, d / 110 + (y >= RH && x >= FX0 - 12 && x < FX1 + 12 ? 0.3 : 0)))));
     }
 }
 
@@ -1403,6 +1567,22 @@ function paintPillar(p: Px, broken: boolean, flip = false) {
   for (let i = 0; i < 18; i += 3) p.tint(5 + i, band + 2, P.void1, 0.6), p.tint(5 + i, band + 3, P.void1, 0.6);
   // Texture top = screen top: fade exactly like the wall behind (ceiling dark, then stepped shadow).
   for (let y = 0; y < 27; y++) for (let x = 0; x < p.w; x++) p.tint(x, y, P.void0, y < 10 ? 0.85 : [0.7, 0.55, 0.4, 0.25, 0.12][Math.floor((y - 7) / 4)]);
+}
+
+/** A pillar fallen whole along the floor, its capital to the left, broken off its plinth on the right: lit along its
+ *  top, its drums' joints across it. The feet line on the bottom row. */
+function paintFallen(p: Px) {
+  const W = p.w, H = p.h, snap = [3, 1, 2, 0, -1, 1, 3, 2, 0, -2, -1, 1, 2, 0];
+  for (let r = 0; r < 14; r++) {
+    const y = H - 15 + r, c = COLUMN[Math.floor((r * 16) / 14)], end = W - 4 + snap[r] - 2;
+    for (let x = 6; x < end; x++)
+      p.p(x, y, x >= end - 2 ? (r < 7 ? P.stone2 : P.stone1) : (x - 6) % 22 === 21 ? P.void2 : (x - 6) % 22 === 0 ? mix(c, P.stone2, 0.3) : x % 4 === 0 && r > 1 && r < 12 ? mix(c, P.void1, 0.25) : c);
+  }
+  for (let r = -2; r < 16; r++) { // the capital's block at the far end
+    const y = H - 15 + r;
+    for (let x = 1; x < 6; x++) p.p(x, y, r === -2 || x === 1 ? P.stone2 : r > 12 ? P.void2 : r > 6 ? P.stone0 : P.stone1);
+  }
+  p.rect(1, H - 1, W - 6, 1, P.void0, 0.5);
 }
 
 function paintBrazier(p: Px) {
@@ -1558,6 +1738,30 @@ function paintAltar(p: Px) {
   p.rect(W / 2, H - 19, 1, 4, 0xc8902a);
 }
 
+/** The Order's font of holy water: a round stone basin on a short shaft and a stepped base, the water pale in it, the
+ *  Eternal Dawn's sun carved on its belly. Lit from the top left; the feet line on the bottom row. */
+function paintFont(p: Px) {
+  const W = p.w, H = p.h, c = W / 2, rim = H - 21;
+  p.rect(1, H - 5, W - 2, 5, P.stone0); // the base step: top, then front
+  p.rect(1, H - 5, W - 2, 1, P.stone1);
+  p.rect(1, H - 5, 1, 5, P.stone1);
+  p.rect(W - 2, H - 5, 1, 5, P.void2);
+  p.rect(1, H - 1, W - 2, 1, P.void2);
+  for (let y = H - 13; y < H - 5; y++) column(p, c - 5, y, 10); // the shaft
+  for (let y = H - 15; y < H - 13; y++) column(p, c - 7, y, 14);
+  for (let y = rim; y < H - 14; y++) { // the basin's belly, round under the rim
+    const hw = Math.round(12.5 * Math.sqrt(Math.max(0, 1 - ((y - rim) / 7.5) ** 2)));
+    column(p, c - hw, y, hw * 2);
+  }
+  p.ellipse(c, rim, 13, 4.5, P.stone2); // the rim seen from above, the water in it
+  p.ellipse(c, rim, 11, 3.2, P.stone0);
+  p.ellipse(c, rim + 0.5, 9.5, 2.4, P.moon0);
+  p.fill(c - 9, rim - 2, c + 9, rim + 3, (x, y) => Math.hypot((x + 0.5 - c + 2) / 6, (y + 0.5 - rim) / 1.4) < 1 && (x + y) % 3 === 0, P.moon1);
+  p.p(c - 4, rim, P.moon2);
+  p.p(c - 3, rim, P.moon2);
+  p.grid(c - 2, rim + 3, ['..Y..', '.YWY.', 'YWWWY', '.YWY.', '..Y..'], { Y: 0x7a4a1c, W: 0xc8902a });
+}
+
 // ---------- overlays ----------
 
 /** Moon shafts falling from the unseen oculus at the top left: parallel beams with hard edges, drawn additive. */
@@ -1581,20 +1785,22 @@ function shaftAt(windows: readonly P[], x: number, y: number) {
 
 function paintShaft(p: Px, L: Layout) {
   if (L.open) return; // under the sky, the light is on the ground
-  if (L.windows) for (let y = 0; y < FY1; y++)
-    for (let x = 0; x < p.w; x++) {
-      const k = shaftAt(L.windows, x, y);
-      if (k > 0) p.p(x, y, 0xffd75e, 0.03 + k * 0.07);
-    }
-  else for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      let k = 0;
-      const t = (y - SHAFT.top) / (SHAFT.bottom - SHAFT.top);
-      for (const b of BEAMS) if (inBeam(x, y, b)) k += b.k * (t > b.len - 0.12 ? 0.55 : 1);
-      if (k > 0) p.p(x, y, P.moon2, k);
-    }
-  // The same pool again, faint, so whoever stands in it catches the moon.
-  light(p, ...L.pool, P.moon2, [0.035, 0.07], 0.06, 4, 22, "paint");
+  // Each pane's shaft only rises up and to the left of it: looked for there alone, the brightest wins.
+  const k = new Float32Array(p.w * p.h);
+  for (const w of L.windows ?? [])
+    for (let y = Math.max(0, w.y - 141); y < Math.min(FY1, w.y + PANE.len + 1); y++)
+      for (let x = Math.max(0, w.x - 82); x < Math.min(p.w, w.x + 34); x++) k[y * p.w + x] = Math.max(k[y * p.w + x], shaftAt([w], x, y));
+  if (L.windows) for (let i = 0; i < k.length; i++) { if (k[i] > 0) p.p(i % p.w, Math.floor(i / p.w), 0xffd75e, 0.03 + k[i] * 0.07); }
+  else for (const dy of L.beams ?? [0])
+    for (let y = Math.max(0, dy + SHAFT.top); y < Math.min(p.h, dy + SHAFT.bottom + 1); y++)
+      for (let x = 0; x < p.w; x++) {
+        let k = 0;
+        const t = (y - dy - SHAFT.top) / (SHAFT.bottom - SHAFT.top);
+        for (const b of BEAMS) if (inBeam(x, y - dy, b)) k += b.k * (t > b.len - 0.12 ? 0.55 : 1);
+        if (k > 0) p.p(x, y, P.moon2, k);
+      }
+  // The same pools again, faint, so whoever stands in one catches the moon.
+  for (const q of L.pools) light(p, ...q, P.moon2, [0.035, 0.07], 0.06, 4, 22, "paint");
   for (let y = FY0; y < FY0 + 100; y++) for (let x = CX - 60; x < CX + 80; x++) if (gateSpill(x, y)) p.p(x, y, P.moon2, gateSpill(x, y) * 0.08);
   for (let y = FY0; y < FY0 + 60; y++) for (let x = FX0; x < FX1; x++) if (lancetSpill(x, y)) p.p(x, y, P.moon2, 0.05);
 }
@@ -1608,10 +1814,10 @@ function paintVignette(p: Px) {
     }
 }
 
-/** The front wall from x0 to x1, `oy` px down (the cloister's, at its foot). */
-function paintFront(p: Px, x0 = FX0 - 12, x1 = FX1 + 12, oy = 0) {
+/** The front wall from x0 to x1, along the floor's front edge fy1, 14 px deep. */
+function paintFront(p: Px, x0: number, x1: number, fy1: number) {
   // Front wall top (seen from above), steps down into the dark in the middle, its outer face below.
-  const sx0 = CX - 22, sx1 = CX + 22, fy1 = FY1 + oy, bottom = T.height + oy;
+  const sx0 = CX - 22, sx1 = CX + 22, bottom = fy1 + 14;
   for (let x = x0; x < x1; x++) {
     if (x >= sx0 && x < sx1) continue;
     p.rect(x, fy1, 1, 8, P.void1);
@@ -1655,7 +1861,7 @@ let BARS: Px;
 /** Paints the layout's room without its portcullis, and the portcullis alone as the pixels where the room painted with
  *  it differs: closed, the gate looks exactly as when it was part of the room. */
 function paintHall(scene: Phaser.Scene, id: LayoutId) {
-  const L = LAYOUT[id], h = L.open ? CH : T.height, open = new Px(T.width, h), shut = new Px(T.width, h);
+  const L = LAYOUT[id], h = L.open ? CH : RH, open = new Px(T.width, h), shut = new Px(T.width, h);
   if (L.open) { // painted once (it is slow), then the shut door over a copy: nothing else touches the door's box
     paintCloister(open, false);
     shut.d.set(open.d);
@@ -1713,16 +1919,16 @@ export function raiseGate(scene: Phaser.Scene, ms: number) {
 // ---------- build ----------
 
 export function build(scene: Phaser.Scene, id: LayoutId): Room {
-  const L = LAYOUT[id], height = L.open ? CH : T.height, fy1 = height - T.height + FY1; // the cloister is three screens tall
+  const L = LAYOUT[id], height = L.open ? CH : RH, fy1 = height - 14; // the floor's front edge
   if (!BARS_OF[id]) paintHall(scene, id); // painted on the layout's first build, kept across restarts
   BARS = BARS_OF[id]!;
   scene.add.image(0, 0, `room-bg-${id}`).setOrigin(0).setDepth(-1000);
   if (L.open) scene.add.image(-MARGIN, 0, bake(scene, 'room-ranges', CW + 2 * MARGIN, CH, paintRanges)).setOrigin(0).setDepth(-1001);
   else {
-    const key = bake(scene, 'room-abyss', T.width + 2 * MARGIN, T.height + 2 * MARGIN, paintAbyss);
+    const key = bake(scene, 'room-abyss', T.width + 2 * MARGIN, RH + 2 * MARGIN, paintAbyss);
     scene.add.image(-MARGIN, -MARGIN, key).setOrigin(0).setDepth(-1001);
     // Below the front wall it is drawn over the room too: the hero climbing the stairs shows only above the steps.
-    scene.add.image(-MARGIN, -MARGIN, key).setOrigin(0).setDepth(8500).setCrop(0, MARGIN + T.height, T.width + 2 * MARGIN, MARGIN);
+    scene.add.image(-MARGIN, -MARGIN, key).setOrigin(0).setDepth(8500).setCrop(0, MARGIN + RH, T.width + 2 * MARGIN, MARGIN);
   }
   drawGate(scene, 0); // the previous room left it open
   scene.add.image(GX, GY, 'room-gate').setOrigin(0).setDepth(-999);
@@ -1736,7 +1942,7 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
     // Characters sort by their sprite centre (feet - ~11 px), so a prop sorts at its feet line minus that.
     const depth = o.y - 11;
     if (o.kind === 'pillar' || o.kind === 'stump') {
-      const h = o.kind === 'pillar' ? o.y : o.tall ?? 58; // a whole pillar runs up to the top of the screen
+      const h = o.tall ?? (o.kind === 'pillar' ? o.y : 58); // a whole pillar runs up to the top of the room unless told
       const key = bake(scene, `room-${o.kind}-${h}${o.flip ? '-flip' : ''}`, 28, h, (p) => paintPillar(p, o.kind === 'stump', o.flip));
       scene.add.image(o.x, o.y, key).setOrigin(0.5, 1).setDepth(depth);
     } else if (o.kind === 'brazier') {
@@ -1744,6 +1950,10 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
       flame(scene, o.x, o.y - 17, depth);
     } else if (o.kind === 'pew' || o.kind === 'altar') {
       scene.add.image(o.x, o.y, bake(scene, `room-${o.kind}`, o.w + 2, o.kind === 'pew' ? 20 : 30, o.kind === 'pew' ? paintPew : paintAltar)).setOrigin(0.5, 1).setDepth(depth);
+    } else if (o.kind === 'fallen') {
+      scene.add.image(o.x, o.y, bake(scene, 'room-fallen', o.w + 4, 18, paintFallen)).setOrigin(0.5, 1).setDepth(depth);
+    } else if (o.kind === 'font') {
+      scene.add.image(o.x, o.y, bake(scene, 'room-font', 28, 30, paintFont)).setOrigin(0.5, 1).setDepth(depth);
     } else if (o.kind === 'heap') {
       scene.add.image(o.x, o.y + 2, bake(scene, 'room-heap', 28, 24, paintHeap)).setOrigin(0.5, 1).setDepth(depth);
     } else {
@@ -1755,9 +1965,9 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
   const pits = scene.physics.add.staticGroup();
   for (const b of L.pits) pits.add(scene.add.zone(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h));
 
-  if (!L.open) scene.add.image(0, 0, bake(scene, `room-shaft-${id}`, T.width, T.height, (p) => paintShaft(p, L))).setOrigin(0).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
+  if (!L.open) scene.add.image(0, 0, bake(scene, `room-shaft-${id}`, T.width, RH, (p) => paintShaft(p, L))).setOrigin(0).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
   atmosphere(scene, L);
-  scene.add.image(0, height - T.height, bake(scene, 'room-front', T.width, T.height, (p) => paintFront(p))).setOrigin(0).setDepth(8500);
+  scene.add.image(0, fy1, bake(scene, 'room-front', T.width, 14, (p) => paintFront(p, FX0 - 12, FX1 + 12, 0))).setOrigin(0).setDepth(8500);
   // The vignette frames the screen, whatever its shape: stretched to the view.
   const vignette = scene.add.image(0, 0, bake(scene, 'room-vignette', T.width, T.height, paintVignette)).setOrigin(0).setDepth(10_000).setScrollFactor(0);
   const fit = () => vignette.setDisplaySize(scene.scale.width, scene.scale.height);
@@ -1819,8 +2029,9 @@ function atmosphere(scene: Phaser.Scene, L: Layout) {
     getRandomPoint(out: Phaser.Types.Math.Vector2Like) {
       for (let i = 0; i < 20; i++) {
         if (L.open) { pt.set(Math.random() * CW, FY0 + Math.random() * (CFY1 - FY0)); if (dawn(pt.x, pt.y)) break; continue; }
-        pt.set(L.windows ? Math.random() * 440 : 100 + Math.random() * 220, (L.windows ? 60 : 10) + Math.random() * 160);
-        if (L.windows ? shaftAt(L.windows, pt.x, pt.y) > 0.3 : BEAMS.some((b) => inBeam(pt.x, pt.y, b))) break;
+        const beams = L.beams ?? [0], dy = beams[Math.floor(Math.random() * beams.length)];
+        pt.set(L.windows ? Math.random() * 440 : 100 + Math.random() * 220, L.windows ? 60 + Math.random() * (FY1 - 60) : dy + 10 + Math.random() * 160);
+        if (L.windows ? shaftAt(L.windows, pt.x, pt.y) > 0.3 : BEAMS.some((b) => inBeam(pt.x, pt.y - dy, b))) break;
       }
       out.x = pt.x; out.y = pt.y;
     },
@@ -1828,7 +2039,7 @@ function atmosphere(scene: Phaser.Scene, L: Layout) {
   scene.add.particles(0, 0, dot, {
     emitZone: { type: 'random', source } as Phaser.Types.GameObjects.Particles.EmitZoneData,
     lifespan: { min: 3000, max: 6000 }, speedX: { min: 1, max: 5 }, speedY: { min: -2, max: 4 },
-    alpha: { values: [0, 0.9, 0] }, tint: L.open ? 0xfff6d8 : L.windows ? 0xffd75e : P.moon2, frequency: L.open ? 30 : 90, advance: 6000, // the cloister: three screens of it
+    alpha: { values: [0, 0.9, 0] }, tint: L.open ? 0xfff6d8 : L.windows ? 0xffd75e : P.moon2, frequency: L.open ? 30 : 90 / (L.beams ?? [0]).length, advance: 6000, // the cloister: three screens of it
   }).setDepth(8001).setBlendMode(Phaser.BlendModes.ADD);
   // Sparks of the abyss drifting up out of each hole, over its far edge (the cloister's pits are hedges).
   for (const b of L.open ? [] : L.pits)

@@ -618,10 +618,12 @@ function image(scene: Scene, x: number, y: number, frame: string, flipX: boolean
   return scene.add.image(x, y, 'enemy', frame).setOrigin(0.5, ORIGIN / SIZE).setFlipX(flipX);
 }
 
-// Floor layer that keeps blood, robes and masks for the rest of the fight. Recreated after a scene restart.
+// Floor layer that keeps blood, robes and masks for the rest of the fight, over the whole room (the physics world is its
+// floor), however tall. Recreated after a scene restart.
 export function stains(scene: Scene) {
+  const b = scene.physics.world.bounds;
   return (scene.children.getByName('enemy-stains') as Phaser.GameObjects.RenderTexture | null)
-    ?? scene.add.renderTexture(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setDepth(1).setName('enemy-stains');
+    ?? scene.add.renderTexture(0, 0, b.right + 40, b.bottom + 16).setOrigin(0).setDepth(1).setName('enemy-stains');
 }
 
 // A blood pool with a lit rim along its top-left edge (light comes from the top left) and an optional dark core.
