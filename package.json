@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "shot": "node scripts/shot.mjs"
+    "shot": "node scripts/shot.mjs",
+    "views": "node scripts/views.mjs"
   },
   "dependencies": {
     "phaser": "^4.2.1"

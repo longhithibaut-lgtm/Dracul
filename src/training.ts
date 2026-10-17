@@ -67,6 +67,9 @@ const CSS = `
 @media (pointer:coarse){
   #training{top:calc(52px + env(safe-area-inset-top,0px));width:min(240px,60vw);max-height:calc(100% - 60px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
   #training button{padding:6px 8px}
+}
+@media (pointer:coarse) and (orientation:portrait){ /* over the dark above the room, not over the room */
+  #training{left:calc(8px + env(safe-area-inset-left,0px));width:auto;max-height:28vh}
 }`;
 
 /** Opens the panel; returns what closes it. */
@@ -77,7 +80,7 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
   const coarse = matchMedia('(pointer: coarse)').matches;
   const root = document.createElement('aside');
   root.id = 'training';
-  root.innerHTML = `<style>${CSS}</style><details${shown ? ' open' : ''}><summary>ENTRAÎNEMENT <small>· ${coarse ? 'replier' : 'T pour quitter'}</small></summary>
+  root.innerHTML = `<style>${CSS}</style><details${shown ? ' open' : ''}><summary>ENTRAÎNEMENT${coarse ? '' : ' <small>· T pour quitter</small>'}</summary>
     <h3>Salle</h3>
     <div class="row">${ROOMS.map(([id, l]) => `<button type="button" data-layout="${id}">${l}</button>`).join('')}</div>
     <h3>Ennemis</h3>

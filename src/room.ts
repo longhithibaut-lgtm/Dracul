@@ -1334,7 +1334,7 @@ function paintAbyss(p: Px) {
       const s = (((x < CX ? x : x - 458) % 14) + 14) % 14; // the pillars as at x 0 and 14, 458 and 472
       const well = y >= T.height && Math.abs(x + 0.5 - CX) < 23 ? Math.max(0, 1 - d / 60) : 0;
       const c = s === 0 ? P.abyss2 : s < 8 ? P.abyss0 : P.abyss1;
-      p.p(i, j, mix(c, P.void0, Math.max(well, Math.min(0.8, d / 160 + (y >= T.height && x >= FX0 - 12 && x < FX1 + 12 ? 0.3 : 0)))));
+      p.p(i, j, mix(c, P.void0, Math.max(well, Math.min(0.85, d / 110 + (y >= T.height && x >= FX0 - 12 && x < FX1 + 12 ? 0.3 : 0)))));
     }
 }
 
