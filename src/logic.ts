@@ -174,7 +174,8 @@ export function stepsFrom(open: readonly boolean[], cols: number, goal: number):
 /** The view, in native pixels, for a screen of `w` x `h` (any unit): a `bw` x `bh` box laid along the screen's long side
  *  just fits, and the other side grows to the screen's shape, so there are never bars. A 16:9 screen shows the box. */
 export function viewSize(w: number, h: number, bw: number, bh: number): { width: number; height: number } {
-  const k = Math.min(Math.max(w, h) / bw, Math.min(w, h) / bh); // screen units per native pixel
+  let k = Math.min(Math.max(w, h) / bw, Math.min(w, h) / bh); // screen units per native pixel
+  if (w > h) k = Math.max(k, w / bw); // landscape: never wider than the rooms (they scroll up and down instead)
   return { width: Math.round(w / k), height: Math.round(h / k) };
 }
 
