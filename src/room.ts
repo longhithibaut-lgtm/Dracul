@@ -749,8 +749,7 @@ const LAYOUT: Record<LayoutId, Layout> = {
       { kind: 'stump', x: 168, y: 504, w: 24, h: 12, tall: 46 },
       { kind: 'stump', x: 312, y: 504, w: 24, h: 12, tall: 32, flip: true },
       { kind: 'stump', x: 312, y: 560, w: 24, h: 12, tall: 52 },
-      { kind: 'stump', x: 168, y: 560, w: 24, h: 12, tall: 22 }, // only its plinth left: the pillar lies by it
-      { kind: 'fallen', x: 108, y: 568, w: 84, h: 10 },
+      { kind: 'fallen', x: 118, y: 568, w: 64, h: 10 },
       { kind: 'brazier', x: 198, y: 86, w: 12, h: 8 },
       { kind: 'brazier', x: 282, y: 86, w: 12, h: 8 },
       { kind: 'brazier', x: 112, y: 424, w: 12, h: 8 },
@@ -1000,7 +999,7 @@ function naveDecor(p: Px) {
   rubble(p, [[184, 272, 6, 4], [192, 278, 4, 3], [326, 270, 5, 3], [334, 276, 7, 4], [182, 328, 5, 3], [150, 340, 4, 3],
     [326, 330, 4, 3], [296, 342, 5, 3], [184, 498, 5, 3], [190, 506, 4, 3], [326, 494, 6, 4], [336, 502, 4, 3], [292, 508, 3, 2],
     [326, 552, 5, 3], [298, 566, 4, 3]]);
-  rubble(p, [[182, 562, 5, 3], [60, 574, 4, 3], [148, 574, 5, 3], [96, 580, 3, 2]]);
+  rubble(p, [[158, 553, 20, 7], [182, 562, 5, 3], [76, 572, 4, 3], [80, 560, 3, 2], [148, 574, 5, 3], [100, 580, 3, 2]]); // its plinth's stub, broken to the floor
   pool(p, 382, 572, 10, 5, 65);
   for (let i = 0; i < 5; i++) splat(p, 368 - i * 9, 566 - i * 6, 3 - i * 0.4, 75 + i, P.blood0, mix(P.blood0, P.blood1, 0.5));
   splat(p, 214, 460, 4, 80, P.blood0, P.blood1, P.blood2);

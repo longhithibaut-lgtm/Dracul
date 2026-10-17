@@ -417,7 +417,11 @@ export class RoomScene extends Phaser.Scene {
         }
         // A waiting enemy on the ring circles the hero, or backs off if too close.
         const turn = !waiting || dist > E.holdRange ? 0 : (dist < E.holdRange - 12 ? Math.PI : Math.PI / 2) * e.getData('side');
-        const v = this.physics.velocityFromRotation(way.angle + turn, E.speed, e.body!.velocity);
+        // A chaser pressed head-on against a prop (a straight line to the hero past its corner) slips along it a moment.
+        const b = e.body!;
+        if (!turn && !b.blocked.none && b.velocity.length() < E.speed / 3 && time >= (e.getData('slipUntil') ?? 0)) e.setData('slipUntil', time + 250);
+        const slip = !turn && time < (e.getData('slipUntil') ?? 0) ? (Math.PI / 2) * e.getData('side') : 0;
+        const v = this.physics.velocityFromRotation(way.angle + turn + slip, E.speed, b.velocity);
         // Close packmates push each other apart, so the pack surrounds the hero instead of stacking.
         for (const o of pack) {
           const d = Phaser.Math.Distance.BetweenPoints(e, o);
