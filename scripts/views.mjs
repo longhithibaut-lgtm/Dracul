@@ -51,7 +51,7 @@ for (const [shape, opts] of Object.entries(SHAPES).filter(([s]) => !arg('only', 
     await page.waitForTimeout(200);
     await run(() => {
       const s = window.game.scene.getScene('room');
-      if (s.room.sections.length) s.hero.body.reset(240, 480); // the cloister: into its middle garden, where wave 2 rises
+      s.hero.body.reset(240, s.room.sections[0] - 40); // into the tall room's middle part, where wave 2 rises
       s.time.removeAllEvents();
       s.invulnUntil = Infinity;
       s.wave = 1;

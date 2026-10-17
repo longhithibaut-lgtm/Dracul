@@ -7,12 +7,13 @@
 // (full frame, the room cleared and the three gift cards open, TIR, GLYPHE and TALENT, the second hovered), gate.png
 // (the portcullis up), training.png (full frame: the training room, its panel, enemies called in from it), tir.png
 // (the hero mid-throw, a plagued shard of blood in flight toward a ghoul) and glyph.png (the glyph cast with E at the
-// pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png, rooms-ossuary.png and
-// rooms-chapel.png (each room layout, full frame, empty), rooms-cloister-1.png to rooms-cloister-3.png (the cloister is
-// three screens tall: from the stairs up to the church door) and dawn.png (the hero standing in the cloister's Eternal
-// Dawn, the danger building before the first burn: smoke, glow, gauge).
+// pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png, rooms-ossuary.png,
+// rooms-chapel.png and rooms-cloister.png (each room layout whole, empty, from the gate down to the stairs: they are
+// taller than the screen, so a screen at a time stitched together, without the HUD and the vignette) and dawn.png (the
+// hero standing in the cloister's Eternal Dawn, the danger building before the first burn: smoke, glow, gauge).
+// The rooms are taller than the screen and the camera follows the hero: crops are given in room coordinates.
 // Exit code 1 if the page logged an error or a capture is missing.
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
@@ -36,10 +37,16 @@ const state = () => page.evaluate(() => {
   return { hx: s.hero.x, hy: s.hero.y, health: s.health, enemies: live.map((e) => ({ x: e.x, y: e.y, st: e.getData('state') })) };
 });
 const freeze = (on) => page.evaluate((on) => (on ? window.game.loop.sleep() : window.game.loop.wake()), on);
-// Crop of `w`x`h` screenshot pixels centred on a native-coordinate point, kept inside the frame.
-const clip = (cx, cy, w, h) => ({
-  x: Math.min(Math.max(cx * X - w / 2, 0), 1920 - w), y: Math.min(Math.max(cy * X - h / 2, 0), 1080 - h), width: w, height: h,
-});
+// The room point at the screen's top left, and that point to screenshot pixels.
+const view = () => page.evaluate(() => { const w = window.game.scene.getScene('room').cameras.main.worldView; return { x: w.x, y: w.y }; });
+const screen = async (x, y) => { const v = await view(); return { x: (x - v.x) * X, y: (y - v.y) * X }; };
+// The camera straight onto the hero, after he is moved (it follows him smoothly, too slowly for a capture).
+const snap = () => page.evaluate(() => { const s = window.game.scene.getScene('room'); s.cameras.main.centerOn(s.hero.x, s.hero.y); });
+// Crop of `w`x`h` screenshot pixels centred on a room point, kept inside the frame.
+const clip = async (cx, cy, w, h) => {
+  const p = await screen(cx, cy);
+  return { x: Math.min(Math.max(p.x - w / 2, 0), 1920 - w), y: Math.min(Math.max(p.y - h / 2, 0), 1080 - h), width: w, height: h };
+};
 const shot = (name, c) => page.screenshot({ path: `${out}/${name}.png`, clip: c });
 
 async function hold(keys, ms) {
@@ -62,7 +69,7 @@ await page.keyboard.down('s');
 await page.waitForTimeout(250);
 await freeze(true);
 let s = await state();
-await shot('hero', clip(s.hx, s.hy - 4, 240, 200));
+await shot('hero', await clip(s.hx, s.hy - 4, 240, 200));
 await freeze(false);
 await page.keyboard.up('d');
 await page.keyboard.up('s');
@@ -78,7 +85,7 @@ await page.keyboard.up('s');
     const e = window.game.scene.getScene('room').enemies.getChildren().find((o) => o.body?.enable && o.getData('state') === 'windup');
     return e ? { x: e.x, y: e.y } : null;
   });
-  if (w) await shot('enemy', clip(w.x, w.y - 4, 240, 200));
+  if (w) await shot('enemy', await clip(w.x, w.y - 4, 240, 200));
   await freeze(false);
 }
 
@@ -111,12 +118,13 @@ for (let i = 0; i < 200 && !captured; i++) {
   await page.keyboard.up(dx > 0 ? 'd' : 'a');
   s = await state();
   const target = s.enemies.length ? s.enemies.reduce((a, b) => (dist(a) < dist(b) ? a : b)) : e;
-  await page.mouse.click(target.x * X, target.y * X);
+  const at = await screen(target.x, target.y);
+  await page.mouse.click(at.x, at.y);
   await page.waitForTimeout(40);
   await freeze(true);
   s = await state();
   await shot('combat');
-  await shot('fx', clip((pre.x + target.x) / 2, s.hy, 480, 270));
+  await shot('fx', await clip((pre.x + target.x) / 2, s.hy, 480, 270));
   await freeze(false);
   captured = true;
 }
@@ -149,19 +157,27 @@ if (captured) {
     await page.waitForTimeout(300); // all bands up
     const hx = l.x + (l.x > 240 ? -34 : 34); // toward the middle of the hall; feet 0.85 of the radius out
     await page.evaluate(({ x, y }) => window.game.scene.getScene('room').hero.body.reset(x, y), { x: hx, y: l.y - 8 }); // feet 8 px below
+    await snap();
     await page.waitForFunction(() => window.game.scene.getScene('room').litMs > 200); // smoking, inside the burn's grace
     await freeze(true);
-    await shot('light', clip((l.x + hx) / 2, l.y - 8, 240, 200));
+    await shot('light', await clip((l.x + hx) / 2, l.y - 8, 240, 200));
     await freeze(false);
     lit = true;
   }
 }
 
 // A crossbowman of the Order mid-aim, its dotted aim line out but not yet locked. They join from the second wave, so
-// that wave is called now, with the hero kept alive for it.
+// that wave is called now, with the hero kept alive for it, in the room's middle part where it rises.
 let bow = null;
 {
-  await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.invulnUntil = Infinity; s.wave = Math.max(s.wave, 1); s.spawnWave(); });
+  await page.evaluate(() => {
+    const s = window.game.scene.getScene('room');
+    s.invulnUntil = Infinity;
+    s.hero.body.reset(240, s.room.sections[0] - 40);
+    s.wave = 1;
+    s.spawnWave();
+  });
+  await snap();
   await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.enemies.getChildren()
     .some((e) => e.body?.enable && e.getData('kind') === 'crossbow' && e.getData('state') === 'aim' && e.getData('fireAt') - s.time.now < 400); }, null, { timeout: 30000 }).catch(() => {});
   await freeze(true);
@@ -169,7 +185,7 @@ let bow = null;
     const e = window.game.scene.getScene('room').enemies.getChildren().find((o) => o.body?.enable && o.getData('state') === 'aim');
     return e ? { x: e.x, y: e.y } : null;
   });
-  if (bow) await shot('crossbow', clip(bow.x, bow.y - 4, 240, 200));
+  if (bow) await shot('crossbow', await clip(bow.x, bow.y - 4, 240, 200));
   await freeze(false);
 }
 
@@ -190,10 +206,11 @@ let bit = null;
     s.facing = 0;
     return { x: prey.x, y: prey.y, phase: prey.getData('phase') };
   });
+  await snap();
   if (p) {
     await page.waitForFunction((phase) => { const n = (window.game.scene.getScene('room').time.now + phase) % 700; return n > 10 && n < 60; }, p.phase);
     await freeze(true);
-    await shot('weak', clip(p.x, p.y - 10, 240, 200));
+    await shot('weak', await clip(p.x, p.y - 10, 240, 200));
     await freeze(false);
     const hp = await page.evaluate(({ x, y }) => {
       const s = window.game.scene.getScene('room');
@@ -206,7 +223,7 @@ let bit = null;
     await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.time.now - s.biteAt > 300; });
     await freeze(true);
     const latched = await page.evaluate(() => !!window.game.scene.getScene('room').prey);
-    if (latched) await shot('bite', clip(p.x - 6, p.y - 8, 240, 200));
+    if (latched) await shot('bite', await clip(p.x - 6, p.y - 8, 240, 200));
     await freeze(false);
     await page.waitForFunction(() => !window.game.scene.getScene('room').prey, null, { timeout: 3000 }).catch(() => {});
     bit = latched && `${hp} -> ${await page.evaluate(() => window.game.scene.getScene('room').health)} blood`;
@@ -230,6 +247,7 @@ let gifts = false, gate = false;
   });
   if (await page.waitForFunction(() => window.game.scene.getScene('room').pickup?.ready, null, { timeout: 8000 }).catch(() => null)) {
     await page.evaluate(() => { const s = window.game.scene.getScene('room'), m = s.room.medallion; s.hero.body.reset(m.x, m.y - 8); }); // feet on it
+    await snap();
     await page.waitForFunction(() => window.game.scene.getScene('room').cards);
     await page.waitForTimeout(600); // the cards have slid in
     await page.mouse.move(240 * X, 140 * X); // hover the middle card
@@ -241,7 +259,7 @@ let gifts = false, gate = false;
     await page.keyboard.press('1');
     await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.phase === 'exit' && s.time.now > s.gateUpAt + 100; }, null, { timeout: 8000 });
     await freeze(true);
-    await shot('gate', clip(240, 38, 400, 300));
+    await shot('gate', await clip(240, 38, 400, 300));
     await freeze(false);
     gate = true;
     // Through the gate to the next room.
@@ -287,13 +305,14 @@ if (training) {
     w.body.reset(290, 160 + g.body.center.y - w.body.center.y); // feet in line with the ghoul's
     return { x: 203, y: 156, hp: g.getData('hp'), whp: w.getData('hp') };
   });
+  await snap();
   if (p) {
     await page.waitForTimeout(100); // a physics step puts the bodies back under their sprites
     await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.shoot(0); s.shotUntil = Infinity; }); // held mid-throw
     await page.waitForFunction(() => { const s = window.game.scene.getScene('room'), b = s.shards.getChildren()[0]; return !b || b.x > s.hero.x + 28; });
     await freeze(true);
     const flying = await page.evaluate(() => window.game.scene.getScene('room').shards.countActive() > 0);
-    if (flying) await shot('tir', clip(p.x, p.y, 400, 200));
+    if (flying) await shot('tir', await clip(p.x, p.y, 400, 200));
     await page.evaluate(() => (window.game.scene.getScene('room').shotUntil = 0));
     await freeze(false);
     await page.waitForTimeout(700);
@@ -320,18 +339,21 @@ if (training) {
     b?.body.reset(335, 202);
     s.hero.body.reset(275, 201);
   });
-  await page.mouse.move(322 * X, 206 * X);
+  await snap();
+  await page.waitForTimeout(50);
+  const to = await screen(322, 206);
+  await page.mouse.move(to.x, to.y);
   await page.waitForTimeout(100); // the pointer is read on Phaser's next step
   await page.keyboard.press('e');
   glyph = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.glyph?.chains.size === 2 && s.time.now - s.glyph.caughtAt > 300; }, null, { timeout: 5000 })
     .then(() => true, () => false);
   await freeze(true);
-  await shot('glyph', clip(300, 195, 480, 320));
+  await shot('glyph', await clip(300, 195, 480, 320));
   await freeze(false);
 }
 
-// Every room layout, full frame and empty: as a run's room 1, its first wave called off. The camera is moved up the
-// tall cloister, a screen at a time.
+// Every room layout whole and empty: as a run's room 1, its first wave called off. The camera is moved up the room a
+// screen at a time, from the stairs to the gate, and the screens are stitched together.
 const layouts = [];
 for (const id of ['hall', 'nave', 'ossuary', 'chapel', 'cloister']) {
   await page.evaluate((layout) => window.game.scene.getScene('room').scene.restart({ layout }), id);
@@ -339,14 +361,34 @@ for (const id of ['hall', 'nave', 'ossuary', 'chapel', 'cloister']) {
   await page.evaluate(() => window.game.scene.getScene('room').time.removeAllEvents()); // no wave: the room empty
   await page.waitForTimeout(400);
   if (!(await page.evaluate((id) => window.game.scene.getScene('room').layout === id && !document.querySelector('#training'), id))) continue;
-  const screens = await page.evaluate(() => window.game.scene.getScene('room').room.height / 270);
-  for (let i = 0; i < screens; i++) {
-    await page.evaluate((y) => { const c = window.game.scene.getScene('room').cameras.main; c.stopFollow(); c.setScroll(0, y); }, (screens - 1 - i) * 270);
+  const h = await page.evaluate(() => { // the HUD's camera and the vignette framing the screen would show at every seam
+    const s = window.game.scene.getScene('room');
+    s.cameras.cameras.slice(1).forEach((c) => c.setVisible(false));
+    s.children.list.find((o) => o.texture?.key === 'room-vignette')?.setVisible(false);
+    return s.room.height;
+  });
+  const parts = [];
+  for (let y = h - 270; ; y = Math.max(0, y - 270)) {
+    await page.evaluate((y) => { const c = window.game.scene.getScene('room').cameras.main; c.stopFollow(); c.setScroll(0, y); }, y);
     await page.waitForTimeout(100);
     await freeze(true);
-    await shot(screens > 1 ? `rooms-${id}-${i + 1}` : `rooms-${id}`);
+    parts.push({ y, png: (await page.screenshot()).toString('base64') });
     await freeze(false);
+    if (y === 0) break;
   }
+  const png = await page.evaluate(async ({ parts, h, X }) => {
+    const c = document.createElement('canvas');
+    c.width = 480 * X;
+    c.height = h * X;
+    for (const p of parts) {
+      const im = new Image();
+      im.src = `data:image/png;base64,${p.png}`;
+      await im.decode();
+      c.getContext('2d').drawImage(im, 0, p.y * X);
+    }
+    return c.toDataURL('image/png').split(',')[1];
+  }, { parts, h, X });
+  await writeFile(`${out}/rooms-${id}.png`, Buffer.from(png, 'base64'));
   layouts.push(id);
 }
 
@@ -363,7 +405,7 @@ if (layouts.at(-1) === 'cloister') {
   }, at)) {
     await page.waitForFunction(() => window.game.scene.getScene('room').litMs > 1800);
     await freeze(true);
-    await shot('dawn', clip(at.x, 135 - 6, 240, 200));
+    await shot('dawn', await clip(at.x, at.y - 6, 240, 200));
     await freeze(false);
     dawn = true;
   }

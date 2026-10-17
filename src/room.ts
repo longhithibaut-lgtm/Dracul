@@ -708,7 +708,7 @@ const LAYOUT: Record<LayoutId, Layout> = {
       { kind: 'coffin', x: 380, y: 384, w: 46, h: 14 },
       { kind: 'stump', x: 172, y: 342, w: 24, h: 12, tall: 50 },
       { kind: 'stump', x: 308, y: 342, w: 24, h: 12, tall: 40, flip: true },
-      { kind: 'pillar', x: 92, y: 490, w: 24, h: 12, tall: 124 },
+      { kind: 'pillar', x: 92, y: 490, w: 24, h: 12, tall: 100 },
       { kind: 'stump', x: 388, y: 490, w: 24, h: 12, tall: 46, flip: true },
       { kind: 'brazier', x: 182, y: 474, w: 12, h: 8 },
       { kind: 'brazier', x: 298, y: 474, w: 12, h: 8 },
