@@ -1,7 +1,7 @@
 // On-screen controls for touch screens, as DOM over the canvas: a stick on the left to move, action buttons on the
 // right, Plein écran and Entraînement at the top right, clear of the HUD. The same thumb arc held sideways or upright
 // (the stick a little smaller upright, to leave the buttons room). Only on coarse pointers (phones, tablets), so a
-// laptop keeps its keyboard and mouse.
+// laptop keeps its keyboard and mouse. Under L'ombre (shadow.ts) the finger plays on the game itself: only the top two.
 
 /** The stick's tilt, each axis in [-1, 1]; 0 when released or inside the dead zone. */
 export const stick = { x: 0, y: 0 };
@@ -32,21 +32,21 @@ const CSS = `
 #touch button.on{background:#e0284acc}
 @media (orientation:portrait){#touch .pad{left:calc(12px + env(safe-area-inset-left,0px));width:128px;height:128px}}`;
 
-export function controls(act: (a: Action) => void): () => void {
+export function controls(act: (a: Action) => void, shadow: boolean): () => void {
   if (!matchMedia('(pointer: coarse)').matches) return () => {};
   const root = document.createElement('div');
   root.id = 'touch';
   const inset = (side: 'right' | 'bottom', px: number) => `${side}:calc(${px}px + env(safe-area-inset-${side},0px))`;
-  root.innerHTML = `<style>${CSS}</style><div class="pad" aria-label="Déplacement"><div class="knob"></div></div>${BUTTONS.map(([a, label, size, r, b]) =>
-    `<button type="button" data-a="${a}" style="width:${size}px;height:${size}px;${inset('right', r)};${inset('bottom', b)}">${label}</button>`).join('')}
+  root.innerHTML = `<style>${CSS}</style>${shadow ? '' : `<div class="pad" aria-label="Déplacement"><div class="knob"></div></div>${BUTTONS.map(([a, label, size, r, b]) =>
+    `<button type="button" data-a="${a}" style="width:${size}px;height:${size}px;${inset('right', r)};${inset('bottom', b)}">${label}</button>`).join('')}`}
     <div class="top"><button type="button" data-a="full">Plein écran</button><button type="button" data-a="training">Entraînement</button></div>`;
 
   // The stick follows one finger, from wherever it lands on the pad.
-  const pad = root.querySelector<HTMLElement>('.pad')!, knob = root.querySelector<HTMLElement>('.knob')!;
+  const pad = root.querySelector<HTMLElement>('.pad'), knob = root.querySelector<HTMLElement>('.knob')!;
   let finger = -1;
   const move = (e: PointerEvent) => {
     if (e.pointerId !== finger) return;
-    const r = pad.getBoundingClientRect();
+    const r = pad!.getBoundingClientRect();
     let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
     const d = Math.hypot(dx, dy);
     if (d > RADIUS) { dx *= RADIUS / d; dy *= RADIUS / d; }
@@ -61,10 +61,10 @@ export function controls(act: (a: Action) => void): () => void {
     stick.x = stick.y = 0;
     knob.style.transform = '';
   };
-  pad.addEventListener('pointerdown', (e) => { finger = e.pointerId; pad.setPointerCapture(e.pointerId); move(e); });
-  pad.addEventListener('pointermove', move);
-  pad.addEventListener('pointerup', release);
-  pad.addEventListener('pointercancel', release);
+  pad?.addEventListener('pointerdown', (e) => { finger = e.pointerId; pad.setPointerCapture(e.pointerId); move(e); });
+  pad?.addEventListener('pointermove', move);
+  pad?.addEventListener('pointerup', release);
+  pad?.addEventListener('pointercancel', release);
 
   // Buttons fire on touch-down; attacks repeat while held (the scene's input buffer paces them).
   for (const b of root.querySelectorAll<HTMLButtonElement>('button')) {

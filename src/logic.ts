@@ -186,3 +186,20 @@ export function edgePip(x: number, y: number, w: number, h: number, m: number) {
   if (!dx && !dy) return undefined;
   return { x: Math.min(Math.max(x, m), w - m), y: Math.min(Math.max(y, m), h - m), dx, dy };
 }
+
+export type Gesture = 'wait' | 'drag' | 'press' | 'tap' | 'double' | 'flick';
+/**
+ * What one finger is doing (L'ombre, see shadow.ts), `ms` after it touched down, having strayed at most `moved` from
+ * where it landed and now `dist` from it, lifted (`up`) or not, `sinceTap` after the last tap was lifted. Distances in
+ * CSS px. A finger that strays past `slopPx` is a drag, or a flick when it is lifted soon and fast; one that stays put
+ * is a long press once held `pressMs`, else a tap when lifted, a double tap if it came soon after a tap.
+ */
+export function gesture(
+  t: { ms: number; moved: number; dist: number; up: boolean; sinceTap: number },
+  k: { slopPx: number; pressMs: number; doubleMs: number; flickMs: number; flickPx: number; flickSpeed: number },
+): Gesture {
+  if (t.moved > k.slopPx) return t.up && t.ms <= k.flickMs && t.dist >= k.flickPx && t.dist / Math.max(t.ms, 1) >= k.flickSpeed ? 'flick' : 'drag';
+  if (t.ms >= k.pressMs) return 'press';
+  if (!t.up) return 'wait';
+  return t.sinceTap <= k.doubleMs ? 'double' : 'tap';
+}

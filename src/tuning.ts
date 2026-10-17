@@ -92,6 +92,20 @@ export const T = {
   // on a steady beat until he is back in the shade.
   dawn: { graceMs: 2500, burnEveryMs: 1000, damage: 1 },
 
+  // L'ombre, the touch control (shadow.ts): one finger moves the hero's shadow, the body follows it. Finger distances in
+  // CSS px (about the same size on every phone).
+  shadow: {
+    gain: 1.6, // the shadow moves this many times as far as the finger, on screen (relative drag: the finger lands anywhere)
+    followMs: 70, // the body slows into the shadow over about this long (lower: snappier); it walks at hero.speed
+    targetRadius: 14, // the shadow lands on an enemy whose feet are this close
+    slopPx: 10, // a finger that strays less than this is still a tap or a long press
+    doubleMs: 280, // a second tap this soon after the first is a double tap: the mist into the shadow
+    flickMs: 180, flickPx: 28, flickSpeed: 0.35, // a flick: lifted within flickMs, at least flickPx away, at flickSpeed px/ms
+    pressMs: 420, // held still this long: the glyph, cast on the shadow
+    lingerMs: 400, // the shadow left this long in holy light dissolves and goes back to the body
+    mistReach: 90, // the double tap's mist goes this far toward the shadow at most (the dash's own reach: 43)
+  },
+
   // A run is a string of rooms; the wave count carries on from room to room, so difficulty keeps climbing.
   run: {
     wavesPerRoom: 3,

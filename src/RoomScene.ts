@@ -14,6 +14,7 @@ import * as Rats from './rats.ts';
 import * as Training from './training.ts';
 import * as Wanderer from './wanderer.ts';
 import * as Touch from './touch.ts';
+import * as Shadow from './shadow.ts';
 import { GIFTS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -34,11 +35,14 @@ export class RoomScene extends Phaser.Scene {
 
   private room!: Room.Room;
   private layout: Room.LayoutId = 'hall';
-  // Walking round the pits: a grid of NAV px cells over the floor, open where a body fits; steps to the hero's cell.
+  // Walking round the pits: a grid of NAV px cells over the floor, open where a body fits; steps to the hero's cell (for
+  // the enemies) and to the shadow's (for the hero, under L'ombre), each kept until its goal cell changes.
   navOpen: boolean[] = [];
   private navCols = 0;
-  private navFrom = -1;
-  private nav: number[] = [];
+  private navHero = { goal: -1, steps: [] as number[] };
+  private navShade = { goal: -1, steps: [] as number[] };
+  private shade?: Shadow.Shade; // L'ombre: the hero's shadow, which the finger moves and the body follows (shadow.ts)
+  private finger?: ReturnType<typeof Shadow.listen>;
   private pitBoxes: { x: number; y: number; width: number; height: number }[] = [];
   private hud!: Hud.Hud;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -85,7 +89,7 @@ export class RoomScene extends Phaser.Scene {
     // The scene instance is reused on restart, so every field is reset here; the run carries on through `data`.
     this.roomNo = data.room ?? 1;
     this.layout = data.layout ?? 'hall';
-    this.navFrom = -1;
+    this.navHero.goal = this.navShade.goal = -1;
     this.training = !!data.training;
     this.gifts = [...(data.gifts ?? [])];
     this.health = data.health ?? this.maxHealth();
@@ -151,6 +155,7 @@ export class RoomScene extends Phaser.Scene {
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.cards) return this.pick(this.cards.at(p.x, p.y));
+      if (this.shade) return; // the finger moves the shadow instead (shadow.ts)
       const w = world(p), a = Math.atan2(w.y - this.hero.y, w.x - this.hero.x);
       if (p.button === 0) this.press(() => this.slash(a));
       else if (p.button === 2) this.press(() => this.shoot(a));
@@ -188,7 +193,26 @@ export class RoomScene extends Phaser.Scene {
       else if (a === 'cast') castAhead();
       else if (a === 'dash') this.dashPressedAt = this.time.now;
       else toggleTraining();
-    }));
+    }, Training.opts.shadow));
+    // L'ombre: dragging moves the shadow (the body follows it, update()); a double tap mists into it, a flick throws a
+    // shard its way (the shadow taken back to where it was), a long press casts the glyph on it.
+    this.shade = this.finger = undefined;
+    if (Training.opts.shadow) {
+      const s = (this.shade = Shadow.create(this, this.hero));
+      let before = { ...s };
+      const playing = () => !this.dead && !this.cards && this.phase !== 'enter' && this.phase !== 'leave';
+      this.finger = Shadow.listen(this, {
+        start: () => (before = { ...s }),
+        drag: (dx, dy) => playing() && this.dragShade(dx, dy),
+        end: (g, angle) => {
+          if (!playing()) return;
+          if (g === 'double') this.dashPressedAt = this.time.now;
+          else if (g === 'flick') Object.assign(s, before), this.press(() => this.shoot(angle));
+          else if (g === 'press') { const to = { x: s.x, y: s.y }; this.press(() => this.cast(to)); }
+        },
+      });
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.finger.off);
+    }
     if (this.training) {
       this.hud.title('Entraînement');
       let calls = 0;
@@ -244,17 +268,26 @@ export class RoomScene extends Phaser.Scene {
     const k = this.keys;
     // Climbing in from the stairs or walking out through the gate, the hero moves on his own.
     const auto = this.phase === 'enter' || this.phase === 'leave';
-    const x = auto ? 0 : Phaser.Math.Clamp(Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown) + Touch.stick.x, -1, 1);
-    const y = auto ? -1 : Phaser.Math.Clamp(Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown) + Touch.stick.y, -1, 1);
+    let x = auto ? 0 : Phaser.Math.Clamp(Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown) + Touch.stick.x, -1, 1);
+    let y = auto ? -1 : Phaser.Math.Clamp(Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown) + Touch.stick.y, -1, 1);
+    let pace = 1; // of the walk speed
+    if (this.shade) [x, y, pace] = this.followShade(time, delta, x, y, auto);
     const posing = time < this.slashUntil || time < this.castUntil;
     if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
     const wantsDash = time - this.dashPressedAt <= T.hero.bufferMs && !auto; // buffered like the actions, see press()
     if (wantsDash && time >= this.dashReadyAt && !this.prey) {
       this.dashPressedAt = -1e9;
-      this.dashUntil = time + T.dash.durationMs;
+      // L'ombre: the mist goes into the shadow, up to its reach, for as long as that takes.
+      let ms: number = T.dash.durationMs;
+      const s = this.shade, f = this.hero.body!.center, d = s ? Phaser.Math.Distance.BetweenPoints(f, s) : 0;
+      if (s?.free && d > 4) {
+        this.facing = Phaser.Math.Angle.BetweenPoints(f, s);
+        ms = (Math.min(d, T.shadow.mistReach) / T.dash.speed) * 1000;
+      }
+      this.dashUntil = time + ms;
       this.dashReadyAt = this.dashUntil + this.dashCooldown();
-      Fx.dash(this, this.hero, this.facing);
+      Fx.dash(this, this.hero, this.facing, ms);
       Sfx.play(this, 'dash');
       this.physics.velocityFromRotation(this.facing, T.dash.speed, this.hero.body!.velocity);
       if (this.gifts.includes('nuee')) this.releaseRats(this.hero.body!.center, T.gifts.rats - this.rats.filter((r) => !r.nest).length);
@@ -275,7 +308,7 @@ export class RoomScene extends Phaser.Scene {
     }
     if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      this.hero.body!.velocity.normalize().scale(T.hero.speed * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
+      this.hero.body!.velocity.normalize().scale(T.hero.speed * pace * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
     }
 
     if (this.queued && (time > this.queued.until || this.queued.act())) this.queued = undefined;
@@ -510,19 +543,110 @@ export class RoomScene extends Phaser.Scene {
 
   /** Where an enemy walks to reach the hero: straight at him, unless a pit lies across the way (`straight` false); then
    *  toward the next cell of the shortest walk round it. */
-  private wayToHero(e: Sprite): { angle: number; straight: boolean } {
-    const from = e.body!.center, to = this.hero.body!.center, angle = Phaser.Math.Angle.BetweenPoints(from, to);
-    if (!this.pitBoxes.length || rayDistance(from, angle, this.room.bounds, this.pitBoxes) >= Phaser.Math.Distance.BetweenPoints(from, to))
+  private wayToHero(e: Sprite) {
+    return this.wayTo(e.body!.center, this.hero.body!.center, this.pitBoxes, this.navHero);
+  }
+
+  /** The same from floor point `from` to `to`, round `boxes` (grown by a walker's half size), with the walk grid's
+   *  steps to `to` kept in `memo`. */
+  private wayTo(from: { x: number; y: number }, to: { x: number; y: number }, boxes: typeof this.pitBoxes, memo: { goal: number; steps: number[] }): { angle: number; straight: boolean } {
+    const angle = Phaser.Math.Angle.BetweenPoints(from, to);
+    if (!boxes.length || rayDistance(from, angle, this.room.bounds, boxes) >= Phaser.Math.Distance.BetweenPoints(from, to))
       return { angle, straight: true };
-    const goal = this.cellOf(to);
-    if (goal !== this.navFrom) [this.navFrom, this.nav] = [goal, this.stepsTo(to)];
+    const goal = this.cellOf(to), nav = memo.goal === goal ? memo.steps : (memo.steps = this.stepsTo(to));
+    memo.goal = goal;
     const c = this.cellOf(from), cols = this.navCols, x = c % cols;
+    if (c === goal) return { angle, straight: false }; // in its cell: a step to a neighbour would only turn back
     let best = -1;
     for (const n of [c - cols - 1, c - cols, c - cols + 1, c - 1, c + 1, c + cols - 1, c + cols, c + cols + 1])
-      if (Math.abs((n % cols) - x) <= 1 && this.nav[n] < (this.nav[best] ?? Infinity)) best = n;
+      if (Math.abs((n % cols) - x) <= 1 && nav[n] < (nav[best] ?? Infinity)) best = n;
     if (best < 0) return { angle, straight: false };
     const b = this.room.bounds, cx = b.x + (best % cols) * NAV + NAV / 2, cy = b.y + Math.floor(best / cols) * NAV + NAV / 2;
     return { angle: Phaser.Math.Angle.Between(from.x, from.y, cx, cy), straight: false };
+  }
+
+  /**
+   * L'ombre, every frame: what the shadow lies on, whether holy light burns it away, and where the body walks: to the
+   * shadow, round props and pits, slowing into it (T.shadow.followMs); to an enemy it lies on, until close enough to
+   * claw it, or to bite it if it is a weakened human. Returns the walk (x, y, pace). The keyboard (`x`, `y`) and the
+   * hero walking in or out on his own (`auto`) take over, the shadow back under him.
+   */
+  private followShade(time: number, delta: number, x: number, y: number, auto: boolean): [number, number, number] {
+    const s = this.shade!, S = T.shadow, feet = this.hero.body!.center, dist = Phaser.Math.Distance.BetweenPoints;
+    s.charge = this.finger!.charge(); // may cast the glyph, see listen()
+    if (s.charge >= 0) [s.glyph, s.glyphReady] = [this.glyphAt(s), time >= this.glyphReadyAt];
+    if (auto || x || y) {
+      s.free = false;
+      s.target = undefined;
+    }
+    // On an enemy: the middle of the shadow (it lies down and right of its feet point) near the enemy's feet or anything
+    // up to its chest, as the eye sees them overlap. That enemy is followed (knocked back too) until the finger takes the
+    // shadow off it.
+    const off = (e: Sprite) => {
+      const c = e.body!.center, gx = s.x + 3, gy = s.y + 5;
+      return Math.hypot(gx - c.x, Math.max(0, gy - c.y, c.y - 14 - gy));
+    };
+    if (s.target && !s.target.body?.enable) s.target = undefined;
+    if (s.target) {
+      const c = s.target.body!.center;
+      s.x += c.x - s.tx;
+      s.y += c.y - s.ty;
+      [s.tx, s.ty] = [c.x, c.y];
+      if (off(s.target) > S.targetRadius) s.target = undefined;
+    }
+    if (s.free && !s.target) {
+      s.target = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && off(e) <= S.targetRadius).sort((a, b) => off(a) - off(b))[0];
+      if (s.target) [s.tx, s.ty] = [s.target.body!.center.x, s.target.body!.center.y];
+    }
+    const e = s.target, prey = !!e?.getData('human') && e.getData('hp') <= T.bite.weakAt;
+    s.mark = e ? (prey ? 'bite' : 'claw') : undefined;
+    // Holy light: the shadow can't stay in it, unless it hides in an enemy's own shade.
+    const lit = s.free && !e && (this.lanterns.some((l) => Lantern.lights(l, s)) || this.room.holy(s.x, s.y));
+    s.litMs = lit ? s.litMs + delta : 0;
+    if (s.litMs >= S.lingerMs) {
+      Shadow.dissolve(this, s.x, s.y);
+      s.free = false;
+      s.litMs = 0;
+    }
+    if (auto || x || y) return [x, y, 1];
+    if (!s.free) return [0, 0, 0];
+    let goal: { x: number; y: number } = s;
+    if (e) {
+      // In reach (sprite to sprite, like the claws and the bite measure it), he strikes, the combo at its own pace.
+      if (dist(this.hero, e) <= (prey ? T.bite.range : T.slash.range) - 4) {
+        if (prey) this.bite();
+        else this.slash(Phaser.Math.Angle.BetweenPoints(this.hero, e));
+        return [0, 0, 0];
+      }
+      goal = e.body!.center;
+    } else if (dist(feet, s) < 1) {
+      s.free = false;
+      return [0, 0, 0];
+    }
+    // A shadow he can't get to (left on a prop): he stops where he got stuck, until the finger moves it.
+    const moved = Math.hypot(this.hero.body!.deltaX(), this.hero.body!.deltaY());
+    s.stuckMs = !e && moved < 0.2 && time >= this.dashUntil && !this.prey ? s.stuckMs + delta : 0;
+    if (s.stuckMs > 300) return [0, 0, 0];
+    const boxes = [...this.pitBoxes, ...this.room.obstacles.getChildren().map((o) => {
+      const b = o.body as Phaser.Physics.Arcade.StaticBody;
+      return { x: b.x - 5, y: b.y - 4, width: b.width + 10, height: b.height + 8 }; // grown by the hero's feet
+    })];
+    const a = this.wayTo(feet, goal, boxes, this.navShade).angle;
+    // Slowing in, but never to a crawl: the last pixel takes no time.
+    return [Math.cos(a), Math.sin(a), e ? 1 : Phaser.Math.Clamp((dist(feet, goal) * 1000) / (S.followMs * T.hero.speed), 0.25, 1)];
+  }
+
+  /** The finger moved by (dx, dy) native px on the screen: the shadow goes T.shadow.gain times as far, over the floor in
+   *  view, never into a pit (it would fall into the abyss): it slides along the brink. */
+  private dragShade(dx: number, dy: number) {
+    const s = this.shade!, b = this.room.bounds, v = this.cameras.main.worldView, k = T.shadow.gain;
+    const pit = (x: number, y: number) => this.pitBoxes.some((p) => x > p.x && x < p.x + p.width && y > p.y && y < p.y + p.height);
+    s.free = true;
+    s.stuckMs = 0;
+    const x = Phaser.Math.Clamp(s.x + dx * k, Math.max(b.x, v.x) + 4, Math.min(b.right, v.right) - 4);
+    if (!pit(x, s.y)) s.x = x;
+    const y = Phaser.Math.Clamp(s.y + dy * k, Math.max(b.y, v.y) + 3, Math.min(b.bottom, v.bottom) - 3);
+    if (!pit(s.x, y)) s.y = y;
   }
 
   /** Input buffer: an action pressed while the hero is still busy (mid-swing, dashing, cooling down...) is kept for
@@ -712,8 +836,7 @@ export class RoomScene extends Phaser.Scene {
   private cast(to: { x: number; y: number }) {
     const now = this.time.now, G = T.glyph;
     if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.glyphReadyAt || now < this.dashUntil) return false;
-    const feet = this.hero.body!.center, b = this.room.bounds, rx = G.radius, ry = rx * T.lantern.squash;
-    const at = glyphSpot(feet, to, G.range, { x: b.x + rx, y: b.y + ry, width: b.width - 2 * rx, height: b.height - 2 * ry });
+    const feet = this.hero.body!.center, at = this.glyphAt(to);
     this.glyph?.end();
     this.glyph = Glyph.cast(this, at.x, at.y, feet);
     this.nestAt = this.gifts.includes('nid') ? now + G.armMs : Infinity;
@@ -722,6 +845,12 @@ export class RoomScene extends Phaser.Scene {
     this.facing = Math.atan2(at.y - feet.y, at.x - feet.x);
     Sfx.play(this, 'glyph');
     return true;
+  }
+
+  /** Where a glyph cast at `to` lands: within reach of the hero's feet, wholly on the floor. */
+  private glyphAt(to: { x: number; y: number }) {
+    const G = T.glyph, b = this.room.bounds, rx = G.radius, ry = rx * T.lantern.squash;
+    return glyphSpot(this.hero.body!.center, to, G.range, { x: b.x + rx, y: b.y + ry, width: b.width - 2 * rx, height: b.height - 2 * ry });
   }
 
   /** The room's last enemy is down: it falls in slow motion with a sting, then the gift of the Rat house rises on the

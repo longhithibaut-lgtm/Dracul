@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, stepsFrom, take, wound } from './logic.ts';
+import { biteTarget, edgePip, gesture, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, stepsFrom, take, wound } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, kind, replacing, shelf } from './gifts.ts';
 import { missing, width, wrap } from './font.ts';
 
@@ -266,5 +266,28 @@ describe('edgePip', () => {
     expect(edgePip(100, 50, 480, 270, 6)).toBeUndefined();
     expect(edgePip(-40, 50, 480, 270, 6)).toEqual({ x: 6, y: 50, dx: -1, dy: 0 });
     expect(edgePip(600, 400, 480, 270, 6)).toEqual({ x: 474, y: 264, dx: 1, dy: 1 });
+  });
+});
+
+describe('gesture', () => {
+  const k = { slopPx: 10, pressMs: 450, doubleMs: 280, flickMs: 180, flickPx: 28, flickSpeed: 0.35 };
+  const g = (ms: number, moved: number, dist: number, up: boolean, sinceTap = Infinity) => gesture({ ms, moved, dist, up, sinceTap }, k);
+
+  it('a finger kept still: waits, then a tap when lifted, a double tap soon after a tap, a long press when held', () => {
+    expect(g(100, 3, 2, false)).toBe('wait');
+    expect(g(120, 3, 2, true)).toBe('tap');
+    expect(g(90, 2, 2, true, 150)).toBe('double');
+    expect(g(90, 2, 2, true, 400)).toBe('tap'); // too long after the first
+    expect(g(450, 8, 4, false)).toBe('press');
+  });
+
+  it('a moving finger: a drag, or a flick when lifted soon, fast and far enough', () => {
+    expect(g(60, 14, 14, false)).toBe('drag'); // still down: a drag until lifted
+    expect(g(120, 60, 60, true)).toBe('flick');
+    expect(g(300, 60, 60, true)).toBe('drag'); // too long: a slow swipe
+    expect(g(120, 20, 20, true)).toBe('drag'); // too short
+    expect(g(170, 40, 40, true)).toBe('drag'); // too slow: 0.24 px/ms
+    expect(g(120, 60, 5, true)).toBe('drag'); // out and back: no direction
+    expect(g(600, 40, 40, false)).toBe('drag'); // moving wins over the long press
   });
 });

@@ -200,11 +200,11 @@ export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
   });
 }
 
-export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle: number) {
+export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle: number, D: number = T.dash.durationMs) { // D: a longer mist (L'ombre)
   // Gameplay passes the hero itself, so the trail can follow it for the whole dash.
   const hero = from as Partial<Phaser.GameObjects.Sprite> & P;
   const sprite = hero.frame ? (hero as Phaser.GameObjects.Sprite) : undefined;
-  const feet = 15, back = angle + Math.PI, D = T.dash.durationMs; // feet: just under the soles, 14 px below y on both hero sheets
+  const feet = 15, back = angle + Math.PI; // feet: just under the soles, 14 px below y on both hero sheets
   const GHOST_MS = 420, STREAK_MS = 340, RING_MS = 460, EVERY = 60, life = D + 520;
   type Strip = Phaser.GameObjects.Image;
   const ghosts: { t: number; y: number; h: number; strips: Strip[] }[] = [];
