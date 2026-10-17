@@ -574,7 +574,14 @@ export class RoomScene extends Phaser.Scene {
 
   /** Steps from every cell of the walk grid to floor point `p` (Infinity: no way there). */
   stepsTo(p: Phaser.Types.Math.Vector2Like) {
-    return stepsFrom(this.navOpen, this.navCols, this.cellOf(p));
+    // Someone pressed against a prop stands on a closed cell, maybe walled in by closed cells: the walk ends at the
+    // nearest open cell instead, and the last steps are straight.
+    const c = this.cellOf(p), cols = this.navCols, x = c % cols;
+    let goal = c;
+    for (let r = 1; !this.navOpen[goal] && r <= 3; r++)
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++)
+        if (!this.navOpen[goal] && x + dx >= 0 && x + dx < cols && this.navOpen[c + dx + dy * cols]) goal = c + dx + dy * cols;
+    return stepsFrom(this.navOpen, cols, this.navOpen[goal] ? goal : c);
   }
 
   /** Where an enemy walks to reach the hero: straight at him, unless a pit (or one of `boxes`) lies across the way
@@ -592,7 +599,7 @@ export class RoomScene extends Phaser.Scene {
     const goal = this.cellOf(to), nav = memo.goal === goal ? memo.steps : (memo.steps = this.stepsTo(to));
     memo.goal = goal;
     const c = this.cellOf(from), cols = this.navCols, x = c % cols;
-    if (c === goal) return { angle, straight: false }; // in its cell: a step to a neighbour would only turn back
+    if (c === goal || nav[c] === 0) return { angle, straight: false }; // there: a step to a neighbour would only turn back
     let best = -1;
     for (const n of [c - cols - 1, c - cols, c - cols + 1, c - 1, c + 1, c + cols - 1, c + cols, c + cols + 1])
       if (Math.abs((n % cols) - x) <= 1 && nav[n] < (nav[best] ?? Infinity)) best = n;
