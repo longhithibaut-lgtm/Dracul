@@ -358,7 +358,11 @@ const layouts = [];
 for (const id of ['hall', 'nave', 'ossuary', 'chapel', 'cloister']) {
   await page.evaluate((layout) => window.game.scene.getScene('room').scene.restart({ layout }), id);
   await page.waitForFunction((id) => { const s = window.game.scene.getScene('room'); return s.layout === id && !s.training; }, id);
-  await page.evaluate(() => window.game.scene.getScene('room').time.removeAllEvents()); // no wave: the room empty
+  await page.evaluate(() => { // no wave: the room empty (a slow first build's long frame may already have called it)
+    const s = window.game.scene.getScene('room');
+    s.time.removeAllEvents();
+    s.enemies.clear(true, true);
+  });
   await page.waitForTimeout(400);
   if (!(await page.evaluate((id) => window.game.scene.getScene('room').layout === id && !document.querySelector('#training'), id))) continue;
   const h = await page.evaluate(() => { // the HUD's camera and the vignette framing the screen would show at every seam
