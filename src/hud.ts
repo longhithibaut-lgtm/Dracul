@@ -121,7 +121,7 @@ const SEAL = [
 ];
 const SEAL_W = 11 + 3; // with its gap from the drops
 
-const X0 = 8, Y0 = 6; // top-left corner of the HUD, in from the safe area's
+const X0 = 8, Y0 = 6; // top-left corner of the HUD, inside the safe area
 const PITCH = 8; // drop spacing: 7 px drop + 1 px gap
 const PIPS = 3, PIP_GAP = 3; // dash pips under the drops
 const FLASH_MS = 60; // a lost drop flashes white, cracks, then bursts

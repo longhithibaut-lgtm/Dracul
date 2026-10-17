@@ -1,7 +1,7 @@
 # Direction artistique
 
 Référence : Hyper Light Drifter, sauf pour les salles : leur barre est la crypte validée par l'utilisateur
-([references/salle-crypte.png](references/salle-crypte.png)). Une nouvelle salle doit l'égaler, pas battre Hyper Light Drifter. Résolution native 480×270, affichée ×4 en 1080p (`pixelArt: true`).
+([references/salle-crypte.png](references/salle-crypte.png)). Une nouvelle salle doit l'égaler, pas battre Hyper Light Drifter. Résolution native 480×270, affichée ×4 en 1080p (`pixelArt: true`) ; sur un écran d'une autre forme, la vue la suit (une boîte de 480×270 le long de son grand côté, l'autre côté agrandi, debout aussi).
 
 ## Palette « Nuit de sang » (base commune, à étendre avec parcimonie)
 
