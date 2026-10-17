@@ -14,7 +14,7 @@ import * as Rats from './rats.ts';
 import * as Training from './training.ts';
 import * as Wanderer from './wanderer.ts';
 import * as Touch from './touch.ts';
-import { GIFTS, type GiftId } from './gifts.ts';
+import { GIFTS, KINDS, type GiftId } from './gifts.ts';
 import { UPS, open, type Levels, type UpId } from './upgrades.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -750,7 +750,7 @@ export class RoomScene extends Phaser.Scene {
     Touch.stick.x = Touch.stick.y = 0;
     this.cards = Rats.cards(this, this.offerUps.map((id) => {
       const u = UPS[id], lvl = this.lv(id) + 1;
-      return { id: `${id}${lvl}`, name: u.name, text: u.text, kind: u.kind, icon: u.icon, band: `NIV ${lvl}/${T.ups.max}` };
+      return { id: `${id}${lvl}`, name: u.name, text: u.text, kind: u.kind, icon: u.icon, band: `${KINDS[u.kind].toUpperCase()} NIV ${lvl}` };
     }), `Le sang monte : niveau ${n}`, Rats.drop(this));
   }
 

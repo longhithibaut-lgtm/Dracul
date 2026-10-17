@@ -482,9 +482,9 @@ export function fall(scene: Scene, s: Sprite, done: () => void) {
   scene.time.delayedCall(60, () => {
     const { x, y } = s, fy = y + GROUND;
     s.disableBody(true, true);
-    bleed(scene, x, y, (s.getData('facing') ?? 0) + Math.PI, 8, 1.4, 0.9);
-    const rt = stains(scene);
-    pool(x, fy, 6, 2.4, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.mid, BLOOD.dark, BLOOD.dry);
+    bleed(scene, x, y, (s.getData('facing') ?? 0) + Math.PI, 5, 1.4, 0.9);
+    const rt = stains(scene); // a small dark pool: hundreds die in a room, and the drops must read on the floor they leave
+    pool(x, fy, 4, 1.6, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.dark, BLOOD.dry);
     rt.render();
     done();
   });

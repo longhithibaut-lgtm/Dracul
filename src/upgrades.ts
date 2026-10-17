@@ -6,6 +6,7 @@ import type { Kind } from './gifts.ts';
 // What they are called, say and look like; their effects live in RoomScene, their numbers in T.ups.
 
 const U = T.ups, pc = (k: number) => `${Math.round(k * 100)} %`;
+const fr = (k: number) => String(k).replace('.', ','); // French decimals
 type Up = { name: string; kind: Kind; text: string; icon: string[] }; // kind: the card's band; icon: 7x7, S silver s grey r d blood
 const DEFS = {
   reach: { name: 'Griffes longues', kind: 'griffes', text: `Tes griffes portent ${U.reach} px plus loin et balaient ${U.arc} degrés de plus.`, icon: [
@@ -16,7 +17,7 @@ const DEFS = {
     '....S..',
     '.....S.',
     'rrrrrrr'] },
-  claw: { name: 'Griffes acérées', kind: 'griffes', text: `Tes griffes infligent ${U.claw} dégât de plus.`, icon: [
+  claw: { name: 'Griffes acérées', kind: 'griffes', text: `Tes griffes infligent ${fr(U.claw)} dégât de plus.`, icon: [
     '...S...',
     '...S...',
     '..SSs..',

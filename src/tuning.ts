@@ -102,8 +102,8 @@ export const T = {
   // The horde (the default mode): ghouls pour in all through the room, more and more, until its time is up.
   horde: {
     roomMs: 90000, roomMsStep: 10000, // room 1 lasts this long, each next room this much longer
-    first: 8, // the opening rush, at once
-    rate: 0.8, rateEnd: 2.4, // ghouls a second at the start of room 1 and at its end (rising in between)...
+    first: 10, // the opening rush, at once
+    rate: 1.2, rateEnd: 4.4, // ghouls a second at the start of room 1 and at its end (rising in between)...
     ratePerRoom: 0.4, // ...both this much higher each next room
     max: 60, // alive at once
     hp: 1, hpPerRoom: 0.5, // weaker than the old ghouls (T.enemy.hp): one or two blows
@@ -120,8 +120,8 @@ export const T = {
 
   // Blood and level-ups: every kill drops blood; the bar full, the game pauses on three upgrade cards (upgrades.ts).
   level: {
-    first: 14, step: 8, // drops the first level needs, and how many more each next one
-    magnet: 30, // drops this close are pulled to the hero...
+    first: 30, step: 10, // drops the first level needs, and how many more each next one
+    magnet: 44, // drops this close are pulled to the hero...
     pull: 240, // ...at up to this speed
     ghoul: 1, bow: 5, // drops' worth
   },
