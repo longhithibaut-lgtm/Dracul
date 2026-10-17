@@ -1,7 +1,10 @@
-// On-screen controls for touch screens, as DOM over the canvas: a stick on the left to move, action buttons on the
-// right, Plein écran and Entraînement at the top right, clear of the HUD. The same thumb arc held sideways or upright
-// (the stick a little smaller upright, to leave the buttons room). Only on coarse pointers (phones, tablets), so a
-// laptop keeps its keyboard and mouse. Under L'ombre (shadow.ts) the finger plays on the game itself: only the top two.
+// On-screen controls for touch screens, as DOM over the canvas, Plein écran and Entraînement at the top right, clear
+// of the HUD. Played with one thumb (the default): an invisible floating stick that appears where the thumb lands on the
+// game, and a quick tap anywhere for the mist; the attacks are automatic. The old manual combat (training room): a
+// fixed stick on the left and action buttons on the right, the same thumb arc held sideways or upright. Only on coarse
+// pointers (phones, tablets), so a laptop keeps its keyboard (the floating stick also answers the mouse there).
+import { T } from './tuning.ts';
+import { isTap, stickTilt } from './logic.ts';
 
 /** The stick's tilt, each axis in [-1, 1]; 0 when released or inside the dead zone. */
 export const stick = { x: 0, y: 0 };
@@ -30,16 +33,21 @@ const CSS = `
 #touch .top{position:absolute;display:flex;gap:8px;right:calc(12px + env(safe-area-inset-right,0px));top:calc(12px + env(safe-area-inset-top,0px))}
 #touch .top button{position:static;border-radius:6px;padding:6px 10px;font-size:12px}
 #touch button.on{background:#e0284acc}
+#touch .ring,#touch .dot{position:absolute;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%)}
+#touch .ring{border:2px solid #e8dcc840;background:#0b071026}
+#touch .dot{width:34px;height:34px;background:#e8dcc84d;border:2px solid #e8dcc866}
 @media (orientation:portrait){#touch .pad{left:calc(12px + env(safe-area-inset-left,0px));width:128px;height:128px}}`;
 
-export function controls(act: (a: Action) => void, shadow: boolean): () => void {
-  if (!matchMedia('(pointer: coarse)').matches) return () => {};
+export function controls(act: (a: Action) => void, manual: boolean, canvas: HTMLCanvasElement, playing: () => boolean): () => void {
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  if (!coarse && manual) return () => {};
   const root = document.createElement('div');
   root.id = 'touch';
   const inset = (side: 'right' | 'bottom', px: number) => `${side}:calc(${px}px + env(safe-area-inset-${side},0px))`;
-  root.innerHTML = `<style>${CSS}</style>${shadow ? '' : `<div class="pad" aria-label="Déplacement"><div class="knob"></div></div>${BUTTONS.map(([a, label, size, r, b]) =>
+  root.innerHTML = `<style>${CSS}</style>${!manual ? '<div class="ring" hidden></div><div class="dot" hidden></div>' : `<div class="pad" aria-label="Déplacement"><div class="knob"></div></div>${BUTTONS.map(([a, label, size, r, b]) =>
     `<button type="button" data-a="${a}" style="width:${size}px;height:${size}px;${inset('right', r)};${inset('bottom', b)}">${label}</button>`).join('')}`}
-    <div class="top"><button type="button" data-a="full">Plein écran</button><button type="button" data-a="training">Entraînement</button></div>`;
+    ${coarse ? `<div class="top"><button type="button" data-a="full">Plein écran</button><button type="button" data-a="training">Entraînement</button></div>` : ''}`;
+  const off = manual ? () => {} : floating(root, canvas, () => act('dash'), playing);
 
   // The stick follows one finger, from wherever it lands on the pad.
   const pad = root.querySelector<HTMLElement>('.pad'), knob = root.querySelector<HTMLElement>('.knob')!;
@@ -89,15 +97,70 @@ export function controls(act: (a: Action) => void, shadow: boolean): () => void 
 
   // Full screen, either way up (the view follows the screen's shape): hides the browser's and the app's bars where the page is allowed to (not every
   // app view is); the button only shows where it can work, and goes away once in full screen.
-  const full = root.querySelector<HTMLButtonElement>('[data-a="full"]')!;
-  const showFull = () => (full.hidden = !document.fullscreenEnabled || !!document.fullscreenElement);
+  const full = root.querySelector<HTMLButtonElement>('[data-a="full"]');
+  const showFull = () => full && (full.hidden = !document.fullscreenEnabled || !!document.fullscreenElement);
   document.addEventListener('fullscreenchange', showFull);
   showFull();
 
   document.body.append(root);
   return () => {
     document.removeEventListener('fullscreenchange', showFull);
+    off();
     stick.x = stick.y = 0;
     root.remove();
+  };
+}
+
+/**
+ * The floating stick on `canvas` (the game itself, never the buttons over it): where a finger lands, a faint ring and
+ * knob appear; the knob follows it within T.stick.radius, the ring follows a finger that drags farther; lifting the
+ * finger hides them. A finger lifted soon without straying (any finger, a second one too) is a tap: `tap()`. Nothing
+ * starts while `playing()` is false (the cards are open: the tap picks a card).
+ */
+function floating(root: HTMLElement, canvas: HTMLCanvasElement, tap: () => void, playing: () => boolean) {
+  const S = T.stick, ring = root.querySelector<HTMLElement>('.ring')!, dot = root.querySelector<HTMLElement>('.dot')!;
+  const fingers = new Map<number, { t: number; x: number; y: number; moved: number }>();
+  let lead = -1, base = { x: 0, y: 0 };
+  const place = (el: HTMLElement, p: { x: number; y: number }) => ((el.style.left = `${p.x}px`), (el.style.top = `${p.y}px`));
+  const down = (e: PointerEvent) => {
+    if (!playing()) return;
+    fingers.set(e.pointerId, { t: e.timeStamp, x: e.clientX, y: e.clientY, moved: 0 });
+    if (lead >= 0) return;
+    lead = e.pointerId;
+    base = { x: e.clientX, y: e.clientY };
+    ring.style.width = ring.style.height = `${2 * S.radius + 34}px`;
+    [ring, dot].forEach((el) => (place(el, base), (el.hidden = false)));
+  };
+  const move = (e: PointerEvent) => {
+    const f = fingers.get(e.pointerId);
+    if (!f) return;
+    f.moved = Math.max(f.moved, Math.hypot(e.clientX - f.x, e.clientY - f.y));
+    if (e.pointerId !== lead) return;
+    const at = { x: e.clientX, y: e.clientY }, tilt = stickTilt(base, at, S.radius, S.dead);
+    base = tilt.base;
+    [stick.x, stick.y] = [tilt.x, tilt.y];
+    place(ring, base);
+    place(dot, at);
+  };
+  const up = (e: PointerEvent) => {
+    const f = fingers.get(e.pointerId);
+    if (!f) return;
+    fingers.delete(e.pointerId);
+    if (e.type === 'pointerup' && isTap(e.timeStamp - f.t, f.moved, S.tapMs, S.slopPx)) tap();
+    if (e.pointerId !== lead) return;
+    lead = -1;
+    stick.x = stick.y = 0;
+    ring.hidden = dot.hidden = true;
+  };
+  canvas.style.touchAction = 'none'; // no scrolling or zooming the page under the thumb
+  canvas.addEventListener('pointerdown', down);
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', up);
+  addEventListener('pointercancel', up);
+  return () => {
+    canvas.removeEventListener('pointerdown', down);
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', up);
+    removeEventListener('pointercancel', up);
   };
 }

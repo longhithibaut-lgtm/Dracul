@@ -4,13 +4,14 @@ import { T } from './tuning.ts';
 import { GIFTS, GIFT_IDS, KINDS, kind, type GiftId } from './gifts.ts';
 import type { LayoutId } from './room.ts';
 
-export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern';
+export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'horde';
 /** Survive the scene restarts (a death in training starts the training room again). */
-// wanderer: the new hero (wanderer.ts), off = the old one. shadow: L'ombre (shadow.ts), on by default on touch screens.
-export const opts = { god: true, passive: false, wanderer: true, shadow: matchMedia('(pointer: coarse)').matches };
+// wanderer: the new hero (wanderer.ts), off = the old one. manual: the old manual combat (waves, attack keys and
+// buttons), off = the horde with automatic attacks; both hold for runs too, while ticked.
+export const opts = { god: true, passive: false, wanderer: true, manual: false };
 
 const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître']];
-const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne']];
+const SPAWNS: [Spawn, string][] = [['horde', 'horde'], ['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne']];
 // [label, group, key, min, max, step]
 const KNOBS = [
   ['Vitesse de marche', 'hero', 'speed', 50, 160, 5],
@@ -40,17 +41,23 @@ const KNOBS = [
   ['Glyphe : recharge (ms)', 'glyph', 'cooldownMs', 0, 10000, 250],
   ['Aube (cloître) : grâce avant de brûler (ms)', 'dawn', 'graceMs', 0, 5000, 100],
   ['Aube (cloître) : une brûlure toutes les (ms)', 'dawn', 'burnEveryMs', 300, 3000, 50],
-  ['Ombre : gain du glissé', 'shadow', 'gain', 0.5, 4, 0.1],
-  ['Ombre : temps pour la rejoindre (ms, bas = vif)', 'shadow', 'followMs', 10, 300, 10],
-  ['Ombre : rayon pour viser un ennemi', 'shadow', 'targetRadius', 6, 30, 1],
-  ['Ombre : marge d\'un appui immobile (px)', 'shadow', 'slopPx', 4, 30, 1],
-  ['Ombre : double tape, délai (ms)', 'shadow', 'doubleMs', 150, 500, 10],
-  ['Ombre : pichenette, durée max (ms)', 'shadow', 'flickMs', 80, 400, 10],
-  ['Ombre : pichenette, longueur min (px)', 'shadow', 'flickPx', 10, 80, 2],
-  ['Ombre : pichenette, vitesse min (px/ms)', 'shadow', 'flickSpeed', 0.1, 1.5, 0.05],
-  ['Ombre : appui long pour le glyphe (ms)', 'shadow', 'pressMs', 200, 1000, 20],
-  ['Ombre : tenue dans la lumière (ms)', 'shadow', 'lingerMs', 0, 1500, 50],
-  ['Ombre : portée de la brume (double tape)', 'shadow', 'mistReach', 30, 200, 5],
+  ['Horde : goules par seconde au début', 'horde', 'rate', 0, 4, 0.1],
+  ['Horde : goules par seconde à la fin', 'horde', 'rateEnd', 0, 8, 0.1],
+  ['Horde : goules en même temps (max)', 'horde', 'max', 10, 120, 5],
+  ['Horde : PV des goules (salle 1)', 'horde', 'hp', 0.5, 4, 0.5],
+  ['Horde : vitesse des goules', 'horde', 'speed', 15, 90, 1],
+  ['Horde : portée de leur coup', 'horde', 'reach', 10, 40, 1],
+  ['Horde : annonce de leur coup (ms)', 'horde', 'windupMs', 150, 1000, 10],
+  ['Horde : durée de la salle 1 (ms)', 'horde', 'roomMs', 20000, 240000, 5000],
+  ['Horde : un arbalétrier toutes les (ms)', 'horde', 'bowEveryMs', 5000, 60000, 1000],
+  ['Sang : gouttes pour le 1er niveau', 'level', 'first', 2, 60, 1],
+  ['Sang : gouttes de plus par niveau', 'level', 'step', 0, 40, 1],
+  ['Sang : rayon d\'attraction', 'level', 'magnet', 0, 120, 2],
+  ['Auto : goules groupées pour le glyphe', 'auto', 'glyphMin', 1, 10, 1],
+  ['Auto : écart des éclats en éventail (rad)', 'auto', 'spread', 0.05, 0.6, 0.01],
+  ['Stick : rayon (px)', 'stick', 'radius', 20, 100, 2],
+  ['Stick : tape, durée max (ms)', 'stick', 'tapMs', 80, 400, 10],
+  ['Stick : tape, écart max (px)', 'stick', 'slopPx', 4, 40, 1],
 ] as const;
 
 // Folded or not, the panel stays so across the training room's restarts (on a phone, it is folded to play).
@@ -101,7 +108,7 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
     <h3>Héros</h3>
     <label><input type="checkbox" data-opt="god"> Invincible</label>
     <label><input type="checkbox" data-opt="wanderer"> Nouveau héros (décocher : l'ancien, pour comparer)</label>
-    <label><input type="checkbox" data-opt="shadow"> Contrôle par l'ombre (décocher : stick et boutons)</label>
+    <label><input type="checkbox" data-opt="manual"> Combat manuel (ancien, pour comparer)</label>
     <div class="row"><button type="button" data-act="heal">Soigner</button></div>
     <h3>Dons du Rat : emplacements</h3>${gifts(true)}
     <h3>Dons du Rat : talents</h3>${gifts(false)}
@@ -131,7 +138,7 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
   root.addEventListener('change', (ev) => {
     const i = ev.target as HTMLInputElement;
     if (i.dataset.opt) opts[i.dataset.opt as keyof typeof opts] = i.checked;
-    if (i.dataset.opt === 'wanderer' || i.dataset.opt === 'shadow') api.restart(); // a new sprite, other controls: the room starts again around him
+    if (i.dataset.opt === 'wanderer' || i.dataset.opt === 'manual') api.restart(); // a new sprite, other controls: the room starts again around him
     if (i.dataset.gift) api.toggle(i.dataset.gift as GiftId, i.checked);
     release();
   });

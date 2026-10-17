@@ -467,6 +467,29 @@ export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, x: numb
   return s;
 }
 
+/** A ghoul of the horde that fell (see fall()) rises again at (x, y), as if new. */
+export function revive(scene: Scene, s: Sprite, x: number, y: number): Sprite {
+  s.enableBody(true, x, y, true, true).setFrame('rise0').clearTint().setImmovable(false).setVelocity(0);
+  s.data.reset();
+  s.setData({ born: scene.time.now, phase: Math.round(x * 3) });
+  return s;
+}
+
+/** A ghoul of the horde falls: the struck frame, a spray of blood and a pool on the floor, and it is gone; cheap
+ *  enough for dozens a second (die() is the full show). Then `done()`, so its sprite can rise again (revive()). */
+export function fall(scene: Scene, s: Sprite, done: () => void) {
+  s.setFrame('hurt!');
+  scene.time.delayedCall(60, () => {
+    const { x, y } = s, fy = y + GROUND;
+    s.disableBody(true, true);
+    bleed(scene, x, y, (s.getData('facing') ?? 0) + Math.PI, 8, 1.4, 0.9);
+    const rt = stains(scene);
+    pool(x, fy, 6, 2.4, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.mid, BLOOD.dark, BLOOD.dry);
+    rt.render();
+    done();
+  });
+}
+
 /** Marker shown where an enemy is about to appear: blood drips into a dark pool that the thrall climbs out of. */
 export function telegraphSpawn(scene: Scene, x: number, y: number, ms: number) {
   const fy = y + GROUND;

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import * as Font from './font.ts';
 import { blot } from './enemy.ts';
-import { GIFTS, ICONS, KINDS, kind, replacing, type GiftId } from './gifts.ts';
+import { GIFTS, ICONS, KINDS, kind, replacing, type GiftId, type Kind } from './gifts.ts';
 import { replaced } from './logic.ts';
 
 // How the Rat house shows: Vesna la Grise's gift waiting on the medallion, the gift cards, the rats of Nuée and of
@@ -131,14 +131,21 @@ export function pickup(scene: Scene, x: number, y: number): Pickup {
 
 const CARD = { w: 128, gap: 12 };
 const TEXT_W = CARD.w - 16;
-/** The lines of a card: what the gift does, then, if it replaces `old` held in its slot, which one. */
-const lines = (id: GiftId, old?: GiftId) => [Font.wrap(GIFTS[id].text, TEXT_W), old ? Font.wrap(replacing(old), TEXT_W) : []];
+/** What a card shows: a name, what it does, its kind's band (or `band`) and icon (or `icon`), and a `foot` line in red. */
+export type Card = { id: string; name: string; text: string; kind: Kind; band?: string; icon?: string[]; foot?: string };
+/** The card of gift `id`, offered to a hero holding `held`: the foot says which gift it would replace, if any. */
+export function giftCard(id: GiftId, held: readonly GiftId[]): Card {
+  const old = replaced(GIFTS, held, id);
+  return { id, name: GIFTS[id].name, text: GIFTS[id].text, kind: kind(id), foot: old && replacing(old) };
+}
+/** The lines of a card: what it does, then its foot. */
+const lines = (c: Card) => [Font.wrap(c.text, TEXT_W), c.foot ? Font.wrap(c.foot, TEXT_W) : []];
 
 /** One card `H` tall, normal or `hot` (hovered, chosen), at x offset `ox` of its texture: a frame of silver over a
- *  blood trim, the key that picks it, its slot's icon and name (or talent's) on a blood band, the gift's name, what it
- *  does and, set a little apart in red, the gift it would replace. */
-function paintCard(put: Put, ox: number, id: GiftId, key: number, hot: boolean, H: number, old?: GiftId) {
-  const W = CARD.w, g = GIFTS[id], at: Put = (x, y, c) => put(ox + x, y, c);
+ *  blood trim, the key that picks it, its kind's icon and name on a blood band, its name, what it does and, set a
+ *  little apart in red, its foot. */
+function paintCard(put: Put, ox: number, c: Card, key: number, hot: boolean, H: number) {
+  const W = CARD.w, at: Put = (x, y, col) => put(ox + x, y, col);
   const rim = hot ? BONE : SILVER, shade = hot ? SILVER : GREY, trim = hot ? BLOOD[2] : BLOOD[1];
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
@@ -151,20 +158,36 @@ function paintCard(put: Put, ox: number, id: GiftId, key: number, hot: boolean, 
   const k = String(key);
   Font.draw(k, 5 + Math.floor((9 - Font.width(k)) / 2), 5, (x, y) => at(x, y, BONE));
   // Kind: icon and name, centred on the band.
-  const band = KINDS[kind(id)].toUpperCase(), sx = Math.floor((W - 11 - Font.width(band)) / 2);
-  grid(at, sx, 6, ICONS[kind(id)], ICON);
+  const band = c.band ?? KINDS[c.kind].toUpperCase(), sx = Math.floor((W - 11 - Font.width(band)) / 2);
+  grid(at, sx, 6, c.icon ?? ICONS[c.kind], ICON);
   Font.draw(band, sx + 11, 4, (x, y) => at(x, y, SILVER));
-  // Name, a rule with a silver diamond, the effect, then what it replaces.
-  Font.draw(g.name, Math.floor((W - Font.width(g.name)) / 2), 21, (x, y) => at(x, y, BONE));
+  // Name, a rule with a silver diamond, the effect, then the foot.
+  Font.draw(c.name, Math.floor((W - Font.width(c.name)) / 2), 21, (x, y) => at(x, y, BONE));
   for (let x = 16; x < W - 16; x++) at(x, 35, trim);
   grid(at, W / 2 - 2, 34, ['.#.', '###', '.#.'], { '#': rim });
-  const [text, foot] = lines(id, old);
+  const [text, foot] = lines(c);
   [...text, ...foot].forEach((l, i) => Font.draw(l, Math.floor((W - Font.width(l)) / 2), 39 + i * Font.LINE + (i < text.length ? 0 : 3),
     (x, y) => at(x, y, i < text.length ? BONE_DIM : BLOOD[2])));
 }
-const card = (scene: Scene, id: GiftId, key: number, h: number, old?: GiftId) =>
-  bake(scene, `rat-card:${id}:${key}:${h}:${old}`, CARD.w * 2, h, (put) => [false, true].forEach((hot, i) => paintCard(put, i * CARD.w, id, key, hot, h, old)),
+const card = (scene: Scene, c: Card, key: number, h: number) =>
+  bake(scene, `rat-card:${c.id}:${key}:${h}:${c.band}:${c.foot}`, CARD.w * 2, h, (put) => [false, true].forEach((hot, i) => paintCard(put, i * CARD.w, c, key, hot, h)),
     [['n', 0, 0, CARD.w, h], ['h', CARD.w, 0, CARD.w, h]]);
+
+// The crest of a level-up: a drop of blood, lit from the top left. H glint, R blood, D shade, o outline.
+const DROP = [
+  '....o....',
+  '...oHo...',
+  '..oHRRo..',
+  '..oHRRo..',
+  '.oHRRRRo.',
+  'oHRRRRRRo',
+  'oHRRRRRRo',
+  'oRRRRRRDo',
+  '.oRRRRDo.',
+  '..oDDDo..',
+  '...ooo...',
+];
+export const drop = (scene: Scene) => bake(scene, 'blood-crest', 9, 11, (put) => grid(put, 0, 0, DROP, { o: VOID, H: 0xff4f8b, R: BLOOD[2], D: BLOOD[1] }));
 
 export type Cards = {
   at(x: number, y: number): number; // the card under a point, or -1
@@ -172,30 +195,29 @@ export type Cards = {
   choose(i: number, done: () => void): boolean; // false when it cannot be chosen (yet)
 };
 
-/** The choice of gifts `ids` over the dimmed room, the hero holding `held`: Vesna's coin, a heading, one card per
- *  gift sliding in, all as tall as the fullest, a hint. Laid out on the view, live: side by side, or stacked when it is
- *  too narrow for that (an upright phone). */
-export function cards(scene: Scene, ids: GiftId[], held: readonly GiftId[]): Cards {
-  const born = scene.time.now, n = ids.length;
-  const olds = ids.map((id) => replaced(GIFTS, held, id));
+/** A choice of cards over the dimmed room: a crest (Vesna's coin by default), a heading, the cards sliding in, all as
+ *  tall as the fullest, a hint. Laid out on the view, live: side by side, or stacked when it is too narrow for that (an
+ *  upright phone). */
+export function cards(scene: Scene, list: Card[], heading = 'Don de la Maison du Rat', crestKey = coin(scene)): Cards {
+  const born = scene.time.now, n = list.length;
   // 82 with three lines of text, like most.
-  const h = 46 + Math.max(...ids.map((id, i) => lines(id, olds[i]).flat().length * Font.LINE + (olds[i] ? 3 : 0)));
+  const h = 46 + Math.max(...list.map((c) => lines(c).flat().length * Font.LINE + (c.foot ? 3 : 0)));
   const dim = scene.add.rectangle(0, 0, T.width, T.height, VOID, 0.78).setOrigin(0).setDepth(UI);
-  const crest = scene.add.image(0, 0, coin(scene)).setOrigin(0.5, 0).setDepth(UI + 1);
-  const head = scene.add.image(0, 0, Font.bake(scene, ['Don de la Maison du Rat'], SILVER, VOID)).setOrigin(0.5, 0).setDepth(UI + 1);
-  const imgs = ids.map((id, i) => scene.add.image(0, 0, card(scene, id, i + 1, h, olds[i]), 'n').setOrigin(0).setDepth(UI + 2));
-  const keys = matchMedia('(pointer: coarse)').matches ? 'touche une carte' : `${ids.map((_, i) => i + 1).join(', ')} ou clic`;
+  const crest = scene.add.image(0, 0, crestKey).setOrigin(0.5, 0).setDepth(UI + 1);
+  const head = scene.add.image(0, 0, Font.bake(scene, [heading], SILVER, VOID)).setOrigin(0.5, 0).setDepth(UI + 1);
+  const imgs = list.map((c, i) => scene.add.image(0, 0, card(scene, c, i + 1, h), 'n').setOrigin(0).setDepth(UI + 2));
+  const keys = matchMedia('(pointer: coarse)').matches ? 'touche une carte' : `${list.map((_, i) => i + 1).join(', ')} ou clic`;
   const hint = scene.add.image(0, 0, Font.bake(scene, [keys], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
   const all = [dim, crest, head, ...imgs, hint];
   all.forEach((o) => o.setScrollFactor(0)); // on the screen, wherever the camera is in a tall room
   let hot = -1, picked = false, xs: number[] = [], ys: number[] = [];
-  const slide = ids.map(() => 10); // each card rises this much into place as it comes in
+  const slide = list.map(() => 10); // each card rises this much into place as it comes in
   const place = () => {
     const W = scene.scale.width, H = scene.scale.height, row = n * CARD.w + (n - 1) * CARD.gap, stack = W < row + 16, gap = 6;
     // Side by side as high as on a 16:9 screen, the block kept in the middle of a taller view; stacked, centred.
     const top = stack ? Math.max(4, Math.round((H - 57 - n * h - (n - 1) * gap) / 2)) : 56 + Math.round((H - T.height) / 2);
-    xs = ids.map((_, i) => (stack ? Math.round((W - CARD.w) / 2) : Math.round((W - row) / 2) + i * (CARD.w + CARD.gap)));
-    ys = ids.map((_, i) => top + 44 + (stack ? i * (h + gap) : 0));
+    xs = list.map((_, i) => (stack ? Math.round((W - CARD.w) / 2) : Math.round((W - row) / 2) + i * (CARD.w + CARD.gap)));
+    ys = list.map((_, i) => top + 44 + (stack ? i * (h + gap) : 0));
     dim.setSize(W, H);
     crest.setPosition(W / 2, top);
     head.setPosition(W / 2, top + 22);
@@ -229,7 +251,7 @@ export function cards(scene: Scene, ids: GiftId[], held: readonly GiftId[]): Car
       show(i);
       picked = true;
       const im = imgs[i].setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
-      scene.time.delayedCall(70, () => im.clearTint());
+      scene.tweens.addCounter({ duration: 70, onComplete: () => im.clearTint() }); // a tween: the clock may be paused (level-up)
       scene.tweens.add({ targets: imgs.filter((o) => o !== im), alpha: 0, duration: 150 });
       scene.tweens.add({ targets: im, y: ys[i] - 8, delay: 300, duration: 260, ease: 'Cubic.easeIn' });
       scene.tweens.add({ targets: [dim, crest, head, hint, im], alpha: 0, delay: 360, duration: 200, onComplete: () => {

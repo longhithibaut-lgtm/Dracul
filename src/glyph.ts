@@ -37,6 +37,7 @@ const BAT = [
 
 export type Glyph = {
   x: number; y: number; at: number; // centre on the floor, cast time
+  r: number; // its radius (T.glyph.radius, grown by Grand sceau)
   from: number; // ground angle toward the hero when cast: the sigil draws itself from that side
   caughtAt: number; // when it first bound something, -1 until then
   g: G; chains: Map<Sprite, { front: G; back: G; at: number }>;
@@ -66,10 +67,10 @@ function line(a: P, b: P, put: (x: number, y: number, i: number) => void, from =
 }
 
 /** Starts drawing a glyph centred on floor point (x, y), cast by a hero standing at `hero` (his feet). */
-export function cast(scene: Phaser.Scene, x: number, y: number, hero: P): Glyph {
+export function cast(scene: Phaser.Scene, x: number, y: number, hero: P, r: number = T.glyph.radius): Glyph {
   const E = Phaser.Scenes.Events;
   const gl: Glyph = {
-    x: Math.round(x), y: Math.round(y), at: scene.time.now, from: Math.atan2((hero.y - y) / SQ, hero.x - x), caughtAt: -1,
+    x: Math.round(x), y: Math.round(y), at: scene.time.now, r, from: Math.atan2((hero.y - y) / SQ, hero.x - x), caughtAt: -1,
     g: scene.add.graphics().setDepth(FLOOR), chains: new Map(), shaken: [],
     end: () => {
       undo();
@@ -88,7 +89,7 @@ export function cast(scene: Phaser.Scene, x: number, y: number, hero: P): Glyph 
 /** True while the glyph binds and floor point `p` (feet) is inside it. */
 export function binds(gl: Glyph, p: P, now: number) {
   const t = now - gl.at - T.glyph.armMs;
-  return t >= 0 && t < T.glyph.holdMs && ellipseDist(gl, p, T.glyph.radius, T.glyph.radius * SQ) <= 1;
+  return t >= 0 && t < T.glyph.holdMs && ellipseDist(gl, p, gl.r, gl.r * SQ) <= 1;
 }
 
 /** Draws the glyph at `now`, holding `held` (the enemies it binds this frame). False once it has crumbled and is gone. */
@@ -105,7 +106,7 @@ export function show(gl: Glyph, now: number, held: Sprite[]): boolean {
 }
 
 function sigil(gl: Glyph, now: number) {
-  const g = gl.g.clear(), G = T.glyph, R = G.radius, ri = ring(R), rm = R - 5.7; // runes between the 2 px rim and the ring
+  const g = gl.g.clear(), G = T.glyph, R = gl.r, ri = ring(R), rm = R - 5.7; // runes between the 2 px rim and the ring
   const age = now - gl.at, arm = Math.min(1, age / G.armMs), t = age - G.armMs, fade = Math.max(0, (t - G.holdMs) / FADE_MS);
   const caught = gl.caughtAt >= 0 ? now - gl.caughtAt : -1;
   // A flare when it arms and when it first catches; a beat on the rim while it holds; a blink before it lets go.
@@ -162,12 +163,13 @@ function sigil(gl: Glyph, now: number) {
   }
 }
 
+const CHAINS = 6; // chained at most, so a glyph on a horde stays cheap to draw; the others are just held still
 /** Chains from the triangle's points to the waist of each bound enemy, in front of it or behind as the point lies, and
  *  one wrapped round its waist. */
 function chains(gl: Glyph, now: number, held: Sprite[]) {
-  for (const [s, c] of gl.chains) if (!held.includes(s)) { c.front.destroy(); c.back.destroy(); gl.chains.delete(s); }
-  const pts = POINTS.map((a) => onGround(gl, a, ring(T.glyph.radius)));
-  held.forEach((s, n) => {
+  for (const [s, c] of gl.chains) if (!held.slice(0, CHAINS).includes(s)) { c.front.destroy(); c.back.destroy(); gl.chains.delete(s); }
+  const pts = POINTS.map((a) => onGround(gl, a, ring(gl.r)));
+  held.slice(0, CHAINS).forEach((s, n) => {
     let c = gl.chains.get(s);
     if (!c) gl.chains.set(s, (c = { front: gl.g.scene.add.graphics(), back: gl.g.scene.add.graphics(), at: now }));
     c.front.clear().setDepth(s.depth + 0.5);

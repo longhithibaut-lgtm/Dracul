@@ -9,8 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "shot": "node scripts/shot.mjs",
-    "views": "node scripts/views.mjs",
-    "shadow": "node scripts/shadow.mjs"
+    "views": "node scripts/views.mjs"
   },
   "dependencies": {
     "phaser": "^4.2.1"
