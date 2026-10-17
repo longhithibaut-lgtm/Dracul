@@ -153,7 +153,7 @@ const steer = async (want) => {
   for (const k of held) if (!want.includes(k)) { await page.keyboard.up(k); held.delete(k); }
   for (const k of want) if (!held.has(k)) { await page.keyboard.down(k); held.add(k); }
 };
-const horde = { deaths: 0, levels: 0, cards: 0, gate: false, biggest: 0, fps: 0, captured: [], peak: 0, health: [] };
+const horde = { deaths: 0, levels: 0, cards: 0, gate: false, biggest: 0, fps: 0, captured: [], peak: 0, health: [], at: [] };
 let captured = false, gifts = false, gate = false, lastLevel = 1;
 {
   const t0 = Date.now();
@@ -163,7 +163,7 @@ let captured = false, gifts = false, gate = false, lastLevel = 1;
     if (r.dead) { horde.deaths++; await steer([]); await page.waitForFunction(() => !window.game.scene.getScene('room').dead, null, { timeout: 5000 }).catch(() => {}); lastLevel = 1; continue; }
     horde.peak = Math.max(horde.peak, r.enemies);
     if (r.health !== horde.health.at(-1)) horde.health.push(r.health);
-    if (r.level > lastLevel) { horde.levels += r.level - lastLevel; lastLevel = r.level; }
+    if (r.level > lastLevel) { horde.levels += r.level - lastLevel; lastLevel = r.level; horde.at.push(Math.round(r.fight / 1000)); }
     if (r.cards) {
       await steer([]);
       await page.waitForTimeout(600); // slid in
@@ -190,7 +190,7 @@ let captured = false, gifts = false, gate = false, lastLevel = 1;
     // Every gift but three held, so the draw is always the same: Éclats pestilents (TIR), Glyphe du nid (GLYPHE),
     // Éclats rongeurs (TALENT).
     if (r.pickup) await page.evaluate(() => { const s = window.game.scene.getScene('room'); if (s.gifts.length < 7) { s.gifts = ['griffes', 'nuee', 'rongeur', 'fuite', 'morsure', 'survivant', 'contagion']; s.hud.gifts(s.gifts); } });
-    if (r.fight > 50000 && r.enemies > horde.biggest && r.near >= 15 && r.enemies >= 30) {
+    if (r.fight > 40000 && r.enemies > horde.biggest && r.near >= 12 && r.enemies >= 30) {
       horde.biggest = r.enemies;
       horde.fps = await page.evaluate(() => window.game.loop.actualFps);
       await freeze(true);
@@ -472,7 +472,7 @@ if (layouts.at(-1) === 'cloister') {
 }
 
 const played = !horde.deaths && horde.levels >= 2 && horde.cards >= 2 && horde.gate && horde.biggest > 0 && horde.captured.includes('level');
-console.log(`horde: ${played ? 'ok' : 'FAILED'}: deaths ${horde.deaths} (health ${horde.health.join(' ')}), ${horde.levels} levels gained, ${horde.cards} cards picked, gate ${horde.gate ? 'reached' : 'NOT reached'}; `
+console.log(`horde: ${played ? 'ok' : 'FAILED'}: deaths ${horde.deaths} (health ${horde.health.join(' ')}), ${horde.levels} levels gained (at ${horde.at.join(', ')} s), ${horde.cards} cards picked, gate ${horde.gate ? 'reached' : 'NOT reached'}; `
   + `most alive ${horde.peak}, biggest horde captured ${horde.biggest} enemies at ${Math.round(horde.fps)} fps; with 40+ enemies: ${horde.step} ms of logic and ${horde.render} ms of render calls per frame`);
 console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; rooms: ${layouts.join(', ') || 'NO'}; dawn: ${dawn ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');

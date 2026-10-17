@@ -672,7 +672,12 @@ export class RoomScene extends Phaser.Scene {
       return;
     }
     const speed = H.speed + (this.roomNo - 1) * H.speedPerRoom;
-    if (!b.blocked.none && b.velocity.length() < speed / 3 && time >= (e.getData('slipUntil') ?? 0)) e.setData('slipUntil', time + 250);
+    // No headway for a while (a corner, the brink of a pit, the press): it slips aside a moment, the other way each time.
+    if (time >= (e.getData('checkAt') ?? 0)) {
+      if (Phaser.Math.Distance.Between(e.x, e.y, e.getData('checkX') ?? 0, e.getData('checkY') ?? 0) < 3)
+        e.setData({ slipUntil: time + 300, side: -e.getData('side') });
+      e.setData({ checkAt: time + 400, checkX: e.x, checkY: e.y });
+    }
     const slip = time < (e.getData('slipUntil') ?? 0) ? (Math.PI / 2) * e.getData('side') : 0;
     const v = this.physics.velocityFromRotation(this.wayToHero(e, this.blockBoxes).angle + slip, speed, b.velocity), sp = H.spacing;
     for (const o of live) {
@@ -1192,7 +1197,7 @@ export class RoomScene extends Phaser.Scene {
       let old = horde ? this.pool.pop() : undefined;
       while (old && !old.scene) old = this.pool.pop(); // one destroyed meanwhile (a group cleared) is dropped
       const e = old ? Enemy.revive(this, old, p.x, p.y) : (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
-      const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0, plagueAt: 0, slipUntil: 0 };
+      const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0, plagueAt: 0, slipUntil: 0, checkAt: 0 };
       if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
       else if (horde) e.setData({ ...common, horde: true, hp: hp ?? T.horde.hp + (this.roomNo - 1) * T.horde.hpPerRoom, restUntil: 0 });
       else e.setData({ ...common, hp: hp ?? T.enemy.hp, restUntil: 0 });

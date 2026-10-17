@@ -480,6 +480,7 @@ export function revive(scene: Scene, s: Sprite, x: number, y: number): Sprite {
 export function fall(scene: Scene, s: Sprite, done: () => void) {
   s.setFrame('hurt!');
   scene.time.delayedCall(60, () => {
+    if (!s.scene) return; // destroyed meanwhile (its group cleared)
     const { x, y } = s, fy = y + GROUND;
     s.disableBody(true, true);
     bleed(scene, x, y, (s.getData('facing') ?? 0) + Math.PI, 5, 1.4, 0.9);
