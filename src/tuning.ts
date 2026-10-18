@@ -92,64 +92,6 @@ export const T = {
   // on a steady beat until he is back in the shade.
   dawn: { graceMs: 2500, burnEveryMs: 1000, damage: 1 },
 
-  // The invisible floating stick (touch.ts): it appears where the thumb lands. In CSS px, about the same on every phone.
-  stick: {
-    radius: 46, // the knob's travel; the base follows a thumb that drags farther
-    dead: 0.18, // of the radius: a resting thumb doesn't walk him
-    tapMs: 200, slopPx: 12, // lifted this soon, having strayed this little: a tap, the mist
-  },
-
-  // The horde (the default mode): ghouls pour in all through the room, more and more, until its time is up.
-  horde: {
-    roomMs: 90000, roomMsStep: 10000, // room 1 lasts this long, each next room this much longer
-    first: 10, // the opening rush, at once
-    rate: 2, rateEnd: 8, // ghouls a second at the start of room 1 and at its end (rising in between)...
-    ratePerRoom: 0.4, // ...both this much higher each next room
-    max: 60, // alive at once
-    hp: 1, hpPerRoom: 0.5, // weaker than the old ghouls (T.enemy.hp): one or two blows
-    speed: 38, speedPerRoom: 3,
-    spacing: 18, // packmates closer than this push apart
-    // Their swipe, telegraphed like the old lunge but short: within `reach` (sprite to sprite) it stops, winds up, lunges.
-    reach: 20, windupMs: 420, lungeSpeed: 170, lungeMs: 110, recoverMs: 350, restMs: 600,
-    margin: 24, // they rise this far beyond the edge of the view...
-    clear: 110, // ...and never closer than this to the hero
-    // The Order, the Hades side: crossbowmen (`bows` at a time in room 1, one more each next room) and lanterns.
-    bowFirstMs: 15000, bowEveryMs: 20000, bows: 1,
-    lanternAt: [0.3, 0.6], // a lantern at these fractions of the room; room 1 only the first
-  },
-
-  // Blood and level-ups: every kill drops blood; the bar full, the game pauses on three upgrade cards (upgrades.ts).
-  level: {
-    first: 50, step: 15, // drops the first level needs, and how many more each next one
-    magnet: 36, // drops this close are pulled to the hero...
-    pull: 240, // ...at up to this speed
-    ghoul: 1, bow: 5, // drops' worth
-  },
-
-  // The automatic attacks of the default mode, all from the kit above.
-  auto: {
-    glyphMin: 3, // the glyph waits for a cluster of at least this many enemies in view
-    spread: 0.22, // radians between the shards of a fan (Gerbe d'éclats)
-  },
-
-  // The upgrades (upgrades.ts), per level taken; each stacks up to `max` levels.
-  ups: {
-    max: 5,
-    reach: 4, arc: 12, // Griffes longues: px, degrees
-    claw: 0.5, // Griffes acérées: damage
-    frenzy: 0.1, // Frénésie: claws' cooldown x (1 - frenzy) per level
-    finisher: 1, // Coup de grâce: the finisher's damage
-    shards: 1, // Gerbe d'éclats: shards per throw
-    shotRate: 0.15, // Main leste: shards' cooldown x (1 - shotRate) per level
-    glyphRadius: 6, // Grand sceau: px
-    glyphRate: 0.15, // Sceau pressé
-    mist: 0.15, // Brume vive
-    speed: 0.08, // Foulée nocturne: x (1 + speed x level)
-    magnet: 0.5, // Appel du sang: x (1 + magnet x level)
-    vigor: 1, // Sang épais: max health, healed when taken
-    feast: 1, // Festin: blood a bite gives back
-  },
-
   // A run is a string of rooms; the wave count carries on from room to room, so difficulty keeps climbing.
   run: {
     wavesPerRoom: 3,

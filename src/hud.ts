@@ -3,7 +3,6 @@ import { T } from './tuning.ts';
 import * as Font from './font.ts';
 import { ICONS, kind, shelf, type GiftId } from './gifts.ts';
 import { edgePip } from './logic.ts';
-import { UPS, UP_IDS, type Levels } from './upgrades.ts';
 
 // Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
 // recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, beside them
@@ -19,11 +18,6 @@ export type Hud = {
   gifts(held: readonly GiftId[]): void;
   title(text: string): void;
   threats(enemies: { x: number; y: number; aim: boolean }[]): void; // on the screen's coordinates; off it, a pip points at each
-  // The horde mode only: the blood bar across the top (blood banked of what the next level needs), the level and the
-  // room's time left on a plaque, and a shelf of the upgrades taken, a pip per level under each icon.
-  level(level: number, blood: number, need: number): void;
-  clock(msLeft: number): void;
-  ups(levels: Levels): void;
 };
 
 // "Nuit de sang" palette (docs/art.md), plus the Rat house's silver and grey for the gift icons.
@@ -127,7 +121,7 @@ const SEAL = [
 ];
 const SEAL_W = 11 + 3; // with its gap from the drops
 
-const X0 = 8, Y0 = 9; // top-left corner of the HUD, inside the safe area
+const X0 = 8, Y0 = 6; // top-left corner of the HUD, inside the safe area
 const PITCH = 8; // drop spacing: 7 px drop + 1 px gap
 const PIPS = 3, PIP_GAP = 3; // dash pips under the drops
 const FLASH_MS = 60; // a lost drop flashes white, cracks, then bursts
@@ -160,7 +154,6 @@ export function create(scene: Phaser.Scene): Hud {
   // gifts: undefined until first set; fresh: the one just taken.
   let gifts: GiftId[] | undefined, fresh: GiftId | undefined, giftAt = -1e9, title = '', titleAt = -1e9;
   let threats: { x: number; y: number; aim: boolean }[] = [];
-  let lvl = 0, banked = 0, need = 1, shown = 0, lvlAt = -1e9, left = -1, ups: [string, number][] = [];
   // The corner, in from the safe area (native px per CSS px: the scale manager's displayScale).
   const corner = () => {
     const css = getComputedStyle(probe), k = scene.scale.displayScale.x;
@@ -256,42 +249,12 @@ export function create(scene: Phaser.Scene): Hud {
       }
     }
 
-    // The horde mode: the blood bar along the top edge, filling up smoothly, bone for a moment at each level; under the
-    // tile a plaque with the level and the time left, the gifts' shelf beside it, the upgrades' under them.
-    let shelfX = x0 + 20;
-    if (lvl) {
-      const bx = at.x - 4, bw = scene.scale.width - 2 * bx, by = at.y - 6, k = Math.min(1, shown / need), up = now - lvlAt < 300;
-      shown += (banked - shown) * 0.2;
-      g.fillStyle(C.void).fillRect(bx - 1, by - 1, bw + 2, 5);
-      g.fillStyle(C.night).fillRect(bx, by, bw, 3);
-      g.fillStyle(up ? C.bone : C.blood[1]).fillRect(bx, by, Math.round(bw * k), 3);
-      g.fillStyle(up ? C.bone : C.blood[2]).fillRect(bx, by, Math.round(bw * k), 1);
-      if (k > 0 && !up) g.fillStyle(C.glow).fillRect(bx + Math.round(bw * k) - 1, by, 1, 3);
-      const y = y0 + 22, text = `NIV ${lvl}${left >= 0 ? `  ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}` : ''}`;
-      const w = Font.width(text) + 6;
-      g.fillStyle(C.night, 0.9).fillRect(shelfX, y, w, 11);
-      g.fillStyle(C.dusk).fillRect(shelfX, y, w, 1);
-      g.fillStyle(up ? C.glow : C.bone);
-      Font.draw(text, shelfX + 3, y - 1, (px, py) => g.fillRect(px, py, 1, 1));
-      shelfX += w + 2;
-      if (ups.length) {
-        const uy = y + 12;
-        g.fillStyle(C.night, 0.9).fillRect(x0 + 20, uy, ups.length * 9 + 3, 13);
-        g.fillStyle(C.dusk).fillRect(x0 + 20, uy, ups.length * 9 + 3, 1);
-        ups.forEach(([id, n], i) => {
-          const x = x0 + 22 + i * 9;
-          grid(x, uy + 2, UPS[id as keyof typeof UPS].icon, ICON);
-          for (let p = 0; p < T.ups.max; p++) g.fillStyle(p < n ? C.blood[2] : C.dusk).fillRect(x + 1 + p, uy + 10, 1, 1);
-        });
-      }
-    }
-
     // Gifts taken: a shelf of their icons under the tile; the newest pops white.
     if (gifts?.length) {
       const y = y0 + 22, n = gifts.length;
-      g.fillStyle(C.night, 0.9).fillRect(shelfX, y, n * 9 + 3, 11);
-      g.fillStyle(C.dusk).fillRect(shelfX, y, n * 9 + 3, 1);
-      gifts.forEach((id, i) => grid(shelfX + 2 + i * 9, y + 2, ICONS[kind(id)], id === fresh && now - giftAt < 120 ? POP : ICON));
+      g.fillStyle(C.night, 0.9).fillRect(x0 + 20, y, n * 9 + 3, 11);
+      g.fillStyle(C.dusk).fillRect(x0 + 20, y, n * 9 + 3, 1);
+      gifts.forEach((id, i) => grid(x0 + 22 + i * 9, y + 2, ICONS[kind(id)], id === fresh && now - giftAt < 120 ? POP : ICON));
     }
 
     // Title card: bone letters between two red rules, then it steps out.
@@ -379,20 +342,6 @@ export function create(scene: Phaser.Scene): Hud {
     },
     threats(list) {
       threats = list;
-    },
-    level(l, b, n) {
-      if (lvl && l > lvl) {
-        lvlAt = scene.time.now;
-        shown = 0;
-      }
-      if (!lvl) shown = b;
-      [lvl, banked, need] = [l, b, n];
-    },
-    clock(ms) {
-      left = Math.max(0, ms);
-    },
-    ups(levels) {
-      ups = UP_IDS.filter((id) => levels[id]).map((id) => [id, levels[id]!]);
     },
   };
 }

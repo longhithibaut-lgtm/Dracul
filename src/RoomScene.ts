@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, densest, drawGifts, glyphSpot, hordeDue, inArc, keepDistance, levelUp, nextCombo, nextLayout, offerable, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -14,16 +14,13 @@ import * as Rats from './rats.ts';
 import * as Training from './training.ts';
 import * as Wanderer from './wanderer.ts';
 import * as Touch from './touch.ts';
-import { GIFTS, KINDS, type GiftId } from './gifts.ts';
-import { UPS, open, type Levels, type UpId } from './upgrades.ts';
+import { GIFTS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 /** What a run carries from room to room, through scene.restart(data); {} starts a new run. */
-type Run = { room?: number; layout?: Room.LayoutId; health?: number; gifts?: GiftId[]; training?: boolean; level?: number; blood?: number; ups?: Levels };
-// A room: the hero climbs in (from room 2), holds out against the horde until its time is up (or, in the old manual
-// combat, fights its waves), takes the gift of the Rat house on the medallion (cards open, the action pauses), then
-// walks out through the portcullis it raised. In the horde his attacks are automatic, and the blood of the dead fills a
-// bar: full, the action pauses on three upgrade cards (a level-up).
+type Run = { room?: number; layout?: Room.LayoutId; health?: number; gifts?: GiftId[]; training?: boolean };
+// A room: the hero climbs in (from room 2), fights its waves, takes the gift of the Rat house on the medallion (cards
+// open, the action pauses), then walks out through the portcullis it raised.
 type Phase = 'enter' | 'fight' | 'gift' | 'choose' | 'exit' | 'leave';
 const NAV = 8; // walk grid cell, px
 
@@ -37,13 +34,12 @@ export class RoomScene extends Phaser.Scene {
 
   private room!: Room.Room;
   private layout: Room.LayoutId = 'hall';
-  // Walking round the pits: a grid of NAV px cells over the floor, open where a body fits; steps to the hero's cell,
-  // shared by every enemy, kept until his cell changes.
+  // Walking round the pits: a grid of NAV px cells over the floor, open where a body fits; steps to the hero's cell.
   navOpen: boolean[] = [];
   private navCols = 0;
-  private navHero = { goal: -1, steps: [] as number[] };
+  private navFrom = -1;
+  private nav: number[] = [];
   private pitBoxes: { x: number; y: number; width: number; height: number }[] = [];
-  private blockBoxes: typeof this.pitBoxes = []; // the pits' and the props': the horde walks round both
   private hud!: Hud.Hud;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private facing = Math.PI / 2;
@@ -80,25 +76,6 @@ export class RoomScene extends Phaser.Scene {
   private castUntil = 0; // the hero's cast pose
   private nestAt = Infinity; // Glyphe du nid: when the glyph arms and lets its rats out
   private waveDue = false; // a tall room's next wave, waiting for the hero to climb into its part
-  private manual = false; // the old manual combat (training room), else the horde with automatic attacks
-  // The horde: its clock (time spent fighting, frozen while cards are open), the room's length, the ghouls risen, when
-  // the next crossbowman comes, the lanterns planted; dead ghouls wait in `pool` to rise again.
-  private fightMs = 0;
-  private fightFrom = 0;
-  private roomMs = 0;
-  private spawned = 0;
-  private bowAt = 0;
-  private planted = 0;
-  private pool: Sprite[] = [];
-  // Blood on the floor, drawn to the hero; the level it buys, banked blood toward the next, levels owed a card choice,
-  // the upgrades taken and those on offer.
-  private drops: { img: Phaser.GameObjects.Image; v: number; pulled: number }[] = [];
-  private level = 1;
-  private blood = 0;
-  private owed = 0;
-  private ups: Levels = {};
-  private offerUps: UpId[] = [];
-  private saidAt: Record<string, number> = {}; // when each sound last played, see say()
 
   constructor() {
     super('room');
@@ -108,9 +85,10 @@ export class RoomScene extends Phaser.Scene {
     // The scene instance is reused on restart, so every field is reset here; the run carries on through `data`.
     this.roomNo = data.room ?? 1;
     this.layout = data.layout ?? 'hall';
-    this.navHero.goal = -1;
+    this.navFrom = -1;
     this.training = !!data.training;
     this.gifts = [...(data.gifts ?? [])];
+    this.health = data.health ?? this.maxHealth();
     this.facing = Math.PI / 2; // start facing the camera
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.shotReadyAt = this.shotUntil = this.invulnUntil = this.combo = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
@@ -132,24 +110,11 @@ export class RoomScene extends Phaser.Scene {
     this.glyphReadyAt = this.castUntil = 0;
     this.nestAt = Infinity;
     this.waveDue = false;
-    this.manual = Training.opts.manual;
-    this.level = data.level ?? 1;
-    this.blood = data.blood ?? 0;
-    this.ups = { ...data.ups };
-    this.health = data.health ?? this.maxHealth(); // once the gifts and upgrades are known
-    this.owed = this.fightMs = this.spawned = this.planted = 0;
-    this.roomMs = T.horde.roomMs + (this.roomNo - 1) * T.horde.roomMsStep;
-    this.bowAt = T.horde.bowFirstMs;
-    this.pool = [];
-    this.drops = [];
-    this.offerUps = [];
-    this.saidAt = {};
   }
 
   create() {
     // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
     this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
-    this.time.paused = false; // a restart from the level-up cards (T)
     this.physics.resume();
     this.room = Room.build(this, this.layout);
     const b = this.room.bounds;
@@ -168,9 +133,6 @@ export class RoomScene extends Phaser.Scene {
     this.physics.add.collider(this.enemies, [this.room.obstacles, this.room.pits]);
     this.physics.add.collider(this.enemies, this.enemies);
     this.physics.add.overlap(this.hero, this.enemies, (_h, e) => this.hurt(e as Sprite));
-    // In the horde, ghouls are solid: they hem him in, and only the mist slips through them. Separated bodies no longer
-    // overlap, so a lunge that bumps into him hurts here.
-    this.physics.add.collider(this.hero, this.enemies, (_h, e) => this.hurt(e as Sprite), () => !this.manual && this.time.now >= this.dashUntil && !this.prey);
     this.bolts = this.physics.add.group();
     // A bolt that lands is spent; one that misses (dash, invulnerability) flies on.
     this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
@@ -182,39 +144,35 @@ export class RoomScene extends Phaser.Scene {
     this.hud.gifts(this.gifts);
 
     this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,K,F,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
-    // The horde: the attacks are automatic, the keyboard only walks him and mists (Space), the mouse is not needed. The old
-    // manual combat: left click slashes, right click shoots, both toward the pointer; J and K do the same toward where he
-    // faces, F bites, unaimed. Either way, while cards are open a click picks one.
+    // Left click slashes, right click shoots, both toward the pointer; J and K do the same toward where he faces. F bites,
+    // unaimed. While the gift cards are open, a click picks one.
     // The cards sit on the screen, the rest in the room under the camera.
     const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.cards) return this.pick(this.cards.at(p.x, p.y));
-      if (!this.manual) return;
       const w = world(p), a = Math.atan2(w.y - this.hero.y, w.x - this.hero.x);
       if (p.button === 0) this.press(() => this.slash(a));
       else if (p.button === 2) this.press(() => this.shoot(a));
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.x, p.y)));
+    this.keys.J.on('down', () => { const a = this.facing; this.press(() => this.slash(a)); });
+    this.keys.K.on('down', () => { const a = this.facing; this.press(() => this.shoot(a)); });
+    this.keys.F.on('down', () => this.press(() => this.bite()));
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
     for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashPressedAt = this.time.now));
+    // Le Glyphe: E casts it at the pointer, L ahead of the hero (keyboard only).
+    this.input.keyboard!.on('keydown-E', () => {
+      const to = world(this.input.activePointer);
+      this.press(() => this.cast(to));
+    });
     const castAhead = () => {
       const f = this.hero.body!.center, to = { x: f.x + Math.cos(this.facing) * T.glyph.near, y: f.y + Math.sin(this.facing) * T.glyph.near };
       this.press(() => this.cast(to));
     };
-    if (this.manual) {
-      this.keys.J.on('down', () => { const a = this.facing; this.press(() => this.slash(a)); });
-      this.keys.K.on('down', () => { const a = this.facing; this.press(() => this.shoot(a)); });
-      this.keys.F.on('down', () => this.press(() => this.bite()));
-      // Le Glyphe: E casts it at the pointer, L ahead of the hero (keyboard only).
-      this.input.keyboard!.on('keydown-E', () => {
-        const to = world(this.input.activePointer);
-        this.press(() => this.cast(to));
-      });
-      this.input.keyboard!.on('keydown-L', castAhead);
-    }
+    this.input.keyboard!.on('keydown-L', castAhead);
     this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
-    // Cards: the 1, 2, 3 keys of the top row (by position, so AZERTY works unshifted) or of the numpad.
+    // Gift cards: the 1, 2, 3 keys of the top row (by position, so AZERTY works unshifted) or of the numpad.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const n = /^(?:Digit|Numpad)([1-3])$/.exec(e.code);
       if (n) this.pick(Number(n[1]) - 1);
@@ -222,8 +180,7 @@ export class RoomScene extends Phaser.Scene {
 
     const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true }) satisfies Run); // in the hall: its panel picks a room
     this.input.keyboard!.on('keydown-T', toggleTraining);
-    // Touch screens: the floating stick and a tap for the mist (the horde), or the old stick and buttons, aimed where
-    // he faces (manual); Entraînement either way.
+    // Touch screens: the same actions as J, K, L, F and Space, aimed where he faces, and T.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, Touch.controls((a) => {
       if (a === 'slash') this.press(() => this.slash(this.facing));
       else if (a === 'shoot') this.press(() => this.shoot(this.facing));
@@ -231,11 +188,7 @@ export class RoomScene extends Phaser.Scene {
       else if (a === 'cast') castAhead();
       else if (a === 'dash') this.dashPressedAt = this.time.now;
       else toggleTraining();
-    }, this.manual, this.game.canvas, () => !this.cards && !this.dead));
-    if (!this.manual) {
-      this.hud.level(this.level, this.blood, this.need());
-      this.hud.ups(this.ups);
-    }
+    }));
     if (this.training) {
       this.hud.title('Entraînement');
       let calls = 0;
@@ -243,10 +196,6 @@ export class RoomScene extends Phaser.Scene {
         gifts: this.gifts,
         spawn: (k) => {
           if (k === 'lantern') return void this.addLantern();
-          if (k === 'horde') {
-            for (let i = 0; i < 20; i++) { const p = this.edgeSpot(); if (p) this.spawn(p, 'ghoul', undefined, p.hidden); }
-            return;
-          }
           // Each call takes the next spawn point on screen and not on top of the hero, so two calls never stack two enemies.
           const view = this.cameras.main.worldView;
           const free = this.room.spawns.filter((p) => view.contains(p.x, p.y) && Phaser.Math.Distance.BetweenPoints(p, this.hero) > 50);
@@ -259,7 +208,7 @@ export class RoomScene extends Phaser.Scene {
           this.bolts.clear(true, true);
           this.shards.clear(true, true);
         },
-        restart: (layout = this.layout) => this.scene.restart({ training: true, gifts: this.gifts, layout, level: this.level, blood: this.blood, ups: this.ups } satisfies Run),
+        restart: (layout = this.layout) => this.scene.restart({ training: true, gifts: this.gifts, layout } satisfies Run),
         heal: () => {
           this.health = this.maxHealth();
           this.hud.health(this.health, this.health);
@@ -277,9 +226,7 @@ export class RoomScene extends Phaser.Scene {
       this.cameras.main.fadeIn(T.run.fadeMs);
       this.hud.title(`Salle ${this.roomNo}`);
     }
-    const wait = this.phase === 'enter' ? T.run.titleMs : 900;
-    if (this.manual) this.time.delayedCall(wait, () => this.spawnWave());
-    else this.fightFrom = this.time.now + wait; // the horde comes once the title is gone
+    this.time.delayedCall(this.phase === 'enter' ? T.run.titleMs : 900, () => this.spawnWave());
   }
 
   /** Frames the room in the view (see main.ts), on creation and live on every resize: a turn of the phone mid-fight
@@ -293,7 +240,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
-    if (this.dead || this.cards) return;
+    if (this.dead || this.phase === 'choose') return;
     const k = this.keys;
     // Climbing in from the stairs or walking out through the gate, the hero moves on his own.
     const auto = this.phase === 'enter' || this.phase === 'leave';
@@ -312,10 +259,10 @@ export class RoomScene extends Phaser.Scene {
       Sfx.play(this, 'dash');
       this.physics.velocityFromRotation(this.facing, T.dash.speed, this.hero.body!.velocity);
       if (this.gifts.includes('nuee')) this.releaseRats(this.hero.body!.center, T.gifts.rats - this.rats.filter((r) => !r.nest).length);
-    } else if (this.manual && time - delta < this.dashUntil) {
+    } else if (time - delta < this.dashUntil) {
       // The mist halts at contact with an enemy it would otherwise end on, so hero and target stay two shapes. Bodies,
       // not sprites: physics has already moved them this frame, including the dash's last step. Never for a lunging
-      // enemy: dashing through a lunge is the dodge. Not in the horde: there the mist is the way out of the press.
+      // enemy: dashing through a lunge is the dodge.
       const b = this.hero.body!, left = Math.max(0, this.dashUntil - time) / 1000;
       const e = (this.enemies.getChildren() as Sprite[]).find((e) => e.body?.enable && e.getData('state') !== 'lunge'
         && dashStopsAt(b.center, b.velocity, left, e.body.center, T.dash.stopShort));
@@ -329,9 +276,7 @@ export class RoomScene extends Phaser.Scene {
     }
     if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      // Attacking slows him down in the manual combat; the horde's attacks never stop, so they never slow him.
-      const slow = !this.manual ? 1 : posing ? 0.3 : time < this.shotUntil ? 0.5 : 1;
-      this.hero.body!.velocity.normalize().scale(T.hero.speed * slow * (1 + T.ups.speed * this.lv('speed')));
+      this.hero.body!.velocity.normalize().scale(T.hero.speed * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
     }
 
     if (this.queued && (time > this.queued.until || this.queued.act())) this.queued = undefined;
@@ -378,15 +323,14 @@ export class RoomScene extends Phaser.Scene {
     Lantern.exposure(this, this.hero, dawn ? this.litMs : 0, T.dawn.graceMs, T.dawn.burnEveryMs);
 
     const held: Sprite[] = []; // bound by the glyph this frame
-    const live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
-    for (const e of live) {
+    for (const e of this.enemies.getChildren() as Sprite[]) {
       if (!e.body?.enable) continue;
       // La Peste: an infected enemy smokes, then the plague takes its due.
       const sick = e.getData('plagueAt');
       if (sick && time < sick) Rats.plagued(this, e, time);
       else if (sick) {
         Rats.plague(this, e);
-        this.say('hit');
+        Sfx.play(this, 'hit');
         this.hurtEnemy(e, T.gifts.plagueDamage); // still sick if it dies of it, for Contagion
         e.setData('plagueAt', 0);
         if (!e.body?.enable) continue;
@@ -404,25 +348,17 @@ export class RoomScene extends Phaser.Scene {
       else if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
         if (this.training && Training.opts.passive) e.setVelocity(0).setData('state', 'chase'); // a training dummy
         else if (bow) this.stepCrossbow(e, time);
-        else if (e.getData('horde')) this.stepGhoul(e, time, live);
         else this.stepEnemy(e, time);
       }
       if (bow) Crossbow.show(e, kneeling ? 'kneel' : e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'), e.getData('hp') <= T.bite.weakAt);
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
-      // A ghoul of the horde standing in front of the hero fades, so he is never lost in the press.
-      if (e.getData('horde')) e.setAlpha(e.y > this.hero.y && e.y - this.hero.y < 26 && Math.abs(e.x - this.hero.x) < 14 ? 0.4 : 1);
     }
     // Enemies off the screen (an upright phone, the tall cloister) are pointed at from its edge, an aiming crossbowman
-    // loudest; on screen, they are not marked. In the horde only the Order's: the ghouls are everywhere.
+    // loudest; on screen, they are not marked.
     const view = this.cameras.main.worldView;
-    this.hud.threats(live.filter((e) => e.body?.enable && (this.manual || e.getData('kind') === 'crossbow'))
+    this.hud.threats((this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable)
       .map((e) => ({ x: e.x - view.x, y: e.y - view.y, aim: e.getData('state') === 'aim' })));
-    if (!this.manual) {
-      if (this.phase === 'fight' && !this.training && time >= this.fightFrom) this.direct(delta, live);
-      if (this.phase !== 'enter' && this.phase !== 'leave') this.autoAttack(time, live.filter((e) => e.body?.enable));
-      this.stepDrops(time, delta);
-    }
     if (this.glyph) {
       if (held.length && this.glyph.caughtAt < 0) Sfx.play(this, 'bind'); // once per glyph
       // Glyphe du nid: as it arms, rats burst out of its centre. On the clock the glyph keeps, not a timer's.
@@ -561,10 +497,6 @@ export class RoomScene extends Phaser.Scene {
       const p = o.body as Phaser.Physics.Arcade.StaticBody;
       return { x: p.x - 6, y: p.y - 3, width: p.width + 12, height: p.height + 6 };
     });
-    this.blockBoxes = [...this.pitBoxes, ...this.room.obstacles.getChildren().map((o) => {
-      const p = o.body as Phaser.Physics.Arcade.StaticBody;
-      return { x: p.x - 6, y: p.y - 3, width: p.width + 12, height: p.height + 6 };
-    })];
   }
 
   cellOf(p: Phaser.Types.Math.Vector2Like) {
@@ -584,206 +516,22 @@ export class RoomScene extends Phaser.Scene {
     return stepsFrom(this.navOpen, cols, this.navOpen[goal] ? goal : c);
   }
 
-  /** Where an enemy walks to reach the hero: straight at him, unless a pit (or one of `boxes`) lies across the way
-   *  (`straight` false); then toward the next cell of the shortest walk round it. */
-  private wayToHero(e: Sprite, boxes = this.pitBoxes) {
-    return this.wayTo(e.body!.center, this.hero.body!.center, boxes, this.navHero);
-  }
-
-  /** The same from floor point `from` to `to`, round `boxes` (grown by a walker's half size), with the walk grid's
-   *  steps to `to` kept in `memo`. */
-  private wayTo(from: { x: number; y: number }, to: { x: number; y: number }, boxes: typeof this.pitBoxes, memo: { goal: number; steps: number[] }): { angle: number; straight: boolean } {
-    const angle = Phaser.Math.Angle.BetweenPoints(from, to);
-    if (!boxes.length || rayDistance(from, angle, this.room.bounds, boxes) >= Phaser.Math.Distance.BetweenPoints(from, to))
+  /** Where an enemy walks to reach the hero: straight at him, unless a pit lies across the way (`straight` false); then
+   *  toward the next cell of the shortest walk round it. */
+  private wayToHero(e: Sprite): { angle: number; straight: boolean } {
+    const from = e.body!.center, to = this.hero.body!.center, angle = Phaser.Math.Angle.BetweenPoints(from, to);
+    if (!this.pitBoxes.length || rayDistance(from, angle, this.room.bounds, this.pitBoxes) >= Phaser.Math.Distance.BetweenPoints(from, to))
       return { angle, straight: true };
-    const goal = this.cellOf(to), nav = memo.goal === goal ? memo.steps : (memo.steps = this.stepsTo(to));
-    memo.goal = goal;
+    const goal = this.cellOf(to);
+    if (goal !== this.navFrom) [this.navFrom, this.nav] = [goal, this.stepsTo(to)];
     const c = this.cellOf(from), cols = this.navCols, x = c % cols;
-    if (c === goal || nav[c] === 0) return { angle, straight: false }; // there: a step to a neighbour would only turn back
+    if (c === goal || this.nav[c] === 0) return { angle, straight: false }; // there: a step to a neighbour would only turn back
     let best = -1;
     for (const n of [c - cols - 1, c - cols, c - cols + 1, c - 1, c + 1, c + cols - 1, c + cols, c + cols + 1])
-      if (Math.abs((n % cols) - x) <= 1 && nav[n] < (nav[best] ?? Infinity)) best = n;
+      if (Math.abs((n % cols) - x) <= 1 && this.nav[n] < (this.nav[best] ?? Infinity)) best = n;
     if (best < 0) return { angle, straight: false };
     const b = this.room.bounds, cx = b.x + (best % cols) * NAV + NAV / 2, cy = b.y + Math.floor(best / cols) * NAV + NAV / 2;
     return { angle: Phaser.Math.Angle.Between(from.x, from.y, cx, cy), straight: false };
-  }
-
-  // ---------- the horde ----------
-
-  /** The horde's director, every frame of the fight: the room's clock, ghouls risen on schedule (at a rate that climbs
-   *  through the room, never more than T.horde.max alive), the Order's crossbowmen and lanterns; the room ends when its
-   *  time is up. */
-  private direct(delta: number, live: Sprite[]) {
-    const H = T.horde, r = this.roomNo - 1;
-    this.fightMs += delta;
-    this.hud.clock(this.roomMs - this.fightMs);
-    if (this.fightMs >= this.roomMs) return this.endHorde(live);
-    const due = hordeDue(this.fightMs, this.roomMs, H.first, H.rate + r * H.ratePerRoom, H.rateEnd + r * H.ratePerRoom);
-    let alive = live.filter((e) => e.getData('horde')).length;
-    for (let p; this.spawned < due && alive < H.max && (p = this.edgeSpot()); alive++, this.spawned++) this.spawn(p, 'ghoul', undefined, p.hidden);
-    if (this.fightMs >= this.bowAt) {
-      this.bowAt += H.bowEveryMs;
-      const p = this.edgeSpot();
-      if (p && live.filter((e) => e.getData('kind') === 'crossbow').length < H.bows + r) this.spawn(p, 'crossbow', undefined, p.hidden);
-    }
-    const at = H.lanternAt.slice(0, this.roomNo > 1 ? 2 : 1);
-    if (this.planted < at.length && this.fightMs >= at[this.planted] * this.roomMs) this.planted++, this.addLantern();
-  }
-
-  /** Time is up: every enemy left falls at once, the blood on the floor flies to the hero, and the room is cleared. */
-  private endHorde(live: Sprite[]) {
-    this.phase = 'gift'; // no more director
-    this.hud.clock(0);
-    for (const e of live) if (e !== this.prey) this.kill(e);
-    this.bolts.clear(true, true);
-    for (const d of this.drops) d.pulled ||= this.time.now;
-    this.roomCleared();
-  }
-
-  /** Where a ghoul of the horde rises: just beyond an edge of the view (`hidden`), on open floor, far enough from the
-   *  hero; on the view only if the room offers nothing off it there. A sprite position (feet 10 px lower). */
-  private edgeSpot() {
-    const v = this.cameras.main.worldView, b = this.room.bounds, m = T.horde.margin, feet = this.hero.body!.center;
-    let seen: { x: number; y: number; hidden: boolean } | undefined;
-    for (let i = 0; i < 16; i++) {
-      const side = Phaser.Math.Between(0, 3), k = Math.random();
-      const x = Phaser.Math.Clamp(side < 2 ? v.x + k * v.width : side === 2 ? v.x - m : v.right + m, b.x + 8, b.right - 8);
-      const y = Phaser.Math.Clamp(side >= 2 ? v.y + k * v.height : side === 0 ? v.y - m : v.bottom + m, b.y + 6, b.bottom - 4);
-      if (!this.navOpen[this.cellOf({ x, y })] || Phaser.Math.Distance.Between(x, y, feet.x, feet.y) < T.horde.clear) continue;
-      const hidden = !v.contains(x, y - 10) && !v.contains(x, y - 26); // feet and head both off the view
-      if (hidden) return { x, y: y - 10, hidden };
-      seen ??= { x, y: y - 10, hidden };
-    }
-    return seen;
-  }
-
-  /** A ghoul of the horde: cheap to run by the dozen. It walks straight at the hero (round pits and props on the shared
-   *  walk grid, slipping aside a moment when the press holds it back), packmates closer than T.horde.spacing pushing it aside; in
-   *  reach it winds up, lunges a short way (the only part that hurts), recovers and rests a moment. Many may swipe at
-   *  once: the horde's threat is its numbers. */
-  private stepGhoul(e: Sprite, time: number, live: Sprite[]) {
-    const H = T.horde, b = e.body!, state = e.getData('state');
-    if (state === 'windup') {
-      this.physics.velocityFromRotation(e.getData('facing'), H.lungeSpeed, b.velocity);
-      e.setData({ state: 'lunge', until: time + H.lungeMs });
-      return;
-    }
-    if (state === 'lunge') {
-      e.setVelocity(0).setData({ state: 'recover', until: time + H.recoverMs, restUntil: time + H.recoverMs + H.restMs });
-      return;
-    }
-    const toHero = Phaser.Math.Angle.BetweenPoints(e, this.hero);
-    if (Phaser.Math.Distance.BetweenPoints(e, this.hero) <= H.reach && time >= e.getData('restUntil')) {
-      e.setVelocity(0).setData({ state: 'windup', until: time + H.windupMs, facing: toHero });
-      this.say('windup', 0, 250);
-      return;
-    }
-    const speed = H.speed + (this.roomNo - 1) * H.speedPerRoom;
-    // No headway for a while (a corner, the brink of a pit, the press): it slips aside a moment, the other way each time.
-    if (time >= (e.getData('checkAt') ?? 0)) {
-      if (Phaser.Math.Distance.Between(e.x, e.y, e.getData('checkX') ?? 0, e.getData('checkY') ?? 0) < 3)
-        e.setData({ slipUntil: time + 300, side: -e.getData('side') });
-      e.setData({ checkAt: time + 400, checkX: e.x, checkY: e.y });
-    }
-    const slip = time < (e.getData('slipUntil') ?? 0) ? (Math.PI / 2) * e.getData('side') : 0;
-    const v = this.physics.velocityFromRotation(this.wayToHero(e, this.blockBoxes).angle + slip, speed, b.velocity), sp = H.spacing;
-    for (const o of live) {
-      const dx = e.x - o.x, dy = e.y - o.y;
-      if (o === e || dx > sp || dx < -sp || dy > sp || dy < -sp) continue;
-      const d = Math.hypot(dx, dy) || 0.01;
-      if (d < sp) v.x += (dx / d) * speed * (1 - d / sp), v.y += (dy / d) * speed * (1 - d / sp);
-    }
-    v.limit(speed);
-    e.setData({ state: 'chase', facing: toHero });
-  }
-
-  /** The automatic attacks, every frame: the bite on a weakened human he walks into; the claws on the nearest enemy (or
-   *  lit lantern) in their reach, at the combo's pace; shards at the nearest enemy on the screen with a clear line; the
-   *  glyph on the thickest cluster on the screen. Each goes through the same action as in the manual combat. */
-  private autoAttack(time: number, live: Sprite[]) {
-    if (this.prey || time < this.dashUntil) return;
-    const h = this.hero, dist = (p: { x: number; y: number }) => Phaser.Math.Distance.BetweenPoints(h, p), B = T.bite;
-    if (time >= this.biteReadyAt && live.some((e) => e.getData('human') && e.getData('hp') <= B.weakAt && dist(e) <= B.range)) {
-      this.bite();
-      return;
-    }
-    const fresh = live.filter((e) => !this.kneeling(e)).sort((a, b) => dist(a) - dist(b)), reach = this.clawRange(false) - 2;
-    if (time >= this.slashReadyAt) {
-      const lamp = this.lanterns.find((l) => l.lit && dist({ x: l.x, y: l.y - 5 }) <= reach);
-      const foe = fresh[0] && dist(fresh[0]) <= reach ? fresh[0] : lamp && { x: lamp.x, y: lamp.y - 5 };
-      if (foe) this.slash(Phaser.Math.Angle.BetweenPoints(h, foe));
-    }
-    const view = this.cameras.main.worldView, seen = fresh.filter((e) => view.contains(e.x, e.y));
-    if (time >= this.shotReadyAt) {
-      const from = h.body!.center, foe = seen.find((e) => this.boltReach(from, Phaser.Math.Angle.BetweenPoints(from, e.body!.center)) >= dist(e) - 4);
-      if (foe) this.shoot(Phaser.Math.Angle.BetweenPoints(from, foe.body!.center));
-    }
-    if (time >= this.glyphReadyAt) {
-      const r = this.glyphRadius(), c = densest(seen.map((e) => e.body!.center), r, r * T.lantern.squash);
-      if (c.n >= T.auto.glyphMin) this.cast(c);
-    }
-  }
-
-  /** The blood on the floor: a drop within the hero's pull (T.level.magnet) flies to him, faster and faster, and is
-   *  drunk on arrival. */
-  private stepDrops(time: number, delta: number) {
-    const c = this.hero.body!.center, pull = T.level.magnet * (1 + T.ups.magnet * this.lv('magnet'));
-    this.drops = this.drops.filter((d) => {
-      const dx = c.x - d.img.x, dy = c.y - 6 - d.img.y, dist = Math.hypot(dx, dy);
-      if (!d.pulled && dist < pull) d.pulled = time;
-      if (!d.pulled) return true;
-      const step = (Math.min(T.level.pull, 40 + (time - d.pulled) * 0.5) * delta) / 1000;
-      if (dist > step + 2) {
-        d.img.setPosition(d.img.x + (dx / dist) * step, d.img.y + (dy / dist) * step).setDepth(d.img.y + 8);
-        return true;
-      }
-      d.img.destroy();
-      this.drink(d.v);
-      return false;
-    });
-  }
-
-  /** Blood drunk: the bar fills; full, a level is gained (several if it overflows) and its cards open when they can. */
-  private drink(v: number) {
-    const before = this.level;
-    ({ level: this.level, blood: this.blood } = levelUp(this.level, this.blood + v, T.level.first, T.level.step));
-    this.hud.level(this.level, this.blood, this.need());
-    if (this.level === before) return;
-    this.owed += this.level - before;
-    Sfx.play(this, 'clear');
-    if (!this.cards && !this.dead) this.openLevel();
-  }
-
-  /** Blood the bar holds at this level. */
-  private need() {
-    return T.level.first + T.level.step * (this.level - 1);
-  }
-
-  /** A level owed: the action pauses (physics and the scene's clock) on three upgrades that can still be taken. */
-  private openLevel() {
-    this.offerUps = drawGifts(open(this.ups), 3, Math.random);
-    if (!this.offerUps.length) return void (this.owed = 0); // all at the top: nothing left to offer
-    const n = this.level - --this.owed;
-    this.physics.pause();
-    this.time.paused = true;
-    Touch.stick.x = Touch.stick.y = 0;
-    this.cards = Rats.cards(this, this.offerUps.map((id) => {
-      const u = UPS[id], lvl = this.lv(id) + 1;
-      return { id: `${id}${lvl}`, name: u.name, text: u.text, kind: u.kind, icon: u.icon, band: `${KINDS[u.kind].toUpperCase()} NIV ${lvl}` };
-    }), `Le sang monte : niveau ${n}`, Rats.drop(this));
-  }
-
-  /** Levels taken of upgrade `id`. */
-  private lv(id: UpId) {
-    return this.ups[id] ?? 0;
-  }
-
-  /** A sound, no more often than every `gap` ms: a horde would otherwise play the same one dozens of times a frame. */
-  private say(name: Parameters<typeof Sfx.play>[1], arg = 0, gap = 45) {
-    const now = this.time.now;
-    if (now - (this.saidAt[name] ?? -1e9) < gap) return;
-    this.saidAt[name] = now;
-    Sfx.play(this, name, arg);
   }
 
   /** Input buffer: an action pressed while the hero is still busy (mid-swing, dashing, cooling down...) is kept for
@@ -802,16 +550,14 @@ export class RoomScene extends Phaser.Scene {
     this.combo = dash ? 0 : nextCombo(this.combo, now - this.lastSlashAt, S.comboWindowMs);
     const fin = !dash && this.combo === 2, kind = dash ? 3 : this.combo; // kind 3: the dash strike, for effects and sounds
     this.lastSlashAt = now;
-    const cooldown = S.cooldownMs * (1 - T.ups.frenzy) ** this.lv('frenzy');
-    this.slashReadyAt = now + cooldown + (fin ? S.finisherRecoveryMs : 0);
-    this.slashUntil = now + cooldown;
+    this.slashReadyAt = now + S.cooldownMs + (fin ? S.finisherRecoveryMs : 0);
+    this.slashUntil = now + S.cooldownMs;
     this.facing = angle;
     Fx.slash(this, this.hero.x, this.hero.y, angle, kind);
-    this.say('slash', kind);
+    Sfx.play(this, 'slash', kind);
 
-    const range = this.clawRange(fin), arc = (dash ? D.strikeArcDeg : fin ? S.finisherArcDeg : S.arcDeg) + T.ups.arc * this.lv('reach');
-    const base = S.damage + T.ups.claw * this.lv('claw');
-    const damage = dash ? base + D.strikeBonus : fin ? base * S.finisherMult + (this.gifts.includes('rongeur') ? T.gifts.gnaw : 0) + T.ups.finisher * this.lv('finisher') : base;
+    const range = fin ? S.finisherRange : S.range, arc = dash ? D.strikeArcDeg : fin ? S.finisherArcDeg : S.arcDeg;
+    const damage = dash ? S.damage + D.strikeBonus : fin ? S.damage * S.finisherMult + (this.gifts.includes('rongeur') ? T.gifts.gnaw : 0) : S.damage;
     const knock = S.knockback * (dash ? D.strikeKnock : fin ? S.finisherKnock : 1);
     let hits = 0;
     for (const e of this.enemies.getChildren() as Sprite[]) {
@@ -824,9 +570,8 @@ export class RoomScene extends Phaser.Scene {
       hits++;
       this.hitLantern(l, angle, damage);
     }
-    // Hit-stop: freeze physics briefly so the impact reads; tweens and timers keep running. In the horde only on the
-    // heavy blows (finisher, dash strike): the claws never stop there, and he never stops moving.
-    if (!hits || (!this.manual && !fin && !dash)) return true;
+    if (!hits) return true;
+    // Hit-stop: freeze physics briefly so the impact reads; tweens and timers keep running.
     this.physics.pause();
     this.time.delayedCall(S.hitStopMs + (fin ? S.finisherHitStopMs : 0), () => this.phase !== 'choose' && this.physics.resume());
     return true;
@@ -837,23 +582,20 @@ export class RoomScene extends Phaser.Scene {
    *  thrown with. */
   private shoot(angle: number) {
     const now = this.time.now, S = T.shot;
-    // Mid-swing he can't throw, unless the attacks are automatic: there the claws would never let the shards go.
-    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.shotReadyAt || now < this.dashUntil || (this.manual && now < this.slashUntil)) return false;
-    this.shotReadyAt = now + S.cooldownMs * (1 - T.ups.shotRate) ** this.lv('shotRate');
+    if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
+    this.shotReadyAt = now + S.cooldownMs;
     this.shotUntil = now + S.throwMs;
     this.facing = angle;
-    const n = 1 + T.ups.shards * this.lv('shards'), from = this.hero.body!.center, plague = this.gifts.includes('eclats');
-    for (let i = 0; i < n; i++) { // Gerbe d'éclats: a fan
-      const a = angle + (i - (n - 1) / 2) * T.auto.spread, reach = this.boltReach(from, a);
-      // It leaves from the hand, flung out ahead of him.
-      const b = this.add.zone(from.x + Math.cos(a) * 10, from.y + Math.sin(a) * 10, 8, 8);
-      b.setData({ x0: from.x, y0: from.y, angle: a, reach, plague, pierce: this.gifts.includes('perce'), hit: [] });
-      this.shards.add(b);
-      this.physics.velocityFromRotation(a, S.speed, (b.body as Phaser.Physics.Arcade.Body).velocity);
-      Fx.shard(this, b, a, (reach / S.speed) * 1000);
-      if (plague) Rats.plagueShard(this, b);
-    }
-    this.say('shoot');
+    const from = this.hero.body!.center, reach = this.boltReach(from, angle);
+    // It leaves from the hand, flung out ahead of him.
+    const b = this.add.zone(from.x + Math.cos(angle) * 10, from.y + Math.sin(angle) * 10, 8, 8);
+    const plague = this.gifts.includes('eclats');
+    b.setData({ x0: from.x, y0: from.y, angle, reach, plague, pierce: this.gifts.includes('perce'), hit: [] });
+    this.shards.add(b);
+    this.physics.velocityFromRotation(angle, S.speed, (b.body as Phaser.Physics.Arcade.Body).velocity);
+    Fx.shard(this, b, angle, (reach / S.speed) * 1000);
+    if (plague) Rats.plagueShard(this, b);
+    Sfx.play(this, 'shoot');
     return true;
   }
 
@@ -870,7 +612,7 @@ export class RoomScene extends Phaser.Scene {
       this.physics.velocityFromRotation(angle, T.shot.knockback, e.body.velocity);
     }
     Fx.splat(this, x, y, angle, true);
-    this.say('splat');
+    Sfx.play(this, 'splat');
     if (plague) this.infect(e);
     this.hurtEnemy(e, T.shot.damage);
   }
@@ -882,7 +624,7 @@ export class RoomScene extends Phaser.Scene {
     e.setData({ state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs });
     if (!this.kneeling(e)) this.physics.velocityFromRotation(angle, knock, e.body!.velocity);
     Fx.hit(this, e.x, e.y, angle);
-    this.say('hit', kind);
+    Sfx.play(this, 'hit', kind);
     if (this.gifts.includes('griffes')) this.infect(e);
     this.hurtEnemy(e, damage);
   }
@@ -914,18 +656,13 @@ export class RoomScene extends Phaser.Scene {
   private kill(e: Sprite) {
     if (!e.body?.enable) return; // already dead: plague or rats can finish a prey mid-bite
     e.disableBody(false, false);
-    if (e.getData('horde')) Enemy.fall(this, e, () => this.pool.push(e)); // a cheap death, and the sprite kept to rise again
-    else (e.getData('kind') === 'crossbow' ? Crossbow : Enemy).die(this, e);
-    this.say('kill');
-    if (!this.manual) { // its blood, at its feet
-      const human = !!e.getData('human');
-      this.drops.push({ img: Fx.drop(this, e.x, e.y + 8, human), v: human ? T.level.bow : T.level.ghoul, pulled: this.phase === 'fight' ? 0 : this.time.now });
-    }
+    (e.getData('kind') === 'crossbow' ? Crossbow : Enemy).die(this, e);
+    Sfx.play(this, 'kill');
     // Contagion: a sick enemy's plague leaps onto those around it.
     if (e.getData('plagueAt') && this.gifts.includes('contagion'))
       for (const o of this.enemies.getChildren() as Sprite[])
         if (Phaser.Math.Distance.BetweenPoints(o, e) < T.gifts.contagion && this.infect(o)) Rats.leap(this, e.x, e.y, o);
-    if (this.training || !this.manual) return; // the horde ends on its clock, see direct()
+    if (this.training) return;
     if ((this.enemies.getChildren() as Sprite[]).some((o) => o.body?.enable)) return;
     if (this.wave < this.roomNo * T.run.wavesPerRoom) this.time.delayedCall(1500, () => this.spawnWave());
     else this.roomCleared();
@@ -970,7 +707,7 @@ export class RoomScene extends Phaser.Scene {
         if (this.dead) return;
         this.prey = undefined;
         this.kill(prey);
-        this.health = Math.min(this.maxHealth(), this.health + B.heal + (this.gifts.includes('morsure') ? T.gifts.bite : 0) + T.ups.feast * this.lv('feast'));
+        this.health = Math.min(this.maxHealth(), this.health + B.heal + (this.gifts.includes('morsure') ? T.gifts.bite : 0));
         this.hud.health(this.health, this.maxHealth());
         Fx.heal(this, this.hero);
         Sfx.play(this, 'heal');
@@ -984,30 +721,16 @@ export class RoomScene extends Phaser.Scene {
   private cast(to: { x: number; y: number }) {
     const now = this.time.now, G = T.glyph;
     if (this.dead || this.prey || this.cards || this.phase === 'enter' || this.phase === 'leave' || now < this.glyphReadyAt || now < this.dashUntil) return false;
-    const feet = this.hero.body!.center, at = this.glyphAt(to);
+    const feet = this.hero.body!.center, b = this.room.bounds, rx = G.radius, ry = rx * T.lantern.squash;
+    const at = glyphSpot(feet, to, G.range, { x: b.x + rx, y: b.y + ry, width: b.width - 2 * rx, height: b.height - 2 * ry });
     this.glyph?.end();
-    this.glyph = Glyph.cast(this, at.x, at.y, feet, this.glyphRadius());
+    this.glyph = Glyph.cast(this, at.x, at.y, feet);
     this.nestAt = this.gifts.includes('nid') ? now + G.armMs : Infinity;
-    this.glyphReadyAt = now + G.cooldownMs * (1 - T.ups.glyphRate) ** this.lv('glyphRate');
+    this.glyphReadyAt = now + G.cooldownMs;
     this.castUntil = now + G.castMs;
     this.facing = Math.atan2(at.y - feet.y, at.x - feet.x);
     Sfx.play(this, 'glyph');
     return true;
-  }
-
-  /** Where a glyph cast at `to` lands: within reach of the hero's feet, wholly on the floor. */
-  private glyphAt(to: { x: number; y: number }) {
-    const G = T.glyph, b = this.room.bounds, rx = this.glyphRadius(), ry = rx * T.lantern.squash;
-    return glyphSpot(this.hero.body!.center, to, G.range, { x: b.x + rx, y: b.y + ry, width: b.width - 2 * rx, height: b.height - 2 * ry });
-  }
-
-  private glyphRadius() {
-    return T.glyph.radius + T.ups.glyphRadius * this.lv('glyphRadius');
-  }
-
-  /** The claws' reach, of the finisher or not. */
-  private clawRange(fin: boolean) {
-    return (fin ? T.slash.finisherRange : T.slash.range) + T.ups.reach * this.lv('reach');
   }
 
   /** The room's last enemy is down: it falls in slow motion with a sting, then the gift of the Rat house rises on the
@@ -1038,42 +761,22 @@ export class RoomScene extends Phaser.Scene {
     this.pickup = undefined;
     Sfx.play(this, 'gift');
     this.offer = drawGifts(offerable(GIFTS, this.gifts), 3, Math.random);
-    this.cards = Rats.cards(this, this.offer.map((id) => Rats.giftCard(id, this.gifts)));
+    this.cards = Rats.cards(this, this.offer, this.gifts);
   }
 
   /** Card `i` of the offer is taken (a key or a click), replacing the gift in its slot if any; the cards close, the
    *  action resumes, the gate rises. */
   private pick(i: number) {
-    if (this.offerUps.length) return this.pickUp(i);
     if (!this.cards?.choose(i, () => {
       this.cards = undefined;
       this.physics.resume();
       this.openGate();
-      if (this.owed) this.openLevel();
     })) return;
     const id = this.offer[i];
     this.gifts = take(GIFTS, this.gifts, id);
     if (id === 'survivant') this.health += T.gifts.blood;
     this.hud.health(this.health, this.maxHealth());
     this.hud.gifts(this.gifts);
-    Sfx.play(this, 'gift', 1);
-  }
-
-  /** Upgrade card `i` of a level-up is taken: one level more of it; the cards close and the action resumes, unless
-   *  another level is owed. */
-  private pickUp(i: number) {
-    const id = this.offerUps[i];
-    if (!this.cards?.choose(i, () => {
-      this.cards = undefined;
-      this.time.paused = false;
-      this.physics.resume();
-      if (this.owed) this.openLevel();
-    })) return;
-    this.offerUps = [];
-    this.ups = { ...this.ups, [id]: this.lv(id) + 1 };
-    if (id === 'vigor') this.health += T.ups.vigor;
-    this.hud.health(this.health, this.maxHealth());
-    this.hud.ups(this.ups);
     Sfx.play(this, 'gift', 1);
   }
 
@@ -1090,16 +793,15 @@ export class RoomScene extends Phaser.Scene {
     this.hero.setCollideWorldBounds(false);
     this.cameras.main.fadeOut(T.run.fadeMs);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
-      this.scene.restart({ room: this.roomNo + 1, layout: nextLayout(this.roomNo + 1, this.layout, Room.LAYOUTS, Math.random), health: this.health, gifts: this.gifts,
-        level: this.level, blood: this.blood, ups: this.ups } satisfies Run));
+      this.scene.restart({ room: this.roomNo + 1, layout: nextLayout(this.roomNo + 1, this.layout, Room.LAYOUTS, Math.random), health: this.health, gifts: this.gifts } satisfies Run));
   }
 
   private maxHealth() {
-    return T.hero.maxHealth + (this.gifts.includes('survivant') ? T.gifts.blood : 0) + T.ups.vigor * this.lv('vigor');
+    return T.hero.maxHealth + (this.gifts.includes('survivant') ? T.gifts.blood : 0);
   }
 
   private dashCooldown() {
-    return (T.dash.cooldownMs / (this.gifts.includes('fuite') ? T.gifts.dashRecharge : 1)) * (1 - T.ups.mist) ** this.lv('mist');
+    return T.dash.cooldownMs / (this.gifts.includes('fuite') ? T.gifts.dashRecharge : 1);
   }
 
   /** `n` rats let loose at floor point `at`: by the mist (Nuée) or out of the glyph's `nest` (Glyphe du nid). */
@@ -1165,7 +867,7 @@ export class RoomScene extends Phaser.Scene {
     Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
     // A new run (room 1, no gifts), or back to the training room.
-    this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, layout: this.layout, level: this.level, blood: this.blood, ups: this.ups } : {}) satisfies Run));
+    this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, layout: this.layout } : {}) satisfies Run));
     return true;
   }
 
@@ -1190,26 +892,17 @@ export class RoomScene extends Phaser.Scene {
     for (const p of spawns) this.spawn(p, bows.includes(p) ? 'crossbow' : 'ghoul');
   }
 
-  /** An enemy rises at `p` after its telegraph, or at once where no one sees it (`now`): a ghoul (one of the horde,
-   *  risen again from the pool if one waits there, unless in the manual combat), or a crossbowman of the Order (`hp` to
-   *  start it weakened). */
-  private spawn(p: { x: number; y: number }, kind: 'ghoul' | 'crossbow', hp?: number, now = false) {
-    const bow = kind === 'crossbow', horde = !bow && !this.manual;
-    if (!now) {
-      (bow ? Crossbow : Enemy).telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
-      if (!bow) this.say('spawn', 0, 150);
-    }
-    const rise = () => {
+  /** An enemy rises at `p` after its telegraph: a ghoul, or a crossbowman of the Order (`hp` to start it weakened). */
+  private spawn(p: { x: number; y: number }, kind: 'ghoul' | 'crossbow', hp?: number) {
+    const bow = kind === 'crossbow';
+    (bow ? Crossbow : Enemy).telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
+    if (!bow) Sfx.play(this, 'spawn');
+    this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
       if (this.dead) return;
-      let old = horde ? this.pool.pop() : undefined;
-      while (old && !old.scene) old = this.pool.pop(); // one destroyed meanwhile (a group cleared) is dropped
-      const e = old ? Enemy.revive(this, old, p.x, p.y) : (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
-      const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0, plagueAt: 0, slipUntil: 0, checkAt: 0 };
+      const e = (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
+      const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0 };
       if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
-      else if (horde) e.setData({ ...common, horde: true, hp: hp ?? T.horde.hp + (this.roomNo - 1) * T.horde.hpPerRoom, restUntil: 0 });
       else e.setData({ ...common, hp: hp ?? T.enemy.hp, restUntil: 0 });
-    };
-    if (now) rise();
-    else this.time.delayedCall(T.enemy.spawnTelegraphMs, rise);
+    });
   }
 }

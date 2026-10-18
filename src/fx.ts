@@ -204,8 +204,8 @@ export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle:
   // Gameplay passes the hero itself, so the trail can follow it for the whole dash.
   const hero = from as Partial<Phaser.GameObjects.Sprite> & P;
   const sprite = hero.frame ? (hero as Phaser.GameObjects.Sprite) : undefined;
-  const feet = 15, back = angle + Math.PI; // feet: just under the soles, 14 px below y on both hero sheets
-  const D = T.dash.durationMs, GHOST_MS = 420, STREAK_MS = 340, RING_MS = 460, EVERY = 60, life = D + 520;
+  const feet = 15, back = angle + Math.PI, D = T.dash.durationMs; // feet: just under the soles, 14 px below y on both hero sheets
+  const GHOST_MS = 420, STREAK_MS = 340, RING_MS = 460, EVERY = 60, life = D + 520;
   type Strip = Phaser.GameObjects.Image;
   const ghosts: { t: number; y: number; h: number; strips: Strip[] }[] = [];
   const wisps: { t: number; x: number; y: number; vx: number; vy: number; life: number; phase: number }[] = [];
@@ -421,29 +421,4 @@ export function hurt(scene: Phaser.Scene) {
     g.fillStyle(DRIED, 0.75 * (1 - k)).fillRect(-8, -8, w + 16, b + 8).fillRect(-8, h - b, w + 16, b + 8)
       .fillRect(-8, b, b + 8, h - 2 * b).fillRect(w - b, b, b + 8, h - 2 * b);
   });
-}
-
-// Blood dropped by the dead in the horde: a drop, and a big one from a human. H glint, R blood, D shade, o outline (the
-// void, so it reads on the blood stains too).
-const DROPS = {
-  s: ['.o.', 'oHo', 'oRo', 'RRD', 'oDo'],
-  b: ['..o..', '.oHo.', 'oHRRo', 'oHRRo', 'RRRRD', 'oRRDo', '.oDo.'],
-};
-/** A drop of blood at floor point (x, y), flung up a little as it lands. */
-export function drop(scene: Phaser.Scene, x: number, y: number, big: boolean) {
-  if (!scene.textures.exists('blood-drop')) {
-    const t = scene.textures.createCanvas('blood-drop', 8, 7)!, pal: Record<string, string> = { o: '#0b0710', H: '#ff4f8b', R: '#e0284a', D: '#a3122f' };
-    Object.entries(DROPS).forEach(([name, rows], i) => {
-      rows.forEach((r, j) => [...r].forEach((k, n) => {
-        if (k === '.') return;
-        t.context.fillStyle = pal[k];
-        t.context.fillRect(i * 3 + n, j, 1, 1);
-      }));
-      t.add(name, 0, i * 3, 0, rows[0].length, rows.length);
-    });
-    t.refresh();
-  }
-  const img = scene.add.image(Math.round(x), Math.round(y), 'blood-drop', big ? 'b' : 's').setOrigin(0.5, 1).setDepth(y);
-  scene.tweens.add({ targets: img, y: Math.round(y) - 2, duration: 160, yoyo: true, ease: 'Sine.easeOut' });
-  return img;
 }

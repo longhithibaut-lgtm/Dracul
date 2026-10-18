@@ -1,9 +1,7 @@
 // Room layout check in headless Chromium, for every layout: on the walk grid, the hero start, every spawn point and the
 // foot of the stairs are walkable (off pits and props) and reach the gate, hence each other; the hero can walk away
-// from its start in every direction; and wherever it waits (behind props, past pits, in corners) every ghoul of the
-// horde reaches it instead of sticking on an obstacle or the brink of a pit: those of the part's spawn points, and
-// those risen beyond the edge of the view, as the horde rises (its director stopped and his attacks held, so each
-// has to walk all the way to him).
+// from its start in every direction; and wherever it waits (behind props, past pits, in corners) every enemy reaches
+// it instead of sticking on an obstacle or the brink of a pit.
 // Usage: node tools/art/room.check.mjs [--port=5206] [--only=nave]   (exit code 1 on a failure or a page error)
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
@@ -50,23 +48,14 @@ for (const layout of Object.keys(WAITS).filter((l) => !only || l === only)) {
     if (x !== undefined) await page.evaluate(([x, y]) => {
       const s = window.game.scene.getScene('room');
       s.hero.body.reset(x, y);
-      s.hero.setImmovable(true); // he waits there: the press must not shove him off it
       s.health = 999; // the hero must survive the wait
       // The first wave rises again with him there (a tall room's, in the part he waits in): a slow first frame may have
       // let its timer beat this reset.
       s.time.removeAllEvents();
       s.enemies.clear(true, true);
-      s.fightFrom = s.slashReadyAt = s.shotReadyAt = s.glyphReadyAt = s.biteReadyAt = Infinity;
       s.wave = 0;
       s.spawnWave();
     }, [x, y]);
-    if (x !== undefined) {
-      await page.waitForTimeout(600); // the camera is on him
-      await page.evaluate(() => {
-        const s = window.game.scene.getScene('room');
-        for (let i = 0; i < 4; i++) { const p = s.edgeSpot(); if (p) s.spawn(p, 'ghoul', undefined, p.hidden); }
-      });
-    }
   };
   console.log(`--- ${layout}`);
 
