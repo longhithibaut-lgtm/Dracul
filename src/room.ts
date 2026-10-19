@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
+import * as Torture from './torture.ts';
 
 type P = { x: number; y: number };
 // How the arena looks and where its solid parts are.
@@ -28,7 +29,8 @@ export type Room = {
 // painter (see paintCloister).
 // Everything is painted pixel by pixel into canvas textures once, then reused on scene restarts.
 export const LAYOUTS = ['hall', 'nave', 'ossuary', 'chapel', 'cloister'] as const;
-export type LayoutId = (typeof LAYOUTS)[number];
+// The torture room is a trial of another art direction (torture.ts, dark.ts): reached from the training room only.
+export type LayoutId = (typeof LAYOUTS)[number] | 'torture';
 
 // Palette "Nuit de sang" (docs/art.md) plus crimson walls, a moonlit blue floor and the magenta dark beyond.
 const P = {
@@ -648,6 +650,7 @@ type Layout = {
   open?: true; // under the sky: painted by paintCloister, lit by the Dawn, three screens tall (the crypt's fields go unused)
   sections?: number[]; // see Room
   decor(p: Px): void; // wear, gore, bones on the floor, before the props cast their shadows
+  dark?: true; // the torture room: painted by torture.ts, its props 'block's whose look stand() adds, lit by dark.ts
 };
 
 // The cloister, in floor coordinates (x, y on the floor, h up from it): a long garth open to the sky, three screens
@@ -878,7 +881,39 @@ const LAYOUT: Record<LayoutId, Layout> = {
     sections: CROSS.map((c) => c - ARC.d), // into a cross gallery's walk
     decor() {},
   },
+  // La salle de torture (essai): the "Crasse et faim" trial, in the dark. Four pillars with torches, two floor cages,
+  // the body pit halfway up (walkers go round), corpses hung on chains, two drains; see torture.ts.
+  torture: {
+    props: [
+      ...Torture.PILLARS.map(([x, y]) => ({ kind: 'block' as const, x, y, w: 24, h: 12 })),
+      ...Torture.CAGES.map(([x, y]) => ({ kind: 'block' as const, x, y, w: 24, h: 12 })),
+    ],
+    pits: [Torture.PIT],
+    candles: [],
+    medallions: [],
+    pools: [],
+    heroStart: { x: CX, y: 566 },
+    spawns: [{ x: CX, y: 470 }, { x: 120, y: 560 }, { x: 360, y: 560 },
+      { x: CX, y: 280 }, { x: 80, y: 380 }, { x: 400, y: 400 },
+      { x: CX, y: 96 }, { x: 120, y: 200 }, { x: 360, y: 200 }],
+    spots: [{ x: 176, y: 120 }, { x: 304, y: 120 }, { x: 176, y: 210 }, { x: 304, y: 210 },
+      { x: 100, y: 300 }, { x: 300, y: 290 }, { x: 120, y: 410 }, { x: 290, y: 420 },
+      { x: 170, y: 520 }, { x: 310, y: 520 }, { x: 160, y: 600 }, { x: 330, y: 600 }],
+    sections: PARTS,
+    decor() {},
+    dark: true,
+  },
 };
+
+/** The torture room's standing things, each sorted at its feet line like a prop. */
+function stand(scene: Phaser.Scene) {
+  const put = (key: string, x: number, y: number, t: { w: number; h: number; foot: number; d: Uint8ClampedArray<ArrayBuffer> }) =>
+    scene.add.image(x - t.w / 2, y - t.foot, bake(scene, key, t.w, t.h, (p) => p.d.set(t.d))).setOrigin(0).setDepth(y - 11);
+  for (const [x, y] of Torture.PILLARS) put('torture-pillar', x, y, Torture.paintPillar());
+  for (const [x, y] of Torture.CAGES) put('torture-cage', x, y, Torture.paintCage());
+  Torture.HANGING.forEach(([x, y], n) => put(`torture-hanging-${n % 2}`, x, y, Torture.paintHanging(n)));
+  put('torture-hungcage', ...Torture.HCAGE, Torture.paintHungCage());
+}
 
 /** A stained-glass pane as the light lays it on the floor from the left wall's lancets: an 18 px pointed arch, stretched
  *  and slanted down and to the right. 0 outside, 1 on the lead (mullion, transom, diamond grid), else 2 + its glass's
@@ -1804,12 +1839,12 @@ function paintShaft(p: Px, L: Layout) {
   for (let y = FY0; y < FY0 + 60; y++) for (let x = FX0; x < FX1; x++) if (lancetSpill(x, y)) p.p(x, y, P.moon2, 0.05);
 }
 
-function paintVignette(p: Px) {
+function paintVignette(p: Px, c: number = P.abyss0, from = 0.66) {
   for (let y = 0; y < p.h; y++)
     for (let x = 0; x < p.w; x++) {
       const v = Math.hypot((x - CX) / 250, (y - 150) / 150);
-      const a = Math.min(1, Math.max(0, (v - 0.66) / 0.6)) ** 1.6 * 0.8;
-      if (a > 0) p.p(x, y, P.abyss0, a);
+      const a = Math.min(1, Math.max(0, (v - from) / 0.6)) ** 1.6 * 0.8;
+      if (a > 0) p.p(x, y, c, a);
     }
 }
 
@@ -1861,7 +1896,11 @@ let BARS: Px;
  *  it differs: closed, the gate looks exactly as when it was part of the room. */
 function paintHall(scene: Phaser.Scene, id: LayoutId) {
   const L = LAYOUT[id], h = L.open ? CH : RH, open = new Px(T.width, h), shut = new Px(T.width, h);
-  if (L.open) { // painted once (it is slow), then the shut door over a copy: nothing else touches the door's box
+  if (L.dark) {
+    const t = Torture.paintRoom((x, y, grow) => inArch(x, y, CX, GATE.hw + grow, GATE.ys, GATE.R + grow));
+    open.d.set(t.open);
+    shut.d.set(t.shut);
+  } else if (L.open) { // painted once (it is slow), then the shut door over a copy: nothing else touches the door's box
     paintCloister(open, false);
     shut.d.set(open.d);
     door(shut, true);
@@ -1922,20 +1961,22 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
   if (!BARS_OF[id]) paintHall(scene, id); // painted on the layout's first build, kept across restarts
   BARS = BARS_OF[id]!;
   scene.add.image(0, 0, `room-bg-${id}`).setOrigin(0).setDepth(-1000);
+  const front = L.dark ? 7970 : 8500; // in the dark, under its light layer (dark.ts)
   if (L.open) scene.add.image(-MARGIN, 0, bake(scene, 'room-ranges', CW + 2 * MARGIN, CH, paintRanges)).setOrigin(0).setDepth(-1001);
   else {
     const key = bake(scene, 'room-abyss', T.width + 2 * MARGIN, RH + 2 * MARGIN, paintAbyss);
     scene.add.image(-MARGIN, -MARGIN, key).setOrigin(0).setDepth(-1001);
     // Below the front wall it is drawn over the room too: the hero climbing the stairs shows only above the steps.
-    scene.add.image(-MARGIN, -MARGIN, key).setOrigin(0).setDepth(8500).setCrop(0, MARGIN + RH, T.width + 2 * MARGIN, MARGIN);
+    scene.add.image(-MARGIN, -MARGIN, key).setOrigin(0).setDepth(front).setCrop(0, MARGIN + RH, T.width + 2 * MARGIN, MARGIN);
   }
   drawGate(scene, 0); // the previous room left it open
   scene.add.image(GX, GY, 'room-gate').setOrigin(0).setDepth(-999);
   scene.add.image(GLX, FY0, bake(scene, 'room-gatelight', 140, 100, paintGateLight)).setOrigin(0).setDepth(-998)
-    .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setName('room-gatelight').setVisible(!L.open); // no moon out there
+    .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setName('room-gatelight').setVisible(!L.open && !L.dark); // no moon out there
 
   const obstacles = scene.physics.add.staticGroup();
   const arcades = L.open ? cloisterProps(scene) : [];
+  if (L.dark) stand(scene);
   for (const o of L.props) {
     if (o.kind === 'block') { obstacles.add(scene.add.zone(o.x, o.y - o.h / 2, o.w, o.h)); continue; }
     // Characters sort by their sprite centre (feet - ~11 px), so a prop sorts at its feet line minus that.
@@ -1964,11 +2005,13 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
   const pits = scene.physics.add.staticGroup();
   for (const b of L.pits) pits.add(scene.add.zone(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h));
 
-  if (!L.open) scene.add.image(0, 0, bake(scene, `room-shaft-${id}`, T.width, RH, (p) => paintShaft(p, L))).setOrigin(0).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
-  atmosphere(scene, L);
-  scene.add.image(0, fy1, bake(scene, 'room-front', T.width, 14, (p) => paintFront(p, FX0 - 12, FX1 + 12, 0))).setOrigin(0).setDepth(8500);
-  // The vignette frames the screen, whatever its shape: stretched to the view.
-  const vignette = scene.add.image(0, 0, bake(scene, 'room-vignette', T.width, T.height, paintVignette)).setOrigin(0).setDepth(10_000).setScrollFactor(0);
+  if (!L.open && !L.dark) scene.add.image(0, 0, bake(scene, `room-shaft-${id}`, T.width, RH, (p) => paintShaft(p, L))).setOrigin(0).setDepth(8000).setBlendMode(Phaser.BlendModes.ADD);
+  if (!L.dark) atmosphere(scene, L);
+  if (L.dark) scene.add.image(0, 0, `room-bg-${id}`).setOrigin(0).setDepth(front).setCrop(0, fy1, T.width, 14); // its own front wall
+  else scene.add.image(0, fy1, bake(scene, 'room-front', T.width, 14, (p) => paintFront(p, FX0 - 12, FX1 + 12, 0))).setOrigin(0).setDepth(front);
+  // The vignette frames the screen, whatever its shape: stretched to the view (in the dark, black and closer in).
+  const vignette = scene.add.image(0, 0, L.dark ? bake(scene, 'room-vignette-dark', T.width, T.height, (p) => paintVignette(p, P.void0, 0.5))
+    : bake(scene, 'room-vignette', T.width, T.height, paintVignette)).setOrigin(0).setDepth(10_000).setScrollFactor(0);
   const fit = () => vignette.setDisplaySize(scene.scale.width, scene.scale.height);
   fit();
   scene.scale.on(Phaser.Scale.Events.RESIZE, fit);

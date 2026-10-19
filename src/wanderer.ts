@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import * as Hero from './hero.ts';
 import { PALETTE, VIEWS, type Frame } from './wanderer.data.ts';
+import { skin } from './dark.ts';
 
 // The hero, the wanderer with the violet scarf (the training room's box brings the old one back to compare). He is the
 // old hero's sprite (physics body, shadow, Hero.show's animation logic) wearing another sheet. The scarf's tail is a
@@ -9,9 +10,14 @@ import { PALETTE, VIEWS, type Frame } from './wanderer.data.ts';
 const FW = 32, FH = 40;
 const ORIGIN_Y = 22 / FH; // soles (row 36) 14 px below the sprite's y, like the old hero's, so body and shadow line up
 const neck = new Map<string, [number, number]>(); // frame name -> where the tail hangs from
-const TONE = { V: 0, v: 0, u: 0 }; // the scarf's three tones as Phaser colours, set by bake()
+const TONES = new Map<string, { V: number; v: number; u: number }>(); // per sheet: the scarf's three tones, set by bake()
+// The torture room's skin (« Crasse et faim », dark.ts): the mockup's gaunt vampire, a near-black coat, a grey-pale face,
+// red eyes, a duller violet scarf. Same frames; its sheet also holds the eyes alone ('*' frames) to glow in the dark.
+const DARK: Record<string, string> = { ...PALETTE, K: '#080706', k: '#161312', d: '#2c282a', s: '#4f454f', m: '#5a5058', l: '#7a7078',
+  W: '#cfc8b8', w: '#8f877a', e: '#ff2a2a', P: '#9a62c0', V: '#7d468f', v: '#6a3a7b', u: '#3f204c', U: '#24102e' };
 
-function bake(scene: Phaser.Scene) {
+function bake(scene: Phaser.Scene, key: string, pal: Record<string, string>) {
+  const eyes = pal !== PALETTE;
   const sheet: [string, Frame][] = [];
   for (const [view, v] of Object.entries(VIEWS)) {
     // Every frame Hero.show may ask for: idle and blink 0-3, the run, dash 0-1, the action poses (the bite is side-on only).
@@ -24,27 +30,31 @@ function bake(scene: Phaser.Scene) {
     add('cast', v.cast);
     if (v.bite) add('bite', v.bite);
   }
-  const tex = scene.textures.createCanvas('wanderer', FW * sheet.length, FH)!;
+  const tex = scene.textures.createCanvas(key, FW * sheet.length, eyes ? 2 * FH : FH)!;
   const ctx = tex.context;
   sheet.forEach(([name, f], i) => {
     f.rows.forEach((row, y) => [...row].forEach((c, x) => {
       if (c === '.') return;
-      if (!PALETTE[c]) throw new Error(`wanderer ${name}: unknown pixel '${c}'`);
-      ctx.fillStyle = PALETTE[c];
+      if (!pal[c]) throw new Error(`wanderer ${name}: unknown pixel '${c}'`);
+      ctx.fillStyle = pal[c];
       ctx.fillRect(i * FW + x, y, 1, 1);
+      if (eyes && c === 'e') ctx.fillRect(i * FW + x, FH + y, 1, 1);
     }));
+    if (eyes) tex.add(`${name}*`, 0, i * FW, FH, FW, FH);
     const dash = name.match(/^(\w+)-dash(\d)$/);
     if (dash) Hero.dissolve(ctx, i * FW, Hero.MIST[+dash[2]], dash[1] === 'side' ? -1 : 0, { side: 0, down: -1, up: 1 }[dash[1]]!, FH, 6);
     tex.add(name, 0, i * FW, 0, FW, FH);
     neck.set(name, f.neck);
   });
   tex.refresh();
-  for (const k of ['V', 'v', 'u'] as const) TONE[k] = Phaser.Display.Color.HexStringToColor(PALETTE[k]).color;
+  const tone = (c: string) => Phaser.Display.Color.HexStringToColor(pal[c]).color;
+  TONES.set(key, { V: tone('V'), v: tone('v'), u: tone('u') });
 }
 
 export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physics.Arcade.Sprite {
-  if (!scene.textures.exists('wanderer')) bake(scene);
-  const s = Hero.create(scene, x, y).setTexture('wanderer', 'down-idle0').setOrigin(0.5, ORIGIN_Y);
+  const key = skin.dark ? 'wanderer-dark' : 'wanderer';
+  if (!scene.textures.exists(key)) bake(scene, key, skin.dark ? DARK : PALETTE);
+  const s = Hero.create(scene, x, y).setTexture(key, 'down-idle0').setOrigin(0.5, ORIGIN_Y);
   s.setSize(8, 6).setOffset(12, 27); // the old hero's feet hitbox, at the same place under his soles
   scarf(scene, s);
   return s;
@@ -60,6 +70,7 @@ function scarf(scene: Phaser.Scene, s: Phaser.Physics.Arcade.Sprite) {
   const g = scene.add.graphics();
   const hang = () => Array.from({ length: LINKS + 1 }, (_, i) => ({ x: 0, y: i * LINK, px: 0, py: i * LINK }));
   let pts = hang(), last = { x: s.x, y: s.y, flip: s.flipX };
+  const TONE = TONES.get(s.texture.key)!;
   const step = (time: number, delta: number) => {
     const name = s.frame.name, at = neck.get(name);
     g.clear();

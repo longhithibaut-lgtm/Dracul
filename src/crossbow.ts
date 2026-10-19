@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { BLOOD, bleed, blot, pool, run, stains } from './enemy.ts';
+import { skin } from './dark.ts';
 
 // How the Order's crossbowman looks: a human in a steel kettle hat and a white tabard with the gold cross of the
 // Dawn, carrying a crossbow. Gameplay owns the AI state; this file only shows it (and its bolts).
@@ -33,6 +34,11 @@ const PAL: Record<string, number> = {
 };
 // The hit flash rims the body in white and lifts the dark tones, like the ghouls'.
 const FLASH: Record<string, number> = { n: 0x5a4468, L: PAL.b, b: PAL.B, m: PAL.s, k: PAL.K, v: PAL.w };
+// The torture room's skin (« Crasse et faim », dark.ts): the mockup's colours, a dull iron hat, a grimy tabard, a
+// tarnished gold, on the same frames; its sheet also holds the eyes alone ('*' frames) to glow in the dark.
+const DARK: Record<string, number> = { ...PAL, '0': 0x080706, '1': 0x1d1814, G: 0xd9b850, g: 0xa8841c, o: 0x6a4a14, W: 0xcfcbb8, w: 0xa8a290, v: 0x7a7462,
+  S: 0xaeafa9, s: 0x747670, m: 0x3e403c, K: 0xcfbba2, k: 0x9a8470, B: 0xb5915e, b: 0x8c663e, L: 0x4a3420, n: 0x4f493f, r: 0x8f1f16, R: 0x4a0a08 };
+const DARK_FLASH: Record<string, number> = { n: 0x7a7262, L: DARK.b, b: DARK.B, m: DARK.s, k: DARK.K, v: DARK.w };
 
 // Pixel grids placed at (x, y) in the 40x40 frame, facing right; '.' is transparent.
 const PARTS: Record<string, [x: number, y: number, rows: string]> = {
@@ -235,7 +241,7 @@ for (const name of Object.keys(FRAMES)) {
 const SUNK: Record<string, [frame: string, depth: number]> = { kneel: ['hurt', 6], 'down~': ['idle~', 3] };
 
 // Stacks parts back to front. Shear leans every row above the feet by that many px per row.
-function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch: string) => void) {
+function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch: string, part: string) => void) {
   for (const [part, dx, dy, shear = 0] of layers) {
     const [px, py, rows] = PARTS[part];
     const lift = part === 'shadow' ? 0 : sink;
@@ -248,23 +254,27 @@ function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch:
         if (ch === '.') return;
         const edge = ch === 'x' ? 0 : 1; // body pixels keep a free border for the outline
         if (!(ch in PAL) || x < edge || x >= SIZE - edge || y < edge || y >= SIZE - edge) throw new Error(`crossbow art: bad pixel '${ch}' in ${part}`);
-        plot(x, y, ch);
+        plot(x, y, ch, part);
       });
     });
   }
 }
 
-// Bakes every frame twice: as drawn with a 1px near-black outline, and as a white-rimmed hit flash ('!').
-function bake(scene: Scene) {
-  const names = [...Object.keys(FRAMES), ...Object.keys(SUNK)];
-  const tex = scene.textures.createCanvas('crossbow', SIZE * names.length, SIZE * 2)!;
+// Bakes every frame twice: as drawn with a 1px near-black outline, and as a white-rimmed hit flash ('!'); in the dark
+// skin, a third time as the eyes alone ('*').
+function bake(scene: Scene, key: string, PAL: Record<string, number>, FLASH: Record<string, number>) {
+  const names = [...Object.keys(FRAMES), ...Object.keys(SUNK)], eyes = key !== 'crossbow';
+  const tex = scene.textures.createCanvas(key, SIZE * names.length, SIZE * (eyes ? 3 : 2))!;
   const img = tex.context.createImageData(tex.width, tex.height);
   const put = (x: number, y: number, c: number, a = 255) => img.data.set([c >> 16, (c >> 8) & 255, c & 255, a], (y * tex.width + x) * 4);
   names.forEach((name, n) => {
     const x0 = n * SIZE;
     const [base, sink] = SUNK[name] ?? [name, 0];
     const grid: string[] = [];
-    compose(FRAMES[base], sink, (x, y, ch) => (grid[y * SIZE + x] = ch));
+    compose(FRAMES[base], sink, (x, y, ch, part) => {
+      grid[y * SIZE + x] = ch;
+      if (eyes && part.startsWith('face') && ch === '1') put(x0 + x, 2 * SIZE + y, 0xd8d0c0);
+    });
     const body = (x: number, y: number) => x >= 0 && x < SIZE && y >= 0 && y < SIZE && (grid[y * SIZE + x] ?? 'x') !== 'x';
     for (let y = 0; y < SIZE; y++) {
       for (let x = 0; x < SIZE; x++) {
@@ -283,6 +293,7 @@ function bake(scene: Scene) {
     }
     tex.add(name, 0, x0, 0, SIZE, SIZE);
     tex.add(name + '!', 0, x0, SIZE, SIZE, SIZE);
+    if (eyes) tex.add(name + '*', 0, x0, 2 * SIZE, SIZE, SIZE);
   });
   tex.putData(img, 0, 0);
   tex.refresh();
@@ -335,8 +346,9 @@ export function boltHit(scene: Scene, b: Sprite) {
 }
 
 export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, x: number, y: number): Sprite {
-  if (!scene.textures.exists('crossbow')) bake(scene);
-  const s = (group.create(x, y, 'crossbow', 'idle!') as Sprite).setOrigin(0.5, ORIGIN / SIZE);
+  const key = skin.dark ? 'crossbow-dark' : 'crossbow';
+  if (!scene.textures.exists(key)) bake(scene, key, skin.dark ? DARK : PAL, skin.dark ? DARK_FLASH : FLASH);
+  const s = (group.create(x, y, key, 'idle!') as Sprite).setOrigin(0.5, ORIGIN / SIZE);
   s.setSize(12, 6).setOffset(14, 30); // feet
   s.setData({ born: scene.time.now, phase: Math.round(x * 3), aimG: scene.add.graphics().setDepth(7990) });
   return s;
@@ -449,6 +461,7 @@ function aimLine(s: Sprite, t: number, facing: number, reach: number) {
 
 export function die(scene: Scene, s: Sprite) {
   (s.getData('aimG') as Phaser.GameObjects.Graphics).destroy();
+  const key = s.texture.key;
   s.setFrame('hurt!');
   scene.time.delayedCall(70, () => {
     const { x, y, flipX } = s;
@@ -456,7 +469,7 @@ export function die(scene: Scene, s: Sprite) {
     s.destroy();
     // Humans bleed: a red burst, it buckles at the knees, falls on its back and a pool spreads under it.
     bleed(scene, x, y, away, 20, 1.2, 1);
-    const body = scene.add.image(x, y, 'crossbow', 'kneel').setOrigin(0.5, ORIGIN / SIZE).setFlipX(flipX).setDepth(y);
+    const body = scene.add.image(x, y, key, 'kneel').setOrigin(0.5, ORIGIN / SIZE).setFlipX(flipX).setDepth(y);
     scene.time.delayedCall(160, () => {
       body.setFrame('corpse');
       run(scene, 500, (t) => {
@@ -465,7 +478,7 @@ export function die(scene: Scene, s: Sprite) {
         pool(x + (flipX ? 2 : -2), y + GROUND - 2, 2 + 10 * k, 1 + 3 * k, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.mid, BLOOD.dark);
         rt.render();
       }, () => {
-        stains(scene).stamp('crossbow', 'corpse', x, y, { originY: ORIGIN / SIZE, scaleX: flipX ? -1 : 1 }).render();
+        stains(scene).stamp(key, 'corpse', x, y, { originY: ORIGIN / SIZE, scaleX: flipX ? -1 : 1 }).render();
         body.destroy();
       });
     });

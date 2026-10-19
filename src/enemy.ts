@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
+import { skin } from './dark.ts';
 
 // How enemies look. Gameplay owns the AI state; this file only shows it.
 export type EnemyState = 'chase' | 'windup' | 'lunge' | 'recover';
@@ -458,9 +459,84 @@ function bake(scene: Scene) {
   tex.refresh();
 }
 
+// The torture room's ghoul (« Crasse et faim », dark.ts): the mockup's emaciated pale crawler on all fours, facing right,
+// its eyes glowing. Same frame names as the thrall's, posed by moving its body and limbs: its legs are the rows from 9
+// down (the hind ones left of column 9, the fore ones under the head); its sheet also holds the eyes alone ('*' frames).
+const GHOUL = [
+  '.......oooo..........',
+  '.....oodFFdoo........',
+  '....odFFffFFdo.......',
+  '...odffrfrfrfdoo.....',
+  '..odfrfrfrfffFFdoo...',
+  '..odfffffffffffFFdoo.',
+  '.odfdooffffffffFfFFdo',
+  '.odo.odfdddooodfdFefo',
+  'odo..odfo.....odffdeo',
+  'odo..odfo....odmmfdo.',
+  'o...odfo....odfmmdo..',
+  '....odfo...odfoooo...',
+  '...odfdo..odfo.......',
+  '..odfdo..odfdo.......',
+  '.onnoo..onnno........',
+];
+const GHOUL_PAL: Record<string, number> = { o: 0x0e0d07, f: 0xb4b49a, F: 0xd6d6c0, d: 0x7a7864, r: 0x4e4c40, m: 0x8f1f16, n: 0xe6e3d8, e: 0xf4fae0 };
+const GHOUL_FLASH: Record<string, number> = { f: GHOUL_PAL.F, d: GHOUL_PAL.f, r: GHOUL_PAL.d, F: GHOUL_PAL.n };
+// body: [dx, dy]; hind, fore: how far the feet swing (the hip stays put); shear: lean per row up from the feet.
+type Pose = { body?: [number, number]; hind?: number; fore?: number; shear?: number; flare?: true; flat?: true };
+const POSES: Record<string, Pose> = {
+  idle: {}, walk0: { hind: 2, fore: -2 }, walk1: { body: [0, 1] }, walk2: { hind: -2, fore: 2 }, walk3: { body: [0, 1] },
+  wind0: { body: [-1, 1], fore: 1 }, wind1: { body: [-2, 1], fore: 2 }, wind2: { body: [-1, 1], fore: 2 }, wind3: { body: [-2, 1], fore: 2, flare: true },
+  lunge: { body: [2, 0], shear: 0.3, hind: -3, fore: 4, flare: true }, hurt: { body: [-1, 0], shear: -0.25 },
+  recover0: { body: [0, 2] }, recover1: { body: [0, 1] }, robe: { body: [0, 3], hind: -2, fore: 2 }, heap: { flat: true }, mask: {},
+};
+
+function bakeGhoul(scene: Scene) {
+  const names = [...Object.keys(FRAMES), ...Object.keys(SUNK)];
+  const tex = scene.textures.createCanvas('enemy-dark', SIZE * names.length, SIZE * 4)!;
+  const img = tex.context.createImageData(tex.width, tex.height);
+  const put = (x: number, y: number, c: number, a = 255) => img.data.set([c >> 16, (c >> 8) & 255, c & 255, a], (y * tex.width + x) * 4);
+  names.forEach((name, n) => {
+    const x0 = n * SIZE, [base, sink] = SUNK[name] ?? [name.replace(/b$/, ''), 0], pose = POSES[base];
+    const grid: string[] = [];
+    const plot = (x: number, y: number, ch: string) => { y += sink; if (x > 0 && x < SIZE - 1 && y > 0 && y <= FEET) grid[y * SIZE + x] = ch; };
+    if (base === 'mask') for (const [x, y] of [[19, 33], [20, 33], [21, 32]]) plot(x, y, 'n'); // a shard of bone
+    else GHOUL.forEach((row, j) => [...row].forEach((ch, i) => {
+      if (ch === '.') return;
+      if (pose.flat) return plot(10 + i - (j < 9 ? 1 : 0), FEET - Math.round((14 - j) * 0.4), ch === 'e' ? 'd' : ch); // collapsed
+      const hind = j >= 9 && i <= 8, fore = j >= 11 && i >= 8 && i <= 13, [bx, by] = hind || fore ? [0, 0] : pose.body ?? [0, 0];
+      const swing = hind ? Math.round(((pose.hind ?? 0) * (j - 8)) / 6) : fore ? Math.round(((pose.fore ?? 0) * (j - 10)) / 4) : 0;
+      const x = 10 + i + bx + swing + Math.round((14 - j) * (pose.shear ?? 0)), y = 20 + j + by;
+      plot(x, y, ch);
+      if (ch === 'e' && pose.flare) plot(x - 1, y, 'e');
+    }));
+    const body = (x: number, y: number) => !!grid[y * SIZE + x];
+    for (let y = 0; y < SIZE; y++)
+      for (let x = 0; x < SIZE; x++) {
+        const ch = grid[y * SIZE + x];
+        if (ch) {
+          put(x0 + x, y, GHOUL_PAL[ch]);
+          put(x0 + x, SIZE + y, GHOUL_FLASH[ch] ?? GHOUL_PAL[ch]);
+          put(x0 + x, 2 * SIZE + y, 0x929e58);
+          if (ch === 'e') put(x0 + x, 3 * SIZE + y, GHOUL_PAL.e);
+        } else {
+          if (body(x - 1, y) || body(x + 1, y) || body(x, y - 1) || body(x, y + 1)) put(x0 + x, SIZE + y, 0xe6dab8); // the hit's white rim
+          if ([[-1, 0], [1, 0], [0, -1], [0, 1]].some(([i, j]) => grid[(y + j) * SIZE + x + i] === 'e')) put(x0 + x, 3 * SIZE + y, GHOUL_PAL.e, 80); // their halo
+          if (base !== 'mask' && ((x + 0.5 - 21) / 10) ** 2 + ((y + 0.5 - FEET) / 2.5) ** 2 <= 1) { put(x0 + x, y, PAL.s, 140); put(x0 + x, SIZE + y, PAL.s, 140); }
+        }
+      }
+    tex.add(name, 0, x0, 0, SIZE, SIZE);
+    tex.add(name + '!', 0, x0, SIZE, SIZE, SIZE);
+    tex.add(name + '~', 0, x0, 2 * SIZE, SIZE, SIZE);
+    tex.add(name + '*', 0, x0, 3 * SIZE, SIZE, SIZE);
+  });
+  tex.putData(img, 0, 0);
+  tex.refresh();
+}
+
 export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, x: number, y: number): Sprite {
-  if (!scene.textures.exists('enemy')) bake(scene);
-  const s = (group.create(x, y, 'enemy', 'rise0') as Sprite).setOrigin(0.5, ORIGIN / SIZE);
+  const key = skin.dark ? 'enemy-dark' : 'enemy';
+  if (!scene.textures.exists(key)) (skin.dark ? bakeGhoul : bake)(scene);
+  const s = (group.create(x, y, key, 'rise0') as Sprite).setOrigin(0.5, ORIGIN / SIZE);
   s.setSize(12, 6).setOffset(14, 30); // feet
   s.setData({ born: scene.time.now, phase: Math.round(x * 3) });
   bleed(scene, x, y, -Math.PI / 2, 6, Math.PI, 0.5, 1); // blood thrown up as it climbs out of the pool
@@ -538,11 +614,12 @@ export function show(s: Sprite, state: EnemyState, facing: number, flash: boolea
 function trail(s: Sprite, now: number) {
   if (now - (s.getData('trailAt') ?? -1e9) < 45) return;
   s.setData('trailAt', now);
-  const g = image(s.scene, s.x, s.y, 'lunge~', s.flipX).setAlpha(0.35).setDepth(s.y - 1);
+  const g = image(s.scene, s.texture.key, s.x, s.y, 'lunge~', s.flipX).setAlpha(0.35).setDepth(s.y - 1);
   s.scene.tweens.add({ targets: g, alpha: 0, duration: 140, onComplete: () => g.destroy() });
 }
 
 export function die(scene: Scene, s: Sprite) {
+  const key = s.texture.key;
   s.setFrame('hurt!');
   scene.time.delayedCall(70, () => {
     const { x, y, flipX } = s;
@@ -558,7 +635,7 @@ export function die(scene: Scene, s: Sprite) {
       scene.tweens.add({ targets: a, y: a.y - Phaser.Math.Between(14, 30), x: a.x + Phaser.Math.Between(-6, 6), alpha: 0,
         duration: Phaser.Math.Between(700, 1400), ease: 'Sine.easeOut', onComplete: () => a.destroy() });
     }
-    const heap = image(scene, x, y, 'slump', flipX).setDepth(y);
+    const heap = image(scene, key, x, y, 'slump', flipX).setDepth(y);
     scene.time.delayedCall(90, () => heap.setFrame('heap'));
     run(scene, 360, (t) => {
       const k = Phaser.Math.Easing.Quadratic.Out(t / 0.36);
@@ -566,11 +643,11 @@ export function die(scene: Scene, s: Sprite) {
       pool(x, fy, 2 + 9 * k, 1 + 3 * k, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.mid, BLOOD.dark);
       rt.render();
     }, () => {
-      stains(scene).stamp('enemy', 'heap', x, y, { originY: ORIGIN / SIZE, scaleX: flipX ? -1 : 1 }).render();
+      stains(scene).stamp(key, 'heap', x, y, { originY: ORIGIN / SIZE, scaleX: flipX ? -1 : 1 }).render();
       heap.destroy();
     });
-    fly(scene, [{ o: image(scene, x, y, 'mask', flipX), x, y, z: 16, vx: Math.cos(away) * 28, vy: Math.sin(away) * 18, vz: 80, d: 0,
-      land: (mx, my) => stains(scene).stamp('enemy', 'mask', mx, my, { originY: ORIGIN / SIZE, scaleX: flipX ? -1 : 1 }).render() }]);
+    fly(scene, [{ o: image(scene, key, x, y, 'mask', flipX), x, y, z: 16, vx: Math.cos(away) * 28, vy: Math.sin(away) * 18, vz: 80, d: 0,
+      land: (mx, my) => stains(scene).stamp(key, 'mask', mx, my, { originY: ORIGIN / SIZE, scaleX: flipX ? -1 : 1 }).render() }]);
   });
 }
 
@@ -614,8 +691,8 @@ export function bleed(scene: Scene, x: number, y: number, angle: number, n: numb
 }
 
 // A loose frame of the thrall (after-image, falling robe, flying mask), placed like the sprite.
-function image(scene: Scene, x: number, y: number, frame: string, flipX: boolean) {
-  return scene.add.image(x, y, 'enemy', frame).setOrigin(0.5, ORIGIN / SIZE).setFlipX(flipX);
+function image(scene: Scene, key: string, x: number, y: number, frame: string, flipX: boolean) {
+  return scene.add.image(x, y, key, frame).setOrigin(0.5, ORIGIN / SIZE).setFlipX(flipX);
 }
 
 // Floor layer that keeps blood, robes and masks for the rest of the fight, over the whole room (the physics world is its

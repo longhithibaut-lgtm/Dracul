@@ -22,6 +22,9 @@ const WAITS = {
   // Three screens tall: the well's garden and the south walk, the graves and the first gallery, the yews and the north walk.
   cloister: [[24, 745], [456, 760], [180, 660], [312, 700], [108, 700], [360, 664], [24, 420], [312, 470], [120, 444],
     [456, 520], [240, 540], [240, 75], [24, 160], [456, 250], [312, 196], [240, 306]],
+  // The trial room: behind the pillars and cages, round the body pit, in the corners.
+  torture: [[240, 600], [56, 610], [424, 610], [92, 570], [112, 470], [368, 470], [186, 350], [130, 318], [240, 318], [186, 286],
+    [392, 280], [56, 245], [424, 245], [112, 120], [368, 120], [240, 75]],
 };
 const only = arg('only', '');
 const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });

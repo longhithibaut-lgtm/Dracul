@@ -13,6 +13,7 @@ import * as Glyph from './glyph.ts';
 import * as Rats from './rats.ts';
 import * as Training from './training.ts';
 import * as Wanderer from './wanderer.ts';
+import * as Dark from './dark.ts';
 import * as Touch from './touch.ts';
 import { GIFTS, type GiftId } from './gifts.ts';
 
@@ -116,6 +117,7 @@ export class RoomScene extends Phaser.Scene {
     // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
     this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
     this.physics.resume();
+    Dark.skin.dark = this.layout === 'torture'; // before anyone is drawn: the trial room's sprites wear its skin
     this.room = Room.build(this, this.layout);
     const b = this.room.bounds;
     this.physics.world.setBounds(b.x, b.y, b.width, b.height);
@@ -137,6 +139,7 @@ export class RoomScene extends Phaser.Scene {
     // A bolt that lands is spent; one that misses (dash, invulnerability) flies on.
     this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
     this.shards = this.physics.add.group();
+    if (Dark.skin.dark) Dark.light(this, this.hero, this.enemies, () => this.lanterns, this.room.height);
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
 
     this.hud = Hud.create(this);
