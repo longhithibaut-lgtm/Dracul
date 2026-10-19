@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { TORCHES, L } from './torture.ts';
+import { viewSize } from './logic.ts';
 
 // The trial room's light (« Crasse et faim », docs/decisions.md), as the mockup's engine lights it. The world camera
 // draws what everything reflects (its albedo, in sRGB); one screen shader (FilterDark) lights it: the static lights
@@ -11,8 +12,29 @@ import { TORCHES, L } from './torture.ts';
 // What glows or warns is drawn unlit over it, by a second camera that sees only what stands at DEPTH and above: the
 // eyes, the torch flames, the aim lines, the effects.
 
-/** The trial room is on: the sprite modules bake and pick their dark skins (wanderer.ts, enemy.ts, crossbow.ts). */
-export const skin = { dark: false };
+/** The trial room is on: the sprite modules bake and pick their dark skins (wanderer.ts, enemy.ts, crossbow.ts).
+ *  `zoom`: screen pixels per room pixel; 2 in the trial room, so its hero (wanderer.ts) keeps his full detail at half
+ *  scale while the rest shows its 1x pixels doubled. Every other room stays at 1, the game exactly as before. */
+export const skin = { dark: false, zoom: 1 };
+
+/** Sizes the game to the view (logic.ts viewSize) times skin.zoom; on a resize (main.ts) and on entering a room. */
+export function fit(scale: Phaser.Scale.ScaleManager) {
+  const { width, height } = scale.parentSize, v = viewSize(width, height, T.width, T.height), w = v.width * skin.zoom, h = v.height * skin.zoom;
+  if (width && height && (w !== scale.width || h !== scale.height)) scale.setGameSize(w, h);
+}
+
+/** A blend mode for what is drawn already lit (the trial room's hero): normal colour, but it clears the alpha it
+ *  covers, which the light shader reads as "keep this colour" (anything drawn over it later restores the alpha). */
+let prelitMode = -1;
+export function prelit(scene: Phaser.Scene) {
+  const r = scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl = r.gl;
+  if (prelitMode < 0) {
+    r.addBlendMode([gl.ONE, gl.ONE_MINUS_SRC_ALPHA], gl.FUNC_ADD);
+    prelitMode = r.blendModes.length - 1; // addBlendMode's own return value is one short
+    r.blendModes[prelitMode].func = [gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ZERO, gl.ONE_MINUS_SRC_ALPHA];
+  }
+  return prelitMode;
+}
 
 /** The mockup's readability cheat for the characters: what they reflect, `k` times in linear light (`keep`: not those). */
 export function boost(pal: Record<string, number>, k = 2.2, keep = '0o') {
@@ -43,6 +65,7 @@ uniform vec4 uOrder2;
 uniform vec4 uOrder3;
 uniform float uTorch;
 uniform float uFrame;
+uniform float uZoom;
 varying vec2 outTexCoord;
 // Textures other than the camera's are bottom-up: v = 1 - row / height.
 
@@ -76,9 +99,10 @@ float bayer(vec2 p) {
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
 void main() {
-  vec2 sp = floor(vec2(outTexCoord.x, 1.0 - outTexCoord.y) * uView.zw);
-  vec2 w = uView.xy + sp;
-  vec3 alb = pow(texture2D(uMainSampler, outTexCoord).rgb, vec3(2.2));
+  vec2 sp = floor(vec2(outTexCoord.x, 1.0 - outTexCoord.y) * uView.zw); // screen pixel
+  vec2 w = floor(uView.xy + (sp + 0.5) / uZoom); // room pixel: the light works on those, whatever the zoom
+  vec4 src = texture2D(uMainSampler, outTexCoord);
+  vec3 alb = pow(src.rgb, vec3(2.2));
   vec3 Lt = vec3(0.0), E = vec3(0.0);
   vec2 uv = (w + 0.5) / uRoom;
   if (uv.x >= 0.0 && uv.x < 1.0 && uv.y >= 0.0 && uv.y < 1.0) {
@@ -102,7 +126,8 @@ void main() {
   vec3 c = alb * Lt + E;
   // Vignette, filmic shoulder back to sRGB, contrast.
   vec2 v = (sp - uView.zw * vec2(0.5, 0.55)) / (uView.zw * 0.5);
-  c *= clamp(1.15 - 0.55 * dot(v, v), 0.0, 1.0);
+  float vig = clamp(1.15 - 0.55 * dot(v, v), 0.0, 1.0);
+  c *= vig;
   c *= 3.2;
   c = pow(c / (1.0 + c), vec3(1.0 / 2.2));
   c += (c * c * (3.0 - 2.0 * c) - c) * 0.45;
@@ -110,9 +135,12 @@ void main() {
   float lum = dot(c, vec3(0.3, 0.59, 0.11));
   c = mix(c, vec3(lum), 0.24 * (1.0 - clamp((E.r + E.g + E.b) * 3.0, 0.0, 1.0)));
   c += vec3(0.012, 0.014, 0.0) * (1.0 - lum) - vec3(0.0, 0.0, 0.004);
-  c += (hash(sp + uFrame) + hash(sp.yx + uFrame * 1.7) - 1.0) * 0.03 * (0.5 + lum);
+  vec2 sq = floor(sp / uZoom);
+  c += (hash(sq + uFrame) + hash(sq.yx + uFrame * 1.7) - 1.0) * 0.03 * (0.5 + lum);
   vec3 q = min(floor(clamp(c + bayer(w) * 0.04, 0.0, 1.0) * 255.0 / 4.0), 63.0);
-  gl_FragColor = vec4(texture2D(uLut, vec2((mod(q.b, 8.0) * 64.0 + q.r + 0.5) / 512.0, 1.0 - (floor(q.b / 8.0) * 64.0 + q.g + 0.5) / 512.0)).rgb, 1.0);
+  vec3 lit = texture2D(uLut, vec2((mod(q.b, 8.0) * 64.0 + q.r + 0.5) / 512.0, 1.0 - (floor(q.b / 8.0) * 64.0 + q.g + 0.5) / 512.0)).rgb;
+  // Drawn already lit (prelit(): alpha cleared): its own colour, only vignetted.
+  gl_FragColor = vec4(mix(src.rgb * pow(vig, 0.45), lit, src.a), 1.0);
 }`;
 function vec(c: number[]) { return `vec3(${c.map((v) => v.toFixed(5)).join(', ')})`; }
 
@@ -140,7 +168,8 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
     const pm = this.programManager, v = c.camera.worldView;
     pm.setUniform('uLight', 1);
     pm.setUniform('uLut', 2);
-    pm.setUniform('uView', [Math.round(v.x), Math.round(v.y), c.camera.width, c.camera.height]);
+    pm.setUniform('uView', [v.x, v.y, c.camera.width, c.camera.height]);
+    pm.setUniform('uZoom', c.camera.zoom);
     pm.setUniform('uRoom', c.room);
     pm.setUniform('uLamp', c.lamp);
     pm.setUniform('uGlass', c.glass);
@@ -213,7 +242,8 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   const over = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height).setName('dark-over');
   const pre = over.preRender.bind(over);
   over.preRender = () => {
-    over.setScroll(main.scrollX, main.scrollY).setSize(main.width, main.height).setAlpha(1 - (main.fadeEffect as unknown as { alpha: number }).alpha);
+    // Origin 0: what is pinned to the screen (scroll factor 0: cards, flashes) lands at its place times the zoom.
+    over.setOrigin(0).setZoom(main.zoom).setScroll(main.worldView.x, main.worldView.y).setSize(main.width, main.height).setAlpha(1 - (main.fadeEffect as unknown as { alpha: number }).alpha);
     pre();
   };
   const sort = () => { // every object to one of the two (the HUD's own camera keeps its own)
@@ -234,7 +264,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   const step = (time: number) => {
     // The lantern glass in his hand, wherever this frame of his sheet has it (wanderer.ts); the old hero has none.
     const [ax, ay] = (hero.frame.customData as { lamp?: [number, number] }).lamp ?? [hero.frame.width / 2, 29], tl = hero.getTopLeft();
-    const lx = Math.round(tl.x! + (hero.flipX ? hero.frame.width - ax : ax)), ly = Math.round(tl.y! + ay), feet = hero.body!.bottom;
+    const lx = Math.round(tl.x! + (hero.flipX ? hero.frame.width - ax : ax) * hero.scaleX), ly = Math.round(tl.y! + ay * hero.scaleY), feet = hero.body!.bottom;
     // Eyes over the dark: each sprite's own eye pixels (its sheet's '*' frames), placed like it.
     for (const s of [hero, ...(enemies.getChildren() as Sprite[])]) {
       const fr = `${s.frame.name.replace('!', '')}*`;

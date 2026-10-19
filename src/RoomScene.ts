@@ -113,11 +113,18 @@ export class RoomScene extends Phaser.Scene {
     this.waveDue = false;
   }
 
+  preload() {
+    if (this.layout === 'torture') Wanderer.preload(this);
+  }
+
   create() {
     // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
     this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
     this.physics.resume();
     Dark.skin.dark = this.layout === 'torture'; // before anyone is drawn: the trial room's sprites wear its skin
+    Dark.skin.zoom = Dark.skin.dark ? 2 : 1;
+    Dark.fit(this.scale);
+    this.cameras.main.setZoom(Dark.skin.zoom);
     this.room = Room.build(this, this.layout);
     const b = this.room.bounds;
     this.physics.world.setBounds(b.x, b.y, b.width, b.height);
@@ -153,12 +160,12 @@ export class RoomScene extends Phaser.Scene {
     const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.cards) return this.pick(this.cards.at(p.x, p.y));
+      if (this.cards) return this.pick(this.cards.at(p.x / Dark.skin.zoom, p.y / Dark.skin.zoom));
       const w = world(p), a = Math.atan2(w.y - this.hero.y, w.x - this.hero.x);
       if (p.button === 0) this.press(() => this.slash(a));
       else if (p.button === 2) this.press(() => this.shoot(a));
     });
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.x, p.y)));
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.x / Dark.skin.zoom, p.y / Dark.skin.zoom)));
     this.keys.J.on('down', () => { const a = this.facing; this.press(() => this.slash(a)); });
     this.keys.K.on('down', () => { const a = this.facing; this.press(() => this.shoot(a)); });
     this.keys.F.on('down', () => this.press(() => this.bite()));
@@ -237,7 +244,7 @@ export class RoomScene extends Phaser.Scene {
    *  surroundings round it; where it is larger (an upright phone, the tall cloister), the camera follows the hero,
    *  smoothly, kept inside the room. */
   private frame() {
-    const { width: w, height: h } = this.scale, rw = T.width, rh = this.room.height;
+    const w = this.scale.width / Dark.skin.zoom, h = this.scale.height / Dark.skin.zoom, rw = T.width, rh = this.room.height;
     this.cameras.main.setBounds(Math.min(0, Math.floor((rw - w) / 2)), Math.min(0, Math.floor((rh - h) / 2)), Math.max(rw, w), Math.max(rh, h))
       .startFollow(this.hero, true, 0.08, 0.08);
   }

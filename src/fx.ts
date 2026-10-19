@@ -219,8 +219,9 @@ export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle:
       // (cropped copies of the texture: no pixel read-back from the GPU). Mid-dash the hero is a mist frame whose
       // streaks would fill into a solid block, so the ghost takes the intact run pose, translucent, behind the action.
       const f = sprite.frame, name = f.name.replace(/dash\d$/, 'run1'), tl = sprite.getTopLeft(), w = f.cutWidth, x0 = Math.round(tl.x), y0 = Math.round(tl.y);
-      const strips = Array.from({ length: w }, (_, x) => scene.add.image(x0 + (sprite.flipX ? w - 1 - 2 * x : 0), y0, sprite.texture, name)
-        .setOrigin(0).setCrop(x, 0, 1, f.cutHeight).setTint(MIST[0]).setTintMode(Phaser.TintModes.FILL).setAlpha(0.55));
+      const k = sprite.scaleX; // the torture room's hero sheet is drawn at half scale
+      const strips = Array.from({ length: w }, (_, x) => scene.add.image(x0 + (sprite.flipX ? w - 1 - 2 * x : 0) * k, y0, sprite.texture, name)
+        .setOrigin(0).setScale(k).setCrop(x, 0, 1, f.cutHeight).setTint(MIST[0]).setTintMode(Phaser.TintModes.FILL).setAlpha(0.55));
       ghosts.push({ t, y: y0, h: f.cutHeight, strips });
     }
     for (let i = 0; i < 2; i++) {
@@ -392,7 +393,7 @@ export function drain(scene: Phaser.Scene, from: P, mouth: P, ms: number) {
 /** Blood regained: the hero flushes rose (never white then red, which is being hurt), a ring spreads at his feet and
  *  warm motes rise off him. */
 export function heal(scene: Phaser.Scene, hero: Phaser.GameObjects.Sprite) {
-  const flush = scene.add.image(hero.x, hero.y, hero.texture, hero.frame.name).setTint(GLOW).setTintMode(Phaser.TintModes.FILL);
+  const flush = scene.add.image(hero.x, hero.y, hero.texture, hero.frame.name).setScale(hero.scaleX).setTint(GLOW).setTintMode(Phaser.TintModes.FILL);
   const motes = Array.from({ length: 14 }, () => ({ x: rnd(-7, 7), y: rnd(-9, 7), rise: rnd(10, 24), end: rnd(260, 520), c: Math.random() < 0.4 ? HOT : GLOW }));
   animate(scene, FLOOR, 360, (g, t) => {
     const k = t / 360, r = 5 + 11 * ease(k);
@@ -411,7 +412,7 @@ export function heal(scene: Phaser.Scene, hero: Phaser.GameObjects.Sprite) {
 }
 
 export function hurt(scene: Phaser.Scene) {
-  const cam = scene.cameras.main, w = cam.width, h = cam.height;
+  const cam = scene.cameras.main, w = cam.width / cam.zoom, h = cam.height / cam.zoom;
   cam.shake(130, new Phaser.Math.Vector2(3 / w, 3 / h));
   // One soft blood-red pulse and a dark frame closing in: short and translucent, never a full-screen white-out.
   animate(scene, 19_000, 260, (g, t) => {

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { viewSize } from './logic.ts';
 import { RoomScene } from './RoomScene.ts';
+import { fit } from './dark.ts';
 
 // The view follows the screen's shape, in native pixels: a 480x270 box along its long side (exactly 480x270 on 16:9,
 // x4 on 1080p), the other side grown to fill it, upright too. ENVELOP covers the screen, cropping the rounding's
@@ -16,11 +17,9 @@ const game = new Phaser.Game({
   parent: 'game', // falls back to <body> when there is no #game element
   scene: [RoomScene],
 });
-// Live, on a resize or a turn of the phone; the scene re-frames itself on the same event (RoomScene.frame).
-game.scale.on(Phaser.Scale.Events.RESIZE, () => {
-  const { width, height } = game.scale.parentSize, v = viewSize(width, height, T.width, T.height);
-  if (width && height && (v.width !== game.scale.width || v.height !== game.scale.height)) game.scale.setGameSize(v.width, v.height);
-});
+// Live, on a resize or a turn of the phone; the scene re-frames itself on the same event (RoomScene.frame). The trial
+// room doubles it (dark.ts skin.zoom).
+game.scale.on(Phaser.Scale.Events.RESIZE, () => fit(game.scale));
 
 // The installable app (public/manifest.webmanifest) needs a service worker; pages that may not register one (a framed
 // preview) just skip it.

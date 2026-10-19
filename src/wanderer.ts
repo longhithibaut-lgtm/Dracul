@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import * as Hero from './hero.ts';
 import { PALETTE, VIEWS, type Frame } from './wanderer.data.ts';
-import { skin } from './dark.ts';
-import * as Vampire from './vampire.data.ts';
+import { skin, prelit } from './dark.ts';
+import * as Grand from './grand.data.ts';
+import grandSheet from './grand-hero.png';
 
 // The hero, the wanderer with the violet scarf (the training room's box brings the old one back to compare). He is the
 // old hero's sprite (physics body, shadow, Hero.show's animation logic) wearing another sheet. The scarf's tail is a
@@ -12,12 +13,12 @@ const FW = 32, FH = 40;
 const ORIGIN_Y = 22 / FH; // soles (row 36) 14 px below the sprite's y, like the old hero's, so body and shadow line up
 const neck = new Map<string, [number, number]>(); // frame name -> where the tail hangs from
 const TONES = new Map<string, { V: number; v: number; u: number }>(); // per sheet: the scarf's three tones, set by bake()
-// The torture room's hero (« Crasse et faim », dark.ts) is another sheet on the same frame names: the mockup's vampire
-// (vampire.data.ts) with the lantern in his hand; it has no scarf tail, and its sheet also holds the eyes and the
-// lantern glass alone ('*' frames) to glow in the dark, and the violet shawl faintly (the mockup's lantern has no blue). Each of its frames carries the glass centre (customData.lamp).
+// The torture room's hero (« Crasse et faim », dark.ts) is another sheet on the same frame names: the validated « grand »
+// vampire rendered from his 3D model (grand-hero.png, tools/art/grand-hero.gen.mjs), already lit, eyes and lantern
+// glowing, drawn at half scale on that room's x2 view so each of his pixels is a screen pixel; no scarf tail. Each of
+// his frames carries the lantern glass centre (customData.lamp).
 
 function bake(scene: Phaser.Scene, key: string, pal: Record<string, string>, views: typeof VIEWS) {
-  const eyes = pal !== PALETTE;
   const sheet: [string, Frame][] = [];
   for (const [view, v] of Object.entries(views)) {
     // Every frame Hero.show may ask for: idle and blink 0-3, the run, dash 0-1, the action poses (the bite is side-on only).
@@ -30,7 +31,7 @@ function bake(scene: Phaser.Scene, key: string, pal: Record<string, string>, vie
     add('cast', v.cast);
     if (v.bite) add('bite', v.bite);
   }
-  const tex = scene.textures.createCanvas(key, FW * sheet.length, eyes ? 2 * FH : FH)!;
+  const tex = scene.textures.createCanvas(key, FW * sheet.length, FH)!;
   const ctx = tex.context;
   sheet.forEach(([name, f], i) => {
     f.rows.forEach((row, y) => [...row].forEach((c, x) => {
@@ -38,13 +39,10 @@ function bake(scene: Phaser.Scene, key: string, pal: Record<string, string>, vie
       if (!pal[c]) throw new Error(`wanderer ${name}: unknown pixel '${c}'`);
       ctx.fillStyle = pal[c];
       ctx.fillRect(i * FW + x, y, 1, 1);
-      if (eyes && (c === 'e' || c === 'G')) ctx.fillRect(i * FW + x, FH + y, 1, 1);
-      if (eyes && 'PVvu'.includes(c)) { ctx.globalAlpha = 0.55; ctx.fillRect(i * FW + x, FH + y, 1, 1); ctx.globalAlpha = 1; } // the shawl's faint glow
     }));
-    if (eyes) tex.add(`${name}*`, 0, i * FW, FH, FW, FH);
     const dash = name.match(/^(\w+)-dash(\d)$/);
     if (dash) Hero.dissolve(ctx, i * FW, Hero.MIST[+dash[2]], dash[1] === 'side' ? -1 : 0, { side: 0, down: -1, up: 1 }[dash[1]]!, FH, 6);
-    Object.assign(tex.add(name, 0, i * FW, 0, FW, FH)!.customData, { lamp: f.lamp });
+    tex.add(name, 0, i * FW, 0, FW, FH);
     if (f.neck) neck.set(name, f.neck);
   });
   tex.refresh();
@@ -52,12 +50,27 @@ function bake(scene: Phaser.Scene, key: string, pal: Record<string, string>, vie
   TONES.set(key, { V: tone('V'), v: tone('v'), u: tone('u') });
 }
 
+/** The torture room's sheet loads with the scene (RoomScene.preload). */
+export function preload(scene: Phaser.Scene) {
+  if (!scene.textures.exists('wanderer-dark')) scene.load.image('wanderer-dark', grandSheet);
+}
+
 export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physics.Arcade.Sprite {
-  const key = skin.dark ? 'wanderer-dark' : 'wanderer';
-  if (!scene.textures.exists(key)) bake(scene, key, skin.dark ? Vampire.PALETTE : PALETTE, skin.dark ? Vampire.VIEWS : VIEWS);
-  const s = Hero.create(scene, x, y).setTexture(key, 'down-idle0').setOrigin(0.5, ORIGIN_Y);
+  if (skin.dark) return grand(scene, x, y);
+  if (!scene.textures.exists('wanderer')) bake(scene, 'wanderer', PALETTE, VIEWS);
+  const s = Hero.create(scene, x, y).setTexture('wanderer', 'down-idle0').setOrigin(0.5, ORIGIN_Y);
   s.setSize(8, 6).setOffset(12, 27); // the old hero's feet hitbox, at the same place under his soles
-  if (!skin.dark) scarf(scene, s);
+  scarf(scene, s);
+  return s;
+}
+
+// The same contract in sheet pixels (two per room pixel): soles 15 room px below his y, the 8x6 feet hitbox 5 px below it.
+function grand(scene: Phaser.Scene, x: number, y: number) {
+  const tex = scene.textures.get('wanderer-dark');
+  if (!tex.has('down-idle0')) for (const [name, { cell, lamp }] of Object.entries(Grand.FRAMES))
+    Object.assign(tex.add(name, 0, (cell % Grand.COLS) * Grand.FW, Math.floor(cell / Grand.COLS) * Grand.FH, Grand.FW, Grand.FH)!.customData, { lamp });
+  const s = Hero.create(scene, x, y).setTexture('wanderer-dark', 'down-idle0').setOrigin(0.5, (Grand.SOLE - 30) / Grand.FH).setScale(0.5);
+  s.setSize(16, 12).setOffset(Grand.FW / 2 - 8, Grand.SOLE - 20).setBlendMode(prelit(scene));
   return s;
 }
 

@@ -3,6 +3,7 @@ import { T } from './tuning.ts';
 import * as Font from './font.ts';
 import { ICONS, kind, shelf, type GiftId } from './gifts.ts';
 import { edgePip } from './logic.ts';
+import { skin } from './dark.ts';
 
 // Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
 // recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, beside them
@@ -141,7 +142,8 @@ export function create(scene: Phaser.Scene): Hud {
   const g = scene.add.graphics();
 
   // Own camera, so the HUD never shakes, flashes or zooms with the world camera.
-  const cam = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height); // resized with the view by Phaser
+  const cam = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setZoom(skin.zoom); // resized with the view by Phaser
+  const Z = skin.zoom; // the HUD is laid out in room pixels, Z screen pixels each
   cam.ignore(scene.children.list.filter((o) => o !== g));
   scene.cameras.main.ignore(g);
   const ignoreNew = (o: Phaser.GameObjects.GameObject) => cam.ignore(o);
@@ -156,7 +158,7 @@ export function create(scene: Phaser.Scene): Hud {
   let threats: { x: number; y: number; aim: boolean }[] = [];
   // The corner, in from the safe area (native px per CSS px: the scale manager's displayScale).
   const corner = () => {
-    const css = getComputedStyle(probe), k = scene.scale.displayScale.x;
+    const css = getComputedStyle(probe), k = scene.scale.displayScale.x / Z;
     return { x: X0 + Math.ceil(parseFloat(css.paddingLeft) * k || 0), y: Y0 + Math.ceil(parseFloat(css.paddingTop) * k || 0) };
   };
   let at = corner();
@@ -261,7 +263,7 @@ export function create(scene: Phaser.Scene): Hud {
     const tt = now - titleAt, out = T.run.titleMs - 200;
     if (tt < T.run.titleMs) {
       const a = tt < out ? 1 : 1 - Math.ceil((tt - out) / 67) / 3, w = Font.width(title, 2);
-      const x = Math.round((scene.scale.width - w) / 2), y = Math.round(scene.scale.height / 2) - 23;
+      const x = Math.round((scene.scale.width / Z - w) / 2), y = Math.round(scene.scale.height / Z / 2) - 23;
       for (const side of [-1, 1]) {
         const rx = side < 0 ? x - 46 : x + w + 8;
         g.fillStyle(C.blood[1], a).fillRect(rx, y + 5, 38, 1);
@@ -276,7 +278,7 @@ export function create(scene: Phaser.Scene): Hud {
     // Enemies off the screen: a small triangle on its edge points at each, blood red; one aiming its crossbow blinks
     // rose and white. Outlined in the void, so it reads on any floor.
     for (const e of threats) {
-      const p = edgePip(e.x, e.y, scene.scale.width, scene.scale.height, PIP + 2);
+      const p = edgePip(e.x, e.y, scene.scale.width / Z, scene.scale.height / Z, PIP + 2);
       if (!p) continue;
       const tx = p.x + p.dx * PIP, ty = p.y + p.dy * PIP, cells: [number, number][] = [];
       for (let a = 0; a <= PIP; a++)

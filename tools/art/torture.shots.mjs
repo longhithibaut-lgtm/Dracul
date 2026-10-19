@@ -43,7 +43,7 @@ for (const [shape, opts] of Object.entries(SHAPES)) {
   await page.waitForTimeout(2500);
   await shot('fight');
   { // device pixels round the hero
-    const { x, y } = await run(() => { const s = window.game.scene.getScene('room'), c = s.cameras.main; return { x: (s.hero.x - c.worldView.x) * window.innerWidth / s.scale.width, y: (s.hero.y - c.worldView.y) * window.innerHeight / s.scale.height }; });
+    const { x, y } = await run(() => { const s = window.game.scene.getScene('room'), c = s.cameras.main; return { x: (s.hero.x - c.worldView.x) * window.innerWidth / c.worldView.width, y: (s.hero.y - c.worldView.y) * window.innerHeight / c.worldView.height }; });
     await run(() => window.game.loop.sleep());
     await page.screenshot({ path: `${out}/${shape}-crisp.png`, clip: { x: Math.max(0, x - 110), y: Math.max(0, y - 90), width: 220, height: 160 } });
     await run(() => window.game.loop.wake());

@@ -6,7 +6,7 @@
 // side view only) keep the idle head and scarf wrap; the cast crouch reaches below the soles' row.
 export const PALETTE: Record<string, string> = {K: "#0b0710",k: "#1c1029",d: "#2e1838",s: "#3b2a4a",m: "#5a4468",l: "#8a6f8f",W: "#e8dcc8",w: "#b7a58f",e: "#e0284a",P: "#dcbcff",V: "#a970ff",v: "#7b45e0",u: "#4c2596",U: "#311a63"};
 
-export type Frame = { neck?: [number, number]; lamp?: [number, number]; rows: string[] };
+export type Frame = { neck?: [number, number]; rows: string[] };
 export type View = { idle: Frame[]; blink?: Frame[]; run: Frame[]; slash: Frame[]; throw: Frame[]; cast: Frame; bite?: Frame; tailInFront?: boolean };
 
 const DOWN_IDLE0: Frame = { neck: [24,22], rows: [
