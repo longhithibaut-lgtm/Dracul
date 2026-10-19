@@ -2,14 +2,15 @@
 // stopped (scarf falling back), running up (back view), running down, mid-dash: shots/wanderer.png (crops at x4, labelled).
 // Then a filmstrip of each view's run cycle, every frame in order: shots/walk.png; then the action poses with their
 // effects, a row per view and the bite: shots/poses.png. --old does the same for the old hero
-// (wanderer-old.png, walk-old.png, poses-old.png), to compare. Usage: node tools/art/wanderer.check.mjs [--old] [--port=5207] [--out=shots].
+// (wanderer-old.png, walk-old.png, poses-old.png), to compare; --dark for the torture room's vampire, in its room
+// (wanderer-dark.png...). Usage: node tools/art/wanderer.check.mjs [--old|--dark] [--port=5207] [--out=shots].
 // Exit code 1 on a page error.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
-const port = Number(arg('port', 5207)), out = arg('out', 'shots'), old = process.argv.includes('--old'), tag = old ? '-old' : '';
+const port = Number(arg('port', 5207)), out = arg('out', 'shots'), old = process.argv.includes('--old'), dark = process.argv.includes('--dark'), tag = old ? '-old' : dark ? '-dark' : '';
 await mkdir(out, { recursive: true });
 const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' }); // no reload mid-capture on an edit
 await server.listen();
@@ -25,6 +26,10 @@ if (old) { // the new hero is the default: tick him off for the old one
   await page.click('#training [data-opt="wanderer"]');
   await page.waitForFunction(() => window.game.scene.getScene('room').hero?.texture.key === 'hero');
 }
+if (dark) {
+  await page.evaluate(() => window.game.scene.getScene('room').scene.restart({ training: true, layout: 'torture' }));
+  await page.waitForFunction(() => window.game.scene.getScene('room').hero?.texture.key === 'wanderer-dark');
+}
 await page.evaluate(() => (document.querySelector('#training').hidden = true));
 await page.waitForTimeout(1600); // the title card is gone
 
@@ -33,7 +38,7 @@ let tiles = [];
 // step, which the scarf would take for a lash.
 const snap = async (label, { w, h, dy } = { w: 200, h: 144, dy: 4 }) => {
   // Not on a frame where an invulnerable hero blinks out (latched in a bite, he does).
-  const { x, y } = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); if (s.hero.alpha > 0.5) { s.scene.pause(); return { x: s.hero.x, y: s.hero.y }; } }).then((h) => h.jsonValue());
+  const { x, y } = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); if (s.hero.alpha > 0.5) { s.scene.pause(); const v = s.cameras.main.worldView; return { x: s.hero.x - v.x, y: s.hero.y - v.y }; } }).then((h) => h.jsonValue());
   await page.waitForTimeout(50); // a render of the paused frame
   const hw = w / 8, hh = h / 8, cx = Math.max(hw, Math.min(480 - hw, x)), cy = Math.max(hh, Math.min(270 - hh, y - dy));
   tiles.push({ label, w, h, png: (await page.screenshot({ clip: { x: (cx - hw) * 4, y: (cy - hh) * 4, width: w, height: h } })).toString('base64') });

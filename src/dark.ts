@@ -53,12 +53,6 @@ function grids(scene: Phaser.Scene, key: string, frames: string[][], pal: Record
 }
 const FLAME = ['..W..|.yWy.|.YWY.|yYWYy|.oYo.|..o..', '.....|..y..|.yW..|.YWYy|yYWY.|.oYo.', '.....|..y..|..Wy.|yYWY.|.YWYy|.oYo.'].map((f) => f.split('|'));
 const FLAME_PAL = { W: '#ffd890', Y: '#e8a040', y: '#c06a20', o: '#8a4516' };
-// A tin lantern: its ring, cage and glass (glass lit from within).
-const LANTERN = [['..l..', '.lLl.', 'lGGGl', 'lGgGl', '.lLl.']];
-const LANTERN_PAL = { l: '#2a2418', L: '#4a4230', G: '#f2f4c0', g: '#c8cc70' };
-// Where his lantern hangs, by view (the hand that holds it, from the sprite's position): mirrored with the sprite.
-const HAND: Record<string, [dx: number, dy: number, behind: boolean]> = { down: [7, 5, false], up: [-7, 5, true], side: [4, 5, false] };
-
 const GRAIN = 96;
 function grain(scene: Phaser.Scene) {
   const key = 'dark-grain';
@@ -81,7 +75,6 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   const rt = scene.add.renderTexture(0, 0, T.width, height).setOrigin(0).setDepth(DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY).setName('dark-light');
   const night = pool(scene, 150, 0.8, 4), lamp = pool(scene, 90), torch = pool(scene, 80), gate = pool(scene, 60, 0.7), order = pool(scene, T.lantern.radius, T.lantern.squash, 4);
   const noise = scene.add.tileSprite(0, 0, 480, 640, grain(scene)).setOrigin(0).setScrollFactor(0).setDepth(9500).setName('dark-grain');
-  const lantern = scene.add.image(0, 0, grids(scene, 'dark-lantern', LANTERN, LANTERN_PAL)).setOrigin(0.5, 0);
   // The mockup's haze round its glass, over the dark.
   const haze = scene.add.image(0, 0, pool(scene, 28, 1, 4)).setTint(0xb8c070).setBlendMode(ADD).setDepth(DEPTH + 1);
   const flameKey = grids(scene, 'dark-flame', FLAME, FLAME_PAL);
@@ -93,11 +86,10 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   let tick = 0, lamp0 = 1;
 
   const step = (time: number) => {
-    // The lantern in his hand, swaying as he walks.
-    const view = hero.frame.name.split('-')[0], [hx, hy, behind] = HAND[view] ?? HAND.down, moving = hero.body!.velocity.lengthSq() > 25;
-    const lx = hero.x + (hero.flipX ? -hx : hx) + (moving ? Math.round(Math.sin(time / 90)) : 0), ly = hero.y + hy + (moving ? Math.round(Math.abs(Math.sin(time / 90))) : 0);
-    lantern.setPosition(Math.round(lx), Math.round(ly)).setDepth(hero.depth + (behind ? -0.3 : 0.3)).setVisible(hero.visible).setAlpha(hero.alpha);
-    haze.setPosition(Math.round(lx), Math.round(ly) + 3).setVisible(hero.visible && rt.visible).setAlpha(0.22 * lamp0);
+    // The lantern glass in his hand, wherever this frame of his sheet has it (wanderer.ts); the old hero has none.
+    const [ax, ay] = (hero.frame.customData as { lamp?: [number, number] }).lamp ?? [hero.frame.width / 2, 29], tl = hero.getTopLeft();
+    const lx = Math.round(tl.x! + (hero.flipX ? hero.frame.width - ax : ax)), ly = Math.round(tl.y! + ay);
+    haze.setPosition(lx, ly).setVisible(hero.visible && rt.visible).setAlpha(0.22 * lamp0);
     // Eyes over the dark: each sprite's own eye pixels (its sheet's '*' frames), placed like it.
     for (const s of [hero, ...(enemies.getChildren() as Sprite[])]) {
       const f = `${s.frame.name.replace('!', '')}*`;
@@ -118,7 +110,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
     lit.forEach(([x, y, h], i) => rt.stamp(torch, undefined, x, y - h * 0.4, { tint: 0xd89850, alpha: flicker[i], blendMode: ADD }));
     rt.stamp(gate, undefined, 240, 52, { tint: 0x5a7a70, alpha: 0.8, blendMode: ADD });
     for (const l of lanterns()) if (l.lit) rt.stamp(order, undefined, l.x, l.y, { tint: 0xb08850, alpha: 0.6, blendMode: ADD });
-    rt.stamp(lamp, undefined, lx, hero.y + 4, { tint: 0xeef0a0, alpha: lamp0, blendMode: ADD });
+    rt.stamp(lamp, undefined, lx, ly, { tint: 0xeef0a0, alpha: lamp0, blendMode: ADD });
     rt.render();
   };
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, step);
