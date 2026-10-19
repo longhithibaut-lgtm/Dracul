@@ -103,7 +103,7 @@ void main() {
   vec2 w = floor(uView.xy + (sp + 0.5) / uZoom); // room pixel: the light works on those, whatever the zoom
   vec4 src = texture2D(uMainSampler, outTexCoord);
   vec3 alb = pow(src.rgb, vec3(2.2));
-  vec3 Lt = vec3(0.0), E = vec3(0.0);
+  vec3 Lt = vec3(0.0), E = vec3(0.0), T = vec3(0.0);
   vec2 uv = (w + 0.5) / uRoom;
   if (uv.x >= 0.0 && uv.x < 1.0 && uv.y >= 0.0 && uv.y < 1.0) {
     vec3 s = texture2D(uLight, vec2(uv.x, 1.0 - uv.y / 3.0)).rgb;
@@ -111,7 +111,8 @@ void main() {
     vec3 g = floor(texture2D(uLight, vec2(uv.x, 1.0 - (uv.y + 2.0) / 3.0)).rgb * 255.0 + 0.5);
     float ny = (g.b - 128.0) / 127.0;
     vec3 P = vec3(w.x, w.y + g.g - 64.0, g.r - 64.0), n = vec3(0.0, ny, sqrt(max(0.0, 1.0 - ny * ny)));
-    Lt = s * s * s * 4.0 * uTorch + AMB;
+    T = s * s * s * 4.0 * uTorch;
+    Lt = T + AMB;
     E = e * e;
     Lt += point(P, n, uNight.xyz, uNight.w, 140.0, 420.0, NIGHT);
     Lt += point(P, n, uLamp.xyz, uLamp.w, 46.0, 200.0, LAMP);
@@ -139,8 +140,10 @@ void main() {
   c += (hash(sq + uFrame) + hash(sq.yx + uFrame * 1.7) - 1.0) * 0.03 * (0.5 + lum);
   vec3 q = min(floor(clamp(c + bayer(w) * 0.04, 0.0, 1.0) * 255.0 / 4.0), 63.0);
   vec3 lit = texture2D(uLut, vec2((mod(q.b, 8.0) * 64.0 + q.r + 0.5) / 512.0, 1.0 - (floor(q.b / 8.0) * 64.0 + q.g + 0.5) / 512.0)).rgb;
-  // Drawn already lit (prelit(): alpha cleared): its own colour, only vignetted.
-  gl_FragColor = vec4(mix(src.rgb * pow(vig, 0.45), lit, src.a), 1.0);
+  // Drawn already lit (prelit(): alpha cleared): its own colour, only vignetted, warmed a little by the torches' baked
+  // light where he stands (it reads the floor behind him: a hint, not a relight).
+  vec3 warm = sqrt(min(T, vec3(1.0)));
+  gl_FragColor = vec4(mix(src.rgb * pow(vig, 0.45) * (1.0 + 0.8 * warm) + warm * vec3(0.05, 0.035, 0.02), lit, src.a), 1.0);
 }`;
 function vec(c: number[]) { return `vec3(${c.map((v) => v.toFixed(5)).join(', ')})`; }
 

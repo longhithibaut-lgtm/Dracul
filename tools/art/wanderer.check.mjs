@@ -95,7 +95,7 @@ for (const [key, label] of [['a', 'profil'], ['s', 'face'], ['w', 'dos']]) {
 }
 await save('walk', strips);
 
-// The action poses, with their effects, a row per view: two slashes (a combo's first two swings), two throws, the cast;
+// The action poses, with their effects, a row per view: the three slashes of a combo, two throws, the cast;
 // last, the bite on a weakened crossbowman. Wider crops, the slash arc reaches 30 px out.
 const wide = { w: 320, h: 224, dy: 8 };
 const act = (f, arg) => page.evaluate(f, arg);
@@ -104,12 +104,14 @@ for (const [a, label] of [[0, 'profil'], [Math.PI / 2, 'face'], [-Math.PI / 2, '
   tiles = [];
   await act(() => { const s = window.game.scene.getScene('room'); s.hero.body.reset(240, 160); s.glyphReadyAt = 0; });
   await page.waitForTimeout(400);
-  for (const [n, call, ms, gap] of [['coup 1', 'slash', 40, 120], ['coup 2', 'slash', 40, 500], ['tir 1', 'shoot', 30, 450], ['tir 2', 'shoot', 30, 450], ['glyphe', 'cast', 80, 400]]) {
+  for (const [n, call, ms, gap] of [['coup 1', 'slash', 40, 120], ['coup 2', 'slash', 40, 120], ['coup 3', 'slash', 50, 500], ['tir 1', 'shoot', 30, 450], ['tir 2', 'shoot', 30, 450], ['glyphe', 'cast', 80, 400]]) {
     await act(([a, call]) => {
       const s = window.game.scene.getScene('room'), h = s.hero;
       s[call](call === 'cast' ? { x: h.x + Math.cos(a) * 60, y: h.y + Math.sin(a) * 60 } : a);
     }, [a, call]);
-    await page.waitForTimeout(ms);
+    // The strike itself where the sheet has steps (the dark hero's claw<combo>-1, throw-1, cast-1), else after `ms`.
+    await page.waitForFunction(() => /-(claw\d-1|throw-1|cast-1|slash\d|throw\d|cast)$/.test(window.game.scene.getScene('room').hero.frame.name), null, { timeout: 600, polling: 'raf' }).catch(() => {});
+    if (!dark) await page.waitForTimeout(ms);
     await snap(`${label}, ${n}`, wide);
     await page.waitForTimeout(gap);
   }

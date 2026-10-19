@@ -596,7 +596,13 @@ function runs(tex: Phaser.Textures.Texture, view: string) {
 }
 
 // Per-hero animation memory: show() only gets the current look, so edges (slash start, dash end...) are kept here.
-type State = { shadow: Phaser.GameObjects.Image; was: HeroLook; swing: number; slashAt: number; hurtAt: number; dashAt: number; dashEnd: number };
+type State = {
+  shadow: Phaser.GameObjects.Image; was: HeroLook; swing: number; slashAt: number; hurtAt: number; dashAt: number; dashEnd: number;
+  throwAt: number; castAt: number; biteAt: number; walked: number; x: number; y: number;
+};
+// The steps of a struck claw (<view>-claw<combo>-<i>, ms after the press): the blow lands on the press and fx.ts sweeps
+// its arc over the first 60-80 ms, so the anticipation is a glimpse and the strike pose holds through the sweep.
+const CLAW = [0, 30, 90, 150];
 const states = new WeakMap<Phaser.Physics.Arcade.Sprite, State>();
 
 export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physics.Arcade.Sprite {
@@ -609,14 +615,17 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
   s.once(Phaser.GameObjects.Events.DESTROY, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow));
   const was = { moving: false, dashing: false, slashing: false, combo: 0, throwing: false, biting: false, casting: false, hurt: false, invulnerable: false, facing: 0 };
-  states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9 });
+  states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9, throwAt: -1e9, castAt: -1e9, biteAt: -1e9, walked: 0, x, y });
   return s;
 }
 
 export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   const st = states.get(s)!, now = s.scene.time.now;
-  if (look.slashing && !st.was.slashing) st.slashAt = now;
-  if (look.throwing && !st.was.throwing) st.swing ^= 1; // and the two throws
+  // A buffered slash starts the frame the last one ends: slashing never drops, the combo step changes.
+  if (look.slashing && (!st.was.slashing || look.combo !== st.was.combo)) st.slashAt = now;
+  if (look.throwing && !st.was.throwing) { st.swing ^= 1; st.throwAt = now; } // and the two throws
+  if (look.casting && !st.was.casting) st.castAt = now;
+  if (look.biting && !st.was.biting) st.biteAt = now;
   if (look.hurt && !st.was.hurt) st.hurtAt = now;
   if (look.dashing && !st.was.dashing) st.dashAt = now;
   if (!look.dashing && st.was.dashing) st.dashEnd = now;
@@ -624,16 +633,30 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
 
   const c = Math.cos(look.facing);
   const view = Math.abs(c) > 0.38 ? 'side' : Math.sin(look.facing) > 0 ? 'down' : 'up'; // diagonals use the side view
+  const has = (f: string) => s.texture.has(`${view}-${f}`);
+  // A sheet may break an action into steps, <action>-<i> from at[i] ms in (the grand hero's), else it has `or`.
+  const step = (name: string, since: number, at: number[], or: string) => (has(`${name}-0`) ? `${name}-${Math.max(0, at.findLastIndex((t) => now - since >= t))}` : or);
+  // A sheet that gives its stride (native px per run cycle, per view: the grand hero's) turns its run frames by the
+  // distance walked along the view, so the planted foot holds the floor at any speed.
+  const stride = (s.getData('stride') as Record<string, number> | undefined)?.[view];
+  st.walked += Math.abs(view === 'side' ? s.x - st.x : s.y - st.y);
+  st.x = s.x;
+  st.y = s.y;
   let frame = `${now % 3600 < 140 ? 'blink' : 'idle'}${Math.floor(now / 260) % 4}`;
   // The body turns to mist during the dash and re-forms just after (fx.ts ghosts the intact run pose instead).
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
-  else if (look.biting && view === 'side') frame = 'bite';
-  else if (look.casting) frame = 'cast';
+  else if (look.biting && (view === 'side' || has('bite-0'))) frame = step('bite', st.biteAt, [0, 70], 'bite'); // 70: T.bite.lungeMs
+  else if (look.casting) frame = step('cast', st.castAt, [0, 60, 140], 'cast');
+  else if (look.hurt && has('hurt-0')) frame = step('hurt', st.hurtAt, [0, 60], '');
+  else if (look.slashing && has(`claw${look.combo}-0`)) frame = step(`claw${look.combo}`, st.slashAt, CLAW, '');
   // The arm rakes the way the arc goes: fx.ts sweeps combo 1 back the other way; a sprite mirrored to face left mirrors it.
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${Number(look.combo === 1) ^ Number(view === 'side' && c < 0)}`;
-  else if (look.throwing) frame = `throw${st.swing}`;
+  else if (look.throwing) frame = step('throw', st.throwAt, [0, 35, 80], `throw${st.swing}`);
   else if (now - st.dashEnd < 70) frame = 'dash0';
-  else if (look.moving) { const n = runs(s.texture, view); frame = `run${Math.floor(now / (540 / n)) % n}`; } // one stride pair per 540ms in every view
+  else if (look.moving) { // else one stride pair per 540ms in every view
+    const n = runs(s.texture, view);
+    frame = `run${Math.floor(stride ? st.walked / (stride / n) : now / (540 / n)) % n}`;
+  }
   s.setFrame(`${view}-${frame}`).setFlipX(view === 'side' && c < 0);
 
   if (look.hurt) s.setTint(now - st.hurtAt < 60 ? 0xffffff : 0xe0284a).setTintMode(Phaser.TintModes.FILL);

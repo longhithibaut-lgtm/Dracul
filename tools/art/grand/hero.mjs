@@ -149,7 +149,7 @@ export function hero(pose = 'idle') {
   const RY = [[10, 8.6], [22, 7.6], [40, 6.0], [50, 5.4], [57, 5.3], [64, 4.9], [72, 4.9], [77, 4.7], [80, 4.3], [82.5, 3.4]];
   const tab = (T, z) => { if (z <= T[0][0]) return T[0][1]; for (let i = 1; i < T.length; i++) if (z <= T[i][0]) return lerp(T[i - 1][1], T[i][1], (z - T[i - 1][0]) / (T[i][0] - T[i - 1][0])); return T[T.length - 1][1]; };
   parts.push({
-    m: M.COAT, k: 1.4, pri: 0.3, box: [-22, -26, 0, 22, 22, 84], f: (x, y, z) => {
+    m: M.COAT, k: 1.4, pri: 0.3, box: [-24, -30, 0, 24, 34, 84], f: (x, y, z) => {
       const pz = P.pelvis[2], u = clamp((z - pz) / lean[2], -2, 1.2);
       z = z <= pz ? z * 51.5 / pz : 51.5 + (z - pz) * 31 / lean[2]; // standing-equivalent height
       const below = clamp((P.pelvis[2] - z) / 40);
@@ -194,7 +194,7 @@ export function hero(pose = 'idle') {
     } });
   }
   const sdf = partsSdf(parts);
-  return { sdf, mat: heroMat(P), bounds: [-26, -28, -1, 26, 30, 104], P, step: 0.6 };
+  return { sdf, mat: heroMat(P), bounds: [-34, -32, -1, 34, 50, 116], P, step: 0.6 };
 }
 
 // ---------- materials ----------
