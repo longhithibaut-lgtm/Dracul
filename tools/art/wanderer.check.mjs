@@ -36,7 +36,7 @@ await page.waitForTimeout(1600); // the title card is gone
 let tiles = [];
 // Each shot pauses the room scene, not the game loop: a slept loop wakes with a long frame the hero catches up in one
 // step, which the scarf would take for a lash.
-const snap = async (label, { w, h, dy } = { w: 200, h: 144, dy: 4 }) => {
+const snap = async (label, { w, h, dy } = dark ? { w: 280, h: 224, dy: 6 } : { w: 200, h: 144, dy: 4 }) => { // the dark hero stands 40 px tall
   // Not on a frame where an invulnerable hero blinks out (latched in a bite, he does).
   const { x, y } = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); if (s.hero.alpha > 0.5) { s.scene.pause(); const v = s.cameras.main.worldView; return { x: s.hero.x - v.x, y: s.hero.y - v.y }; } }).then((h) => h.jsonValue());
   await page.waitForTimeout(50); // a render of the paused frame

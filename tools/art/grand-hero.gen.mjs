@@ -33,9 +33,9 @@ function pose(name, k) {
     const up = k ? 0.6 : 0, u = (p) => add(p, [0, 0, up]);
     return { ...I, head: u(I.head), neck: u(I.neck), chest: add(I.chest, [0, 0.3 * k, up]), Sr: u(I.Sr), Sl: u(I.Sl), Er: u(I.Er), El: u(I.El), Wr: u(I.Wr), Wl: u(I.Wl), Kr_: u(I.Kr_), Kl_: u(I.Kl_), lanSway: k ? [0.6, -0.8] : [-0.3, 0.4] };
   }
-  if (name === 'slash') { // 0: the claws raked down and forward (the mockup's pose); 1: the backhand, swept up high
+  if (name === 'slash') { // 0: the claws raked down and forward (the mockup's pose); 1: the claw arm flung up high
     const S = POSES.slash;
-    return k ? { ...S, smear: false, Er: [-10, 22, 76], Wr: [-11, 33, 82], Kr_: [-11, 37, 84], head: add(S.head, [0, -2, 1.5]) } : { ...S, smear: false };
+    return k ? { ...S, smear: false, Er: [-9.5, 16, 82], Wr: [-9.5, 23, 95], Kr_: [-9.5, 25.5, 98.5], head: add(S.head, [0, -2, 1.5]) } : { ...S, smear: false };
   }
   // run k of RUN: a stalking stride, the body leaning in, the claw arm against the legs, the lantern lagging, the coat
   // flaring behind and swinging with the hips.
