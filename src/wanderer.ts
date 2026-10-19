@@ -14,7 +14,7 @@ const neck = new Map<string, [number, number]>(); // frame name -> where the tai
 const TONES = new Map<string, { V: number; v: number; u: number }>(); // per sheet: the scarf's three tones, set by bake()
 // The torture room's hero (« Crasse et faim », dark.ts) is another sheet on the same frame names: the mockup's vampire
 // (vampire.data.ts) with the lantern in his hand; it has no scarf tail, and its sheet also holds the eyes and the
-// lantern glass alone ('*' frames) to glow in the dark. Each of its frames carries the glass centre (customData.lamp).
+// lantern glass alone ('*' frames) to glow in the dark, and the violet shawl faintly (the mockup's lantern has no blue). Each of its frames carries the glass centre (customData.lamp).
 
 function bake(scene: Phaser.Scene, key: string, pal: Record<string, string>, views: typeof VIEWS) {
   const eyes = pal !== PALETTE;
@@ -39,6 +39,7 @@ function bake(scene: Phaser.Scene, key: string, pal: Record<string, string>, vie
       ctx.fillStyle = pal[c];
       ctx.fillRect(i * FW + x, y, 1, 1);
       if (eyes && (c === 'e' || c === 'G')) ctx.fillRect(i * FW + x, FH + y, 1, 1);
+      if (eyes && 'PVvu'.includes(c)) { ctx.globalAlpha = 0.55; ctx.fillRect(i * FW + x, FH + y, 1, 1); ctx.globalAlpha = 1; } // the shawl's faint glow
     }));
     if (eyes) tex.add(`${name}*`, 0, i * FW, FH, FW, FH);
     const dash = name.match(/^(\w+)-dash(\d)$/);

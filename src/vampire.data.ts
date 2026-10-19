@@ -4,7 +4,7 @@
 import type { Frame, View } from './wanderer.data.ts';
 
 export const PALETTE: Record<string, string> = { o: '#080706', H: '#17131a', R: '#4c4c58', W: '#cfc8b8', w: '#8f877a', e: '#ff2a2a',
-  P: '#b47ed6', V: '#8a4eaa', v: '#6a3a7f', u: '#3f204c', k: '#0f0d10', c: '#1d191d', d: '#2e282e', r: '#5c5e68', n: '#262028',
+  P: '#b47ed6', V: '#8a4eaa', v: '#6a3a7f', u: '#3f204c', k: '#0f0d10', c: '#171418', d: '#262127', r: '#4a4a54', n: '#262028',
   b: '#0c0a0a', B: '#3a3432', L: '#5a5038', l: '#34301f', G: '#f2f4c0', g: '#c8cc70' };
 
 const DOWN_IDLE0: Frame = { lamp: [24,29], rows: [

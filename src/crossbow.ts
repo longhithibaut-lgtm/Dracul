@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { BLOOD, bleed, blot, pool, run, stains } from './enemy.ts';
-import { skin } from './dark.ts';
+import { skin, boost } from './dark.ts';
 
 // How the Order's crossbowman looks: a human in a steel kettle hat and a white tabard with the gold cross of the
 // Dawn, carrying a crossbow. Gameplay owns the AI state; this file only shows it (and its bolts).
@@ -36,8 +36,8 @@ const PAL: Record<string, number> = {
 const FLASH: Record<string, number> = { n: 0x5a4468, L: PAL.b, b: PAL.B, m: PAL.s, k: PAL.K, v: PAL.w };
 // The torture room's skin (« Crasse et faim », dark.ts): the mockup's colours, a dull iron hat, a grimy tabard, a
 // tarnished gold, on the same frames; its sheet also holds the eyes alone ('*' frames) to glow in the dark.
-const DARK: Record<string, number> = { ...PAL, '0': 0x080706, '1': 0x1d1814, G: 0xd9b850, g: 0xa8841c, o: 0x6a4a14, W: 0xcfcbb8, w: 0xa8a290, v: 0x7a7462,
-  S: 0xaeafa9, s: 0x747670, m: 0x3e403c, K: 0xcfbba2, k: 0x9a8470, B: 0xb5915e, b: 0x8c663e, L: 0x4a3420, n: 0x4f493f, r: 0x8f1f16, R: 0x4a0a08 };
+const DARK: Record<string, number> = boost({ ...PAL, '0': 0x080706, '1': 0x1d1814, G: 0xd9b850, g: 0xa8841c, o: 0x6a4a14, W: 0xcfcbb8, w: 0xa8a290, v: 0x7a7462,
+  S: 0xaeafa9, s: 0x747670, m: 0x3e403c, K: 0xcfbba2, k: 0x9a8470, B: 0xb5915e, b: 0x8c663e, L: 0x4a3420, n: 0x4f493f, r: 0x8f1f16, R: 0x4a0a08 }, 1.6, '0x'); // lit like the mockup's: brighter than the room
 const DARK_FLASH: Record<string, number> = { n: 0x7a7262, L: DARK.b, b: DARK.B, m: DARK.s, k: DARK.K, v: DARK.w };
 
 // Pixel grids placed at (x, y) in the 40x40 frame, facing right; '.' is transparent.
@@ -438,7 +438,7 @@ function mark(g: Phaser.GameObjects.Graphics, x: number, bottom: number, t: numb
   rows.forEach((row, j) => [...row].forEach((c, i) => c !== '.' && g.fillStyle(MARK_PAL[c]).fillRect(x0 + i, y0 + j, 1, 1)));
 }
 
-// The telegraph: a dotted gold line along the bolt's path, marching toward the target, that turns solid and
+// The telegraph: a dotted gold line (red in the torture room) along the bolt's path, marching toward the target, that turns solid and
 // flickers white once the aim is locked. It ends where the bolt would stop.
 function aimLine(s: Sprite, t: number, facing: number, reach: number) {
   const g = s.getData('aimG') as Phaser.GameObjects.Graphics;
@@ -450,7 +450,7 @@ function aimLine(s: Sprite, t: number, facing: number, reach: number) {
   const x0 = s.body!.center.x, y0 = s.body!.center.y - BOLT_HEIGHT;
   const march = Math.floor(t / 60);
   const len = Math.min(reach, 12 + (reach - 12) * Math.min(1, t / 200)); // shoots out as it is raised
-  const color = locked && Math.floor(t / 50) % 2 ? PAL.Y : PAL.G;
+  const color = skin.dark ? (locked && Math.floor(t / 50) % 2 ? 0xff3a2a : 0xa0301c) : locked && Math.floor(t / 50) % 2 ? PAL.Y : PAL.G; // red in the dark, as in its mockup
   g.fillStyle(color, locked ? 1 : 0.6 + 0.4 * Math.min(1, t / (C.aimMs - C.lockMs)));
   for (let k = 14; k < len; k++) if (locked || (k - march) % 5 < 3) g.fillRect(Math.round(x0 + cx * k), Math.round(y0 + cy * k), 1, 1);
   if (len >= reach) {

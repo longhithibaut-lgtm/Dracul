@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { skin } from './dark.ts';
+import { skin, boost } from './dark.ts';
 
 // How enemies look. Gameplay owns the AI state; this file only shows it.
 export type EnemyState = 'chase' | 'windup' | 'lunge' | 'recover';
@@ -479,7 +479,7 @@ const GHOUL = [
   '..odfdo..odfdo.......',
   '.onnoo..onnno........',
 ];
-const GHOUL_PAL: Record<string, number> = { o: 0x0e0d07, f: 0xb4b49a, F: 0xd6d6c0, d: 0x7a7864, r: 0x4e4c40, m: 0x8f1f16, n: 0xe6e3d8, e: 0xf4fae0 };
+const GHOUL_PAL: Record<string, number> = { ...boost({ o: 0x080706, f: 0x6b675a, F: 0x9a9482, d: 0x423e36, r: 0x2c2924, m: 0x5a0c08, n: 0xb8ae90 }), e: 0xeef6d0 }; // the mockup's, lit 2.2x
 const GHOUL_FLASH: Record<string, number> = { f: GHOUL_PAL.F, d: GHOUL_PAL.f, r: GHOUL_PAL.d, F: GHOUL_PAL.n };
 // body: [dx, dy]; hind, fore: how far the feet swing (the hip stays put); shear: lean per row up from the feet.
 type Pose = { body?: [number, number]; hind?: number; fore?: number; shear?: number; flare?: true; flat?: true };
