@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { ellipseDist } from './logic.ts';
+import { skin } from './dark.ts';
 
 // Sacred lanterns of the Order: an iron lantern on a pale stone plinth, crowned and marked with the sun of the
 // Eternal Dawn, casting a pool of holy light that burns vampires. Gameplay owns hp and timing; this file shows them.
@@ -128,6 +129,11 @@ const AMBER = 0xff9830; // what the multiply layer lets through: red, some green
 function pool([m, a]: Lamp, x: number, y: number, s: number, bands: number, flick: number, boost = 1) {
   const rx = T.lantern.radius * s, ry = rx * T.lantern.squash;
   if (rx < 1) return;
+  if (skin.dark) { // the torture room: its shader casts the light (dark.ts); here only a dirty glaze and the burning edge
+    if (bands > 0) fill(a, x, y, rx, ry, 0x566236, 0.1 * boost);
+    rim(a, x, y, rx, ry, 0x929e58, 0.45);
+    return;
+  }
   if (bands > 0) { fill(m, x, y, rx, ry, AMBER, 0.75); fill(a, x, y, rx, ry, PAL.G, 0.32 * boost); }
   if (bands > 1) fill(a, x, y, rx * 0.64 + flick, ry * 0.64 + flick, PAL.Y, 0.2 * boost);
   if (bands > 2) fill(a, x, y, rx * 0.34 + flick, ry * 0.34 + flick, PAL.W, 0.28 * boost);
@@ -138,7 +144,7 @@ function pool([m, a]: Lamp, x: number, y: number, s: number, bands: number, flic
 /** The sun of the Order, as on the finial, painted on the floor in light. */
 function sign([m, a]: Lamp, x: number, y: number, k: number) {
   BASE.trim().split('\n').slice(0, 6).forEach((row, j) => [...row].forEach((c, i) => {
-    if (c !== '.') { px(m, x + i - 6, y + j - 3, AMBER); px(a, x + i - 6, y + j - 3, PAL[c], k); }
+    if (c !== '.') { if (!skin.dark) px(m, x + i - 6, y + j - 3, AMBER); px(a, x + i - 6, y + j - 3, PAL[c], k); }
   }));
 }
 
@@ -156,8 +162,8 @@ export function create(scene: Scene, obstacles: Phaser.Physics.Arcade.StaticGrou
       const k = t / ms, s = 0.55 + 0.45 * Phaser.Math.Easing.Cubic.Out(Math.min(1, k / 0.4)), turn = k * 4;
       const on = Math.floor(k * (k > 0.65 ? 18 : 8)) % 2 === 0;
       const dash = (dx: number, dy: number) => Math.floor(((Math.atan2(dy / sq, dx) + Math.PI) * R) / 4 + turn) % 2 === 0;
-      rim(g[0], x, y, R * s, R * sq * s, AMBER, 1, dash);
-      rim(g[1], x, y, R * s, R * sq * s, on ? PAL.Y : PAL.G, 0.9, dash);
+      if (!skin.dark) rim(g[0], x, y, R * s, R * sq * s, AMBER, 1, dash);
+      rim(g[1], x, y, R * s, R * sq * s, skin.dark ? (on ? 0xb8c070 : 0x566236) : on ? PAL.Y : PAL.G, 0.9, dash);
       sign(g, x, y, on ? 0.9 : 0.5);
       return;
     }

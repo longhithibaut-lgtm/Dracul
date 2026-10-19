@@ -14,13 +14,15 @@ type V3 = [number, number, number];
 // ---------- the room's plan (floor coordinates: x, y on the floor; z up) ----------
 
 export const PILLARS: [x: number, y: number, torch: number][] = [ // feet line; footprint 24x12; torch strength (0: burnt out)
-  [112, 110, 1], [368, 110, 1], [112, 340, 0.8], [368, 340, 0], [112, 540, 1], [368, 540, 0.55]];
-export const CAGES: [x: number, y: number][] = [[347, 210], [92, 300], [392, 470]]; // floor cages, feet line, footprint 24x12
+  [112, 110, 1], [368, 110, 1], [112, 340, 0.8], [368, 340, 0.6], [112, 540, 1], [368, 540, 0.8]];
+export const CAGES: [x: number, y: number][] = [[347, 210], [92, 300], [392, 470], [160, 610]]; // floor cages, feet line, footprint 24x12
 export const PITS = [{ x: 110, y: 146, w: 68, h: 34 }, { x: 296, y: 384, w: 64, h: 30 }]; // body pits (walkers go round)
 const HANGING: [x: number, y: number, z: number][] = [ // corpses on chains: over this floor point, feet this high
   [300, 102, 12], [146, 158, 22], [196, 286, 12], [328, 398, 22], [244, 430, 14], [150, 470, 12], [300, 516, 12], [420, 596, 14]];
 const HCAGES: [x: number, y: number][] = [[85, 126], [404, 268], [72, 600]]; // small cages hung high, over this floor point
 const DRAINS: [number, number][] = [[266, 168], [226, 372], [214, 520]];
+const HEAPS: [x: number, y: number, rx: number, ry: number, n: number][] = [[150, 412, 26, 9, 8], [306, 590, 22, 8, 7], [420, 150, 14, 6, 4]];
+const HOOKS: [x: number, y: number][] = [[262, 296], [130, 360], [372, 444], [92, 540], [262, 600], [210, 118]];
 const SCONCES: [x: number, lit: boolean][] = [[196, true], [332, false]];
 const GATE_LIGHT = { x: 240, y: WB - 10, z: 22 };
 
@@ -232,6 +234,55 @@ function gore() {
     [140, 600], [260, 470], [330, 300]]) skull(x, y);
 }
 
+/** A tangle of `n` flayed bodies (torsos, heads, limbs) in the box, each outlined against the others; `shade(y)` darkens
+ *  them (down a pit), `inside` clips them (a heap). */
+function bodies(x0: number, x1: number, y0: number, y1: number, n: number, R: () => number, z0: number, shade: (y: number) => number, inside = (_x: number, _y: number) => true) {
+  const bid = new Map<number, number>(), skin = [L('#a29680'), L('#b4a68c'), L('#867a66'), L('#968270')];
+  const pp = (x: number, y: number, c: V3, id: number, z: number) => {
+    x |= 0; y |= 0;
+    if (x < x0 || x > x1 || y < y0 || y > y1 || !inside(x, y)) return;
+    put(x, y, mul(c, shade(y)), y, z);
+    bid.set(y * W + x, id);
+  };
+  for (let k = 1; k <= n; k++) {
+    const cx = x0 + 6 + R() * (x1 - x0 - 12), cy = y0 + 3 + R() * (y1 - y0 - 5), a = R() * 6.28, rx = 4 + R() * 2.5, ry = 2 + R(), sk = skin[Math.floor(R() * 4)], z = z0 + k;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const limb = (ox: number, oy: number, la: number, len: number) => {
+      for (let t = 0; t < len; t += 0.5) { const x = ox + Math.cos(la) * t, y = oy + Math.sin(la) * t * 0.7; pp(x, y, mul(sk, 0.9), k, z); pp(x + 1, y, mul(sk, 0.7), k, z); }
+      if (h2(k, len | 0, 3) < 0.5) pp(ox + Math.cos(la) * len, oy + Math.sin(la) * len * 0.7, C.bone, k, z);
+    };
+    for (const s of [-1, 1]) for (const spread of [0.9, 1.2]) limb(cx + ca * rx * s * 0.8, cy + sa * rx * s * 0.5, a + (s > 0 ? 0 : Math.PI) + (R() * 2 - 1) * spread, 4 + R() * 5);
+    for (let y = -7; y <= 7; y++) for (let x = -8; x <= 8; x++) {
+      const u = (x * ca + y * sa) / rx, v = (-x * sa + y * ca) / ry;
+      if (u * u + v * v > 1) continue;
+      let c = mul(sk, v < -0.3 ? 1.15 : v > 0.4 ? 0.75 : 1);
+      if (h2((cx + x) | 0, (cy + y) | 0, k) < 0.18) c = mix(c, C.bloodF, 0.7); // flayed patches
+      if (Math.abs(u) < 0.5 && (x + y) & 1 && h2(k, 9, 9) < 0.4) c = mul(c, 0.7); // ribs
+      pp(cx + x, cy + y * 0.8, c, k, z);
+    }
+    const hx = cx + ca * (rx + 2), hy = cy + sa * (rx + 2) * 0.7;
+    for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (x * x + y * y <= 4) pp(hx + x, hy + y, (x === 0 || x === 1) && y === 0 ? mul(sk, 0.5) : mul(sk, 1.1), k, z);
+  }
+  for (const [i, id] of bid) if (bid.get(i - 1) !== id || bid.get(i - W) !== id) dark(i % W, (i / W) | 0, 0.35);
+}
+
+/** Bodies dumped on the floor, in a pool of their blood. */
+function heap(cx: number, cy: number, rx: number, ry: number, n: number, seed: number) {
+  stain(cx, cy + 2, rx + 6, ry + 4, C.blood, 0.8, seed, 0.7);
+  for (let y = -ry - 2; y <= ry + 2; y++) for (let x = -rx - 2; x <= rx + 2; x++) if ((x * x) / (rx * rx) + (y * y) / (ry * ry) <= 1.2) dark(cx + x, cy + y + 2, 0.6);
+  bodies(cx - rx, cx + rx, cy - ry, cy + ry, n, rng(seed), 1, () => 1, (x, y) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1);
+  skull(cx + rx - 4, cy + ry - 3);
+}
+
+/** An empty hook on a chain from the dark above the floor point (x, y), dripping. */
+function hook(x: number, y: number) {
+  const z = 30, b = y - z;
+  chain(x, b - 45, b, y, z, 0, 35);
+  for (const [dx, dy] of [[0, 1], [0, 2], [-1, 3], [1, 2]]) put(x + dx, b + dy, C.rust, y, z - dy, SOUTH, 0, 2);
+  for (let k = 0; k < 3; k++) put(x, b + 6 + k * 5, C.bloodF, y, z - 6 - k * 5, SOUTH, 0, 2);
+  stain(x, y, 4, 2, C.bloodF, 0.8, x * 7 + y, 0.4);
+}
+
 /** A body pit: its north face going down, a tangle of bodies at the bottom, an arm over the lip. */
 function pit(p: { x: number; y: number; w: number; h: number }, seed: number) {
   const x0 = p.x + 2, x1 = p.x + p.w - 2, y0 = p.y + 2, y1 = p.y + p.h - 2, R = rng(seed);
@@ -241,33 +292,7 @@ function pit(p: { x: number; y: number; w: number; h: number }, seed: number) {
       tint(x, y, C.bloodD, clamp(fbm(x / 4, y / 2, 3, 77) - 0.35) * 1.2);
     } else put(x, y, mul(C.mortar, 0.5), y, -30);
   }
-  const bid = new Map<number, number>(), skin = [L('#a29680'), L('#b4a68c'), L('#867a66'), L('#968270')];
-  const pp = (x: number, y: number, c: V3, id: number, z: number) => {
-    x |= 0; y |= 0;
-    if (x < x0 || x > x1 || y < y0 + 8 || y > y1) return;
-    put(x, y, mul(c, 0.55 + 0.45 * clamp((y - y0 - 8) / (y1 - y0 - 8))), y, z);
-    bid.set(y * W + x, id);
-  };
-  for (let n = 1; n <= 14; n++) {
-    const cx = x0 + 6 + R() * (x1 - x0 - 12), cy = y0 + 11 + R() * (y1 - y0 - 13), a = R() * 6.28, rx = 4 + R() * 2.5, ry = 2 + R(), sk = skin[Math.floor(R() * 4)], z = -26 + n;
-    const ca = Math.cos(a), sa = Math.sin(a);
-    const limb = (ox: number, oy: number, la: number, len: number) => {
-      for (let t = 0; t < len; t += 0.5) { const x = ox + Math.cos(la) * t, y = oy + Math.sin(la) * t * 0.7; pp(x, y, mul(sk, 0.9), n, z); pp(x + 1, y, mul(sk, 0.7), n, z); }
-      if (h2(n, len | 0, 3) < 0.5) pp(ox + Math.cos(la) * len, oy + Math.sin(la) * len * 0.7, C.bone, n, z);
-    };
-    for (const s of [-1, 1]) for (const spread of [0.9, 1.2]) limb(cx + ca * rx * s * 0.8, cy + sa * rx * s * 0.5, a + (s > 0 ? 0 : Math.PI) + (R() * 2 - 1) * spread, 4 + R() * 5);
-    for (let y = -7; y <= 7; y++) for (let x = -8; x <= 8; x++) {
-      const u = (x * ca + y * sa) / rx, v = (-x * sa + y * ca) / ry;
-      if (u * u + v * v > 1) continue;
-      let c = mul(sk, v < -0.3 ? 1.15 : v > 0.4 ? 0.75 : 1);
-      if (h2((cx + x) | 0, (cy + y) | 0, n) < 0.18) c = mix(c, C.bloodF, 0.7); // flayed patches
-      if (Math.abs(u) < 0.5 && (x + y) & 1 && h2(n, 9, 9) < 0.4) c = mul(c, 0.7); // ribs
-      pp(cx + x, cy + y * 0.8, c, n, z);
-    }
-    const hx = cx + ca * (rx + 2), hy = cy + sa * (rx + 2) * 0.7;
-    for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (x * x + y * y <= 4) pp(hx + x, hy + y, (x === 0 || x === 1) && y === 0 ? mul(sk, 0.5) : mul(sk, 1.1), n, z);
-  }
-  for (const [i, id] of bid) if (bid.get(i - 1) !== id || bid.get(i - W) !== id) dark(i % W, (i / W) | 0, 0.35);
+  bodies(x0, x1, y0 + 8, y1, 14, R, -26, (y) => 0.55 + 0.45 * clamp((y - y0 - 8) / (y1 - y0 - 8)));
   for (let n = 0; n < 5; n++) stain(x0 + 6 + R() * (x1 - x0 - 12), y0 + 12 + R() * (y1 - y0 - 14), 4, 2, C.bloodF, 0.8, 140 + n + seed, 0.4);
   skull(x0 + 6, y1 - 8); skull(x1 - 10, y1 - 4);
   for (let s = 0; s < 7; s++) put(x0 + 30 + (s >> 2), y1 - 2 - s, s < 2 ? C.bone : L('#6d6252'), y1, s, SOUTH); // an arm reaching up over the lip
@@ -526,6 +551,8 @@ export function paintRoom(gate: (x: number, y: number, grow: number) => boolean)
   gore();
   PITS.forEach((p, n) => pit(p, 5 + n));
   for (const [x, y] of DRAINS) drain(x, y);
+  for (const [x, y, rx, ry, n] of HEAPS) heap(x, y, rx, ry, n, x + y);
+  for (const [x, y] of HOOKS) hook(x, y);
   walls(gate);
   // What stands, back to front, each one's contact shadow under it first.
   const ao = (cx: number, cy: number, rx: number, ry: number, k: number) => {

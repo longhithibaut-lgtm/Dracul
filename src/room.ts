@@ -881,8 +881,8 @@ const LAYOUT: Record<LayoutId, Layout> = {
     sections: CROSS.map((c) => c - ARC.d), // into a cross gallery's walk
     decor() {},
   },
-  // La salle de torture (essai): the "Crasse et faim" trial, in the dark. Four pillars with torches, two floor cages,
-  // the body pit halfway up (walkers go round), corpses hung on chains, two drains; see torture.ts.
+  // La salle de torture (essai): the "Crasse et faim" trial, in the dark. Six pillars with torches, floor cages, two
+  // body pits (walkers go round), corpses hung on chains, hung cages, heaps of bodies, drains; see torture.ts.
   torture: {
     props: [
       ...Torture.PILLARS.map(([x, y]) => ({ kind: 'block' as const, x, y, w: 24, h: 12 })),
@@ -895,10 +895,10 @@ const LAYOUT: Record<LayoutId, Layout> = {
     heroStart: { x: CX, y: 566 },
     spawns: [{ x: CX, y: 470 }, { x: 120, y: 560 }, { x: 360, y: 560 },
       { x: CX, y: 280 }, { x: 80, y: 380 }, { x: 400, y: 400 },
-      { x: CX, y: 96 }, { x: 120, y: 200 }, { x: 360, y: 200 }],
+      { x: CX, y: 96 }, { x: 120, y: 200 }, { x: 400, y: 200 }],
     spots: [{ x: 176, y: 120 }, { x: 304, y: 120 }, { x: 176, y: 210 }, { x: 304, y: 210 },
-      { x: 100, y: 300 }, { x: 300, y: 290 }, { x: 120, y: 410 }, { x: 290, y: 420 },
-      { x: 170, y: 520 }, { x: 310, y: 520 }, { x: 160, y: 600 }, { x: 330, y: 600 }],
+      { x: 150, y: 300 }, { x: 300, y: 290 }, { x: 120, y: 410 }, { x: 260, y: 440 },
+      { x: 170, y: 520 }, { x: 310, y: 520 }, { x: 100, y: 600 }, { x: 330, y: 600 }],
     sections: PARTS,
     decor() {},
     dark: true,

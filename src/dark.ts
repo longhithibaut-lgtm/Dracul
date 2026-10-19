@@ -228,7 +228,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   const flameKey = grids(scene, 'dark-flame', FLAME, FLAME_PAL);
   if (!scene.anims.exists('dark-flame')) scene.anims.create({ key: 'dark-flame', frames: [0, 1, 2].map((n) => ({ key: flameKey, frame: String(n) })), frameRate: 8, repeat: -1 });
   for (const [x, y, k] of TORCHES) scene.add.sprite(x, y, flameKey).setOrigin(0.5, 1).setDepth(DEPTH + 5).setAlpha(0.6 + 0.4 * k).play({ key: 'dark-flame', startFrame: x % 3 });
-  const eyes = new Map<Sprite, Phaser.GameObjects.Image>();
+  const eyes = new Map<Sprite, Phaser.GameObjects.Image>(), shades = new Map<Sprite, Phaser.GameObjects.Image>();
   let tick = 0, lamp0 = 1, torch = 1;
 
   const step = (time: number) => {
@@ -243,7 +243,19 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
       if (!s.texture.has(fr)) { e.setVisible(false); continue; }
       e.setTexture(s.texture.key, fr).setPosition(s.x, s.y).setOrigin(s.originX, s.originY).setFlipX(s.flipX).setVisible(s.visible).setAlpha(s.alpha);
     }
+    // Each enemy's shadow from the lantern: its silhouette laid on the floor away from the glass, longer farther off.
+    for (const s of enemies.getChildren() as Sprite[]) {
+      let sh = shades.get(s);
+      if (!sh) shades.set(s, (sh = scene.add.image(0, 0, s.texture.key).setTintMode(Phaser.TintModes.FILL).setTint(0)));
+      const dx = s.x - lx, dy = s.body!.bottom - feet, d = Math.hypot(dx, dy);
+      sh.setVisible(s.visible && d > 6 && d < 150);
+      if (!sh.visible) continue;
+      sh.setTexture(s.texture.key, s.frame.name).setPosition(s.x, s.body!.bottom).setOrigin(s.originX, (s.displayOriginY + s.body!.bottom - s.y) / s.frame.height)
+        .setFlipX(s.flipX).setRotation(Math.atan2(dy, dx) + Math.PI / 2).setScale(1, Math.min(3.2, Math.max(0.8, d / 22)))
+        .setAlpha(0.85 * Math.min(1, 2 - d / 75) * s.alpha).setDepth(s.depth - 0.01);
+    }
     for (const [s, e] of eyes) if (!s.active) { e.destroy(); eyes.delete(s); }
+    for (const [s, e] of shades) if (!s.active) { e.destroy(); shades.delete(s); }
     if (++tick % 6 === 0) { // ten times a second: the torches gutter, the lamp breathes, the grain moves
       torch = Math.random() < 0.12 ? 0.8 + Math.random() * 0.1 : 0.94 + Math.random() * 0.06;
       lamp0 = 0.9 + 0.08 * Math.sin(time / 400) + Math.random() * 0.04;

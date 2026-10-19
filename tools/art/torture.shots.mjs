@@ -1,6 +1,6 @@
 // The torture room trial (« Crasse et faim », src/torture.ts, src/dark.ts) in headless Chromium, on the phone held
 // sideways and upright (touch emulation): mid-fight (ghouls and a crossbowman), three frames of the hero walking, then
-// the frame rate with the light layer on and off. Writes <out>/<shape>-<what>.png.
+// the frame rate with the light shader (dark.ts) on and off. Writes <out>/<shape>-<what>.png.
 // Usage: node tools/art/torture.shots.mjs [--out=shots/torture --port=5208]   (exit code 1 on a page error)
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -54,7 +54,7 @@ for (const [shape, opts] of Object.entries(SHAPES)) {
     await shot(`walk${k}`);
   }
   await page.keyboard.up('a');
-  // Frame rate, light layer on then off (2 s each, after a settle).
+  // Frame rate, light shader on then off (2 s each, after a settle).
   const fps = async () => {
     await page.waitForTimeout(800);
     return run(() => new Promise((done) => {
@@ -64,7 +64,7 @@ for (const [shape, opts] of Object.entries(SHAPES)) {
     }));
   };
   const on = await fps();
-  await run(() => { const s = window.game.scene.getScene('room'); for (const n of ['dark-light', 'dark-grain']) s.children.getByName(n).setVisible(false); });
+  await run(() => { for (const f of window.game.scene.getScene('room').cameras.main.filters.internal.list) f.setActive(false); }); // the light shader off
   const off = await fps();
   await shot('unlit');
   console.log(`${shape}: view ${await run(() => `${window.game.scale.width}x${window.game.scale.height}`)}, ${on} fps lit, ${off} fps unlit`);
