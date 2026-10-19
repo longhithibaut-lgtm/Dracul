@@ -60,6 +60,16 @@ Une chapelle oubliée sous la nécropole, avec le cercueil du héros. Chaque che
 quelques répliques courtes, une offrande de sang récolté pendant les fuites, et une amélioration permanente propre
 à sa maison.
 
+Plan validé avec l'utilisateur (maquettes dans `docs/maquettes/refuge-*.png`) :
+- **La crypte aux cercueils**, où le héros se reforme : son cercueil plein de cendres dans une abside d'ossuaire, et
+  les quatre cercueils des chefs sur des catafalques, chacun au signe de sa maison, fermés et vides tant que le chef
+  n'est pas libéré. De vieux cercueils anonymes dans les niches.
+- **La grande salle**, au cœur : le bassin où l'on offre le sang récolté, des rigoles qui y convergent depuis chaque
+  porte, et l'escalier qui descend vers les fuites.
+- **Une salle par maison**, de tailles différentes, ouvrant sur la grande salle : l'échoppe exiguë de Vesna, le salon
+  embrumé de Séverin (miroir fêlé, mannequin d'escrime), l'arène de Magda (la plus grande), la salle des cartes de
+  Lucian (étroite et haute, des chauves-souris).
+
 ## Les ennemis
 
 - **Les humains de l'Ordre** : arbalétriers, prêtres qui posent des zones de lumière sacrée, chiens de chasse,

@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+import fs from 'fs';
+const dir = new URL('.', import.meta.url).pathname;
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+page.on('console', m => console.log('page:', m.text()));
+page.on('pageerror', e => console.log('ERR:', e.message));
+await page.setContent('<html><body style="margin:0;background:#000"><canvas id="c" width="1920" height="1080"></canvas></body></html>');
+await page.addScriptTag({ path: dir + 'draw.js' });
+const url = await page.evaluate(() => window.__done);
+fs.writeFileSync(dir + (process.argv[2] || 'salle-a.png'), Buffer.from(url.split(',')[1], 'base64'));
+await browser.close();
