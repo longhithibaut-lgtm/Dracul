@@ -286,7 +286,7 @@ export class RoomScene extends Phaser.Scene {
     }
     if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      this.hero.body!.velocity.normalize().scale(T.hero.speed * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
+      this.hero.body!.velocity.normalize().scale((Dark.skin.dark ? T.grand.speed : T.hero.speed) * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
     }
 
     if (this.queued && (time > this.queued.until || this.queued.act())) this.queued = undefined;

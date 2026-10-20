@@ -95,7 +95,7 @@ for (const [key, label] of [['a', 'profil'], ['s', 'face'], ['w', 'dos']]) {
 }
 await save('walk', strips);
 
-// The action poses, with their effects, a row per view: two slashes (a combo's first two swings), two throws, the cast;
+// The action poses, with their effects, a row per view: the three slashes of a combo, two throws, the cast;
 // last, the bite on a weakened crossbowman. Wider crops, the slash arc reaches 30 px out.
 const wide = { w: 320, h: 224, dy: 8 };
 const act = (f, arg) => page.evaluate(f, arg);
@@ -104,15 +104,23 @@ for (const [a, label] of [[0, 'profil'], [Math.PI / 2, 'face'], [-Math.PI / 2, '
   tiles = [];
   await act(() => { const s = window.game.scene.getScene('room'); s.hero.body.reset(240, 160); s.glyphReadyAt = 0; });
   await page.waitForTimeout(400);
-  for (const [n, call, ms, gap] of [['coup 1', 'slash', 40, 120], ['coup 2', 'slash', 40, 500], ['tir 1', 'shoot', 30, 450], ['tir 2', 'shoot', 30, 450], ['glyphe', 'cast', 80, 400]]) {
+  // The dark room runs at a few fps headless, which would skip his actions' 30-60 ms steps: there the game is stepped
+  // by hand at 60 fps while they are shot, each on its strike (claw<combo>-1, throw-1, cast-1).
+  const tick = (ms, re) => act(([ms, re]) => {
+    const g = window.game, h = g.scene.getScene('room').hero;
+    for (let t = 0; t < ms && !(re && new RegExp(re).test(h.frame.name)); t += 1000 / 60) g.step((g.loop.time += 1000 / 60), 1000 / 60);
+  }, [ms, re]);
+  if (dark) await act(() => window.game.loop.sleep());
+  for (const [n, call, ms, gap] of [['coup 1', 'slash', 40, 120], ['coup 2', 'slash', 40, 120], ['coup 3', 'slash', 50, 500], ['tir 1', 'shoot', 30, 450], ['tir 2', 'shoot', 30, 450], ['glyphe', 'cast', 80, 400]]) {
     await act(([a, call]) => {
       const s = window.game.scene.getScene('room'), h = s.hero;
       s[call](call === 'cast' ? { x: h.x + Math.cos(a) * 60, y: h.y + Math.sin(a) * 60 } : a);
     }, [a, call]);
-    await page.waitForTimeout(ms);
+    await (dark ? tick(400, '-(claw\\d|throw|cast)-1$') : page.waitForTimeout(ms));
     await snap(`${label}, ${n}`, wide);
-    await page.waitForTimeout(gap);
+    await (dark ? tick(Math.max(gap, 250)) : page.waitForTimeout(gap)); // stepped, the next claw waits out the cooldown
   }
+  if (dark) await act(() => window.game.loop.wake());
   rows.push(tiles);
 }
 tiles = [];

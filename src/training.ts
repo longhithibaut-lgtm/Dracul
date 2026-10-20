@@ -13,6 +13,7 @@ const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrie
 // [label, group, key, min, max, step]
 const KNOBS = [
   ['Vitesse de marche', 'hero', 'speed', 50, 160, 5],
+  ['Vitesse de marche (salle de torture)', 'grand', 'speed', 30, 160, 2],
   ['Invulnérabilité après un coup (ms)', 'hero', 'hurtInvulnMs', 200, 1500, 50],
   ['Mémoire des touches pressées trop tôt (ms)', 'hero', 'bufferMs', 0, 400, 10],
   ['Brume : vitesse', 'dash', 'speed', 200, 500, 10],
