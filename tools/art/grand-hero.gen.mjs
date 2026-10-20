@@ -137,10 +137,10 @@ function pose(name, k, view) {
   return P;
 }
 
-// The dash's dissolve, on the rendered cell: the body breaks into the game's moon mist from the feet and its trailing
+// The dash's dissolve, on the rendered cell: the body breaks into clotted blood vapour from the feet and its trailing
 // side (tx, ty: the trail's way on the sheet), in ragged 2x2 clumps, and wisps stream off the trailing edge.
 function mist(px, amount, tx, ty) {
-  const light = [0x8f, 0xf0, 0xdc], dark = [0x3f, 0xa7, 0xa3], far = [0x1f, 0x4a, 0x5a]; // fx.ts moon mist
+  const light = [0x5a, 0x0a, 0x10], dark = [0x3e, 0x06, 0x0b], far = [0x26, 0x04, 0x07]; // clotted blood vapour (fx-blood.ts, mockup « A. Sang »)
   let x0 = FW, x1 = 0, y0 = FH, y1 = 0;
   for (let i = 0; i < FW * FH; i++) if (px[i * 4 + 3]) { const x = i % FW, y = (i / FW) | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, hw = (x1 - x0) / 2 + 1, hh = (y1 - y0) / 2 + 1, at = (x, y) => (y * FW + x) * 4;

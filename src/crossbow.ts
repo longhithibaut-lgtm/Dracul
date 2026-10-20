@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { BLOOD, bleed, blot, pool, run, stains } from './enemy.ts';
-import { skin, boost } from './dark.ts';
+import { skin, boost, bloodied } from './dark.ts';
 
 // How the Order's crossbowman looks: a human in a steel kettle hat and a white tabard with the gold cross of the
 // Dawn, carrying a crossbow. Gameplay owns the AI state; this file only shows it (and its bolts).
@@ -38,7 +38,7 @@ const FLASH: Record<string, number> = { n: 0x5a4468, L: PAL.b, b: PAL.B, m: PAL.
 // tarnished gold, on the same frames; its sheet also holds the eyes alone ('*' frames) to glow in the dark.
 const DARK: Record<string, number> = boost({ ...PAL, '0': 0x080706, '1': 0x1d1814, G: 0xd9b850, g: 0xa8841c, o: 0x6a4a14, W: 0xcfcbb8, w: 0xa8a290, v: 0x7a7462,
   S: 0xaeafa9, s: 0x747670, m: 0x3e403c, K: 0xcfbba2, k: 0x9a8470, B: 0xb5915e, b: 0x8c663e, L: 0x4a3420, n: 0x4f493f, r: 0x8f1f16, R: 0x4a0a08 }, 1.6, '0x'); // lit like the mockup's: brighter than the room
-const DARK_FLASH: Record<string, number> = { n: 0x7a7262, L: DARK.b, b: DARK.B, m: DARK.s, k: DARK.K, v: DARK.w };
+const DARK_FLASH = bloodied(DARK); // struck in the dark: dyed with blood, no white rim (fx-blood.ts opens the wound)
 
 // Pixel grids placed at (x, y) in the 40x40 frame, facing right; '.' is transparent.
 const PARTS: Record<string, [x: number, y: number, rows: string]> = {
@@ -261,7 +261,7 @@ function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch:
 }
 
 // Bakes every frame twice: as drawn with a 1px near-black outline, and as a white-rimmed hit flash ('!'); in the dark
-// skin, a third time as the eyes alone ('*').
+// skin, its rim stays dark, and a third time as the eyes alone ('*').
 function bake(scene: Scene, key: string, PAL: Record<string, number>, FLASH: Record<string, number>) {
   const names = [...Object.keys(FRAMES), ...Object.keys(SUNK)], eyes = key !== 'crossbow';
   const tex = scene.textures.createCanvas(key, SIZE * names.length, SIZE * (eyes ? 3 : 2))!;
@@ -284,7 +284,7 @@ function bake(scene: Scene, key: string, PAL: Record<string, number>, FLASH: Rec
           put(x0 + x, SIZE + y, FLASH[ch] ?? PAL[ch]);
         } else if (body(x - 1, y) || body(x + 1, y) || body(x, y - 1) || body(x, y + 1)) {
           put(x0 + x, y, PAL[0]);
-          put(x0 + x, SIZE + y, PAL.Y);
+          put(x0 + x, SIZE + y, eyes ? PAL[0] : PAL.Y);
         } else if (ch === 'x') {
           put(x0 + x, y, PAL.x, 140);
           put(x0 + x, SIZE + y, PAL.x, 140);
@@ -398,8 +398,8 @@ export function show(s: Sprite, state: CrossbowState, facing: number, flash: boo
   else f = s.body!.velocity.lengthSq() > 25 ? 'walk' + (Math.floor((now + s.getData('phase')) / 130) % 4) : 'idle';
   if (Math.sin(facing) < -0.5 && FRAMES[f + 'b']) f += 'b';
   if (weak) f += '~';
-  // It appears in a flash of the Dawn's light, then the white rim pops on each hit.
-  s.setFrame(age < 120 || (flash && hurt > 0 && hurt < 50) ? f + '!' : f);
+  // It appears in a flash of the Dawn's light (not in the dark, where '!' is blood), then the white rim pops on each hit.
+  s.setFrame((age < 120 && !skin.dark) || (flash && hurt > 0 && hurt < 50) ? f + '!' : f);
   aimLine(s, state === 'aim' && hurt >= 220 ? t : -1, facing, reach);
   // Over the hunched head; on its knees, lower and on a slower, failing beat.
   const down = state === 'kneel';

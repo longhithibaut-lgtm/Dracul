@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
+import { skin } from './dark.ts';
+import * as Blood from './fx-blood.ts';
 
 // Combat feedback: slashes, impacts, dash trail, being hurt. Gameplay only says what happened and where.
 // Everything sits on the native pixel grid: 1x1 rects redrawn every frame, or unrotated 1 px crops of the hero's
 // frame for the afterimages. Shapes stay crisp at x4 at any angle: no rotated sprites, no smooth lines.
+// The torture room (dark.ts skin.dark) has its own, in blood: fx-blood.ts.
 
 // Palette "Nuit de sang" (docs/art.md), plus DEEP: a deep magenta bridging the pink of a swing to its purple tail.
 const HOT = 0xffe4ee, GLOW = 0xff4f8b, DEEP = 0x8f195e, RED = 0xe0284a, BLOOD = 0xa3122f, DRIED = 0x5c0a1c;
@@ -106,6 +109,7 @@ export function slash(scene: Phaser.Scene, x: number, y: number, angle: number, 
   const heavy = combo === 2, mist = combo === 3;
   const dir = combo === 1 ? -1 : 1;
   swing = { heavy, mist, dir, landed: false };
+  if (skin.dark) return Blood.slash(scene, x, y, angle, combo);
   const sw = swing;
   // The swing starts behind the body and follows through a little past the aim, so it wraps around the hero. Its
   // radius follows the reach (the ground ring is a little inside it).
@@ -138,6 +142,7 @@ export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
   // Small, sharp shake, mostly along the blow; the finisher's is the hardest of the claws.
   const cam = scene.cameras.main, kick = heavy ? 4 : mist ? 3 : 2;
   cam.shake(heavy ? 150 : mist ? 90 : 70, new Phaser.Math.Vector2((0.6 + kick * Math.abs(cos)) / cam.width, (0.6 + kick * Math.abs(sin)) / cam.height));
+  if (skin.dark) return Blood.hit(scene, x, y, angle, heavy);
 
   const ix = Math.round(x - cos * 5), iy = Math.round(y - sin * 5); // the blade meets the near side of the body
   const floorY = Math.round(y) + 9, z0 = Math.max(3, floorY - iy); // droplets start at the wound, above the feet
@@ -201,6 +206,7 @@ export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
 }
 
 export function dash(scene: Phaser.Scene, from: { x: number; y: number }, angle: number) {
+  if (skin.dark) return Blood.dash(scene, from, angle);
   // Gameplay passes the hero itself, so the trail can follow it for the whole dash.
   const hero = from as Partial<Phaser.GameObjects.Sprite> & P;
   const sprite = hero.frame ? (hero as Phaser.GameObjects.Sprite) : undefined;
@@ -289,6 +295,7 @@ const SHOT_HEIGHT = 11;
  * fly off the fingers with it.
  */
 export function shard(scene: Phaser.Scene, b: P & { active: boolean }, angle: number, ms: number) {
+  if (skin.dark) return Blood.shard(scene, b, angle, ms);
   const c = Math.cos(angle), s = Math.sin(angle), x0 = b.x, y0 = b.y - SHOT_HEIGHT;
   const path: (P & { t: number })[] = [];
   const flung = Array.from({ length: 3 }, () => ({ a: angle + rnd(-0.4, 0.4), v: rnd(60, 130) }));
@@ -317,6 +324,7 @@ export function shard(scene: Phaser.Scene, b: P & { active: boolean }, angle: nu
 /** A shard bursts where it struck: a small star and drops spattering back that dot the floor a moment; `big` off an
  *  enemy, smaller on a wall or a prop. (x, y) is its floor point. */
 export function splat(scene: Phaser.Scene, x: number, y: number, angle: number, big: boolean) {
+  if (skin.dark) return Blood.splat(scene, x, y, angle, big);
   const cx = Math.round(x - Math.cos(angle) * 2), cy = Math.round(y - Math.sin(angle) * 2), z0 = SHOT_HEIGHT;
   const drops = Array.from({ length: big ? 7 : 4 }, () => {
     const a = angle + Math.PI + rnd(-1.4, 1.4), v = rnd(20, big ? 75 : 50), vz = rnd(10, 60);
@@ -345,6 +353,7 @@ export function splat(scene: Phaser.Scene, x: number, y: number, angle: number, 
 
 /** A bite at nothing: two rows of bone-white fangs clamp shut in front of the face, a small glint where they meet. */
 export function snap(scene: Phaser.Scene, x: number, y: number, angle: number) {
+  if (skin.dark) return Blood.snap(scene, x, y, angle);
   const cx = Math.round(x + Math.cos(angle) * 11), cy = Math.round(y - 5 + Math.sin(angle) * 7);
   animate(scene, ABOVE, 170, (g, t) => {
     const gap = Math.max(0, Math.round(4 * (1 - t / 60))), c = t < 60 ? HOT : MIST[0];
@@ -361,6 +370,7 @@ export function snap(scene: Phaser.Scene, x: number, y: number, angle: number) {
 export function bite(scene: Phaser.Scene, x: number, y: number) {
   const cam = scene.cameras.main;
   cam.shake(90, new Phaser.Math.Vector2(2 / cam.width, 1.5 / cam.height));
+  if (skin.dark) return Blood.bite(scene, x, y);
   const drops = Array.from({ length: 8 }, () => ({ vx: rnd(-40, 40), vy: rnd(-90, -30), c: Math.random() < 0.3 ? GLOW : RED }));
   animate(scene, ABOVE, 300, (g, t) => {
     if (t < 100) {
@@ -378,6 +388,7 @@ export function bite(scene: Phaser.Scene, x: number, y: number) {
  * bent on it, so they vanish into him.
  */
 export function drain(scene: Phaser.Scene, from: P, mouth: P, ms: number) {
+  if (skin.dark) return Blood.drain(scene, from, mouth, ms);
   const pull = ms / 3;
   const motes = Array.from({ length: 27 }, (_, i) => ({ t0: (i % 3) * pull + rnd(0, pull * 0.4), x: from.x + rnd(-7, 7), y: from.y + rnd(-6, 9), life: rnd(130, 190) }));
   animate(scene, from.y + 1, ms, (g, t) => {
@@ -393,6 +404,7 @@ export function drain(scene: Phaser.Scene, from: P, mouth: P, ms: number) {
 /** Blood regained: the hero flushes rose (never white then red, which is being hurt), a ring spreads at his feet and
  *  warm motes rise off him. */
 export function heal(scene: Phaser.Scene, hero: Phaser.GameObjects.Sprite) {
+  if (skin.dark) return Blood.heal(scene, hero);
   const flush = scene.add.image(hero.x, hero.y, hero.texture, hero.frame.name).setScale(hero.scaleX).setTint(GLOW).setTintMode(Phaser.TintModes.FILL);
   const motes = Array.from({ length: 14 }, () => ({ x: rnd(-7, 7), y: rnd(-9, 7), rise: rnd(10, 24), end: rnd(260, 520), c: Math.random() < 0.4 ? HOT : GLOW }));
   animate(scene, FLOOR, 360, (g, t) => {

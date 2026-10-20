@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { ellipseDist } from './logic.ts';
+import { skin, SANG } from './dark.ts';
 
 // Le Glyphe: the blood sigil the Sans-Maison casts on the floor. A hard rim (bright outside, dark inside), a band of
 // angular runes, a ring, the fang triangle and the bat of his banner, all in blood: never the Order's gold, the moon
@@ -12,8 +13,12 @@ type G = Phaser.GameObjects.Graphics;
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type P = { x: number; y: number };
 
-// Palette "Nuit de sang" (docs/art.md): blood, its glows and the night.
-const HOT = 0xffe4ee, GLOW = 0xff4f8b, RED = 0xe0284a, BLOOD = 0xa3122f, DRIED = 0x5c0a1c, NIGHT = 0x1c1029;
+// Palette "Nuit de sang" (docs/art.md): blood, its glows and the night. The trial room's (mockup « A. Sang »,
+// fx-blood.ts) is seeping blood, wet where it is being drawn, glowing nowhere; it is drawn at its hero's resolution, Z
+// fine px per room px (dark.ts skin.zoom), and bleeds runnels out of its rim. Both set by cast(): one glyph at a time.
+const NIGHT_PAL = { HOT: 0xffe4ee, GLOW: 0xff4f8b, RED: 0xe0284a, BLOOD: 0xa3122f, DRIED: 0x5c0a1c, NIGHT: 0x1c1029 };
+const SANG_PAL = { HOT: SANG[6], GLOW: SANG[5], RED: SANG[4], BLOOD: SANG[3], DRIED: SANG[2], NIGHT: SANG[0] };
+let { HOT, GLOW, RED, BLOOD, DRIED, NIGHT } = NIGHT_PAL, Z = 1;
 const FLOOR = 1.7; // over blood stains and holy light, under characters
 const FADE_MS = 300;
 const SNAP_MS = 70; // chains shoot out to a newly bound enemy
@@ -68,9 +73,11 @@ function line(a: P, b: P, put: (x: number, y: number, i: number) => void, from =
 /** Starts drawing a glyph centred on floor point (x, y), cast by a hero standing at `hero` (his feet). */
 export function cast(scene: Phaser.Scene, x: number, y: number, hero: P): Glyph {
   const E = Phaser.Scenes.Events;
+  ({ HOT, GLOW, RED, BLOOD, DRIED, NIGHT } = skin.dark ? SANG_PAL : NIGHT_PAL);
+  Z = skin.zoom;
   const gl: Glyph = {
     x: Math.round(x), y: Math.round(y), at: scene.time.now, from: Math.atan2((hero.y - y) / SQ, hero.x - x), caughtAt: -1,
-    g: scene.add.graphics().setDepth(FLOOR), chains: new Map(), shaken: [],
+    g: scene.add.graphics().setDepth(FLOOR).setScale(1 / Z), chains: new Map(), shaken: [],
     end: () => {
       undo();
       scene.events.off(E.PRE_UPDATE, undo).off(E.SHUTDOWN, gl.end);
@@ -105,7 +112,7 @@ export function show(gl: Glyph, now: number, held: Sprite[]): boolean {
 }
 
 function sigil(gl: Glyph, now: number) {
-  const g = gl.g.clear(), G = T.glyph, R = G.radius, ri = ring(R), rm = R - 5.7; // runes between the 2 px rim and the ring
+  const g = gl.g.clear(), G = T.glyph, R = G.radius * Z, ri = ring(R), rm = R - 5.7 * Z, ox = gl.x * Z, oy = gl.y * Z; // runes between the 2 px rim and the ring
   const age = now - gl.at, arm = Math.min(1, age / G.armMs), t = age - G.armMs, fade = Math.max(0, (t - G.holdMs) / FADE_MS);
   const caught = gl.caughtAt >= 0 ? now - gl.caughtAt : -1;
   // A flare when it arms and when it first catches; a beat on the rim while it holds; a blink before it lets go.
@@ -119,16 +126,21 @@ function sigil(gl: Glyph, now: number) {
     return reach <= 0 || d > reach + 0.01 ? -1 : arm >= 1 ? 9 : reach - d;
   };
   const tone = (c: number, behind: number) => (fade ? (fade < 0.45 ? BLOOD : DRIED) : flare || behind < 0.4 ? HOT : c);
-  const put = (x: number, y: number, c: number) => fade * 1.4 > hash(x + 64, y + 64) || g.fillStyle(c).fillRect(gl.x + x, gl.y + y, 1, 1);
+  const put = (x: number, y: number, c: number) => fade * 1.4 > hash(x + 64, y + 64) ||
+    g.fillStyle(Z > 1 && c === RED ? [BLOOD, RED, RED, GLOW][Math.floor(hash(x + 7, y + 3) * 4)] : c).fillRect(ox + x, oy + y, 1, 1); // blood pools unevenly
 
   // The floor under it darkens, soaked.
   g.fillStyle(NIGHT, 0.55 * Math.min(1, arm * 2) * (1 - fade));
   for (let y = -Math.floor(R * SQ); y <= R * SQ; y++) {
     const w = Math.floor(Math.sqrt(R * R - (y / SQ) ** 2));
-    g.fillRect(gl.x - w, gl.y + y, 2 * w + 1, 1);
+    g.fillRect(ox - w, oy + y, 2 * w + 1, 1);
+  }
+  if (Z > 1) for (let i = 0; i < 16; i++) { // it seeps: runnels creep out of the rim as it arms, and on while it holds
+    const a = hash(i, 5) * 7, n = Math.floor((2 + 5 * hash(i, 9)) * Math.min(1, arm * 1.4) + Math.min(3, Math.max(0, t) / 500));
+    for (let j = 0; j < n; j++) put(Math.round(Math.cos(a) * (R + j)), Math.round(Math.sin(a) * (R * SQ + j * 0.6)), j < n - 1 ? DRIED : BLOOD);
   }
   // Hard 2 px rim with a dark lining, the ring; and the pulse thrown out when it first catches.
-  const pulse = caught >= 0 && caught < 240 ? R + 1 + 5 * Phaser.Math.Easing.Cubic.Out(caught / 240) : 0;
+  const pulse = caught >= 0 && caught < 240 ? R + Z + 5 * Z * Phaser.Math.Easing.Cubic.Out(caught / 240) : 0;
   const W = Math.ceil(Math.max(R, pulse)) + 1, H = Math.ceil(Math.max(R, pulse) * SQ) + 1;
   for (let y = -H; y <= H; y++) for (let x = -W; x <= W; x++) {
     const a = Math.atan2(y / SQ, x);
@@ -148,15 +160,15 @@ function sigil(gl: Glyph, now: number) {
       p === 'X' && put(cx - 1 + i, cy + j, tone(k === lit ? GLOW : RED, b))));
   }
   // The fang triangle, drawn from each point to the next, and its points.
-  const pts = POINTS.map((a) => onGround(gl, a, ri)), k = Phaser.Math.Clamp((arm - 0.5) / 0.35, 0, 1);
+  const pts = POINTS.map((a) => onGround({ x: ox, y: oy }, a, ri)), k = Phaser.Math.Clamp((arm - 0.5) / 0.35, 0, 1);
   pts.forEach((p, i) => {
     const q = pts[(i + 1) % 3], n = Math.max(Math.abs(q.x - p.x), Math.abs(q.y - p.y)) + 1;
-    line(p, q, (x, y, j) => j <= k * n && put(x - gl.x, y - gl.y, tone(RED, arm < 1 && j > k * n - 4 ? 0 : 9)));
+    line(p, q, (x, y, j) => j <= k * n && put(x - ox, y - oy, tone(RED, arm < 1 && j > k * n - 4 ? 0 : 9)));
   });
-  if (arm >= 0.5) for (const p of pts) for (const [x, y] of [[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]]) put(p.x - gl.x + x, p.y - gl.y + y, tone(x || y ? GLOW : HOT, 9));
+  if (arm >= 0.5) for (const p of pts) for (const [x, y] of [[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]]) put(p.x - ox + x, p.y - oy + y, tone(x || y ? GLOW : HOT, 9));
   // The bat, burnt in last at the heart of the triangle.
   if (arm >= 0.8) {
-    const cy = Math.round((pts[0].y + pts[1].y + pts[2].y) / 3 - gl.y) - 4;
+    const cy = Math.round((pts[0].y + pts[1].y + pts[2].y) / 3 - oy) - 4;
     BAT.forEach((row, j) => [...row].forEach((p, i) =>
       p !== '.' && put(i - 7, cy + j, arm < 1 || flare ? HOT : p === 'X' ? (beat ? GLOW : RED) : BLOOD)));
   }
@@ -166,14 +178,14 @@ function sigil(gl: Glyph, now: number) {
  *  one wrapped round its waist. */
 function chains(gl: Glyph, now: number, held: Sprite[]) {
   for (const [s, c] of gl.chains) if (!held.includes(s)) { c.front.destroy(); c.back.destroy(); gl.chains.delete(s); }
-  const pts = POINTS.map((a) => onGround(gl, a, ring(T.glyph.radius)));
+  const pts = POINTS.map((a) => onGround({ x: gl.x * Z, y: gl.y * Z }, a, ring(T.glyph.radius * Z)));
   held.forEach((s, n) => {
     let c = gl.chains.get(s);
-    if (!c) gl.chains.set(s, (c = { front: gl.g.scene.add.graphics(), back: gl.g.scene.add.graphics(), at: now }));
+    if (!c) gl.chains.set(s, (c = { front: gl.g.scene.add.graphics().setScale(1 / Z), back: gl.g.scene.add.graphics().setScale(1 / Z), at: now }));
     c.front.clear().setDepth(s.depth + 0.5);
     c.back.clear().setDepth(s.depth - 0.5);
     const feet = s.body!.center, age = now - c.at, k = Math.min(1, age / SNAP_MS), hot = age < SNAP_MS + 60;
-    const waist = { x: Math.round(feet.x), y: Math.round(feet.y) - 9 };
+    const waist = { x: Math.round(feet.x * Z), y: Math.round(feet.y * Z) - 9 * Z };
     // Beaded links (two pixels face on, lit then red, one edge on, a dark joint) over a shadow; white-hot as they snap
     // on. `q`: how far the middle link is pulled across the chain.
     const links = (g: G, a: P, b: P, q: number) => {
@@ -192,8 +204,8 @@ function chains(gl: Glyph, now: number, held: Sprite[]) {
     pts.forEach((p, j) => {
       const to = { x: p.x + (waist.x - p.x) * k, y: p.y + (waist.y - p.y) * k };
       // Taut, the middle link quivers a pixel across the chain.
-      links(p.y > feet.y ? c.front : c.back, p, to, k < 1 ? 0 : [0, 1, 0, -1][(Math.floor(now / 45) + n + j) % 4]);
+      links(p.y > feet.y * Z ? c.front : c.back, p, to, k < 1 ? 0 : [0, 1, 0, -1][(Math.floor(now / 45) + n + j) % 4]);
     });
-    if (k >= 1) links(c.front, { x: waist.x - 6, y: waist.y }, { x: waist.x + 6, y: waist.y }, 0);
+    if (k >= 1) links(c.front, { x: waist.x - 6 * Z, y: waist.y }, { x: waist.x + 6 * Z, y: waist.y }, 0);
   });
 }

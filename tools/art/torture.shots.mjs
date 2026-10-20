@@ -1,6 +1,6 @@
 // The torture room trial (« Crasse et faim », src/torture.ts, src/dark.ts) in headless Chromium, on the phone held
-// sideways and upright (touch emulation): mid-fight (ghouls and a crossbowman), three frames of the hero walking, then
-// the frame rate with the light shader (dark.ts) on and off. Writes <out>/<shape>-<what>.png.
+// sideways and upright (touch emulation): mid-fight (ghouls and a crossbowman), the blood effects (fx-*), three frames
+// of the hero walking, then the frame rate with the light shader (dark.ts) on and off. Writes <out>/<shape>-<what>.png.
 // Usage: node tools/art/torture.shots.mjs [--out=shots/torture --port=5208]   (exit code 1 on a page error)
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -42,12 +42,39 @@ for (const [shape, opts] of Object.entries(SHAPES)) {
   });
   await page.waitForTimeout(2500);
   await shot('fight');
-  { // device pixels round the hero
+  const crop = async (what, w = 220, h = 160, live = true) => { // device pixels round the hero
     const { x, y } = await run(() => { const s = window.game.scene.getScene('room'), c = s.cameras.main; return { x: (s.hero.x - c.worldView.x) * window.innerWidth / c.worldView.width, y: (s.hero.y - c.worldView.y) * window.innerHeight / c.worldView.height }; });
-    await run(() => window.game.loop.sleep());
-    await page.screenshot({ path: `${out}/${shape}-crisp.png`, clip: { x: Math.max(0, x - 110), y: Math.max(0, y - 90), width: 220, height: 160 } });
-    await run(() => window.game.loop.wake());
-  }
+    if (live) await run(() => window.game.loop.sleep());
+    await page.screenshot({ path: `${out}/${shape}-${what}.png`, clip: { x: Math.max(0, x - w / 2), y: Math.max(0, y - h * 0.55), width: w, height: h } });
+    if (live) await run(() => window.game.loop.wake());
+  };
+  await crop('crisp');
+  // The blood effects (fx-blood.ts), the game stepped by hand at 60 fps (headless it runs at a few fps, which would skip
+  // them): beside the nearest ghoul, a glyph cast on it, a dash at it and the dash strike (fx-strike); the back-swipe
+  // and the finisher (fx-finisher); a tir (fx-tir).
+  const step = (ms) => run((ms) => { const g = window.game; for (let t = 0; t < ms; t += 1000 / 60) g.step((g.loop.time += 1000 / 60), 1000 / 60); }, ms);
+  const act = (what) => run((what) => {
+    const s = window.game.scene.getScene('room'), h = s.hero, d = (e) => Math.hypot(e.x - h.x, e.y - h.y);
+    const e = s.enemies.getChildren().filter((e) => e.body?.enable && e.getData('kind') !== 'crossbow').sort((a, b) => d(a) - d(b))[0];
+    if (!e) return;
+    if (what === 'near') h.body.reset(e.x - 64, e.y), e.setData('hp', 20); // it lasts the whole combo
+    const a = Math.atan2(e.y - h.y, e.x - h.x);
+    if (what === 'cast') s.cast(e.body.center);
+    if (what === 'dash') { s.facing = a; s.dashPressedAt = s.time.now; }
+    if (what === 'slash') s.slash(a);
+    if (what === 'shoot') s.shoot(a);
+  }, what);
+  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable && e.getData('kind') !== 'crossbow'));
+  await run(() => window.game.loop.sleep());
+  for (const [what, ms] of [['near', 50], ['cast', 420], ['dash', 150], ['slash', 50]]) { await act(what); await step(ms); }
+  await crop('fx-strike', 300, 200, false);
+  for (const [what, ms] of [['slash', 240], ['slash', 60]]) { await act(what); await step(ms); }
+  await crop('fx-finisher', 300, 200, false);
+  await step(400);
+  await act('shoot');
+  await step(90);
+  await crop('fx-tir', 300, 200, false);
+  await run(() => window.game.loop.wake());
   for (const k of [0, 1, 2]) { // walking left, a frame every 130 ms
     if (k === 0) await page.keyboard.down('a');
     await page.waitForTimeout(130);
