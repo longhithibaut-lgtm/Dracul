@@ -15,10 +15,12 @@ import * as Training from './training.ts';
 import * as Wanderer from './wanderer.ts';
 import * as Dark from './dark.ts';
 import * as Touch from './touch.ts';
+import * as Refuge from './refuge.ts';
 import { GIFTS, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
-/** What a run carries from room to room, through scene.restart(data); {} starts a new run. */
+/** What a run carries from room to room, through scene.restart(data); {} is the refuge, where the game starts and the
+ *  hero re-forms after a death; its stairs start a run in the crypt (layout 'hall', room 1). */
 type Run = { room?: number; layout?: Room.LayoutId; health?: number; gifts?: GiftId[]; training?: boolean };
 // A room: the hero climbs in (from room 2), fights its waves, takes the gift of the Rat house on the medallion (cards
 // open, the action pauses), then walks out through the portcullis it raised.
@@ -85,7 +87,7 @@ export class RoomScene extends Phaser.Scene {
   init(data: Run) {
     // The scene instance is reused on restart, so every field is reset here; the run carries on through `data`.
     this.roomNo = data.room ?? 1;
-    this.layout = data.layout ?? 'hall';
+    this.layout = data.layout ?? 'refuge';
     this.navFrom = -1;
     this.training = !!data.training;
     this.gifts = [...(data.gifts ?? [])];
@@ -114,14 +116,15 @@ export class RoomScene extends Phaser.Scene {
   }
 
   preload() {
-    if (this.layout === 'torture') Wanderer.preload(this);
+    if (this.layout === 'torture' || this.layout === 'refuge') Wanderer.preload(this);
+    if (this.layout === 'refuge') Refuge.preload(this);
   }
 
   create() {
     // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
     this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
     this.physics.resume();
-    Dark.skin.dark = this.layout === 'torture'; // before anyone is drawn: the trial room's sprites wear its skin
+    Dark.skin.dark = this.layout === 'torture' || this.layout === 'refuge'; // before anyone is drawn: these rooms' sprites wear their skin
     Dark.skin.zoom = Dark.skin.dark ? 2 : 1;
     Dark.fit(this.scale);
     this.cameras.main.setZoom(Dark.skin.zoom);
@@ -146,7 +149,7 @@ export class RoomScene extends Phaser.Scene {
     // A bolt that lands is spent; one that misses (dash, invulnerability) flies on.
     this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
     this.shards = this.physics.add.group();
-    if (Dark.skin.dark) Dark.light(this, this.hero, this.enemies, () => this.lanterns, this.room.height);
+    if (Dark.skin.dark) Dark.light(this, this.hero, this.enemies, () => this.lanterns, [this.room.width, this.room.height], this.room.look);
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
 
     this.hud = Hud.create(this);
@@ -188,7 +191,7 @@ export class RoomScene extends Phaser.Scene {
       if (n) this.pick(Number(n[1]) - 1);
     });
 
-    const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true }) satisfies Run); // in the hall: its panel picks a room
+    const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true, layout: 'hall' }) satisfies Run); // its panel picks a room
     this.input.keyboard!.on('keydown-T', toggleTraining);
     // Touch screens: the same actions as J, K, L, F and Space, aimed where he faces, and T.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, Touch.controls((a) => {
@@ -232,6 +235,7 @@ export class RoomScene extends Phaser.Scene {
       }));
       return;
     }
+    if (this.layout === 'refuge') return void this.cameras.main.fadeIn(T.run.fadeMs); // no wave: the stairs start a run
     if (this.phase === 'enter') {
       this.cameras.main.fadeIn(T.run.fadeMs);
       this.hud.title(`Salle ${this.roomNo}`);
@@ -244,7 +248,7 @@ export class RoomScene extends Phaser.Scene {
    *  surroundings round it; where it is larger (an upright phone, the tall cloister), the camera follows the hero,
    *  smoothly, kept inside the room. */
   private frame() {
-    const w = this.scale.width / Dark.skin.zoom, h = this.scale.height / Dark.skin.zoom, rw = T.width, rh = this.room.height;
+    const w = this.scale.width / Dark.skin.zoom, h = this.scale.height / Dark.skin.zoom, rw = this.room.width, rh = this.room.height;
     this.cameras.main.setBounds(Math.min(0, Math.floor((rw - w) / 2)), Math.min(0, Math.floor((rh - h) / 2)), Math.max(rw, w), Math.max(rh, h))
       .startFollow(this.hero, true, 0.08, 0.08);
   }
@@ -252,10 +256,10 @@ export class RoomScene extends Phaser.Scene {
   update(time: number, delta: number) {
     if (this.dead || this.phase === 'choose') return;
     const k = this.keys;
-    // Climbing in from the stairs or walking out through the gate, the hero moves on his own.
+    // Climbing in from the stairs or walking out through the gate (down the refuge's stairs), the hero moves on his own.
     const auto = this.phase === 'enter' || this.phase === 'leave';
     const x = auto ? 0 : Phaser.Math.Clamp(Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown) + Touch.stick.x, -1, 1);
-    const y = auto ? -1 : Phaser.Math.Clamp(Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown) + Touch.stick.y, -1, 1);
+    const y = auto ? (this.layout === 'refuge' ? 1 : -1) : Phaser.Math.Clamp(Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown) + Touch.stick.y, -1, 1);
     const posing = time < this.slashUntil || time < this.castUntil;
     if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
@@ -313,6 +317,7 @@ export class RoomScene extends Phaser.Scene {
     }
     if (this.waveDue) this.spawnWave();
     if (this.phase === 'gift' && this.pickup?.ready && Phaser.Math.Distance.BetweenPoints(feet.center, this.pickup) < 10) this.openGifts();
+    if (this.layout === 'refuge' && this.phase === 'fight' && feet.bottom > Refuge.STAIRS) this.leave();
     if (this.phase === 'exit' && time >= this.gateUpAt && feet.top <= this.room.bounds.top + 1 && Math.abs(feet.center.x - this.room.gate.x) < 14) this.leave();
 
     // Holy light (a lantern's pool, the chapel's stained glass, the Dawn): free for a grace on stepping in, then it burns
@@ -797,13 +802,15 @@ export class RoomScene extends Phaser.Scene {
     Sfx.play(this, 'gate');
   }
 
-  /** Into the open gate: fade to black, then the next room (another layout than this one), health and gifts kept. */
+  /** Into the open gate: fade to black, then the next room (another layout than this one), health and gifts kept. Down
+   *  the refuge's stairs: a new run, room 1 in the crypt (in training, the training room). */
   private leave() {
     this.phase = 'leave';
     this.hero.setCollideWorldBounds(false);
     this.cameras.main.fadeOut(T.run.fadeMs);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
-      this.scene.restart({ room: this.roomNo + 1, layout: nextLayout(this.roomNo + 1, this.layout, Room.LAYOUTS, Math.random), health: this.health, gifts: this.gifts } satisfies Run));
+    const next: Run = this.layout !== 'refuge' ? { room: this.roomNo + 1, layout: nextLayout(this.roomNo + 1, this.layout, Room.LAYOUTS, Math.random), health: this.health, gifts: this.gifts }
+      : this.training ? { training: true, gifts: this.gifts, layout: 'hall' } : { layout: 'hall' };
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(next));
   }
 
   private maxHealth() {
@@ -876,7 +883,7 @@ export class RoomScene extends Phaser.Scene {
     this.dead = true;
     Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
-    // A new run (room 1, no gifts), or back to the training room.
+    // Back to the refuge, re-formed at his coffin (a new run starts down its stairs), or back to the training room.
     this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, layout: this.layout } : {}) satisfies Run));
     return true;
   }

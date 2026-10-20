@@ -68,7 +68,7 @@ export function render(scene) {
   const { W, H, cam, off, objects, lights, env, ambient } = scene; const offX = scene.offX || 0;
   const N = W * H;
   const out = new Float32Array(N * 3), oid = new Int16Array(N).fill(-1), emis = new Float32Array(N), depth = new Float32Array(N).fill(1e9);
-  const nrm = new Float32Array(N * 3);
+  const nrm = new Float32Array(N * 3), alb3 = new Float32Array(N * 3), emi3 = new Float32Array(N * 3); // albedo and emission, for the game's refuge
   const [vx, vy, vz] = cam.v;
   // object world AABBs + screen boxes
   for (const o of objects) {
@@ -167,6 +167,7 @@ export function render(scene) {
     }
     if (m.ao !== undefined) ao *= m.ao;
     const alb = m.alb;
+    alb3[i * 3] = alb[0]; alb3[i * 3 + 1] = alb[1]; alb3[i * 3 + 2] = alb[2];
     let r = alb[0] * ambient[0] * ao, g = alb[1] * ambient[1] * ao, b = alb[2] * ambient[2] * ao;
     const Vx = -vx, Vy = -vy, Vz = -vz;
     const ndv = Math.max(0, Nn[0] * Vx + Nn[1] * Vy + Nn[2] * Vz);
@@ -192,10 +193,10 @@ export function render(scene) {
       if (m.spec) { let hx = ux + Vx, hy = uy + Vy, hz = uz + Vz; const hl = Math.hypot(hx, hy, hz); const ndh = Math.max(0, (Nn[0] * hx + Nn[1] * hy + Nn[2] * hz) / hl); const sp = m.spec * Math.pow(ndh, m.gloss || 30) * (ndl > 0 ? 1 : 0); lr += sp; lg += sp; lb += sp; }
       r += lr * l.c[0] * k; g += lg * l.c[1] * k; b += lb * l.c[2] * k;
     }
-    if (m.emi) { r += m.emi[0]; g += m.emi[1]; b += m.emi[2]; emis[i] = m.emi[0] + m.emi[1] + m.emi[2]; }
+    if (m.emi) { r += m.emi[0]; g += m.emi[1]; b += m.emi[2]; emis[i] = m.emi[0] + m.emi[1] + m.emi[2]; emi3.set(m.emi, i * 3); }
     out[i * 3] = r; out[i * 3 + 1] = g; out[i * 3 + 2] = b;
   }
-  return { out, oid, emis, depth, nrm, W, H };
+  return { out, oid, emis, depth, nrm, alb3, emi3, W, H };
 }
 
 // screen-space light haze
@@ -267,9 +268,9 @@ export function post(img, opt = {}) {
 const crcT = new Int32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c; });
 function crc(buf) { let c = -1; for (const b of buf) c = crcT[(c ^ b) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; }
 function chunk(type, data) { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); }
-export function writePNG(path, rgba, W, H, scale = 1) {
+export function writePNG(path, rgba, W, H, scale = 1, alpha = false) {
   const w = W * scale, h = H * scale; const raw = Buffer.alloc((w * 4 + 1) * h);
-  for (let y = 0; y < h; y++) { raw[y * (w * 4 + 1)] = 0; for (let x = 0; x < w; x++) { const s = ((y / scale | 0) * W + (x / scale | 0)) * 4, d = y * (w * 4 + 1) + 1 + x * 4; raw[d] = rgba[s]; raw[d + 1] = rgba[s + 1]; raw[d + 2] = rgba[s + 2]; raw[d + 3] = 255; } }
+  for (let y = 0; y < h; y++) { raw[y * (w * 4 + 1)] = 0; for (let x = 0; x < w; x++) { const s = ((y / scale | 0) * W + (x / scale | 0)) * 4, d = y * (w * 4 + 1) + 1 + x * 4; raw[d] = rgba[s]; raw[d + 1] = rgba[s + 1]; raw[d + 2] = rgba[s + 2]; raw[d + 3] = alpha ? rgba[s + 3] : 255; } }
   const ih = Buffer.alloc(13); ih.writeUInt32BE(w, 0); ih.writeUInt32BE(h, 4); ih[8] = 8; ih[9] = 6;
   fs.writeFileSync(path, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ih), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]));
 }

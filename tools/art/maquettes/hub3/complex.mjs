@@ -291,10 +291,12 @@ const lights = [], L_ = (o) => lights.push(o);
 const WARM = L('#d89a50'), CANDLE = L('#d8b070'), FIRE = L('#e07a30'), COLD = L('#5a6a78');
 const lightCand = (p, I = 2.6, name) => L_({ p, c: CANDLE, I, r0: 40, R: 260, soft: 5, haze: 0.025, hazeR: 6, skip: name ? [name] : undefined });
 // hero
-const hz = hero('idle');
-const HP = HERO_AT === 'crypt' ? [1868, 330, 0.25] : [1880, 1700, 0.55];
-const oHero = add('hero', hz, [HP[0], HP[1], 0], HP[2], { id: 60 });
-L_({ name: 'lantern', p: lw(oHero, hz.P._lantern), c: L('#d0cc78'), I: 6, r0: 44, R: 280, pad: 3.6, soft: 6, haze: 0.012, hazeR: 4 });
+if (!process.env.NOHERO) { // NOHERO: the game's refuge (tools/art/refuge.gen.mjs), which draws its own hero and lantern
+  const hz = hero('idle');
+  const HP = HERO_AT === 'crypt' ? [1868, 330, 0.25] : [1880, 1700, 0.55];
+  const oHero = add('hero', hz, [HP[0], HP[1], 0], HP[2], { id: 60 });
+  L_({ name: 'lantern', p: lw(oHero, hz.P._lantern), c: L('#d0cc78'), I: 6, r0: 44, R: 280, pad: 3.6, soft: 6, haze: 0.012, hazeR: 4 });
+}
 
 // --- crypt: the hero's coffin always burns; the chiefs' coffins open as they come back ---
 add('coffin', coffin(), [1800, 250, 0]); add('lidUp', lidUpright(), [1712, 176, 0], 0.05);
@@ -446,7 +448,7 @@ const SC = { W, H, cam, off, offX: X0, objects, lights, env, envShadow, ambient:
 export async function scene() { return SC; }
 
 // ---------- post ----------
-const PAL = [...PALETTE, ...['#141a26', '#1e283a', '#2c3a52', '#2a2830', '#3e3a46', '#58525f', '#6e6680', '#9a92aa', '#3a1a16', '#5a2a20'].map(h => hex(h).map(v => v * 255))];
+export const PAL = [...PALETTE, ...['#141a26', '#1e283a', '#2c3a52', '#2a2830', '#3e3a46', '#58525f', '#6e6680', '#9a92aa', '#3a1a16', '#5a2a20'].map(h => hex(h).map(v => v * 255))];
 const FONT = { '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'], '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'], '4': ['00010', '00110', '01010', '10010', '11111', '00010', '00010'], '6': ['00110', '01000', '10000', '11110', '10001', '10001', '01110'], '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'] };
 export function hud(rgba, w, x0 = 24, y0 = 20) {
   const put = (x, y, h) => { const c = hex(h); const i = (y * w + x) * 4; rgba[i] = c[0] * 255; rgba[i + 1] = c[1] * 255; rgba[i + 2] = c[2] * 255; };
@@ -457,6 +459,14 @@ export function hud(rgba, w, x0 = 24, y0 = 20) {
 }
 const P2 = (x, y, z) => [x - X0, y * SN - z * CS - off];
 export async function finish(img, sc) {
+  decorate(img, sc);
+  const rgba = post(img, { exposure: 3.4, vignette: Number(process.env.VIG ?? 0.2), desat: 0.16, grain: 0.012, dither: 0.02, palette: PAL });
+  writePNG(OUT + '-native.png', rgba, W, H, 1);
+  writePNG(OUT + '.png', rgba, W, H, 2);
+  const fs = await import('fs'); fs.writeFileSync(OUT + '.rgba', Buffer.from(rgba.buffer));
+}
+/** What is laid over the render before the post: mist, cobwebs, smoke, wing blur, then the lights' haze (unless noHaze). */
+export function decorate(img, sc, noHaze = false) {
   const T0 = 4000;
   // mist: pooling over Séverin's floor (soft rolling banks, not stripes), breathing out of the brume coffin once it is open
   for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
@@ -488,9 +498,5 @@ export async function finish(img, sc) {
   for (const [x, y, z, s] of [[1866, 272, 14, 1], [1812, 172, 13, 2], [1842, 1900, 4, 3], ...(S === 0 ? [[1450, 192, 22, 4], [2010, 192, 24, 5], [1528, 1176, 10, 6]] : [])]) smoke(x, y, z, s);
   const blur = (x, y, z, dx, dy, seed) => { const [cx, cy] = P2(x, y, z); for (let t = 2; t < 14; t += 0.5) for (let w = -2; w <= 2; w++) plot(cx - dx * t + (dy ? w : 0), cy - dy * t + (dx ? w * 0.6 : 0), 0.05 * (1 - t / 14), 0.02); };
   for (const [x, y, z] of [[1300, 1280, 150], [1360, 1350, 120], [1250, 1220, 175], [1420, 1240, 190], [1206, 300, 330], [1236, 230, 420]]) blur(x, y, z, 0.6, 0.8, 1);
-  haze(img, sc);
-  const rgba = post(img, { exposure: 3.4, vignette: Number(process.env.VIG ?? 0.2), desat: 0.16, grain: 0.012, dither: 0.02, palette: PAL });
-  writePNG(OUT + '-native.png', rgba, W, H, 1);
-  writePNG(OUT + '.png', rgba, W, H, 2);
-  const fs = await import('fs'); fs.writeFileSync(OUT + '.rgba', Buffer.from(rgba.buffer));
+  if (!noHaze) haze(img, sc);
 }

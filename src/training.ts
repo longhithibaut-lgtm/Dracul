@@ -8,12 +8,12 @@ export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern';
 /** Survive the scene restarts (a death in training starts the training room again). */
 export const opts = { god: true, passive: false, wanderer: true }; // wanderer: the new hero (wanderer.ts); off = the old one
 
-const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître'], ['torture', 'La salle de torture (essai)']];
+const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître'], ['torture', 'La salle de torture (essai)'], ['refuge', 'Le refuge']];
 const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne']];
 // [label, group, key, min, max, step]
 const KNOBS = [
   ['Vitesse de marche', 'hero', 'speed', 50, 160, 5],
-  ['Vitesse de marche (salle de torture)', 'grand', 'speed', 30, 160, 2],
+  ['Vitesse de marche (salle de torture, refuge)', 'grand', 'speed', 30, 160, 2],
   ['Invulnérabilité après un coup (ms)', 'hero', 'hurtInvulnMs', 200, 1500, 50],
   ['Mémoire des touches pressées trop tôt (ms)', 'hero', 'bufferMs', 0, 400, 10],
   ['Brume : vitesse', 'dash', 'speed', 200, 500, 10],

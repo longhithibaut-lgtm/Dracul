@@ -17,6 +17,9 @@ page.on('pageerror', (e) => errors.push(e.message));
 await mkdir(out, { recursive: true });
 await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
+// The game starts in the refuge: a run, room 1 in the crypt.
+await page.evaluate(() => window.game.scene.getScene('room').scene.restart({ layout: 'hall' }));
+await page.waitForFunction(() => window.game.scene.getScene('room').layout === 'hall' && window.game.scene.getScene('room').hero?.body);
 await page.waitForTimeout(1500);
 await page.evaluate(() => window.game.loop.sleep());
 
@@ -47,7 +50,7 @@ await film('hit', hurt, [0, 30, 70, 110, 150, 190, 240, 300, 380, 460, 560, 700]
 await film('dash', 's.dashUntil = t0 + 130; s.dashReadyAt = t0 + 510;', [0, 100, 250, 400, 505, 530, 560, 650]);
 await film('low', `${hurt} ${hurt} ${hurt}`, Array.from({ length: 24 }, (_, i) => 700 + i * 50));
 await film('heal', 's.health = 5; s.hud.health(5, 5);', [0, 50, 100, 150, 200, 300, 400]);
-await film('restart', 's.scene.restart();', [50, 150, 250, 400, 600]);
+await film('restart', 's.scene.restart({ layout: 'hall' });', [50, 150, 250, 400, 600]);
 
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();

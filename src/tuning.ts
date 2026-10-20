@@ -5,7 +5,7 @@ export const T = {
   height: 270,
 
   hero: { maxHealth: 5, speed: 95, hurtInvulnMs: 800, bufferMs: 150 }, // bufferMs: how early a press may come, see press()
-  grand: { speed: 66 }, // the torture room's grand vampire walks slower, heavier (his run frames follow the distance)
+  grand: { speed: 66 }, // the grand vampire (torture room, refuge) walks slower, heavier (his run frames follow the distance)
   dash: {
     speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22, // stopShort: halts this far from an enemy it'd end on
     // The dash strike: a slash pressed during the dash (it waits for the end) or this soon after it. The combo's first blow.

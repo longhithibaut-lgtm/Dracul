@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import * as Torture from './torture.ts';
+import * as Refuge from './refuge.ts';
+import type { Look } from './dark.ts';
 
 type P = { x: number; y: number };
 // How the arena looks and where its solid parts are.
@@ -17,7 +19,8 @@ export type Room = {
   holy(x: number, y: number): boolean; // a floor point in holy light that never goes out (stained glass, the open sky)
   burn: { graceMs: number; burnEveryMs: number; damage: number }; // how that light burns: like a lantern, or the Dawn's
   arcades: Phaser.GameObjects.Image[]; // the cloister's: their bottom row is their feet line; see through one from behind
-  height: number; // of the whole room: a crypt's (RH) or the cloister's three screens (the camera follows the hero up it)
+  width: number; height: number; // of the whole room: a crypt's (RH), the cloister's three screens, the refuge (the camera follows the hero)
+  look?: Look; // in the dark (dark.ts): how it is lit, the torture room's by default
   sections: number[]; // feet lines the hero climbs past into the room's next part, bottom first (none: one part)
 };
 
@@ -29,8 +32,10 @@ export type Room = {
 // painter (see paintCloister).
 // Everything is painted pixel by pixel into canvas textures once, then reused on scene restarts.
 export const LAYOUTS = ['hall', 'nave', 'ossuary', 'chapel', 'cloister'] as const;
-// The torture room is a trial of another art direction (torture.ts, dark.ts): reached from the training room only.
-export type LayoutId = (typeof LAYOUTS)[number] | 'torture';
+// The torture room is a trial of another art direction (torture.ts, dark.ts): reached from the training room only. The
+// refuge (refuge.ts), in the same dark, is where the game starts and where the hero re-forms after a death.
+type Painted = (typeof LAYOUTS)[number] | 'torture';
+export type LayoutId = Painted | 'refuge';
 
 // Palette "Nuit de sang" (docs/art.md) plus crimson walls, a moonlit blue floor and the magenta dark beyond.
 const P = {
@@ -701,7 +706,7 @@ const HEDGES: Box[] = [
 // wave waits until he walks past a part's line (bottom first), then rises in front of him; the top part is the room as
 // it was one screen tall, with the gate, its medallion and the gift.
 const PARTS = [432, 248];
-const LAYOUT: Record<LayoutId, Layout> = {
+const LAYOUT: Record<Painted, Layout> = {
   // The validated hall: fights in the open middle, around the great medallion. Down the room, a row of tombs between
   // broken pillars, then by the stairs an antechamber round a smaller medallion between two braziers.
   hall: {
@@ -1885,12 +1890,12 @@ function glowTexture(p: Px) {
 // Box around the gate opening; the bars stop above the threshold slab (row 63).
 const GX = CX - GATE.hw, GY = 4, GW = GATE.hw * 2 + 1, GH = 59, GATE_RISE = 48;
 // The bars as painted in each layout, lights included; transparent elsewhere. BARS: the current room's.
-const BARS_OF: Partial<Record<LayoutId, Px>> = {};
+const BARS_OF: Partial<Record<Painted, Px>> = {};
 let BARS: Px;
 
 /** Paints the layout's room without its portcullis, and the portcullis alone as the pixels where the room painted with
  *  it differs: closed, the gate looks exactly as when it was part of the room. */
-function paintHall(scene: Phaser.Scene, id: LayoutId) {
+function paintHall(scene: Phaser.Scene, id: Painted) {
   const L = LAYOUT[id], h = L.open ? CH : RH, open = new Px(T.width, h), shut = new Px(T.width, h);
   if (L.dark) {
     const t = Torture.paintRoom((x, y, grow) => inArch(x, y, CX, GATE.hw + grow, GATE.ys, GATE.R + grow));
@@ -1955,6 +1960,7 @@ export function raiseGate(scene: Phaser.Scene, ms: number) {
 // ---------- build ----------
 
 export function build(scene: Phaser.Scene, id: LayoutId): Room {
+  if (id === 'refuge') return Refuge.build(scene);
   const L = LAYOUT[id], height = L.open ? CH : RH, fy1 = height - 14; // the floor's front edge
   if (!BARS_OF[id]) paintHall(scene, id); // painted on the layout's first build, kept across restarts
   BARS = BARS_OF[id]!;
@@ -2027,6 +2033,7 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
     holy: L.open ? dawn : (x, y) => !!L.windows && pane(L.windows, Math.floor(x), Math.floor(y)) > 0,
     burn: L.open ? T.dawn : T.lantern,
     arcades,
+    width: T.width,
     height,
     sections: L.sections ?? [],
   };

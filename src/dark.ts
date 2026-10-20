@@ -9,11 +9,13 @@ import { viewSize } from './logic.ts';
 // the hero's lantern (green-yellow, from the glass drawn in his hand, a gentle flicker), his night sight (so shapes
 // read in the dark) and the Order's lanterns (small, dirty green). Then the mockup's post: vignette, filmic tone,
 // desaturated grade with green-brown shadows, grain, ordered dither snapped onto its palette.
+// The refuge (refuge.ts) is lit the same way from its own bake and mockup (its Look): its 'refuge-light' holds the whole
+// static render, two texels per room pixel.
 // What glows or warns is drawn unlit over it, by a second camera that sees only what stands at DEPTH and above: the
 // eyes, the torch flames, the aim lines, the effects.
 
-/** The trial room is on: the sprite modules bake and pick their dark skins (wanderer.ts, enemy.ts, crossbow.ts).
- *  `zoom`: screen pixels per room pixel; 2 in the trial room, so its hero (wanderer.ts) keeps his full detail at half
+/** The trial room (or the refuge) is on: the sprite modules bake and pick their dark skins (wanderer.ts, enemy.ts,
+ *  crossbow.ts). `zoom`: screen pixels per room pixel; 2 in these rooms, so its hero (wanderer.ts) keeps his full detail at half
  *  scale while the rest shows its 1x pixels doubled. Every other room stays at 1, the game exactly as before. */
 export const skin = { dark: false, zoom: 1 };
 
@@ -73,10 +75,14 @@ uniform vec4 uOrder3;
 uniform float uTorch;
 uniform float uFrame;
 uniform float uZoom;
+uniform float uTexel;
+uniform vec3 uAmb;
+uniform vec3 uLampR;
+uniform vec4 uPost;
+uniform vec4 uVig;
 varying vec2 outTexCoord;
 // Textures other than the camera's are bottom-up: v = 1 - row / height.
 
-const vec3 AMB = ${vec(L('#16181a').map((v) => v * 0.9))};
 const vec3 LAMP = ${vec(L('#c8c874'))};
 const vec3 NIGHT = ${vec(L('#7c8a86'))};
 const vec3 ORDER = ${vec(L('#a8ac5c'))};
@@ -86,7 +92,7 @@ float fall(float d, float I, float r0, float R) {
   return I / (1.0 + (d / r0) * (d / r0)) * q * q;
 }
 vec3 point(vec3 P, vec3 n, vec3 p, float I, float r0, float R, vec3 c) {
-  vec3 v = p - P;
+  vec3 v = (p - P) * vec3(1.0, uLampR.z, 1.0); // up and down the screen is foreshortened depth: uLampR.z undoes it
   float d = max(length(v), 0.001);
   if (d > R) return vec3(0.0);
   return c * fall(d, I, r0, R) * max(0.0, (dot(n, v / d) + 0.45) / 1.45);
@@ -107,11 +113,13 @@ float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.545
 
 void main() {
   vec2 sp = floor(vec2(outTexCoord.x, 1.0 - outTexCoord.y) * uView.zw); // screen pixel
-  vec2 w = floor(uView.xy + (sp + 0.5) / uZoom); // room pixel: the light works on those, whatever the zoom
+  // The texel of the room's images under this pixel (uTexel per room pixel), and its room position: the light works on
+  // those, whatever the zoom.
+  vec2 tx = floor((uView.xy + (sp + 0.5) / uZoom) * uTexel), w = tx / uTexel;
   vec4 src = texture2D(uMainSampler, outTexCoord);
   vec3 alb = pow(src.rgb, vec3(2.2));
   vec3 Lt = vec3(0.0), E = vec3(0.0), T = vec3(0.0);
-  vec2 uv = (w + 0.5) / uRoom;
+  vec2 uv = (tx + 0.5) / (uRoom * uTexel);
   if (uv.x >= 0.0 && uv.x < 1.0 && uv.y >= 0.0 && uv.y < 1.0) {
     vec3 s = texture2D(uLight, vec2(uv.x, 1.0 - uv.y / 3.0)).rgb;
     vec3 e = texture2D(uLight, vec2(uv.x, 1.0 - (uv.y + 1.0) / 3.0)).rgb;
@@ -119,33 +127,33 @@ void main() {
     float ny = (g.b - 128.0) / 127.0;
     vec3 P = vec3(w.x, w.y + g.g - 64.0, g.r - 64.0), n = vec3(0.0, ny, sqrt(max(0.0, 1.0 - ny * ny)));
     T = s * s * s * 4.0 * uTorch;
-    Lt = T + AMB;
+    Lt = T + uAmb;
     E = e * e;
     Lt += point(P, n, uNight.xyz, uNight.w, 140.0, 420.0, NIGHT);
-    Lt += point(P, n, uLamp.xyz, uLamp.w, 46.0, 200.0, LAMP);
+    Lt += point(P, n, uLamp.xyz, uLamp.w, uLampR.x, uLampR.y, LAMP);
     Lt += order(P, n, w, uOrder0) + order(P, n, w, uOrder1) + order(P, n, w, uOrder2) + order(P, n, w, uOrder3);
   }
   // The lantern's halo round its glass and its haze; the Order's lanterns' haze.
   float dg = length(vec2(w.x - uGlass.x, (w.y - uGlass.y) * 1.1));
   if (dg < 6.5) E += vec3(0.5, 0.55, 0.2) * pow(1.0 - dg / 6.5, 2.0) * 0.35 * uGlass.z;
-  E += haze(w, uGlass.xy, uLamp.w * 0.0025, 46.0, LAMP);
+  E += haze(w, uGlass.xy, uLamp.w * 0.0025, uLampR.x, LAMP);
   if (uOrder0.z > 0.0) E += haze(w, uOrder0.xy - vec2(0.0, 16.0), uOrder0.z * 0.012, 16.0, ORDER);
   if (uOrder1.z > 0.0) E += haze(w, uOrder1.xy - vec2(0.0, 16.0), uOrder1.z * 0.012, 16.0, ORDER);
   vec3 c = alb * Lt + E;
   // Vignette, filmic shoulder back to sRGB, contrast.
   vec2 v = (sp - uView.zw * vec2(0.5, 0.55)) / (uView.zw * 0.5);
-  float vig = clamp(1.15 - 0.55 * dot(v, v), 0.0, 1.0);
+  float vig = clamp(uVig.x - uVig.y * dot(v, v), 0.0, 1.0);
   c *= vig;
-  c *= 3.2;
+  c = max(c * uPost.x - uVig.w, 0.0);
   c = pow(c / (1.0 + c), vec3(1.0 / 2.2));
-  c += (c * c * (3.0 - 2.0 * c) - c) * 0.45;
+  c += (c * c * (3.0 - 2.0 * c) - c) * uPost.y;
   // Grade: desaturated but where something glows, shadows pushed green-brown; grain; ordered dither onto the palette.
   float lum = dot(c, vec3(0.3, 0.59, 0.11));
-  c = mix(c, vec3(lum), 0.24 * (1.0 - clamp((E.r + E.g + E.b) * 3.0, 0.0, 1.0)));
+  c = mix(c, vec3(lum), uPost.z * (1.0 - clamp((E.r + E.g + E.b) * 3.0, 0.0, 1.0)));
   c += vec3(0.012, 0.014, 0.0) * (1.0 - lum) - vec3(0.0, 0.0, 0.004);
-  vec2 sq = floor(sp / uZoom);
-  c += (hash(sq + uFrame) + hash(sq.yx + uFrame * 1.7) - 1.0) * 0.03 * (0.5 + lum);
-  vec3 q = min(floor(clamp(c + bayer(w) * 0.04, 0.0, 1.0) * 255.0 / 4.0), 63.0);
+  vec2 sq = floor(sp / uZoom * uTexel);
+  c += (hash(sq + uFrame) + hash(sq.yx + uFrame * 1.7) - 1.0) * uPost.w * (0.5 + lum);
+  vec3 q = min(floor(clamp(c + bayer(tx) * uVig.z, 0.0, 1.0) * 255.0 / 4.0), 63.0);
   vec3 lit = texture2D(uLut, vec2((mod(q.b, 8.0) * 64.0 + q.r + 0.5) / 512.0, 1.0 - (floor(q.b / 8.0) * 64.0 + q.g + 0.5) / 512.0)).rgb;
   // Drawn already lit (prelit(): alpha cleared): its own colour, only vignetted, warmed a little by the torches' baked
   // light where he stands (it reads the floor behind him: a hint, not a relight).
@@ -165,7 +173,8 @@ class Dark extends Phaser.Filters.Controller {
   order: V4[] = [];
   torch = 1;
   frame = 0;
-  constructor(camera: Phaser.Cameras.Scene2D.Camera) { super(camera, 'FilterDark'); }
+  look: Look;
+  constructor(camera: Phaser.Cameras.Scene2D.Camera, look: Look) { super(camera, 'FilterDark'); this.look = look; }
 }
 
 class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
@@ -178,7 +187,10 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
     const pm = this.programManager, v = c.camera.worldView;
     pm.setUniform('uLight', 1);
     pm.setUniform('uLut', 2);
-    pm.setUniform('uView', [v.x, v.y, c.camera.width, c.camera.height]);
+    // Where the camera really draws the room: it rounds each image to whole screen pixels (roundPixels), so must the
+    // light, or a half-pixel scroll lays each texel's light on its neighbour.
+    const z = c.camera.zoom, snap = (a: number) => -Math.round(-a * z) / z;
+    pm.setUniform('uView', [snap(v.x), snap(v.y), c.camera.width, c.camera.height]);
     pm.setUniform('uZoom', c.camera.zoom);
     pm.setUniform('uRoom', c.room);
     pm.setUniform('uLamp', c.lamp);
@@ -187,6 +199,12 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
     for (let i = 0; i < 4; i++) pm.setUniform(`uOrder${i}`, c.order[i] ?? [0, 0, 0, 0]);
     pm.setUniform('uTorch', c.torch);
     pm.setUniform('uFrame', c.frame);
+    const k = c.look;
+    pm.setUniform('uTexel', k.texel);
+    pm.setUniform('uAmb', L(k.amb).map((v) => v * 0.9));
+    pm.setUniform('uLampR', [k.lamp[1], k.lamp[2], k.ys]);
+    pm.setUniform('uPost', k.post);
+    pm.setUniform('uVig', k.vig);
   }
 }
 
@@ -196,22 +214,24 @@ const PAL = ['#1c140e', '#281c13', '#362619', '#463220', '#5a4228', '#745632', '
   '#2e0d09', '#3a0408', '#5a0a10', '#7e1018', '#43130c', '#5c1a10', '#7a2416', '#a0301c', '#ff3a2a',
   '#5a2a0e', '#8a4516', '#c06a20', '#e8a040', '#ffd890',
   '#1e1222', '#2e1a36', '#46265a', '#643882', '#8a52a8',
-  '#1a1e20', '#262c2e', '#384042', '#58605e', '#8a908a', '#c4c8bc', '#f2f4e4'].map((s) => [1, 3, 5].map((k) => parseInt(s.slice(k, k + 2), 16)));
-export function nearest(r: number, g: number, b: number) {
-  let best = PAL[0], bd = Infinity;
-  for (const q of PAL) {
+  '#1a1e20', '#262c2e', '#384042', '#58605e', '#8a908a', '#c4c8bc', '#f2f4e4'];
+const rgb = (s: string) => [1, 3, 5].map((k) => parseInt(s.slice(k, k + 2), 16));
+/** The nearest colour of `pal` (rgb) to r, g, b; `wY`: the weight of brightness against hue. */
+export function nearest(r: number, g: number, b: number, pal = PAL.map(rgb), wY = 1.4) {
+  let best = pal[0], bd = Infinity;
+  for (const q of pal) {
     const dr = r - q[0], dg = g - q[1], db = b - q[2], dY = 0.3 * dr + 0.59 * dg + 0.11 * db, dCo = dr - db, dCg = dg - (dr + db) / 2;
-    const d = dY * dY * 1.4 + dCo * dCo * 0.6 + dCg * dCg * 0.7;
+    const d = dY * dY * wY + dCo * dCo * 0.6 + dCg * dCg * 0.7;
     if (d < bd) { bd = d; best = q; }
   }
   return best;
 }
-function lut(scene: Phaser.Scene) {
-  const key = 'dark-lut';
+function lut(scene: Phaser.Scene, look: Look) {
+  const key = `dark-lut-${look.light}`, pal = look.pal.map(rgb);
   if (scene.textures.exists(key)) return key;
   const t = scene.textures.createCanvas(key, 512, 512)!, img = t.context.createImageData(512, 512);
   for (let b = 0; b < 64; b++) for (let g = 0; g < 64; g++) for (let r = 0; r < 64; r++) // the mockup snaps rgb >> 2: each cell takes its centre's colour
-    img.data.set([...nearest(r * 4 + 2, g * 4 + 2, b * 4 + 2), 255], (((b >> 3) * 64 + g) * 512 + (b & 7) * 64 + r) * 4);
+    img.data.set([...nearest(r * 4 + 2, g * 4 + 2, b * 4 + 2, pal, look.wY), 255], (((b >> 3) * 64 + g) * 512 + (b & 7) * 64 + r) * 4);
   t.putData(img, 0, 0);
   t.refresh();
   return key;
@@ -237,16 +257,31 @@ const FLAME_PAL = { W: '#ffd890', Y: '#e8a040', y: '#c06a20', o: '#8a4516' };
 
 let registered = false;
 
-/** Lights the room around `hero`; `lanterns()`: the Order's lanterns standing. The world camera's light is its filter
- *  'dark' (set it inactive to see the room unlit: albedo only). */
-export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics.Arcade.Group, lanterns: () => Spot[], height: number) {
+/** How a room in the dark is lit and finished, from its mockup. `light`: the texture of its baked light (three bands,
+ *  `texel` texels per room px); `torches`: flames drawn over it (x, the row under the flame, strength), `flicker` all its
+ *  baked light with them; `amb`: the ambient added to it; `night`: the hero's night sight; `lamp`: his lantern's
+ *  strength, near and far radius; `ys`: how much a screen row counts in depth; `post`: exposure, contrast, desaturation,
+ *  grain; `vig`: vignette centre and fall, dither, black level (taken off after the exposure); `pal`, `wY`: the palette and its brightness weight. */
+export type Look = {
+  light: string; texel: number; torches: [number, number, number][]; flicker: boolean; amb: string; night: number;
+  lamp: [number, number, number]; ys: number; post: [number, number, number, number]; vig: [number, number, number, number]; pal: string[]; wY: number;
+};
+/** The torture room's (torture.ts): its mockup « Crasse et faim ». */
+export const TORTURE: Look = {
+  light: 'torture-light', texel: 1, torches: TORCHES, flicker: true, amb: '#16181a', night: 0.26,
+  lamp: [5, 46, 200], ys: 1, post: [3.2, 0.45, 0.24, 0.03], vig: [1.15, 0.55, 0.04, 0], pal: PAL, wY: 1.4,
+};
+
+/** Lights the room (`size`, room px) around `hero`; `lanterns()`: the Order's lanterns standing. The world camera's
+ *  light is its filter 'dark' (set it inactive to see the room unlit: albedo only). */
+export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics.Arcade.Group, lanterns: () => Spot[], size: [number, number], look = TORTURE) {
   const renderer = scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   if (!registered) renderer.renderNodes.addNodeConstructor('FilterDark', DarkNode);
   registered = true;
-  const main = scene.cameras.main, f = main.filters.internal.add(new Dark(main)) as Dark;
-  f.light = scene.textures.get('torture-light').source[0].glTexture!;
-  f.lut = scene.textures.get(lut(scene)).source[0].glTexture!;
-  f.room = [T.width, height];
+  const main = scene.cameras.main, f = main.filters.internal.add(new Dark(main, look)) as Dark;
+  f.light = scene.textures.get(look.light).source[0].glTexture!;
+  f.lut = scene.textures.get(lut(scene, look)).source[0].glTexture!;
+  f.room = size;
 
   // The unlit layer: its own camera, scrolled with the world's once that one has followed the hero this frame.
   const over = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height).setName('dark-over');
@@ -267,7 +302,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
 
   const flameKey = grids(scene, 'dark-flame', FLAME, FLAME_PAL);
   if (!scene.anims.exists('dark-flame')) scene.anims.create({ key: 'dark-flame', frames: [0, 1, 2].map((n) => ({ key: flameKey, frame: String(n) })), frameRate: 8, repeat: -1 });
-  for (const [x, y, k] of TORCHES) scene.add.sprite(x, y, flameKey).setOrigin(0.5, 1).setDepth(DEPTH + 5).setAlpha(0.6 + 0.4 * k).play({ key: 'dark-flame', startFrame: x % 3 });
+  for (const [x, y, k] of look.torches) scene.add.sprite(x, y, flameKey).setOrigin(0.5, 1).setDepth(DEPTH + 5).setAlpha(0.6 + 0.4 * k).play({ key: 'dark-flame', startFrame: x % 3 });
   const eyes = new Map<Sprite, Phaser.GameObjects.Image>(), shades = new Map<Sprite, Phaser.GameObjects.Image>();
   let tick = 0, lamp0 = 1, torch = 1;
 
@@ -297,14 +332,14 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
     for (const [s, e] of eyes) if (!s.active) { e.destroy(); eyes.delete(s); }
     for (const [s, e] of shades) if (!s.active) { e.destroy(); shades.delete(s); }
     if (++tick % 6 === 0) { // ten times a second: the torches gutter, the lamp breathes, the grain moves
-      torch = Math.random() < 0.12 ? 0.8 + Math.random() * 0.1 : 0.94 + Math.random() * 0.06;
+      if (look.flicker) torch = Math.random() < 0.12 ? 0.8 + Math.random() * 0.1 : 0.94 + Math.random() * 0.06;
       lamp0 = 0.9 + 0.08 * Math.sin(time / 400) + Math.random() * 0.04;
       f.frame = (f.frame + 1) % 97;
     }
     f.torch = torch;
-    f.lamp = [lx, feet + 1, feet - ly, hero.visible ? 5 * lamp0 : 0];
+    f.lamp = [lx, feet + 1, feet - ly, hero.visible ? look.lamp[0] * lamp0 : 0];
     f.glass = [lx, ly, hero.visible ? lamp0 : 0];
-    f.night = [hero.x, feet, 90, 0.26];
+    f.night = [hero.x, feet, 90, look.night];
     f.order = lanterns().filter((l) => l.lit).slice(0, 4).map((l): V4 => [l.x, l.y, 1.8, 0]);
     sort();
   };

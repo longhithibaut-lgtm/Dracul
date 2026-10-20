@@ -58,6 +58,9 @@ async function hold(keys, ms) {
 await mkdir(out, { recursive: true });
 await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
+// The game starts in the refuge: a run, room 1 in the crypt.
+await page.evaluate(() => window.game.scene.getScene('room').scene.restart({ layout: 'hall' }));
+await page.waitForFunction(() => window.game.scene.getScene('room').layout === 'hall' && window.game.scene.getScene('room').hero?.body);
 await page.waitForTimeout(400);
 
 await freeze(true);
