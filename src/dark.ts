@@ -42,6 +42,13 @@ export function boost(pal: Record<string, number>, k = 2.2, keep = '0o') {
   return Object.fromEntries(Object.entries(pal).map(([c, v]) => [c, keep.includes(c) ? v : (ch(v >> 16) << 16) | (ch((v >> 8) & 255) << 8) | ch(v & 255)]));
 }
 
+/** The blood of the trial room's effects (mockup « A. Sang », fx-blood.ts), black to arterial. */
+export const SANG = [0x120204, 0x260407, 0x3e060b, 0x5a0a10, 0x781116, 0x951c18, 0xb42c1e];
+/** A palette dyed with that blood by brightness, as the mockup dyes struck flesh: the hit flash, never white. */
+export function bloodied(pal: Record<string, number>) {
+  return Object.fromEntries(Object.entries(pal).map(([c, v]) => [c, SANG[1 + Math.min(4, Math.round((((v >> 16) + ((v >> 8) & 255) + (v & 255)) / 765) * 3.2))]]));
+}
+
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Spot = { x: number; y: number; lit: boolean };
 type V4 = [number, number, number, number];

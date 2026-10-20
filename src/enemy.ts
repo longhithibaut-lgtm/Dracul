@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { skin, boost } from './dark.ts';
+import { skin, boost, bloodied, SANG } from './dark.ts';
 
 // How enemies look. Gameplay owns the AI state; this file only shows it.
 export type EnemyState = 'chase' | 'windup' | 'lunge' | 'recover';
@@ -27,7 +27,12 @@ const PAL: Record<string, number> = {
   t: 0x3fa7a3, T: 0x1f4a5a,
   s: 0x0b0710, // ground shadow, drawn translucent
 };
-export const BLOOD = { light: 0xe0284a, mid: 0xa3122f, dark: 0x5c0a1c, dry: 0x3e0820 }; // drops, pools and stains
+// Drops, pools and stains; in the trial room, the darker blood of its effects (fx-blood.ts).
+const BLOODS = [{ light: 0xe0284a, mid: 0xa3122f, dark: 0x5c0a1c, dry: 0x3e0820 }, { light: SANG[4], mid: SANG[3], dark: SANG[2], dry: SANG[1] }];
+export const BLOOD = {
+  get light() { return BLOODS[+skin.dark].light; }, get mid() { return BLOODS[+skin.dark].mid; },
+  get dark() { return BLOODS[+skin.dark].dark; }, get dry() { return BLOODS[+skin.dark].dry; },
+};
 // The hit flash rims the body in white and lifts the robe a tone instead of filling it white, so the struck thrall
 // stays a dark shape apart from the pale hero standing at it.
 const FLASH: Record<string, number> = { d: PAL.r, r: PAL.R, R: PAL.h, h: PAL.E };
@@ -480,7 +485,7 @@ const GHOUL = [
   '.onnoo..onnno........',
 ];
 const GHOUL_PAL: Record<string, number> = { ...boost({ o: 0x080706, f: 0x6b675a, F: 0x9a9482, d: 0x423e36, r: 0x2c2924, m: 0x5a0c08, n: 0xb8ae90 }), e: 0xeef6d0 }; // the mockup's, lit 2.2x
-const GHOUL_FLASH: Record<string, number> = { f: GHOUL_PAL.F, d: GHOUL_PAL.f, r: GHOUL_PAL.d, F: GHOUL_PAL.n };
+const GHOUL_FLASH = bloodied(GHOUL_PAL); // struck: dyed with blood, no white rim (fx-blood.ts opens the wound)
 // body: [dx, dy]; hind, fore: how far the feet swing (the hip stays put); shear: lean per row up from the feet.
 type Pose = { body?: [number, number]; hind?: number; fore?: number; shear?: number; flare?: true; flat?: true };
 const POSES: Record<string, Pose> = {
@@ -509,7 +514,6 @@ function bakeGhoul(scene: Scene) {
       plot(x, y, ch);
       if (ch === 'e' && pose.flare) plot(x - 1, y, 'e');
     }));
-    const body = (x: number, y: number) => !!grid[y * SIZE + x];
     for (let y = 0; y < SIZE; y++)
       for (let x = 0; x < SIZE; x++) {
         const ch = grid[y * SIZE + x];
@@ -519,7 +523,6 @@ function bakeGhoul(scene: Scene) {
           put(x0 + x, 2 * SIZE + y, 0x929e58);
           if (ch === 'e') put(x0 + x, 3 * SIZE + y, GHOUL_PAL.e);
         } else {
-          if (body(x - 1, y) || body(x + 1, y) || body(x, y - 1) || body(x, y + 1)) put(x0 + x, SIZE + y, 0xe6dab8); // the hit's white rim
           if ([[-1, 0], [1, 0], [0, -1], [0, 1]].some(([i, j]) => grid[(y + j) * SIZE + x + i] === 'e')) put(x0 + x, 3 * SIZE + y, GHOUL_PAL.e, 80); // their halo
           if (base !== 'mask' && ((x + 0.5 - 21) / 10) ** 2 + ((y + 0.5 - FEET) / 2.5) ** 2 <= 1) { put(x0 + x, y, PAL.s, 140); put(x0 + x, SIZE + y, PAL.s, 140); }
         }
@@ -631,7 +634,7 @@ export function die(scene: Scene, s: Sprite) {
     bleed(scene, x, y, away, 7, 1.8, 0.7, 10, [PAL.R, PAL.r, PAL.d], 1); // shreds of robe
     for (let i = 0; i < 18; i++) {
       const a = scene.add.rectangle(x + Phaser.Math.Between(-7, 7), y + Phaser.Math.Between(-10, 8), 1, 1,
-        Phaser.Utils.Array.GetRandom([PAL[2], PAL[4], 0x5a4468, BLOOD.light])).setDepth(y + 1);
+        Phaser.Utils.Array.GetRandom(skin.dark ? [SANG[1], SANG[2], 0x2b261e, BLOOD.light] : [PAL[2], PAL[4], 0x5a4468, BLOOD.light])).setDepth(y + 1);
       scene.tweens.add({ targets: a, y: a.y - Phaser.Math.Between(14, 30), x: a.x + Phaser.Math.Between(-6, 6), alpha: 0,
         duration: Phaser.Math.Between(700, 1400), ease: 'Sine.easeOut', onComplete: () => a.destroy() });
     }
@@ -696,11 +699,23 @@ function image(scene: Scene, key: string, x: number, y: number, frame: string, f
 }
 
 // Floor layer that keeps blood, robes and masks for the rest of the fight, over the whole room (the physics world is its
-// floor), however tall. Recreated after a scene restart.
-export function stains(scene: Scene) {
-  const b = scene.physics.world.bounds;
-  return (scene.children.getByName('enemy-stains') as Phaser.GameObjects.RenderTexture | null)
-    ?? scene.add.renderTexture(0, 0, b.right + 40, b.bottom + 16).setOrigin(0).setDepth(1).setName('enemy-stains');
+// floor), however tall. Recreated after a scene restart. The trial room's has its hero's resolution (dark.ts skin.zoom),
+// for fx-blood.ts's drops; callers still give room pixels (fractions reach its finer ones).
+type Stains = {
+  fill(c: number, a: number, x: number, y: number, w: number, h: number): Stains;
+  stamp(key: string, frame: string, x: number, y: number, o: { originY: number; scaleX: number }): Stains;
+  render(): Stains;
+};
+export function stains(scene: Scene): Stains {
+  const b = scene.physics.world.bounds, Z = skin.zoom;
+  const rt = (scene.children.getByName('enemy-stains') as Phaser.GameObjects.RenderTexture | null)
+    ?? scene.add.renderTexture(0, 0, (b.right + 40) * Z, (b.bottom + 16) * Z).setOrigin(0).setScale(1 / Z).setDepth(1).setName('enemy-stains');
+  const s: Stains = {
+    fill: (c, a, x, y, w, h) => (rt.fill(c, a, x * Z, y * Z, w * Z, h * Z), s),
+    stamp: (key, frame, x, y, o) => (rt.stamp(key, frame, x * Z, y * Z, { ...o, scaleX: o.scaleX * Z, scaleY: Z }), s),
+    render: () => (rt.render(), s),
+  };
+  return s;
 }
 
 // A blood pool with a lit rim along its top-left edge (light comes from the top left) and an optional dark core.

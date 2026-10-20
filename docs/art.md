@@ -23,7 +23,7 @@ décision ou une maquette validée.
 
 **Personnages** : le héros vampire validé (`docs/maquettes/grand-heros.png`, modèle `tools/art/maquettes/grand/hero.mjs`) :
 mince, longs cheveux noirs, yeux de braise rouge, long manteau à doublure violette (sa signature), griffes nues,
-lanterne tenue bas ; sa brume est une brume de lune. Gestes lourds,
+lanterne tenue bas ; sa brume est une vapeur de sang caillé. Gestes lourds,
 marche lente, les pieds tiennent au sol (course pilotée par la distance).
 
 **Lieux** : le refuge validé (`docs/maquettes/refuge-*.png`, `refuge2-*.png`, plan dans `docs/lore.md`) ; la salle de
@@ -37,6 +37,8 @@ cages, fosse aux corps.
 | `grand-heros.png`, `grand-ecran.png` | direction retenue (essai) |
 | `refuge-*.png`, `refuge2-*.png` | refuge validé |
 | `a-encre-gothique.png`, `b-crasse-et-faim.png`, `c-clair-obscur.png` | pistes écartées (la B a donné l'éclairage) |
+| `fx-a-sang*.png` | effets de combat retenus (sang artériel, gouttes, caillots ; `src/fx-blood.ts`) |
+| `fx-b-*.png`, `fx-c-*.png` | pistes d'effets écartées (ombre, cendre) |
 | `cloitre.png`, `ennemis-*.png` | archivées, pas encore de décision |
 
 **À décider avec l'utilisateur** (aucune règle tant que ce n'est pas tranché) : palette commune des salles, ennemis
