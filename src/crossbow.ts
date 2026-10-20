@@ -432,7 +432,7 @@ oeeeeerro
 ..orrro..
 ...ooo...
 `].map((m) => m.trim().split('\n'));
-function mark(g: Phaser.GameObjects.Graphics, x: number, bottom: number, t: number, period: number) {
+export function mark(g: Phaser.GameObjects.Graphics, x: number, bottom: number, t: number, period: number) {
   const beat = t % period, rows = MARK[Number(beat < 80 || (beat >= 160 && beat < 240))];
   const x0 = Math.round(x) - (rows[0].length >> 1), y0 = Math.round(bottom) - rows.length;
   rows.forEach((row, j) => [...row].forEach((c, i) => c !== '.' && g.fillStyle(MARK_PAL[c]).fillRect(x0 + i, y0 + j, 1, 1)));

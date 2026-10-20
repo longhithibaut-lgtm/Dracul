@@ -168,12 +168,13 @@ export function penitent(pose = 'idle', seed = 2) {
 }
 
 // ======================= 3. PRÊTRE (lore) =======================
-export function pretre(pose = 'idle') {
+// over: joints to override (the game's sheet, tools/art/foes.gen.mjs, poses its frames with it)
+export function pretre(pose = 'idle', over = {}) {
   const atk = pose === 'atk'; const J = clone(std); const b = B(); const { rc, el, tor } = b;
   Object.assign(J, atk ? {
     head: [0, 2.5, 91], neck: [0, 1, 83], Sr: [-8.5, 1, 79], Er: [-8, 9, 80], Wr: [-2, 16, 84], Hr_: [-1, 18, 85],
     Sl: [8.5, 1, 79], El: [8, 7, 70], Wl: [2, 11, 74], Hl_: [1, 12.5, 75],
-  } : { Sr: [-8.5, 0, 78], Er: [-8, 4, 63], Wr: [-3, 8, 64], Hr_: [-1, 8.5, 66], Sl: [8.5, 0, 78], El: [11, 2, 63], Wl: [12, 6, 70], Hl_: [12, 7, 73] });
+  } : { Sr: [-8.5, 0, 78], Er: [-8, 4, 63], Wr: [-3, 8, 64], Hr_: [-1, 8.5, 66], Sl: [8.5, 0, 78], El: [11, 2, 63], Wl: [12, 6, 70], Hl_: [12, 7, 73] }, over);
   humanoid(J, b, { armM: 2 });
   // robe (bell) + wide sleeves
   b.rev(0, 0, 0.5, 78, t => t < 0.62 ? lerp(15, 9.6, Math.pow(t / 0.62, 0.7)) : lerp(9.6, 7.4, (t - 0.62) / 0.38), 2, 1.5, 0.82, { fold: [9, 1.2] });
@@ -221,13 +222,15 @@ export function pretre(pose = 'idle') {
 }
 
 // ======================= 4. PURIFICATEUR (new) =======================
-export function purificateur(pose = 'idle') {
-  const atk = pose === 'atk'; const J = clone(std); const b = B(); const { rc, el } = b;
+// pose: 'idle', 'atk' (the jet; 'atk1' another jet), 'tele' (the game's telegraph: the stance, the pilot light flaring, no
+// jet yet); over: joints to override (the game's sheet, tools/art/foes.gen.mjs, poses its frames with it)
+export function purificateur(pose = 'idle', over = {}) {
+  const fire = pose.startsWith('atk'), tele = pose === 'tele', atk = fire || tele; const J = clone(std); const b = B(); const { rc, el } = b;
   Object.assign(J, {
     head: [0, 7, 84], neck: [0, 4.5, 77], chest: [0, 2.5, 68], pelvis: [0, 0, 50],
     Sr: [-8.5, 2.5, 74], Er: [-10, 8, 60], Wr: [-5, 15, 57], Hr_: [-3.5, 17, 57],
     Sl: [8.5, 2.5, 74], El: [9.5, 3, 59], Wl: [3, 7, 54], Hl_: [1.5, 8, 54],
-  }, atk ? { Kl: [4.5, 9, 26], Al: [5, 8, 4], Tl: [5.5, 14, 1.2], Kr: [-4.5, -5, 26], Ar: [-5, -12, 5], Tr: [-5.5, -7, 1.2], Wr: [-3, 18, 63], Hr_: [-2, 20, 64], Wl: [2, 9, 57], Hl_: [1, 10, 57.5] } : {});
+  }, atk ? { Kl: [4.5, 9, 26], Al: [5, 8, 4], Tl: [5.5, 14, 1.2], Kr: [-4.5, -5, 26], Ar: [-5, -12, 5], Tr: [-5.5, -7, 1.2], Wr: [-3, 18, 63], Hr_: [-2, 20, 64], Wl: [2, 9, 57], Hl_: [1, 10, 57.5] } : {}, over);
   humanoid(J, b, { thin: 1.1, armM: 2, legM: 6 });
   // waxed leather coat to the ankles + shoulder cape
   b.rev(0, 0.5, 11, 72, t => lerp(12.5, 8.2, Math.pow(t, 0.8)), 2, 1.2, 0.85, { fold: [7, 1.0] });
@@ -247,7 +250,7 @@ export function purificateur(pose = 'idle') {
   rc(l0, l1, 1.3, 1.0, 9); el(add(l1, sc(dir, -1)), [1.6, 1.6, 1.6], 8);
   b.chain([[-6, -9, 52], [-9, -2, 44], [-6, 6, 46], l0], 0.9, 5, 0.4);
   const tip = add(l1, sc(dir, 1.5));
-  if (!atk) el(add(tip, sc(dir, 1.2)), [0.9, 0.9, 1.4], 10); // pilot flame
+  if (!fire) el(add(tip, sc(dir, tele ? 2 : 1.2)), tele ? [1.6, 1.6, 2.4] : [0.9, 0.9, 1.4], 10); // pilot flame
   const mat = (m, x, y, z) => {
     const n = fbm3(x * 0.4, y * 0.4, z * 0.4, 3, 21);
     switch (m) {
@@ -265,10 +268,10 @@ export function purificateur(pose = 'idle') {
     return { alb: mix(L('#2a221a'), L('#16120e'), n) };
   };
   const r = done(b, mat);
-  r.lights = [{ p: add(tip, sc(dir, 2)), c: L('#e08030'), I: 2.6, r0: 16, R: 100, pad: 2, haze: 0.04, hazeR: 2 }];
-  if (atk) {
+  r.lights = [{ p: add(tip, sc(dir, 2)), c: L('#e08030'), I: tele ? 5 : 2.6, r0: 16, R: 100, pad: 2, haze: 0.04, hazeR: 2 }];
+  if (fire) {
     // fire jet: a cone of noisy emissive blobs
-    const v = B(); const R = mulberry32(5);
+    const v = B(); const R = mulberry32(pose === 'atk1' ? 6 : 5);
     for (let i = 0; i < 34; i++) { const t = i / 33; const c = add(tip, add(sc(dir, 2 + t * 58), [(R() - 0.5) * t * 9, (R() - 0.5) * t * 7, (R() - 0.4) * t * 6 - t * t * 8])); const rr = 0.6 + t * 4.0 * (0.5 + R() * 0.7); v.el(c, [rr, rr, rr * 0.75], 10, 1.6); }
     const vs = partsSdf(v.parts); const fireTip = add(tip, sc(dir, 60));
     r.vfx = { sdf: (x, y, z) => vs(x, y, z) + 1.2 * (vn3(x * 0.35, y * 0.35, z * 0.35, 3) - 0.5), mat: (m, x, y, z) => { const d = Math.hypot(...sub([x, y, z], tip)); const k = clamp(1.3 - d / 70); return glow(mix([0.7, 0.08, 0.02], [2.0, 1.0, 0.32], k * k), 0.3 + 0.6 * vn3(x * 0.4, y * 0.4, z * 0.4, 11)); }, bounds: boundsOf(v.parts, 3), step: 0.7 };

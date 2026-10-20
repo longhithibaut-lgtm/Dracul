@@ -4,12 +4,12 @@ import { T } from './tuning.ts';
 import { GIFTS, GIFT_IDS, KINDS, kind, type GiftId } from './gifts.ts';
 import type { LayoutId } from './room.ts';
 
-export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern';
+export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'priest';
 /** Survive the scene restarts (a death in training starts the training room again). */
 export const opts = { god: true, passive: false, wanderer: true }; // wanderer: the new hero (wanderer.ts); off = the old one
 
 const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître'], ['torture', 'La salle de torture (essai)'], ['refuge', 'Le refuge']];
-const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne']];
+const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne'], ['purifier', 'Purificateur'], ['priest', 'Prêtre']];
 // [label, group, key, min, max, step]
 const KNOBS = [
   ['Vitesse de marche', 'hero', 'speed', 50, 160, 5],

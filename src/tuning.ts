@@ -75,6 +75,39 @@ export const T = {
     damage: 1,
   },
 
+  // The Order's Purificateur (« grand pixel » rooms, training only for now): a heavy flamethrower. He walks into range,
+  // turns to one of eight directions toward the hero (the way his sprite can face), lights his pilot and marks a cone of
+  // fire on the floor (the telegraph, locked: stepping out of it dodges), then burns along it.
+  purifier: {
+    hp: 3,
+    speed: 30,
+    near: 22, far: 38, // keeps the hero between these distances, in his flame's reach
+    reach: 44, // the cone's length from his feet; he lights up only with the hero this close
+    halfDeg: 23, // the cone's half-angle (eight directions: a hero anywhere in reach is in one of them)
+    igniteMs: 750, // telegraph: pilot light, cone on the floor
+    fireMs: 550, // the jet; the hero standing in the cone is burnt (once: his invulnerability covers the rest)
+    recoverMs: 450,
+    reloadMs: 1900, // from one jet to the next ignition
+    firstMs: 1200, // after he appears
+    damage: 1,
+  },
+  // The Order's Prêtre (« grand pixel » rooms, training only for now): keeps behind, far from the hero; points his
+  // monstrance, a gold circle fills under the hero where he stood, then the holy light falls on it.
+  priest: {
+    hp: 2,
+    speed: 28,
+    near: 120, far: 160, // stays this far from the hero: behind the others
+    maxCast: 230, // prays only at a hero this close, on screen
+    radius: 22, // the circle's half-width; an ellipse squashed like the ground (T.lantern.squash)
+    fillMs: 1100, // the circle fills: leave it before it is full
+    smiteMs: 350, // the light falls (it burns at its first instant)
+    reloadMs: 2600,
+    firstMs: 1500,
+    damage: 1,
+    light: 2, // his monstrance's light in the dark rooms (dark.ts), and while he prays
+    prayLight: 4,
+  },
+
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
   lantern: {
     hp: 3,

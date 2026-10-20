@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
+import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
+import * as Foes from './foes.ts';
 import * as Room from './room.ts';
 import * as Fx from './fx.ts';
 import * as Hud from './hud.ts';
@@ -118,6 +119,7 @@ export class RoomScene extends Phaser.Scene {
   preload() {
     if (this.layout === 'torture' || this.layout === 'refuge') Wanderer.preload(this);
     if (this.layout === 'refuge') Refuge.preload(this);
+    Foes.preload(this); // the training room calls them into any room
   }
 
   create() {
@@ -149,7 +151,10 @@ export class RoomScene extends Phaser.Scene {
     // A bolt that lands is spent; one that misses (dash, invulnerability) flies on.
     this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
     this.shards = this.physics.add.group();
-    if (Dark.skin.dark) Dark.light(this, this.hero, this.enemies, () => this.lanterns, [this.room.width, this.room.height], this.room.look);
+    // The Order's lights: each priest's monstrance (brighter as he prays), then its lanterns.
+    const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && e.getData('kind') === 'priest')
+      .map((e) => ({ ...Foes.lamp(e), lit: true, I: e.getData('state') === 'pray' ? T.priest.prayLight : T.priest.light })), ...this.lanterns];
+    if (Dark.skin.dark) Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
 
     this.hud = Hud.create(this);
@@ -213,7 +218,7 @@ export class RoomScene extends Phaser.Scene {
           const view = this.cameras.main.worldView;
           const free = this.room.spawns.filter((p) => view.contains(p.x, p.y) && Phaser.Math.Distance.BetweenPoints(p, this.hero) > 50);
           const p = free[calls++ % free.length] ?? this.room.spawns[0];
-          this.spawn(p, k === 'ghoul' ? 'ghoul' : 'crossbow', k === 'weak' ? T.bite.weakAt : undefined);
+          this.spawn(p, k === 'weak' ? 'crossbow' : k, k === 'weak' ? T.bite.weakAt : undefined);
         },
         clear: () => {
           for (const e of this.enemies.getChildren() as Sprite[]) this.kill(e);
@@ -350,7 +355,7 @@ export class RoomScene extends Phaser.Scene {
         e.setData('plagueAt', 0);
         if (!e.body?.enable) continue;
       }
-      const bow = e.getData('kind') === 'crossbow';
+      const kind = e.getData('kind'), bow = kind === 'crossbow';
       // Bound by the glyph, it stops dead, its lunge or aim cancelled, and cannot be shoved; it resumes once let go. A
       // prey in the hero's jaws is held by the bite instead.
       const bound = !!this.glyph && Glyph.binds(this.glyph, e.body.center, time);
@@ -363,9 +368,12 @@ export class RoomScene extends Phaser.Scene {
       else if (time >= e.getData('stunnedUntil') && time >= e.getData('until')) {
         if (this.training && Training.opts.passive) e.setVelocity(0).setData('state', 'chase'); // a training dummy
         else if (bow) this.stepCrossbow(e, time);
+        else if (kind === 'purifier') this.stepPurifier(e, time);
+        else if (kind === 'priest') this.stepPriest(e, time);
         else this.stepEnemy(e, time);
       }
-      if (bow) Crossbow.show(e, kneeling ? 'kneel' : e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'), e.getData('hp') <= T.bite.weakAt);
+      if (Foes.isFoe(kind)) Foes.show(e, kneeling ? 'kneel' : e.getData('state'), time < e.getData('flashUntil'), e.getData('hp') <= T.bite.weakAt);
+      else if (bow) Crossbow.show(e, kneeling ? 'kneel' : e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('reach'), e.getData('hp') <= T.bite.weakAt);
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
     }
@@ -373,7 +381,7 @@ export class RoomScene extends Phaser.Scene {
     // loudest; on screen, they are not marked.
     const view = this.cameras.main.worldView;
     this.hud.threats((this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable)
-      .map((e) => ({ x: e.x - view.x, y: e.y - view.y, aim: e.getData('state') === 'aim' })));
+      .map((e) => ({ x: e.x - view.x, y: e.y - view.y, aim: ['aim', 'ignite', 'pray'].includes(e.getData('state')) })));
     if (this.glyph) {
       if (held.length && this.glyph.caughtAt < 0) Sfx.play(this, 'bind'); // once per glyph
       // Glyphe du nid: as it arms, rats burst out of its centre. On the clock the glyph keeps, not a timer's.
@@ -490,6 +498,67 @@ export class RoomScene extends Phaser.Scene {
     if (time >= e.getData('steadyUntil') && (!e.body!.blocked.none || v.length() < C.speed / 3))
       e.setData({ side: -e.getData('side'), steadyUntil: time + 600 });
     v.limit(C.speed);
+    e.setData({ state: 'chase', facing: toHero });
+  }
+
+  // Purificateur: walks into flame range; ignites (stops, turns to the octant of the hero, the cone on the floor, locked),
+  // then burns along the cone; recovers, reloads.
+  private stepPurifier(e: Sprite, time: number) {
+    const P = T.purifier, from = e.body!.center, to = this.hero.body!.center;
+    const toHero = Phaser.Math.Angle.BetweenPoints(from, to), dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    // The cone lies on the floor: angles and reach are measured with the ground's foreshortening undone.
+    const inCone = () => inArc({ x: 0, y: 0 }, (e.getData('aim') * Math.PI) / 4, { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, P.reach, 2 * P.halfDeg);
+    switch (e.getData('state')) {
+      case 'ignite':
+        if (time < e.getData('fireAt')) return;
+        e.setData({ state: 'fire', fireUntil: time + P.fireMs });
+        Sfx.play(this, 'burn');
+        return;
+      case 'fire':
+        if (inCone()) this.damageHero(P.damage);
+        if (time >= e.getData('fireUntil')) e.setData({ state: 'recover', until: time + P.recoverMs, readyAt: time + P.reloadMs });
+        return;
+    }
+    if (time >= e.getData('readyAt') && dist <= P.reach && this.cameras.main.worldView.contains(from.x, from.y)) {
+      e.setVelocity(0).setData({ state: 'ignite', fireAt: time + P.igniteMs, facing: toHero, aim: Foes.octant(Math.atan2((to.y - from.y) / T.lantern.squash, to.x - from.x)) });
+      Sfx.play(this, 'aim', P.igniteMs / 1000);
+      return;
+    }
+    this.keepAt(e, toHero, dist, P.near, P.far, P.speed);
+  }
+
+  // Prêtre: keeps far behind; prays (stops, points the monstrance, a gold circle fills where the hero stands), then the
+  // light falls on it, burning him if he is still inside; reloads.
+  private stepPriest(e: Sprite, time: number) {
+    const P = T.priest, from = e.body!.center, to = this.hero.body!.center;
+    const toHero = Phaser.Math.Angle.BetweenPoints(from, to), dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    switch (e.getData('state')) {
+      case 'pray':
+        if (time < e.getData('smiteAt')) return;
+        if (ellipseDist(e.getData('zone'), to, P.radius, P.radius * T.lantern.squash) <= 1 && this.damageHero(P.damage)) Sfx.play(this, 'burn');
+        e.setData({ state: 'smite', until: time + P.smiteMs, readyAt: time + P.reloadMs });
+        Sfx.play(this, 'holy');
+        return;
+    }
+    if (time >= e.getData('readyAt') && dist <= P.maxCast && this.cameras.main.worldView.contains(from.x, from.y)) {
+      e.setVelocity(0).setData({ state: 'pray', smiteAt: time + P.fillMs, facing: toHero, zone: { x: to.x, y: to.y } });
+      Sfx.play(this, 'aim', P.fillMs / 1000);
+      return;
+    }
+    this.keepAt(e, toHero, dist, P.near, P.far, P.speed);
+  }
+
+  /** A human of the Order keeping between `near` and `far` of the hero, like the crossbowman: closes in, strafes, backs
+   *  off, pushed apart from its packmates, turning back at walls. */
+  private keepAt(e: Sprite, toHero: number, dist: number, near: number, far: number, speed: number) {
+    const v = this.physics.velocityFromRotation(toHero + keepDistance(dist, near, far, e.getData('side')), speed, e.body!.velocity);
+    for (const o of this.enemies.getChildren() as Sprite[]) {
+      const d = Phaser.Math.Distance.BetweenPoints(e, o);
+      if (o !== e && o.body?.enable && d < T.enemy.spacing) v.add(new Phaser.Math.Vector2(e.x - o.x, e.y - o.y).setLength(speed * (1 - d / T.enemy.spacing)));
+    }
+    if (this.time.now >= e.getData('steadyUntil') && (!e.body!.blocked.none || v.length() < speed / 3))
+      e.setData({ side: -e.getData('side'), steadyUntil: this.time.now + 600 });
+    v.limit(speed);
     e.setData({ state: 'chase', facing: toHero });
   }
 
@@ -671,7 +740,8 @@ export class RoomScene extends Phaser.Scene {
   private kill(e: Sprite) {
     if (!e.body?.enable) return; // already dead: plague or rats can finish a prey mid-bite
     e.disableBody(false, false);
-    (e.getData('kind') === 'crossbow' ? Crossbow : Enemy).die(this, e);
+    const kind = e.getData('kind');
+    (kind === 'crossbow' ? Crossbow : Foes.isFoe(kind) ? Foes : Enemy).die(this, e);
     Sfx.play(this, 'kill');
     // Contagion: a sick enemy's plague leaps onto those around it.
     if (e.getData('plagueAt') && this.gifts.includes('contagion'))
@@ -909,16 +979,18 @@ export class RoomScene extends Phaser.Scene {
     for (const p of spawns) this.spawn(p, bows.includes(p) ? 'crossbow' : 'ghoul');
   }
 
-  /** An enemy rises at `p` after its telegraph: a ghoul, or a crossbowman of the Order (`hp` to start it weakened). */
-  private spawn(p: { x: number; y: number }, kind: 'ghoul' | 'crossbow', hp?: number) {
-    const bow = kind === 'crossbow';
-    (bow ? Crossbow : Enemy).telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
-    if (!bow) Sfx.play(this, 'spawn');
+  /** An enemy rises at `p` after its telegraph: a ghoul, or a human of the Order: a crossbowman (`hp` to start it
+   *  weakened), a purificateur or a prêtre (the training room's only, for now). */
+  private spawn(p: { x: number; y: number }, kind: 'ghoul' | 'crossbow' | Foes.Kind, hp?: number) {
+    const bow = kind === 'crossbow', human = kind !== 'ghoul';
+    (human ? Crossbow : Enemy).telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
+    if (!human) Sfx.play(this, 'spawn');
     this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
       if (this.dead) return;
-      const e = (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y).setCollideWorldBounds(true);
+      const e = (Foes.isFoe(kind) ? Foes.create(this, this.enemies, kind, p.x, p.y) : (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y)).setCollideWorldBounds(true);
       const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0 };
-      if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
+      if (Foes.isFoe(kind)) e.setData({ ...common, kind, human: true, hp: T[kind].hp, readyAt: this.time.now + T[kind].firstMs, aim: 2 });
+      else if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
       else e.setData({ ...common, hp: hp ?? T.enemy.hp, restUntil: 0 });
     });
   }

@@ -52,7 +52,7 @@ export function bloodied(pal: Record<string, number>) {
 }
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
-type Spot = { x: number; y: number; lit: boolean };
+type Spot = { x: number; y: number; lit: boolean; h?: number; I?: number }; // h, I: a light held that high (a priest's monstrance), that strong
 type V4 = [number, number, number, number];
 
 const DEPTH = 7980; // from here up, drawn unlit over the lit world: aim lines (7990), effects (9000)
@@ -86,6 +86,7 @@ varying vec2 outTexCoord;
 const vec3 LAMP = ${vec(L('#c8c874'))};
 const vec3 NIGHT = ${vec(L('#7c8a86'))};
 const vec3 ORDER = ${vec(L('#a8ac5c'))};
+const vec3 HOLY = ${vec(L('#e8c878'))};
 
 float fall(float d, float I, float r0, float R) {
   float q = max(0.0, 1.0 - (d / R) * (d / R));
@@ -100,9 +101,16 @@ vec3 point(vec3 P, vec3 n, vec3 p, float I, float r0, float R, vec3 c) {
 vec3 haze(vec2 w, vec2 s, float k, float r0, vec3 c) {
   return c * k * exp(-length(vec2(w.x - s.x, (w.y - s.y) * 1.2)) / (r0 * 1.4));
 }
+// The Order's lights: a lantern (w 0), or a priest's monstrance held w px high, gold, lighting the room.
 vec3 order(vec3 P, vec3 n, vec2 w, vec4 o) {
   if (o.z <= 0.0) return vec3(0.0);
+  if (o.w > 0.0) return point(P, n, vec3(o.xy, o.w), o.z, 40.0, 220.0, HOLY);
   return point(P, n, vec3(o.xy, 16.0), o.z, 16.0, 72.0, ORDER);
+}
+vec3 orderHaze(vec2 w, vec4 o) {
+  if (o.z <= 0.0) return vec3(0.0);
+  if (o.w > 0.0) return haze(w, o.xy - vec2(0.0, o.w), o.z * 0.02, 7.0, HOLY);
+  return haze(w, o.xy - vec2(0.0, 16.0), o.z * 0.012, 16.0, ORDER);
 }
 float bayer(vec2 p) {
   vec2 a = mod(p, 2.0), b = mod(floor(p * 0.5), 2.0);
@@ -137,8 +145,7 @@ void main() {
   float dg = length(vec2(w.x - uGlass.x, (w.y - uGlass.y) * 1.1));
   if (dg < 6.5) E += vec3(0.5, 0.55, 0.2) * pow(1.0 - dg / 6.5, 2.0) * 0.35 * uGlass.z;
   E += haze(w, uGlass.xy, uLamp.w * 0.0025, uLampR.x, LAMP);
-  if (uOrder0.z > 0.0) E += haze(w, uOrder0.xy - vec2(0.0, 16.0), uOrder0.z * 0.012, 16.0, ORDER);
-  if (uOrder1.z > 0.0) E += haze(w, uOrder1.xy - vec2(0.0, 16.0), uOrder1.z * 0.012, 16.0, ORDER);
+  E += orderHaze(w, uOrder0) + orderHaze(w, uOrder1);
   vec3 c = alb * Lt + E;
   // Vignette, filmic shoulder back to sRGB, contrast.
   vec2 v = (sp - uView.zw * vec2(0.5, 0.55)) / (uView.zw * 0.5);
@@ -325,8 +332,10 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
       const dx = s.x - lx, dy = s.body!.bottom - feet, d = Math.hypot(dx, dy);
       sh.setVisible(s.visible && d > 6 && d < 150);
       if (!sh.visible) continue;
-      sh.setTexture(s.texture.key, s.frame.name).setPosition(s.x, s.body!.bottom).setOrigin(s.originX, (s.displayOriginY + s.body!.bottom - s.y) / s.frame.height)
-        .setFlipX(s.flipX).setRotation(Math.atan2(dy, dx) + Math.PI / 2).setScale(1, Math.min(3.2, Math.max(0.8, d / 22)))
+      // A half-scale sheet (foes.ts) casts at its scale; a frame may name the one that casts its shadow (not the jet of fire).
+      sh.setTexture(s.texture.key, (s.frame.customData as { shade?: string }).shade ?? s.frame.name).setPosition(s.x, s.body!.bottom)
+        .setOrigin(s.originX, (s.displayOriginY + (s.body!.bottom - s.y) / s.scaleY) / s.frame.height)
+        .setFlipX(s.flipX).setRotation(Math.atan2(dy, dx) + Math.PI / 2).setScale(s.scaleX, s.scaleY * Math.min(3.2, Math.max(0.8, d / 22)))
         .setAlpha(0.85 * Math.min(1, 2 - d / 75) * s.alpha).setDepth(s.depth - 0.01);
     }
     for (const [s, e] of eyes) if (!s.active) { e.destroy(); eyes.delete(s); }
@@ -340,7 +349,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
     f.lamp = [lx, feet + 1, feet - ly, hero.visible ? look.lamp[0] * lamp0 : 0];
     f.glass = [lx, ly, hero.visible ? lamp0 : 0];
     f.night = [hero.x, feet, 90, look.night];
-    f.order = lanterns().filter((l) => l.lit).slice(0, 4).map((l): V4 => [l.x, l.y, 1.8, 0]);
+    f.order = lanterns().filter((l) => l.lit).slice(0, 4).map((l): V4 => [l.x, l.y, l.I ?? 1.8, l.h ?? 0]);
     sort();
   };
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, step);
