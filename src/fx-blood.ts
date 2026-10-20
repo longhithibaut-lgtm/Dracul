@@ -106,7 +106,9 @@ export function slash(scene: Phaser.Scene, x: number, y: number, angle: number, 
   const wmax = (i: number) => (heavy ? 2.8 : 2.3) - 0.3 * i;
   // Every pixel the swing may cover, with what stays put while it plays: x, y, along the swing (u, 0..1), behind the
   // body, the smear's brush streaks, the vapour's clots, then each rake's signed distance (outward < 0; they wobble).
-  const K = 6 + n, cells: number[] = [], r = R + 2, ry = Math.ceil(r * SQ);
+  const K = 6 + n, cells: number[] = [], r = R + 2, ry = Math.ceil(r * SQ), STEPS = 256;
+  const wobble = Array.from({ length: n }, (_, i) => Array.from({ length: STEPS + 1 }, (_, k) => // along the swing only: a table
+    1.5 + i * sp + (heavy ? i * 0.6 : 0) + (vn((k / STEPS) * len / 7, i * 7, i) - 0.5) * 1.6 + (vn(((k / STEPS) * len) / 2, i * 3, i + 1) - 0.5) * 0.5));
   for (let dy = -ry; dy <= ry; dy++) for (let dx = -r; dx <= r; dx++) {
     const gx = dx + 0.5, gy = (dy + 0.5) / SQ, depth = R - Math.hypot(gx, gy);
     if (depth < -1 || depth > W) continue;
@@ -114,7 +116,7 @@ export function slash(scene: Phaser.Scene, x: number, y: number, angle: number, 
     if (u < 0 || u > 1) continue;
     const X = ox + dx, Y = oy + dy;
     cells.push(X, Y, u, gy < 0 ? 1 : 0, vn((u * len) / 2.5, depth * 0.9, 5), mist ? 0.6 * vn(X / 4, Y / 4, 3) + 0.4 * vn(X / 2, Y / 2, 4) : 0);
-    for (let i = 0; i < n; i++) cells.push(depth - 1.5 - i * sp - (heavy ? i * 0.6 : 0) - (vn((u * len) / 7, i * 7, i) - 0.5) * 1.6 - (vn((u * len) / 2, i * 3, i + 1) - 0.5) * 0.5);
+    for (let i = 0; i < n; i++) cells.push(depth - wobble[i][Math.round(u * STEPS)]);
   }
   const head = (t: number) => Math.min(1, 0.55 + 0.45 * ease(Math.min(1, t / swingMs)));
   // The spray: each drop leaves a rake as the claws pass there (before the first frame: already flying).
