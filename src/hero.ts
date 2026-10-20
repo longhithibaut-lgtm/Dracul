@@ -648,8 +648,8 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   else if (look.biting && (view === 'side' || has('bite-0'))) frame = step('bite', st.biteAt, [0, 70], 'bite'); // 70: T.bite.lungeMs
   else if (look.casting) frame = step('cast', st.castAt, [0, 60, 140], 'cast');
   else if (look.hurt && has('hurt-0')) frame = step('hurt', st.hurtAt, [0, 60], '');
-  else if (look.slashing && has(`claw${look.combo}-0`)) frame = step(`claw${look.combo}`, st.slashAt, CLAW, '');
   // The arm rakes the way the arc goes: fx.ts sweeps combo 1 back the other way; a sprite mirrored to face left mirrors it.
+  else if (look.slashing && has(`claw${look.combo}-0`)) frame = step(`claw${look.combo < 2 && view === 'side' && c < 0 ? 1 - look.combo : look.combo}`, st.slashAt, CLAW, '');
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${Number(look.combo === 1) ^ Number(view === 'side' && c < 0)}`;
   else if (look.throwing) frame = step('throw', st.throwAt, [0, 35, 80], `throw${st.swing}`);
   else if (now - st.dashEnd < 70) frame = 'dash0';
