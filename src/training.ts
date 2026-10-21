@@ -6,14 +6,13 @@ import type { LayoutId } from './room.ts';
 
 export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'priest' | 'hounds' | 'penitents' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau';
 /** Survive the scene restarts (a death in training starts the training room again). */
-export const opts = { god: true, passive: false, wanderer: true }; // wanderer: the new hero (wanderer.ts); off = the old one
+export const opts = { god: true, passive: false };
 
 const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître'], ['torture', 'La salle de torture (essai)'], ['refuge', 'Le refuge']];
 const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne'], ['purifier', 'Purificateur'], ['priest', 'Prêtre'], ['hounds', 'Chiens (3)'], ['penitents', 'Pénitents (6)'], ['ringer', 'Sonneur'], ['inquisitor', 'Inquisiteur'], ['amas', 'Amas'], ['bourreau', 'Bourreau']];
 // [label, group, key, min, max, step]
 const KNOBS = [
-  ['Vitesse de marche', 'hero', 'speed', 50, 160, 5],
-  ['Vitesse de marche (salles « grand pixel »)', 'grand', 'speed', 30, 160, 2],
+  ['Vitesse de marche', 'hero', 'speed', 30, 160, 2],
   ['Invulnérabilité après un coup (ms)', 'hero', 'hurtInvulnMs', 200, 1500, 50],
   ['Mémoire des touches pressées trop tôt (ms)', 'hero', 'bufferMs', 0, 400, 10],
   ['Brume : vitesse', 'dash', 'speed', 200, 500, 10],
@@ -95,7 +94,6 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
     <label><input type="checkbox" data-opt="passive"> Ennemis passifs (mannequins)</label>
     <h3>Héros</h3>
     <label><input type="checkbox" data-opt="god"> Invincible</label>
-    <label><input type="checkbox" data-opt="wanderer"> Nouveau héros (décocher : l'ancien, pour comparer)</label>
     <div class="row"><button type="button" data-act="heal">Soigner</button></div>
     <h3>Dons du Rat : emplacements</h3>${gifts(true)}
     <h3>Dons du Rat : talents</h3>${gifts(false)}
@@ -125,7 +123,6 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
   root.addEventListener('change', (ev) => {
     const i = ev.target as HTMLInputElement;
     if (i.dataset.opt) opts[i.dataset.opt as keyof typeof opts] = i.checked;
-    if (i.dataset.opt === 'wanderer') api.restart(); // a new sprite: the room starts again around him
     if (i.dataset.gift) api.toggle(i.dataset.gift as GiftId, i.checked);
     release();
   });

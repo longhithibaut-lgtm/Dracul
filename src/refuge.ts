@@ -33,7 +33,6 @@ export function build(scene: Phaser.Scene): Room {
     stairs: D.START,
     holy: () => false,
     burn: T.lantern,
-    arcades: [],
     width: D.W,
     height: D.H,
     sections: [],

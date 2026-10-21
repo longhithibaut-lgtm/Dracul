@@ -17,8 +17,8 @@ const game = new Phaser.Game({
   parent: 'game', // falls back to <body> when there is no #game element
   scene: [RoomScene],
 });
-// Live, on a resize or a turn of the phone; the scene re-frames itself on the same event (RoomScene.frame). The trial
-// room doubles it (dark.ts skin.zoom).
+// Live, on a resize or a turn of the phone; the scene re-frames itself on the same event (RoomScene.frame). The game
+// draws it at dark.ts ZOOM.
 game.scale.on(Phaser.Scale.Events.RESIZE, () => fit(game.scale));
 
 // The installable app (public/manifest.webmanifest) needs a service worker; pages that may not register one (a framed

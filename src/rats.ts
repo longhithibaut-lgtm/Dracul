@@ -4,7 +4,7 @@ import * as Font from './font.ts';
 import { blot } from './enemy.ts';
 import { GIFTS, ICONS, KINDS, kind, replacing, type GiftId } from './gifts.ts';
 import { replaced } from './logic.ts';
-import { skin } from './dark.ts';
+import { ZOOM } from './dark.ts';
 
 // How the Rat house shows: Vesna la Grise's gift waiting on the medallion, the gift cards, the rats of Nuée and of
 // the Glyphe du nid, and la Peste (on enemies, on shards, leaping with Contagion). Gameplay decides what happens; this
@@ -192,7 +192,7 @@ export function cards(scene: Scene, ids: GiftId[], held: readonly GiftId[]): Car
   let hot = -1, picked = false, xs: number[] = [], ys: number[] = [];
   const slide = ids.map(() => 10); // each card rises this much into place as it comes in
   const place = () => {
-    const W = scene.scale.width / skin.zoom, H = scene.scale.height / skin.zoom, row = n * CARD.w + (n - 1) * CARD.gap, stack = W < row + 16, gap = 6;
+    const W = scene.scale.width / ZOOM, H = scene.scale.height / ZOOM, row = n * CARD.w + (n - 1) * CARD.gap, stack = W < row + 16, gap = 6;
     // Side by side as high as on a 16:9 screen, the block kept in the middle of a taller view; stacked, centred.
     const top = stack ? Math.max(4, Math.round((H - 57 - n * h - (n - 1) * gap) / 2)) : 56 + Math.round((H - T.height) / 2);
     xs = ids.map((_, i) => (stack ? Math.round((W - CARD.w) / 2) : Math.round((W - row) / 2) + i * (CARD.w + CARD.gap)));

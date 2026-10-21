@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { ellipseDist } from './logic.ts';
-import { skin } from './dark.ts';
 
 // Sacred lanterns of the Order: an iron lantern on a pale stone plinth, crowned and marked with the sun of the
 // Eternal Dawn, casting a pool of holy light that burns vampires. Gameplay owns hp and timing; this file shows them.
@@ -11,7 +10,7 @@ type G = Phaser.GameObjects.Graphics;
 type P = { x: number; y: number };
 // Light is drawn twice: a multiply layer soaks up the floor's blue, an additive one pours gold onto it. Gold over blue
 // in plain alpha only turns grey.
-type Lamp = [mul: G, add: G];
+type Lamp = [add: G];
 export type Lantern = {
   x: number; y: number; // centre of its footprint and of its pool of light
   hp: number;
@@ -120,31 +119,22 @@ function rim(g: G, cx: number, cy: number, rx: number, ry: number, c: number, a:
   }
 }
 
-const lamp = (scene: Scene): Lamp => [scene.add.graphics().setDepth(FLOOR).setBlendMode(Phaser.BlendModes.MULTIPLY),
-  scene.add.graphics().setDepth(FLOOR + 0.1).setBlendMode(Phaser.BlendModes.ADD)];
-const AMBER = 0xff9830; // what the multiply layer lets through: red, some green, little blue
+const lamp = (scene: Scene): Lamp => [scene.add.graphics().setDepth(FLOOR + 0.1).setBlendMode(Phaser.BlendModes.ADD)];
 
-/** The pool: hard-stepped bands, brightest under the lantern, with a crisp edge that is exactly where it burns. Only the
- *  inner bands flicker (`flick`, in px); the edge never moves. `s` scales it (lighting up, going out). */
-function pool([m, a]: Lamp, x: number, y: number, s: number, bands: number, flick: number, boost = 1) {
+/** The pool's glaze and its crisp edge, exactly where it burns (the light itself is the room shader's). `s` scales it
+ *  (lighting up, going out). */
+function pool([a]: Lamp, x: number, y: number, s: number, bands: number, boost = 1) {
   const rx = T.lantern.radius * s, ry = rx * T.lantern.squash;
   if (rx < 1) return;
-  if (skin.dark) { // the torture room: its shader casts the light (dark.ts); here only a dirty glaze and the burning edge
-    if (bands > 0) fill(a, x, y, rx, ry, 0x566236, 0.1 * boost);
-    rim(a, x, y, rx, ry, 0x929e58, 0.45);
-    return;
-  }
-  if (bands > 0) { fill(m, x, y, rx, ry, AMBER, 0.75); fill(a, x, y, rx, ry, PAL.G, 0.32 * boost); }
-  if (bands > 1) fill(a, x, y, rx * 0.64 + flick, ry * 0.64 + flick, PAL.Y, 0.2 * boost);
-  if (bands > 2) fill(a, x, y, rx * 0.34 + flick, ry * 0.34 + flick, PAL.W, 0.28 * boost);
-  rim(m, x, y, rx, ry, AMBER, 1);
-  rim(a, x, y, rx, ry, PAL.Y, 0.65);
+  // The room's shader casts the light (dark.ts); here only a dirty glaze and the burning edge.
+  if (bands > 0) fill(a, x, y, rx, ry, 0x566236, 0.1 * boost);
+  rim(a, x, y, rx, ry, 0x929e58, 0.45);
 }
 
 /** The sun of the Order, as on the finial, painted on the floor in light. */
-function sign([m, a]: Lamp, x: number, y: number, k: number) {
+function sign([a]: Lamp, x: number, y: number, k: number) {
   BASE.trim().split('\n').slice(0, 6).forEach((row, j) => [...row].forEach((c, i) => {
-    if (c !== '.') { if (!skin.dark) px(m, x + i - 6, y + j - 3, AMBER); px(a, x + i - 6, y + j - 3, PAL[c], k); }
+    if (c !== '.') px(a, x + i - 6, y + j - 3, PAL[c], k);
   }));
 }
 
@@ -152,7 +142,6 @@ function sign([m, a]: Lamp, x: number, y: number, k: number) {
 export function create(scene: Scene, obstacles: Phaser.Physics.Arcade.StaticGroup, x: number, y: number, ms: number): Lantern {
   if (!scene.textures.exists('lantern')) bake(scene);
   const born = scene.time.now, R = T.lantern.radius, sq = T.lantern.squash;
-  let flick = 0;
   const l: Lantern = { x, y, hp: T.lantern.hp, lit: false, light: lamp(scene), stutterUntil: 0, timer: undefined! };
   const step = () => {
     const t = scene.time.now - born, g = l.light;
@@ -162,8 +151,7 @@ export function create(scene: Scene, obstacles: Phaser.Physics.Arcade.StaticGrou
       const k = t / ms, s = 0.55 + 0.45 * Phaser.Math.Easing.Cubic.Out(Math.min(1, k / 0.4)), turn = k * 4;
       const on = Math.floor(k * (k > 0.65 ? 18 : 8)) % 2 === 0;
       const dash = (dx: number, dy: number) => Math.floor(((Math.atan2(dy / sq, dx) + Math.PI) * R) / 4 + turn) % 2 === 0;
-      if (!skin.dark) rim(g[0], x, y, R * s, R * sq * s, AMBER, 1, dash);
-      rim(g[1], x, y, R * s, R * sq * s, skin.dark ? (on ? 0xb8c070 : 0x566236) : on ? PAL.Y : PAL.G, 0.9, dash);
+      rim(g[0], x, y, R * s, R * sq * s, on ? 0xb8c070 : 0x566236, 0.9, dash);
       sign(g, x, y, on ? 0.9 : 0.5);
       return;
     }
@@ -176,9 +164,8 @@ export function create(scene: Scene, obstacles: Phaser.Physics.Arcade.StaticGrou
       obstacles.add(l.zone);
     }
     // Lights up band by band, then breathes: an inner band shifts by a pixel now and then, more once the glass cracks.
-    if (Math.random() < (l.hp < 2 ? 0.5 : 0.25)) flick = Phaser.Math.Between(-1, 1);
     const up = t - ms, bands = scene.time.now < l.stutterUntil ? 1 : Math.min(3, 1 + Math.floor(up / 80));
-    pool(g, x, y, 1, bands, up < 240 ? 0 : flick, l.hp < 2 && Math.random() < 0.15 ? 0.6 : 1);
+    pool(g, x, y, 1, bands, l.hp < 2 && Math.random() < 0.15 ? 0.6 : 1);
   };
   l.timer = scene.time.addEvent({ delay: 40, loop: true, callback: step });
   step();
@@ -230,7 +217,7 @@ export function shatter(scene: Scene, l: Lantern, angle: number) {
   scene.tweens.addCounter({ from: 0, to: 260, duration: 260, onComplete: () => out.forEach((g) => g.destroy()), onUpdate: (tw) => {
     const t = tw.getValue() ?? 0, k = Math.floor((t / 260) * 5) / 5; // a flare, then a stepped collapse
     out.forEach((g) => g.clear());
-    pool(out, l.x, l.y, 1 - k, t < 50 ? 3 : 1, 0, t < 50 ? 2 : 1);
+    pool(out, l.x, l.y, 1 - k, t < 50 ? 3 : 1, t < 50 ? 2 : 1);
   } });
 }
 
@@ -266,10 +253,10 @@ export function exposure(scene: Scene, hero: Phaser.GameObjects.Sprite, ms: numb
   const k = Math.min(1, ms / graceMs), burning = ms >= graceMs, beat = burning ? ((ms - graceMs) % everyMs) / everyMs : 0;
   if (Math.random() < 0.2 + 0.8 * k) sizzle(scene, hero, false, burning ? 4 : 1 + Math.round(2 * k));
   // The glow creeps on (an added tint, so the hurt flash, a fill tint, keeps the upper hand).
-  const t = (skin.dark ? 0.5 : 1) * k ** 1.5; // the grand vampire is drawn already lit: half the glow reads the same
+  const t = 0.5 * k ** 1.5; // he is drawn already lit: half the glow reads
   if (!hero.isTinted) hero.setTint(Phaser.Display.Color.GetColor(Math.round(170 * t), Math.round(80 * t), Math.round(20 * t)))
     .setTintMode(Phaser.TintModes.ADD);
-  const x = Math.round(hero.x) - 7, y = Math.round(hero.y) - (skin.dark ? 32 : 24), w = burning ? 13 : Math.round(13 * k); // over his head (the grand vampire's is higher)
+  const x = Math.round(hero.x) - 7, y = Math.round(hero.y) - 32, w = burning ? 13 : Math.round(13 * k); // over his head
   const fill = burning ? (beat > 0.8 && Math.floor(ms / 60) % 2 ? PAL.W : 0xe0284a) : k > 0.85 && Math.floor(ms / 80) % 2 ? PAL.W : k > 0.6 ? PAL.Y : PAL.G;
   g.fillStyle(PAL['0']).fillRect(x - 1, y - 1, 15, 4);
   g.fillStyle(PAL.k).fillRect(x, y, 13, 2);

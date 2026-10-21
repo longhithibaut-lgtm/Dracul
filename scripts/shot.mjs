@@ -276,6 +276,9 @@ let gifts = false, gate = false;
 // The training room (key T): its panel calls enemies in, freezes them and hands out gifts.
 let training = false;
 {
+  // Not while a room is fading out to the next (its restart would swallow the key).
+  await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.sys.isActive() && s.hero?.body && s.phase !== 'leave'; }, null, { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(500);
   await page.keyboard.press('t');
   if (await page.waitForSelector('#training', { timeout: 5000 }).catch(() => null)) {
     for (const s of ['ghoul', 'weak', 'lantern']) await page.click(`#training [data-spawn="${s}"]`);
@@ -284,7 +287,7 @@ let training = false;
     training = await page.waitForFunction(() => { // past the spawn telegraphs (slower in game time when frames are slow)
       const s = window.game.scene.getScene('room');
       return s.training && s.gifts.includes('nuee') && s.enemies.getChildren().filter((e) => e.body?.enable).length === 2 && s.lanterns.length === 1;
-    }, null, { timeout: 8000 }).then(() => true, () => false);
+    }, null, { timeout: 20000 }).then(() => true, () => false); // slow, headless: the panel's clicks and the telegraphs take seconds
     await freeze(true);
     await shot('training');
     await freeze(false);
@@ -303,8 +306,7 @@ if (training) {
     if (!g || !w) return null;
     s.hero.body.reset(170, 160); // across the medallion, out of every lantern's light
     g.body.reset(236, 160);
-    w.body.reset(290, 160);
-    w.body.reset(290, 160 + g.body.center.y - w.body.center.y); // feet in line with the ghoul's
+    w.body.reset(290, 160); // feet in line with the ghoul's: both 10 px below the sprite
     return { x: 203, y: 156, hp: g.getData('hp'), whp: w.getData('hp') };
   });
   await snap();
@@ -333,7 +335,7 @@ let glyph = false;
 if (training) {
   await page.click('#training [data-act="clear"]');
   for (let i = 0; i < 2; i++) await page.click('#training [data-spawn="ghoul"]');
-  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().filter((e) => e.body?.enable).length === 2, null, { timeout: 5000 }).catch(() => {});
+  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().filter((e) => e.body?.enable).length === 2, null, { timeout: 15000 }).catch(() => {});
   await page.evaluate(() => {
     const s = window.game.scene.getScene('room');
     const [a, b] = s.enemies.getChildren().filter((e) => e.body?.enable);
@@ -347,7 +349,7 @@ if (training) {
   await page.mouse.move(to.x, to.y);
   await page.waitForTimeout(400); // the pointer is read on Phaser's next step (a slow one, headless, in the dark rooms)
   await page.keyboard.press('e');
-  glyph = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.glyph?.chains.size === 2 && s.time.now - s.glyph.caughtAt > 300; }, null, { timeout: 5000 })
+  glyph = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.glyph?.chains.size === 2 && s.time.now - s.glyph.caughtAt > 300; }, null, { timeout: 15000 })
     .then(() => true, () => false);
   await freeze(true);
   await shot('glyph', await clip(300, 195, 480, 320));

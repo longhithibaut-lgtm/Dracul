@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import type { Room } from './room.ts';
 import type { Look } from './dark.ts';
-import { T } from './tuning.ts';
 import { runMask } from './logic.ts';
 
 // The rooms baked offline in the « grand pixel » style (tools/art/bake.mjs): src/<key>-albedo.png, what the world camera
@@ -37,8 +36,8 @@ export type Plan = {
   GATES: { at: number[]; w: number; h: number; frames: [number, number][] }; TORCHES: [number, number, number][]; HOLY: string; PALETTE: string[];
 };
 
-/** Builds the run room `key` from its plan, lit by dark.ts as `look` says. */
-export function room(scene: Phaser.Scene, key: string, D: Plan, look: Look): Room {
+/** Builds the run room `key` from its plan, lit by dark.ts as `look` says; its holy light (HOLY) burns as `burn` says. */
+export function room(scene: Phaser.Scene, key: string, D: Plan, look: Look, burn: Room['burn']): Room {
   const obstacles = draw(scene, key, D.OVER, D.BOXES);
   // The portcullis: its frames from closed to raised (raise()), over the closed one the albedo shows.
   const tex = scene.textures.get(`${key}-over`);
@@ -58,12 +57,11 @@ export function room(scene: Phaser.Scene, key: string, D: Plan, look: Look): Roo
     gate: D.GATE,
     stairs: D.STAIRS,
     holy,
-    burn: D.HOLY ? T.dawn : T.lantern,
-    arcades: [],
+    burn,
     width: D.W,
     height: D.H,
     sections: D.SECTIONS,
-    look: { ...look, torches: D.TORCHES, pal: D.PALETTE, albedo: `${key}-albedo` },
+    look: { ...look, light: `${key}-light`, torches: D.TORCHES, pal: D.PALETTE, albedo: `${key}-albedo` },
   };
 }
 

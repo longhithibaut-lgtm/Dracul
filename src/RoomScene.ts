@@ -13,7 +13,6 @@ import * as Lantern from './lantern.ts';
 import * as Glyph from './glyph.ts';
 import * as Rats from './rats.ts';
 import * as Training from './training.ts';
-import * as Wanderer from './wanderer.ts';
 import * as Dark from './dark.ts';
 import * as Touch from './touch.ts';
 import * as Refuge from './refuge.ts';
@@ -120,7 +119,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   preload() {
-    Wanderer.preload(this); // the grand vampire's sheet, for the rooms in the dark
+    Hero.preload(this);
     Room.preload(this, this.layout);
     Foes.preload(this); // the training room calls them into any room
   }
@@ -129,17 +128,15 @@ export class RoomScene extends Phaser.Scene {
     // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
     this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
     this.physics.resume();
-    Dark.skin.dark = !!Room.look(this.layout); // before anyone is drawn: the rooms in the dark have their sprites wear their skin
-    Dark.skin.zoom = Dark.skin.dark ? 2 : 1;
     Dark.fit(this.scale);
-    this.cameras.main.setZoom(Dark.skin.zoom);
+    this.cameras.main.setZoom(Dark.ZOOM);
     this.room = Room.build(this, this.layout);
     const b = this.room.bounds;
     this.physics.world.setBounds(b.x, b.y, b.width, b.height);
     this.walkGrid();
 
     const start = this.phase === 'enter' ? this.room.stairs : this.room.heroStart;
-    this.hero = (Training.opts.wanderer ? Wanderer : Hero).create(this, start.x, start.y);
+    this.hero = Hero.create(this, start.x, start.y);
     this.frame();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.frame, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.frame, this));
@@ -159,7 +156,7 @@ export class RoomScene extends Phaser.Scene {
     // its rim glows and rings, then its lanterns. Their bodies' tells, in the dark rooms.
     const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (['priest', 'inquisitor', 'bourreau'].includes(e.getData('kind')) || ['ignite', 'fire', 'raise', 'toll'].includes(e.getData('state'))))
       .map((e) => ({ ...Foes.lamp(e), lit: true, I: this.glow(e) })), ...this.lanterns];
-    if (Dark.skin.dark) Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
+    Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
 
     this.hud = Hud.create(this);
@@ -173,12 +170,12 @@ export class RoomScene extends Phaser.Scene {
     const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.cards) return this.pick(this.cards.at(p.x / Dark.skin.zoom, p.y / Dark.skin.zoom));
+      if (this.cards) return this.pick(this.cards.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM));
       const w = world(p), a = Math.atan2(w.y - this.hero.y, w.x - this.hero.x);
       if (p.button === 0) this.press(() => this.slash(a));
       else if (p.button === 2) this.press(() => this.shoot(a));
     });
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.x / Dark.skin.zoom, p.y / Dark.skin.zoom)));
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.cards?.hover(this.cards.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM)));
     this.keys.J.on('down', () => { const a = this.facing; this.press(() => this.slash(a)); });
     this.keys.K.on('down', () => { const a = this.facing; this.press(() => this.shoot(a)); });
     this.keys.F.on('down', () => this.press(() => this.bite()));
@@ -263,7 +260,7 @@ export class RoomScene extends Phaser.Scene {
    *  surroundings round it; where it is larger (an upright phone, the tall cloister), the camera follows the hero,
    *  smoothly, kept inside the room. */
   private frame() {
-    const w = this.scale.width / Dark.skin.zoom, h = this.scale.height / Dark.skin.zoom, rw = this.room.width, rh = this.room.height;
+    const w = this.scale.width / Dark.ZOOM, h = this.scale.height / Dark.ZOOM, rw = this.room.width, rh = this.room.height;
     this.cameras.main.setBounds(Math.min(0, Math.floor((rw - w) / 2)), Math.min(0, Math.floor((rh - h) / 2)), Math.max(rw, w), Math.max(rh, h))
       .startFollow(this.hero, true, 0.08, 0.08);
   }
@@ -306,7 +303,7 @@ export class RoomScene extends Phaser.Scene {
     if (time < this.shoveUntil && time >= this.dashUntil && !this.prey) this.hero.setVelocity(this.shove.x, this.shove.y);
     else if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      this.hero.body!.velocity.normalize().scale((Dark.skin.dark ? T.grand.speed : T.hero.speed) * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
+      this.hero.body!.velocity.normalize().scale(T.hero.speed * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
     }
 
     if (this.queued && (time > this.queued.until || (!dazed && this.queued.act()))) this.queued = undefined;
@@ -322,11 +319,6 @@ export class RoomScene extends Phaser.Scene {
     this.hud.glyphReady(time >= this.glyphReadyAt, this.glyphReadyAt);
 
     const feet = this.hero.body!;
-    // An arcade the hero is behind fades, so he is never lost behind it.
-    for (const a of this.room.arcades) {
-      const behind = feet.bottom > a.y && feet.bottom < a.y + a.height - 1;
-      a.setAlpha(Phaser.Math.Linear(a.alpha, behind ? 0.35 : 1, Math.min(1, delta / 100)));
-    }
     if (this.phase === 'enter' && feet.bottom < this.room.bounds.bottom - 16) {
       this.phase = 'fight';
       this.hero.setCollideWorldBounds(true);
@@ -419,7 +411,7 @@ export class RoomScene extends Phaser.Scene {
     this.stepRats(time, delta);
     // Bolts fly until the prop or wall they were aimed into.
     for (const b of [...this.bolts.getChildren()] as Sprite[]) {
-      b.setDepth(b.y);
+      b.setDepth(b.y + Crossbow.BOLT_HEIGHT - 10); // sorted by its floor point, like the characters
       const { x0, y0, angle, reach } = b.data.values;
       if (Phaser.Math.Distance.Between(x0, y0, b.body!.center.x, b.body!.center.y) < reach) continue;
       b.setPosition(x0 + Math.cos(angle) * reach, y0 + Math.sin(angle) * reach - Crossbow.BOLT_HEIGHT);

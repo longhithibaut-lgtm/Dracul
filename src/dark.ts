@@ -15,14 +15,13 @@ import { viewSize } from './logic.ts';
 // What glows or warns is drawn unlit over it, by a second camera that sees only what stands at DEPTH and above: the
 // eyes, the torch flames, the effects.
 
-/** A room in the « grand pixel » style is on (room.ts look()): the sprite modules bake and pick their dark skins
- *  (wanderer.ts, enemy.ts, crossbow.ts). `zoom`: screen pixels per room pixel; 2 in these rooms, so its hero (wanderer.ts)
- *  keeps his full detail at half scale. The painted rooms stay at 1, the game exactly as before. */
-export const skin = { dark: false, zoom: 1 };
+/** Screen pixels per room pixel: the « grand pixel » sheets (the hero, the foes) are drawn at half scale, so each of their
+ *  pixels is a screen pixel. */
+export const ZOOM = 2;
 
-/** Sizes the game to the view (logic.ts viewSize) times skin.zoom; on a resize (main.ts) and on entering a room. */
+/** Sizes the game to the view (logic.ts viewSize) times ZOOM; on a resize (main.ts). */
 export function fit(scale: Phaser.Scale.ScaleManager) {
-  const { width, height } = scale.parentSize, v = viewSize(width, height, T.width, T.height), w = v.width * skin.zoom, h = v.height * skin.zoom;
+  const { width, height } = scale.parentSize, v = viewSize(width, height, T.width, T.height), w = v.width * ZOOM, h = v.height * ZOOM;
   if (width && height && (w !== scale.width || h !== scale.height)) scale.setGameSize(w, h);
 }
 
@@ -328,8 +327,8 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   let tick = 0, lamp0 = 1, torch = 1;
 
   const step = (time: number) => {
-    // The lantern glass in his hand, wherever this frame of his sheet has it (wanderer.ts); the old hero has none.
-    const [ax, ay] = (hero.frame.customData as { lamp?: [number, number] }).lamp ?? [hero.frame.width / 2, 29], tl = hero.getTopLeft();
+    // The lantern glass in his hand, wherever this frame of his sheet has it (hero.ts).
+    const [ax, ay] = (hero.frame.customData as { lamp: [number, number] }).lamp, tl = hero.getTopLeft();
     const lx = Math.round(tl.x! + (hero.flipX ? hero.frame.width - ax : ax) * hero.scaleX), ly = Math.round(tl.y! + ay * hero.scaleY), feet = hero.body!.bottom;
     // Eyes over the dark: each sprite's own eye pixels (its sheet's '*' frames), placed like it.
     for (const s of [hero, ...(enemies.getChildren() as Sprite[])]) {

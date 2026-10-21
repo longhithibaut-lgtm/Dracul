@@ -1,15 +1,13 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { skin, boost, bloodied, SANG } from './dark.ts';
+import { boost, bloodied, SANG, ZOOM } from './dark.ts';
 
-// How enemies look. Gameplay owns the AI state; this file only shows it.
+// How the ghouls look. Gameplay owns the AI state; this file only shows it.
 export type EnemyState = 'chase' | 'windup' | 'lunge' | 'recover';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
-type Layer = [part: string, dx: number, dy: number, shear?: number];
 
-// A blood thrall: bat-eared hood, fanged bone mask, long claws. Drawn facing right; show() mirrors it.
 // Frames are 40x40 with the feet on row 34. The origin row keeps the feet 10 px under the sprite position,
 // about where the hero's are, so gameplay's sort-by-y draws whoever stands lower in front.
 const SIZE = 40;
@@ -17,455 +15,21 @@ const FEET = 34;
 const ORIGIN = 24;
 const GROUND = FEET - ORIGIN; // floor level below the sprite position: shadows, pools, landing blood
 const RISE_MS = 240;
+const SHADOW = 0x0b0710; // its ground shadow, drawn translucent; the core of its spawn pool
+const SHREDS = [0x7a1a3e, 0x521030, 0x33102a]; // what it sheds as it bursts
 
-// "Nuit de sang" palette, plus four wine tones for the robe (d, r, R, h) so it stays apart from blood and from the hero.
-const PAL: Record<string, number> = {
-  '0': 0x0b0710, '1': 0x1c1029, '2': 0x2e1838, '4': 0x8a6f8f,
-  d: 0x33102a, r: 0x521030, R: 0x7a1a3e, h: 0xb03a5e,
-  B: 0xe8dcc8, b: 0xb7a58f,
-  e: 0xe0284a, E: 0xff4f8b, W: 0xffe4ee, '8': 0x8f195e, // eyes and their glow
-  t: 0x3fa7a3, T: 0x1f4a5a,
-  s: 0x0b0710, // ground shadow, drawn translucent
-};
-// Drops, pools and stains; in the trial room, the darker blood of its effects (fx-blood.ts).
-const BLOODS = [{ light: 0xe0284a, mid: 0xa3122f, dark: 0x5c0a1c, dry: 0x3e0820 }, { light: SANG[4], mid: SANG[3], dark: SANG[2], dry: SANG[1] }];
-export const BLOOD = {
-  get light() { return BLOODS[+skin.dark].light; }, get mid() { return BLOODS[+skin.dark].mid; },
-  get dark() { return BLOODS[+skin.dark].dark; }, get dry() { return BLOODS[+skin.dark].dry; },
-};
-// The hit flash rims the body in white and lifts the robe a tone instead of filling it white, so the struck thrall
-// stays a dark shape apart from the pale hero standing at it.
-const FLASH: Record<string, number> = { d: PAL.r, r: PAL.R, R: PAL.h, h: PAL.E };
+// Drops, pools and stains: the blood of the effects (fx-blood.ts).
+export const BLOOD = { light: SANG[4], mid: SANG[3], dark: SANG[2], dry: SANG[1] };
 
-// Pixel grids placed at (x, y) in the 40x40 frame; '.' is transparent.
-const PARTS: Record<string, [x: number, y: number, rows: string]> = {
-  head: [12, 8, `
-...R.....R.....
-...RR...RRd....
-..RRr..RRrd....
-..RRrrrRRrrd...
-..Rrrrrrrrrrd..
-.RRrrdddddddd..
-.Rrd000bBBB00..
-.Rr00B0eBB0eBb.
-.Rr00BBBBBBBBBb
-RRrd00bBBBBBbb4
-Rrrd000bbbbb4..
-.rrd000B000B0d.
-.......B...B...
-`],
-  head_rage: [12, 8, `
-...R.....R.....
-...RR...RRd....
-..RRr..RRrd....
-..RRrrrRRrrd...
-..Rrrrrrrrrrd..
-.RRrrdddddddd..
-.Rrd000bBB00d..
-.Rr00B0EBB0EBb.
-.Rr00BBBBBBBBBb
-RRrd00bBBBBBbb4
-Rrrd00bB000Bb..
-.rrd000B000B0d.
-.......B...B...
-`],
-  head_glare: [12, 8, `
-...R.....R.....
-...RR...RRd....
-..RRr..RRrd....
-..RRrrrRRrrd...
-..Rrrrrrrrrrd..
-.RRrrdddddddd..
-.Rrd08W8BBW80..
-.Rr08EW8B8WEb..
-.Rr00BBBBBBBBBb
-RRrd00bBBBBBbb4
-Rrrd00bB000Bb..
-.rrd000B000B0d.
-.......B...B...
-`],
-  head_flare: [12, 8, `
-...R.....R.....
-...RR...RRd....
-..RRr..RRrd....
-..RRrrrRRrrd...
-..Rrrrrrrrrrd..
-.RRrrdddddddd..
-.Rrd0EWEBBEWE0.
-.Rr0EWWEBEWWEb.
-.Rr00BBBBBBBBBb
-RRrd00bBBBBBbb4
-Rrrd00bB000Bb..
-.rrd000B000B0d.
-.......B...B...
-`],
-  head_hurt: [12, 8, `
-...R.....R.....
-...RR...RRd....
-..RRr..RRrd....
-..RRrrrRRrrd...
-..Rrrrrrrrrrd..
-.RRrrdddddddd..
-.Rrd00bBBBBBd..
-.Rr00B0EBB0EBb.
-.Rr00BBBBBBBBBb
-RRrd00bBBBBBbb4
-Rrrd00bB000Bb..
-.rrd000B000B0d.
-.......B...B...
-`],
-  hood: [12, 8, `
-...R.....R....
-...RR...RRd...
-..RRr..RRrd...
-..RRrrrRRrrd..
-..Rrrrrrrrrrd.
-.RRrrdddddddd.
-.Rrd0000000d..
-.Rr00000000d..
-.Rr0000000d...
-RRrd00000d....
-Rrrd0000d.....
-.rrd000dd.....
-`],
-  head_back: [12, 8, `
-...R.....R.....
-...RR...RRd....
-..RRr..RRrd....
-..RRrrrRRrrd...
-..RRrrrrrrrrd..
-.RRRrrrrrrrrd0.
-.RRrrrrrrrrrd04
-.RRrrrrrrrrdd0b
-.RRrrrrrrrrdd..
-RRRrrrrrrrdd...
-dRrrrrrrrdd....
-.ddrrrrrdd.....
-`],
-  body_back: [7, 16, `
-..RRr...........rd....
-.RRRrr.........rrrd...
-RRRRrrrrrrrrrrrrrrdd..
-RRRRrrrrrrrrrrrrrrrdd.
-RRRRRrrrrddddrrdrrrrdd
-.RRRRrrrrrrrrrrdrrrrdd
-..RRRrrrrrrrrrdrrrrdd.
-...RRrrrrrrrrrdrrrdd..
-....RRrrrdrrrrdrrdd...
-.....Rrrrdrrrrdrrd....
-.....RRrrdrrrrdrdd....
-.....Rrrrdrrrrdrdd....
-.....Rrrrdrrrdrrdd....
-.....RRrrdrrrdrrdd....
-....RRrrdrrrrdrrrdd...
-....Rrddrrrdrrrdrdd...
-`],
-  lunge_body: [4, 19, `
-.............RRRr.....
-...........RRRrrrd....
-..........RRrrrrrrd...
-.........RRrrrrrrrrd..
-........RRrrrrrrrrrrd.
-.......RRrrrrrrrrrrrrd
-......RRrrrrrrrdrrrrrd
-.....RRrrrrrrrdrrrrrdd
-....RRrrrrrrrdrrrrrdd.
-...RRrrdrrrrdrrrrdd...
-..rrrd.rrrdrrrddd.....
-.rrd..rd.rd.rd........
-rd...d111.............
-.....b1b..............
-`],
-  lunge_near: [20, 21, `
-............b
-.........0BB.
-.RRRr...000..
-RRrrrrrd11BBb
-.rrrrrdd110..
-....ddd.00BB.
-............b
-`],
-  lunge_far: [25, 12, `
-........b
-.....0BB.
-..RR000..
-.rrr11BBb
-rrd.110..
-....00BB.
-........b
-`],
-  arm_far_fling: [1, 11, `
-b..b...
-.B.B.B.
-.B0B0B.
-.01110.
-..0111.
-...1RR.
-....RRr
-.....Rr
-`],
-  body: [7, 16, `
-..RRr...........rd....
-.RRRrr.........rrrd...
-RRRRrrr.......rrrrdd..
-RRRRrrrrr...rrrrrrrdd.
-RRRRRrrrrrrrrrrrrrrdd.
-.RRRRrrrrrrrrrrrrrrdd.
-..RRRrrrrrrrrrrrrrdd..
-...RRrrrrrrrrrrrrdd...
-....RRrrrrrrrrrddd....
-.....RRrrrrrrrdddd....
-.....RRrrrrrdddddd....
-.....RRrrrrddddddd....
-.....RRrrrdddddddd....
-....RRrrrddddddddd....
-....RRrrdddddddddd....
-...RRrdddddddddddd....
-`],
-  hem0: [10, 32, `
-RR.rr.rr.rr.rd.d
-`],
-  hem1: [10, 32, `
-.RR.rr.rr.rd.dd.
-`],
-  legs: [10, 33, `
-...11.......11..
-..bBb......bBb..
-`],
-  legs_w0: [10, 33, `
-..11.........11.
-.bBb........bBb.
-`],
-  legs_w1: [10, 32, `
-..........11....
-.....bBb..11....
-.........bBb....
-`],
-  legs_w2: [10, 33, `
-....11.....11...
-...bBb....bBb...
-`],
-  legs_w3: [10, 32, `
-......11........
-......11.bBb....
-.....bBb........
-`],
-  arm_far: [5, 19, `
-...R...
-..RRr..
-..rrd..
-..rd...
-..rd...
-.01d...
-0110...
-01100..
-B0B0B..
-B.B.B..
-b..b..b
-`],
-  arm_near: [25, 19, `
-.r......
-rrrr....
-drrrr...
-.d.rrd..
-...rrd..
-...1d...
-..0110..
-..01100.
-..B0B0B.
-..B.B.B.
-.b..b..b
-`],
-  arm_cock: [2, 0, `
-B..B..B.....
-.B..B..B....
-..B..B.B....
-...B.B.B....
-...0B0B0....
-...01110....
-....0110....
-............
-...RRR11....
-..RRRrr1....
-..RRrrrrr...
-.RRrrrdrrd..
-.Rrrrddrrrd.
-.rrdrrddrrr.
-.rd.rdddrrr.
-.d..d..drrr.
-.......ddrr.
-........ddr.
-`],
-  arm_thrust: [20, 20, `
-..............BB...
-...RRRr......B.....
-..RRrrrrRRr0B......
-..rrrrrrrrd011BBB..
-..ddddrrddd0111..b.
-...dddddd..01BB....
-...........0..BB...
-................b..
-`],
-  legs_brace: [8, 32, `
-..d1.........11...
-.d11..........11..
-bBb............bBb
-`],
-  wing_l: [1, 1, `
-..B..B..B.......
-...B..B..B......
-....B..B.B......
-.....B.BB.......
-.....00BB0......
-.....01110......
-.....hh110......
-.hhhhRRRRh......
-hRRRRddrRRh.....
-.dddddrddRRh....
-..ddddrdddRRh...
-...rddrddddRRh..
-..rdddrdddddRRh.
-.rddddrddddddRRh
-r..dddrdddddddRR
-....ddrddddddddR
-....drdddddddddd
-....rddddddddd..
-....rd...dddd...
-....r.....d.....
-`],
-  wing_r: [25, 7, `
-......hhhhhhh.
-.....hRRRRRRRR
-....hRRddddd..
-...hRRdrddd...
-..hRRddrdddr..
-.hRRdddrddddr.
-hRRddddrdddddr
-RRdddddrddd...
-ddddddrdd.....
-ddddddrddd....
-ddddd...dd....
-`],
-  shadow: [12, 31, `
-...sssssssssss...
-..sssssssssssss..
-sssssssssssssssss
-sssssssssssssssss
-..sssssssssssss..
-......sssss......
-`],
-  heap: [8, 27, `
-.......R.....R..........
-.......RR...RRd.........
-......RRrrrrRrrd........
-....RRRrrrrrrrrrd.......
-...RRrrrdrrrrdrrrd......
-..RRrrrdrrrrrdrrrrdd....
-.rrrdrrdrrdrrrdrrrdd1B.B
-rrd.rd.rd.rd.rd.dd..b.b.
-`],
-  mask: [17, 30, `
-.bBBBb.
-bB0BB0b
-4bBBBb4
-.B...B.
-`],
-};
-// Frames stack parts back to front as [part, dx, dy, shear].
-const FRAMES: Record<string, Layer[]> = {
-  idle: [['shadow', 0, 0], ['arm_far', 0, 0], ['body', 0, 0], ['hem0', 0, 0], ['legs', 0, 0], ['arm_near', 0, 0], ['head', 0, 0]],
-  walk0: [['shadow', 0, 0], ['arm_far', 0, -1], ['body', 0, 0], ['hem0', 0, 0], ['legs_w0', 0, 0], ['arm_near', 0, 1], ['head', 0, 0]],
-  walk1: [['shadow', 0, 0], ['arm_far', 0, -1], ['body', 0, -1], ['hem1', 0, -1], ['legs_w1', 0, 0], ['arm_near', 0, 0], ['head', 0, -1]],
-  walk2: [['shadow', 0, 0], ['arm_far', 0, 1], ['body', 0, 0], ['hem0', 0, 0], ['legs_w2', 0, 0], ['arm_near', 0, -1], ['head', 0, 0]],
-  walk3: [['shadow', 0, 0], ['arm_far', 0, 0], ['body', 0, -1], ['hem1', 0, -1], ['legs_w3', 0, 0], ['arm_near', 0, -1], ['head', 0, -1]],
-  wind0: [['shadow', 0, 0], ['arm_cock', 3, 6], ['body', 0, 1, -0.05], ['hem0', 0, 1, -0.05], ['legs_brace', 0, 0], ['head_glare', 1, 2], ['arm_thrust', -4, 1]],
-  wind1: [['shadow', 0, 0], ['wing_r', 0, 0], ['wing_l', 0, 0], ['body', 0, 0, 0.15], ['hem0', 0, 0, 0.15], ['legs_brace', 0, 0], ['head_glare', 3, 1], ['arm_thrust', 0, 0]],
-  wind2: [['shadow', 0, 0], ['wing_r', 0, -1], ['wing_l', 1, 0], ['body', 1, 0, 0.15], ['hem0', 1, 0, 0.15], ['legs_brace', 0, 0], ['head_glare', 4, 1], ['arm_thrust', 1, 0]],
-  wind3: [['shadow', 0, 0], ['wing_r', 0, 0], ['wing_l', 0, 0], ['body', 0, 0, 0.15], ['hem0', 0, 0, 0.15], ['legs_brace', 0, 0], ['head_flare', 3, 1], ['arm_thrust', 0, 0]],
-  lunge: [['shadow', 0, 0], ['lunge_far', 0, 0], ['lunge_body', 0, 0], ['head_rage', 5, 4], ['lunge_near', 1, 2]],
-  hurt: [['shadow', 0, 0], ['arm_far_fling', 0, 0], ['body', 0, 0, -0.2], ['hem0', 0, 0, -0.2], ['legs', 0, 0], ['arm_near', -1, -1], ['head_hurt', -4, 0]],
-  recover0: [['shadow', 0, 0], ['arm_far', 1, 3], ['body', 0, 2], ['hem0', 0, 1], ['legs', 0, 0], ['arm_near', 1, 3], ['head', 2, 4]],
-  recover1: [['shadow', 0, 0], ['arm_far', 1, 2], ['body', 0, 1], ['hem0', 0, 1], ['legs', 0, 0], ['arm_near', 1, 2], ['head', 2, 3]],
-  robe: [['shadow', 0, 0], ['arm_far', 0, 0], ['body', 0, 0], ['hem0', 0, 0], ['legs', 0, 0], ['arm_near', 0, 0], ['hood', 0, 0]],
-  heap: [['heap', 0, 0]],
-  mask: [['mask', 0, 0]],
-};
-// Seen from behind while it heads up the screen: the same poses with the back of the hood and robe ('b' suffix).
-const BACK: Record<string, string> = { head: 'head_back', head_glare: 'head_back', head_flare: 'head_back', body: 'body_back' };
-for (const name of ['idle', 'walk0', 'walk1', 'walk2', 'walk3', 'wind0', 'wind1', 'wind2', 'wind3', 'recover0', 'recover1']) {
-  FRAMES[name + 'b'] = FRAMES[name].map(([part, ...rest]) => [BACK[part] ?? part, ...rest] as Layer);
-}
-
-// Parts that get a dark seam where a later part overlaps them (hem, legs and loose pieces stay seamless).
-const SEAMED = /^(wing|body|head|hood|arm|lunge)/;
-
-// Frames sunk into the floor and cut at the feet: climbing out of the spawn pool, and the emptied robe collapsing.
+// Its frames: as it stands, walks, winds up (wind0-3), lunges, reels, recovers; the heap it collapses into, the bone shard
+// it sheds ('mask'), its last pose before that ('robe'). Seen from behind while it heads up the screen: 'b' suffix.
+const BACKS = new Set(['idle', 'walk0', 'walk1', 'walk2', 'walk3', 'wind0', 'wind1', 'wind2', 'wind3', 'recover0', 'recover1']);
+const NAMES = ['idle', 'walk0', 'walk1', 'walk2', 'walk3', 'wind0', 'wind1', 'wind2', 'wind3', 'lunge', 'hurt', 'recover0', 'recover1', 'robe', 'heap', 'mask', ...[...BACKS].map((n) => n + 'b')];
+// Frames sunk into the floor and cut at the feet: climbing out of the spawn pool, and the emptied body collapsing.
 const SUNK: Record<string, [frame: string, depth: number]> = { rise0: ['idle', 18], rise1: ['idle', 11], rise2: ['idle', 5], slump: ['robe', 7] };
 
-// Stacks parts back to front. Shear leans every row above the feet by that many px per row (the recoil).
-function compose(layers: Layer[], sink: number, plot: (x: number, y: number, ch: string, part: string, k: number) => void) {
-  layers.forEach(([part, dx, dy, shear = 0], k) => {
-    const [px, py, rows] = PARTS[part];
-    const lift = part === 'shadow' ? 0 : sink;
-    rows.trim().split('\n').forEach((row, j) => {
-      const y = py + dy + j + lift;
-      if (lift && y > FEET) return;
-      const off = Math.round((FEET - y) * shear);
-      [...row].forEach((ch, i) => {
-        const x = px + dx + i + off;
-        if (ch === '.') return;
-        const edge = ch === 's' ? 0 : 1; // body pixels keep a free border for the outline
-        if (!(ch in PAL) || x < edge || x >= SIZE - edge || y < edge || y >= SIZE - edge) throw new Error(`enemy art: bad pixel '${ch}' in ${part}`);
-        plot(x, y, ch, part, k);
-      });
-    });
-  });
-}
-
-// Bakes every frame three times: as drawn, as a white-rimmed hit flash ('!') and as a flat lunge after-image ('~').
-// The body gets a 1px near-black outline so it reads against any floor, red rings included (the shadow is not body),
-// and each wing, arm, hood and robe gets one where it passes behind another, so they read as separate shapes.
-function bake(scene: Scene) {
-  const names = [...Object.keys(FRAMES), ...Object.keys(SUNK)];
-  const tex = scene.textures.createCanvas('enemy', SIZE * names.length, SIZE * 3)!;
-  const img = tex.context.createImageData(tex.width, tex.height);
-  const put = (x: number, y: number, c: number, a = 255) => img.data.set([c >> 16, (c >> 8) & 255, c & 255, a], (y * tex.width + x) * 4);
-  names.forEach((name, n) => {
-    const x0 = n * SIZE;
-    const [base, sink] = SUNK[name] ?? [name, 0];
-    const grid: string[] = [];
-    const layer: number[] = [];
-    compose(FRAMES[base], sink, (x, y, ch, part, k) => ((grid[y * SIZE + x] = ch), (layer[y * SIZE + x] = SEAMED.test(part) ? k : -1)));
-    const body = (x: number, y: number) => x >= 0 && x < SIZE && y >= 0 && y < SIZE && (grid[y * SIZE + x] ?? 's') !== 's';
-    const above = (x: number, y: number, k: number) => body(x, y) && layer[y * SIZE + x] > k;
-    for (let y = 0; y < SIZE; y++) {
-      for (let x = 0; x < SIZE; x++) {
-        const ch = grid[y * SIZE + x];
-        if (body(x, y)) {
-          const k = layer[y * SIZE + x];
-          const seam = k >= 0 && (above(x - 1, y, k) || above(x + 1, y, k) || above(x, y - 1, k) || above(x, y + 1, k));
-          put(x0 + x, y, seam ? PAL[0] : PAL[ch]);
-          put(x0 + x, SIZE + y, seam ? PAL[0] : FLASH[ch] ?? PAL[ch]);
-          put(x0 + x, 2 * SIZE + y, PAL.h);
-        } else if (body(x - 1, y) || body(x + 1, y) || body(x, y - 1) || body(x, y + 1)) {
-          put(x0 + x, y, PAL[0]);
-          put(x0 + x, SIZE + y, PAL.W);
-        } else if (ch === 's') {
-          put(x0 + x, y, PAL.s, 140);
-          put(x0 + x, SIZE + y, PAL.s, 140);
-        }
-      }
-    }
-    tex.add(name, 0, x0, 0, SIZE, SIZE);
-    tex.add(name + '!', 0, x0, SIZE, SIZE, SIZE);
-    tex.add(name + '~', 0, x0, 2 * SIZE, SIZE, SIZE);
-  });
-  tex.putData(img, 0, 0);
-  tex.refresh();
-}
-
-// The torture room's ghoul (« Crasse et faim », dark.ts): the mockup's emaciated pale crawler on all fours, facing right,
-// its eyes glowing. Same frame names as the thrall's, posed by moving its body and limbs: its legs are the rows from 9
+// The ghoul (the torture room's, « Crasse et faim »): the mockup's emaciated pale crawler on all fours, facing right,
+// its eyes glowing. Its frames are posed by moving its body and limbs: its legs are the rows from 9
 // down (the hind ones left of column 9, the fore ones under the head); its sheet also holds the eyes alone ('*' frames).
 const GHOUL = [
   '.......oooo..........',
@@ -496,8 +60,8 @@ const POSES: Record<string, Pose> = {
 };
 
 function bakeGhoul(scene: Scene) {
-  const names = [...Object.keys(FRAMES), ...Object.keys(SUNK)];
-  const tex = scene.textures.createCanvas('enemy-dark', SIZE * names.length, SIZE * 4)!;
+  const names = [...NAMES, ...Object.keys(SUNK)];
+  const tex = scene.textures.createCanvas('enemy', SIZE * names.length, SIZE * 4)!;
   const img = tex.context.createImageData(tex.width, tex.height);
   const put = (x: number, y: number, c: number, a = 255) => img.data.set([c >> 16, (c >> 8) & 255, c & 255, a], (y * tex.width + x) * 4);
   names.forEach((name, n) => {
@@ -524,7 +88,7 @@ function bakeGhoul(scene: Scene) {
           if (ch === 'e') put(x0 + x, 3 * SIZE + y, GHOUL_PAL.e);
         } else {
           if ([[-1, 0], [1, 0], [0, -1], [0, 1]].some(([i, j]) => grid[(y + j) * SIZE + x + i] === 'e')) put(x0 + x, 3 * SIZE + y, GHOUL_PAL.e, 80); // their halo
-          if (base !== 'mask' && ((x + 0.5 - 21) / 10) ** 2 + ((y + 0.5 - FEET) / 2.5) ** 2 <= 1) { put(x0 + x, y, PAL.s, 140); put(x0 + x, SIZE + y, PAL.s, 140); }
+          if (base !== 'mask' && ((x + 0.5 - 21) / 10) ** 2 + ((y + 0.5 - FEET) / 2.5) ** 2 <= 1) { put(x0 + x, y, SHADOW, 140); put(x0 + x, SIZE + y, SHADOW, 140); }
         }
       }
     tex.add(name, 0, x0, 0, SIZE, SIZE);
@@ -537,16 +101,15 @@ function bakeGhoul(scene: Scene) {
 }
 
 export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, x: number, y: number): Sprite {
-  const key = skin.dark ? 'enemy-dark' : 'enemy';
-  if (!scene.textures.exists(key)) (skin.dark ? bakeGhoul : bake)(scene);
-  const s = (group.create(x, y, key, 'rise0') as Sprite).setOrigin(0.5, ORIGIN / SIZE);
+  if (!scene.textures.exists('enemy')) bakeGhoul(scene);
+  const s = (group.create(x, y, 'enemy', 'rise0') as Sprite).setOrigin(0.5, ORIGIN / SIZE);
   s.setSize(12, 6).setOffset(14, 30); // feet
   s.setData({ born: scene.time.now, phase: Math.round(x * 3) });
   bleed(scene, x, y, -Math.PI / 2, 6, Math.PI, 0.5, 1); // blood thrown up as it climbs out of the pool
   return s;
 }
 
-/** Marker shown where an enemy is about to appear: blood drips into a dark pool that the thrall climbs out of. */
+/** Marker shown where an enemy is about to appear: blood drips into a dark pool that the ghoul climbs out of. */
 export function telegraphSpawn(scene: Scene, x: number, y: number, ms: number) {
   const fy = y + GROUND;
   const g = scene.add.graphics().setDepth(1);
@@ -557,7 +120,7 @@ export function telegraphSpawn(scene: Scene, x: number, y: number, ms: number) {
     const rim = k > 0.7 && k < 1 && Math.floor(t * 24) % 2 ? BLOOD.light : BLOOD.mid; // flickers just before it rises
     g.clear();
     for (const [dx, dy, rx, ry] of [[-10, 2, 2, 1], [11, -1, 1.5, 1], [-4, 1, 6, 3], [5, -1, 6, 2.6]]) pool(x + dx * grow, fy + dy, rx * grow, ry * grow, fill, rim, BLOOD.dry);
-    pool(x, fy, 9 * grow, 3.6 * grow, fill, rim, BLOOD.dry, PAL[0]);
+    pool(x, fy, 9 * grow, 3.6 * grow, fill, rim, BLOOD.dry, SHADOW);
   }, () => g.destroy());
   for (let i = 0; i < 6; i++) {
     scene.time.delayedCall((i * ms) / 10, () => {
@@ -609,7 +172,7 @@ export function show(s: Sprite, state: EnemyState, facing: number, flash: boolea
     trail(s, now);
   } else if (state === 'recover') f = t > 200 && Math.floor(t / 180) % 2 ? 'recover1' : 'recover0';
   else f = s.body!.velocity.lengthSq() > 25 ? 'walk' + (Math.floor((now + s.getData('phase')) / 120) % 4) : 'idle';
-  if (Math.sin(facing) < -0.5 && FRAMES[f + 'b']) f += 'b';
+  if (Math.sin(facing) < -0.5 && BACKS.has(f)) f += 'b';
   s.setFrame(flash && hurt > 0 && hurt < 50 ? f + '!' : f); // impact frame in colour, then a white-rim pop for a few frames
 }
 
@@ -631,10 +194,10 @@ export function die(scene: Scene, s: Sprite) {
     s.destroy();
     // It bursts: blood everywhere, ash drifting up, the empty robe drops into a spreading pool and the mask flies off.
     bleed(scene, x, y, away, 24, 1.4, 1);
-    bleed(scene, x, y, away, 7, 1.8, 0.7, 10, [PAL.R, PAL.r, PAL.d], 1); // shreds of robe
+    bleed(scene, x, y, away, 7, 1.8, 0.7, 10, SHREDS, 1);
     for (let i = 0; i < 18; i++) {
       const a = scene.add.rectangle(x + Phaser.Math.Between(-7, 7), y + Phaser.Math.Between(-10, 8), 1, 1,
-        Phaser.Utils.Array.GetRandom(skin.dark ? [SANG[1], SANG[2], 0x2b261e, BLOOD.light] : [PAL[2], PAL[4], 0x5a4468, BLOOD.light])).setDepth(y + 1);
+        Phaser.Utils.Array.GetRandom([SANG[1], SANG[2], 0x2b261e, BLOOD.light])).setDepth(y + 1);
       scene.tweens.add({ targets: a, y: a.y - Phaser.Math.Between(14, 30), x: a.x + Phaser.Math.Between(-6, 6), alpha: 0,
         duration: Phaser.Math.Between(700, 1400), ease: 'Sine.easeOut', onComplete: () => a.destroy() });
     }
@@ -677,7 +240,7 @@ function fly(scene: Scene, items: Flier[]) {
   run(scene, Math.max(...ends) * 1000, step);
 }
 
-// Drops (blood by default) from the chest of a thrall at (x, y), flung around `angle`; they stain the floor where they land.
+// Drops (blood by default) from the chest of a body at (x, y), flung around `angle`; they stain the floor where they land.
 export function bleed(scene: Scene, x: number, y: number, angle: number, n: number, spread: number, power: number, z = 12,
   colors = [BLOOD.light, BLOOD.mid, BLOOD.mid, BLOOD.dark], big = 0.2) {
   const items: Flier[] = [];
@@ -693,21 +256,21 @@ export function bleed(scene: Scene, x: number, y: number, angle: number, n: numb
   fly(scene, items);
 }
 
-// A loose frame of the thrall (after-image, falling robe, flying mask), placed like the sprite.
+// A loose frame of the ghoul (after-image, its collapsing body, the shard it sheds), placed like the sprite.
 function image(scene: Scene, key: string, x: number, y: number, frame: string, flipX: boolean) {
   return scene.add.image(x, y, key, frame).setOrigin(0.5, ORIGIN / SIZE).setFlipX(flipX);
 }
 
 // Floor layer that keeps blood, robes and masks for the rest of the fight, over the whole room (the physics world is its
-// floor), however tall. Recreated after a scene restart. The trial room's has its hero's resolution (dark.ts skin.zoom),
-// for fx-blood.ts's drops; callers still give room pixels (fractions reach its finer ones).
+// floor), however tall. Recreated after a scene restart. It has the hero's resolution (dark.ts ZOOM), for fx-blood.ts's
+// drops; callers still give room pixels (fractions reach its finer ones).
 type Stains = {
   fill(c: number, a: number, x: number, y: number, w: number, h: number): Stains;
   stamp(key: string, frame: string, x: number, y: number, o: { originY: number; scaleX: number }): Stains;
   render(): Stains;
 };
 export function stains(scene: Scene): Stains {
-  const b = scene.physics.world.bounds, Z = skin.zoom;
+  const b = scene.physics.world.bounds, Z = ZOOM;
   const rt = (scene.children.getByName('enemy-stains') as Phaser.GameObjects.RenderTexture | null)
     ?? scene.add.renderTexture(0, 0, (b.right + 40) * Z, (b.bottom + 16) * Z).setOrigin(0).setScale(1 / Z).setDepth(1).setName('enemy-stains');
   const s: Stains = {

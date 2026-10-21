@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { ellipseDist } from './logic.ts';
-import { skin, SANG } from './dark.ts';
+import { SANG, ZOOM } from './dark.ts';
 
 // Le Glyphe: the blood sigil the Sans-Maison casts on the floor. A hard rim (bright outside, dark inside), a band of
 // angular runes, a ring, the fang triangle and the bat of his banner, all in blood: never the Order's gold, the moon
@@ -13,12 +13,9 @@ type G = Phaser.GameObjects.Graphics;
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type P = { x: number; y: number };
 
-// Palette "Nuit de sang" (docs/art.md): blood, its glows and the night. The trial room's (mockup « A. Sang »,
-// fx-blood.ts) is seeping blood, wet where it is being drawn, glowing nowhere; it is drawn at its hero's resolution, Z
-// fine px per room px (dark.ts skin.zoom), and bleeds runnels out of its rim. Both set by cast(): one glyph at a time.
-const NIGHT_PAL = { HOT: 0xffe4ee, GLOW: 0xff4f8b, RED: 0xe0284a, BLOOD: 0xa3122f, DRIED: 0x5c0a1c, NIGHT: 0x1c1029 };
-const SANG_PAL = { HOT: SANG[6], GLOW: SANG[5], RED: SANG[4], BLOOD: SANG[3], DRIED: SANG[2], NIGHT: SANG[0] };
-let { HOT, GLOW, RED, BLOOD, DRIED, NIGHT } = NIGHT_PAL, Z = 1;
+// The blood of the mockup « A. Sang » (fx-blood.ts): seeping, wet where it is being drawn, glowing nowhere; drawn at the
+// hero's resolution, Z fine px per room px, it bleeds runnels out of its rim.
+const [NIGHT, , DRIED, BLOOD, RED, GLOW, HOT] = SANG, Z = ZOOM;
 const FLOOR = 1.7; // over blood stains and holy light, under characters
 const FADE_MS = 300;
 const SNAP_MS = 70; // chains shoot out to a newly bound enemy
@@ -73,8 +70,6 @@ function line(a: P, b: P, put: (x: number, y: number, i: number) => void, from =
 /** Starts drawing a glyph centred on floor point (x, y), cast by a hero standing at `hero` (his feet). */
 export function cast(scene: Phaser.Scene, x: number, y: number, hero: P): Glyph {
   const E = Phaser.Scenes.Events;
-  ({ HOT, GLOW, RED, BLOOD, DRIED, NIGHT } = skin.dark ? SANG_PAL : NIGHT_PAL);
-  Z = skin.zoom;
   const gl: Glyph = {
     x: Math.round(x), y: Math.round(y), at: scene.time.now, from: Math.atan2((hero.y - y) / SQ, hero.x - x), caughtAt: -1,
     g: scene.add.graphics().setDepth(FLOOR).setScale(1 / Z), chains: new Map(), shaken: [],

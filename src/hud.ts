@@ -3,7 +3,7 @@ import { T } from './tuning.ts';
 import * as Font from './font.ts';
 import { ICONS, kind, shelf, type GiftId } from './gifts.ts';
 import { edgePip } from './logic.ts';
-import { skin } from './dark.ts';
+import { ZOOM } from './dark.ts';
 
 // Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
 // recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, beside them
@@ -142,8 +142,8 @@ export function create(scene: Phaser.Scene): Hud {
   const g = scene.add.graphics();
 
   // Own camera, so the HUD never shakes, flashes or zooms with the world camera.
-  const cam = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setZoom(skin.zoom); // resized with the view by Phaser
-  const Z = skin.zoom; // the HUD is laid out in room pixels, Z screen pixels each
+  const cam = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setZoom(ZOOM); // resized with the view by Phaser
+  const Z = ZOOM; // the HUD is laid out in room pixels, Z screen pixels each
   cam.ignore(scene.children.list.filter((o) => o !== g));
   scene.cameras.main.ignore(g);
   const ignoreNew = (o: Phaser.GameObjects.GameObject) => cam.ignore(o);

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { skin, prelit } from './dark.ts';
+import { ZOOM, prelit } from './dark.ts';
 import { BLOOD, bleed, pool, run, stains } from './enemy.ts';
 import { mark } from './crossbow.ts';
 import { SHEETS, FLOOR } from './foes.data.ts';
@@ -12,20 +12,22 @@ import ringerSheet from './ringer.png';
 import inquisitorSheet from './inquisitor.png';
 import amasSheet from './amas.png';
 import bourreauSheet from './bourreau.png';
+import crossbowSheet from './crossbow.png';
 
 // How the Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur (docs/maquettes/ennemis-planche-1.png),
 // Inquisiteur and Bourreau, and the ghouls' Amas (ennemis-planche-2.png) look: the validated sheet's own models rendered offline, already lit, in five views (tools/art/foes.gen.mjs), drawn at half
-// scale like the grand hero (wanderer.ts), so each of their pixels is a screen pixel of the x2 rooms. Gameplay owns the
+// scale like the grand hero (hero.ts), so each of their pixels is a screen pixel of the x2 rooms. Gameplay owns the
 // AI state (RoomScene); this file shows it. No mark on the floor announces an attack (docs/decisions.md): only their
 // bodies do (the pilot lit, the monstrance raised, the hound flattened, the scourge cocked, the bell's rim lit, the censer
 // whirled, the Amas gathered up with its arms raised, the axe raised), then the attack itself (the jet, the falling
 // light, the lash, the bell's rings rolling out, the sweep, the Amas' slam spreading over the floor, the crack).
-export type Kind = keyof typeof SHEETS;
-export type FoeState = 'chase' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'contract' | 'slam' | 'sprawl' | 'heave' | 'chop' | 'wrench' | 'rip' | 'swing' | 'held' | 'kneel';
+export type Kind = Exclude<Sheeted, 'crossbow'>; // the crossbowman's sheet is shown here too, but he is crossbow.ts's
+type Sheeted = keyof typeof SHEETS;
+export type FoeState = 'chase' | 'aim' | 'shoot' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'contract' | 'slam' | 'sprawl' | 'heave' | 'chop' | 'wrench' | 'rip' | 'swing' | 'held' | 'kneel';
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
 
-export const isFoe = (kind: unknown): kind is Kind => typeof kind === 'string' && kind in SHEETS;
+export const isFoe = (kind: unknown): kind is Kind => typeof kind === 'string' && kind in SHEETS && kind !== 'crossbow';
 /** The eighth of a turn an angle points to: 0 right, 2 down, 4 left, 6 up. */
 export const octant = (a: number) => (((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8);
 export const DIRS = 64; // aims (logic.ts aimAt()) snap to this many directions
@@ -37,24 +39,24 @@ const GROUND = ORIGIN / 2;
 const SQ = T.lantern.squash; // the floor seen at an angle
 const STRUCK = 0xff4a3a; // the hit flash: dyed with blood, never white (fx-blood.ts)
 // The states that face the aim locked at their start, and the pose each one holds.
-const LOCKED: FoeState[] = ['ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench', 'rip', 'swing'];
-const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk', slam: 'atk', sprawl: 'atk', heave: 'tele', chop: 'atk', swing: 'tele' }; // swing: the axe torn up
-const HEAD: Record<Kind, number> = { purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50, amas: 0, bourreau: 62 };
+const LOCKED: FoeState[] = ['aim', 'shoot', 'ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench', 'rip', 'swing'];
+const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', shoot: 'shot', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk', slam: 'atk', sprawl: 'atk', heave: 'tele', chop: 'atk', swing: 'tele' }; // swing: the axe torn up
+const HEAD: Record<Sheeted, number> = { crossbow: 40, purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50, amas: 0, bourreau: 62 };
 // Their feet on the floor, sheet px (half as many room px): a man's like the crossbowman's, the big ones' broader.
-const FEET: Partial<Record<Kind, [number, number]>> = { amas: [52, 22], bourreau: [36, 16] }; // the blood drop of the weak, over the feet
+const FEET: Partial<Record<Sheeted, [number, number]>> = { amas: [52, 22], bourreau: [36, 16] }; // the blood drop of the weak, over the feet
 
 export function preload(scene: Scene) {
-  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet], ['amas', amasSheet], ['bourreau', bourreauSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
+  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet], ['amas', amasSheet], ['bourreau', bourreauSheet], ['crossbow', crossbowSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
 }
 
-export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: Kind, x: number, y: number): Sprite {
+export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: Sheeted, x: number, y: number): Sprite {
   const S = SHEETS[kind], tex = scene.textures.get(kind);
   if (!tex.has('corpse')) for (const [name, { cell, lamp }] of Object.entries(S.FRAMES))
     Object.assign(tex.add(name, 0, (cell % S.COLS) * S.FW, Math.floor(cell / S.COLS) * S.FH, S.FW, S.FH)!.customData, { lamp });
   const s = (group.create(x, y, kind, 'down-idle0') as Sprite).setOrigin(0.5, (S.SOLE - ORIGIN) / S.FH).setScale(0.5);
   const [w, h] = FEET[kind] ?? [24, 12];
   s.setSize(w, h).setOffset(S.FW / 2 - w / 2, S.SOLE - 2 - h / 2);
-  if (skin.dark) s.setBlendMode(prelit(scene));
+  s.setBlendMode(prelit(scene));
   // The jet of fire is drawn apart from him, turned from its view to his real aim.
   const jet = scene.add.image(0, 0, kind, 'down-idle0').setScale(0.5).setVisible(false).setBlendMode(s.blendMode);
   s.setData({ born: scene.time.now, phase: Math.round(x * 3), walked: 0, at: [x, y], jet, markG: scene.add.graphics().setDepth(7990) });
@@ -64,14 +66,14 @@ export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: K
 /** Where a priest's monstrance or a purificateur's pilot light shines, for the dark rooms' light (dark.ts): its floor
  *  point and height, room px. */
 export function lamp(s: Sprite) {
-  const [lx, ly] = (s.frame.customData as { lamp: [number, number] }).lamp, S = SHEETS[s.texture.key as Kind];
+  const [lx, ly] = (s.frame.customData as { lamp: [number, number] }).lamp, S = SHEETS[s.texture.key as Sheeted];
   return { x: s.x + ((lx - S.FW / 2) / 2) * (s.flipX ? -1 : 1), y: s.y + GROUND, h: (S.SOLE - ly) / 2 };
 }
 
 /** Shows the foe in `state`; facing and its locked aim (a floor angle, logic.ts aimAt()), where the light falls and timings
  *  are in its data. `weak`: hurt enough to be bitten. */
 export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) {
-  const now = s.scene.time.now, kind = s.texture.key as Kind;
+  const now = s.scene.time.now, kind = s.texture.key as Sheeted;
   if (s.getData('look') !== state) s.setData({ look: state, lookAt: now });
   if (flash && !s.getData('flashOn')) {
     s.setData('hitAt', now);
@@ -88,6 +90,7 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
   const haste = (s.getData('hasteUntil') ?? 0) > now;
   let f = 'idle' + (Math.floor((now + s.getData('phase')) / (haste ? 125 : 250)) % 4); // breathing, the pilot or the monstrance flickering
   if (state === 'fire') f = 'fire' + (Math.floor(now / 70) % 2);
+  else if (state === 'aim') f = t < 100 ? 'raise' : t >= T.crossbow.aimMs - T.crossbow.lockMs ? 'lock' : 'aim'; // raised, sighting, the bolt's glint once locked
   else if (state === 'whirl') f = 'whirl' + (Math.floor((t / 110) * (0.6 + (0.8 * t) / T.inquisitor.whirlMs)) % 4); // gathering speed
   else if (state === 'sweep') f = 'sweep' + Math.min(2, Math.floor((t * 3) / T.inquisitor.sweepMs));
   else if (state === 'contract') f = t < T.amas.contractMs * 0.45 ? 'tele0' : 'tele1'; // gathering itself, arms rising
@@ -263,7 +266,7 @@ export function die(scene: Scene, s: Sprite) {
         pool(x, y + GROUND - 6, 4 + 24 * k, 2 + 8 * k, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.mid, BLOOD.dark);
         rt.render();
       }, () => { // settled: into the floor's layer of the dead, which keeps them for the fight
-        corpses(scene).stamp(key, 'corpse', x * skin.zoom, y * skin.zoom, { originY, scaleX: (flipX ? -0.5 : 0.5) * skin.zoom, scaleY: 0.5 * skin.zoom }).render();
+        corpses(scene).stamp(key, 'corpse', x * ZOOM, y * ZOOM, { originY, scaleX: (flipX ? -0.5 : 0.5) * ZOOM, scaleY: 0.5 * ZOOM }).render();
         body.destroy();
       });
     });
@@ -273,8 +276,8 @@ export function die(scene: Scene, s: Sprite) {
 // The dead of the Order: one layer over the room's floor blood (enemy.ts stains), at its resolution, drawn already lit
 // like them (the blood layer is lit by the dark rooms, they are not).
 function corpses(scene: Scene) {
-  const b = scene.physics.world.bounds, Z = skin.zoom;
+  const b = scene.physics.world.bounds, Z = ZOOM;
   return (scene.children.getByName('foe-corpses') as Phaser.GameObjects.RenderTexture | null)
     ?? scene.add.renderTexture(0, 0, (b.right + 40) * Z, (b.bottom + 16) * Z).setOrigin(0).setScale(1 / Z).setDepth(1.5).setName('foe-corpses')
-      .setBlendMode(skin.dark ? prelit(scene) : Phaser.BlendModes.NORMAL).setTint(0xa0a0a0); // the dead give back less light
+      .setBlendMode(prelit(scene)).setTint(0xa0a0a0); // the dead give back less light
 }

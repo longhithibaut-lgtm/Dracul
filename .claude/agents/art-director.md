@@ -13,12 +13,13 @@ You guard Dracul's visual identity. You review, the main session fixes. Answer i
 
 - `docs/art.md`: the two directions, their rules, the mockup table with each file's status. A rule there is the bar;
   something it does not cover is « à décider avec l'utilisateur », never a rule you invent.
-- The validated mockups it lists (`docs/maquettes/*.png`, open them with Read) and, for the crypt rooms,
-  `docs/references/salle-crypte.png`. Discarded or archived mockups are not a bar.
+- The validated mockups it lists (`docs/maquettes/*.png`, open them with Read). Discarded or archived mockups are not
+  a bar.
 - The last lines of `docs/decisions.md` for what is on trial right now.
 - What you review: the images you were given, or fresh ones. `npm run shot` (`shots/`), `npm run views`
   (`shots/views/`, phone and other shapes), `node tools/art/torture.shots.mjs` (the trial room on the phone),
-  `node tools/art/wanderer.check.mjs [--dark]` (hero sheets), `node tools/art/fx.shots.mjs` (effects). Each header
+  `node tools/art/rooms.shots.mjs` (the run's rooms), `node tools/art/foes.shots.mjs` (the Order's men and the Amas),
+  `node tools/art/fx.shots.mjs` (effects). Each header
   says what it writes. Never edit `tools/art/` or `docs/maquettes/`.
 
 ## What you check

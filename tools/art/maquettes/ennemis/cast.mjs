@@ -202,12 +202,18 @@ export function pitBodies(seed = 9, w = 110, d = 40) {
 }
 
 // ================= CROSSBOWMAN of the Order =================
-export function crossbowman() {
-  const J = JSON.parse(JSON.stringify(std));
-  // aiming stance: left foot forward, crossbow shouldered
-  Object.assign(J, { Kl: [4.2, 5, 27], Al: [4.5, 6, 4], Tl: [5, 12, 1], Kr: [-4.4, -3, 27], Ar: [-5, -6, 4], Tr: [-6.5, 0, 1],
+// pose: 'aim' (the mockups': shouldered, left foot forward), 'lock' (the same, the bolt's head glinting: the aim is
+// locked), 'shot' (the same, the string slapped forward, the bolt gone), 'idle' (the crossbow held low across him),
+// 'raise' (bringing it up); over: joints to override, or a function of the joints returning them (the game's sheet,
+// tools/art/foes.gen.mjs, poses its frames with it)
+export function crossbowman(pose = 'aim', over = {}) {
+  const J = JSON.parse(JSON.stringify(std)), shouldered = ['aim', 'lock', 'shot'].includes(pose);
+  if (shouldered) Object.assign(J, { Kl: [4.2, 5, 27], Al: [4.5, 6, 4], Tl: [5, 12, 1], Kr: [-4.4, -3, 27], Ar: [-5, -6, 4], Tr: [-6.5, 0, 1],
     Sr: [-8.8, -0.5, 77], Er: [-9.5, 6, 66], Wr: [-3.5, 11, 70.5], Hr_: [-2.5, 13.5, 71],
     Sl: [8.8, 0.5, 77], El: [6.5, 12, 66], Wl: [1.5, 20, 70], Hl_: [0.5, 22, 70.5], head: [-1.0, 2.6, 89.5] });
+  else if (pose === 'raise') Object.assign(J, { Er: [-10, 3, 63], Wr: [-5.5, 8, 62], Hr_: [-4.5, 10, 62], El: [8, 9, 62], Wl: [2, 16, 62], Hl_: [1, 18, 62], head: [-0.5, 1.8, 89.8] });
+  else Object.assign(J, { Er: [-10, 1, 62], Wr: [-7, 4, 52], Hr_: [-6, 6, 51], El: [9, 5, 60], Wl: [2.5, 13, 51], Hl_: [1.5, 15, 50] });
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   const b = builder(); humanoid(J, b, { thin: 1.15, torsoM: 3, pelvisM: 3, armM: 3, legM: 5, shinM: 6, footM: 6 });
   const { rc, el, parts } = b;
   // kettle hat: brim + dome
@@ -221,8 +227,10 @@ export function crossbowman() {
   rc(st0, st1, 1.4, 1.0, 9, 0);
   const pc = add(st1, [0, -1, 0.3]);
   parts.push({ m: 10, k: 0, f: (x, y, z) => { const X = x - pc[0], Y = y - pc[1] + X * X * 0.025; return sdBox(X, Y, z, 0, 0, pc[2], 13, 0.7, 0.8, 0.3); }, box: [pc[0] - 15, pc[1] - 6, pc[2] - 3, pc[0] + 15, pc[1] + 3, pc[2] + 3] });
-  rc(add(pc, [-13, -4.2, 0.2]), add(st1, [0, -11, 0.6]), 0.18, 0.18, 11, 0); rc(add(pc, [13, -4.2, 0.2]), add(st1, [0, -11, 0.6]), 0.18, 0.18, 11, 0);
-  rc(add(st1, [0, -10, 1.3]), add(st1, [0, 3.5, 1.3]), 0.3, 0.3, 12, 0);
+  const nock = pose === 'shot' ? add(pc, [0, -4.2, 0.2]) : add(st1, [0, -11, 0.6]); // loosed: the string slapped forward
+  rc(add(pc, [-13, -4.2, 0.2]), nock, 0.18, 0.18, 11, 0); rc(add(pc, [13, -4.2, 0.2]), nock, 0.18, 0.18, 11, 0);
+  if (pose !== 'shot') rc(add(st1, [0, -10, 1.3]), add(st1, [0, 3.5, 1.3]), 0.3, 0.3, 12, 0);
+  if (pose === 'lock') el(add(st1, [0, 3.6, 1.4]), [0.9, 0.9, 0.9], 14, 0); // the bolt's head catching the light
   // lantern hung from a pole strapped to his back, out in front of the hat (the Order's light)
   const lan = [-3, 13, 104];
   rc([-2, -5, 58], [-3.5, -3, 112], 0.6, 0.5, 9, 0); rc([-3.5, -3, 112], [-3, 13, 113], 0.5, 0.45, 9, 0); rc([-3, 13, 113], [-3, 13, 107], 0.25, 0.25, 10, 0);
@@ -252,6 +260,7 @@ export function crossbowman() {
       case 11: return { alb: L('#8a8070'), wrap: 0.5 };
       case 12: return { alb: S.iron, spec: 0.8, gloss: 60 };
       case 13: return { alb: [0.2, 0.15, 0.05], emi: [1.2, 0.6, 0.18], noAO: true, noShadow: true };
+      case 14: return { alb: [0.3, 0.3, 0.3], emi: [2.2, 2, 1.6], noAO: true, noShadow: true };
     }
     return { alb: [1, 0, 1] };
   };

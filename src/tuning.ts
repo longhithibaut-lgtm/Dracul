@@ -4,8 +4,8 @@ export const T = {
   width: 480,
   height: 270,
 
-  hero: { maxHealth: 5, speed: 95, hurtInvulnMs: 800, bufferMs: 150 }, // bufferMs: how early a press may come, see press()
-  grand: { speed: 66 }, // the grand vampire (torture room, refuge) walks slower, heavier (his run frames follow the distance)
+  // speed: the grand vampire walks heavily (his run frames follow the distance); bufferMs: how early a press may come, see press()
+  hero: { maxHealth: 5, speed: 66, hurtInvulnMs: 800, bufferMs: 150 },
   dash: {
     speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22, // stopShort: halts this far from an enemy it'd end on
     // The dash strike: a slash pressed during the dash (it waits for the end) or this soon after it. The combo's first blow.
@@ -75,13 +75,13 @@ export const T = {
     damage: 1,
   },
 
-  // The grand foes (« grand pixel » rooms, below) when their blow lands on the hero: the game freezes `hitStopMs` and he is
+  // The grand foes (below) when their blow lands on the hero: the game freezes `hitStopMs` and he is
   // thrown back at `knock` px/s for `knockMs`, both per point of blood lost, so a heavier blow lands harder. `poiseMs`:
   // struck out of an attack, a foe holds firm through the blows that follow this long (an attack begun meanwhile goes
   // on), so the claws cannot pin it down.
   foes: { hitStopMs: 45, knock: 110, knockMs: 90, poiseMs: 700 },
 
-  // The Order's Purificateur (« grand pixel » rooms, training only for now): a heavy flamethrower. He walks into range,
+  // The Order's Purificateur: a heavy flamethrower. He walks into range,
   // turns to the hero and lights his pilot, flaring (the tell, his aim locked: stepping aside dodges), then burns along
   // that aim. Nothing is marked on the floor.
   purifier: {
@@ -100,7 +100,7 @@ export const T = {
     damage: 2,
     pilotLight: 3, // his pilot lighting the dark rooms (dark.ts) at the end of the tell; the jet, half as much again
   },
-  // The Order's Prêtre (« grand pixel » rooms, training only for now): keeps behind, far from the hero; points his
+  // The Order's Prêtre: keeps behind, far from the hero; points his
   // monstrance, brightening as he prays, then the holy light falls where the hero stood (nothing marks the spot).
   priest: {
     hp: 2,
@@ -116,7 +116,7 @@ export const T = {
     light: 2, // his monstrance's light in the dark rooms (dark.ts), rising to prayLight as he prays
     prayLight: 5,
   },
-  // The Order's Chien de chasse (« grand pixel » rooms, training only for now): hunts in packs of three, fast. The pack
+  // The Order's Chien de chasse: hunts in packs of three, fast. The pack
   // spreads round the hero on the side away from the Order's shooters, so its leaps drive him toward them. The tell: it
   // flattens, muzzle open, its aim locked; then a straight leap that shoves the hero along it. Stepping aside dodges.
   hound: {
@@ -135,7 +135,7 @@ export const T = {
     firstMs: 600,
     damage: 1,
   },
-  // The Order's Pénitent (« grand pixel » rooms, training only for now): cannon fodder in waves of six; drags his cross
+  // The Order's Pénitent: cannon fodder in waves of six; drags his cross
   // straight at the hero and never backs off. The tell: he cocks his nailed scourge, his aim locked; then a short lash
   // in a cone. Stepping back dodges, and so does striking him first (a claw cuts the tell short).
   penitent: {
@@ -153,7 +153,7 @@ export const T = {
     firstMs: 500,
     damage: 1,
   },
-  // The Order's Sonneur (« grand pixel » rooms, training only for now): support, deaf, keeps far behind the others. The
+  // The Order's Sonneur: support, deaf, keeps far behind the others. The
   // tell: he raises his mallet and his bell's rim lights up; then he strikes it and three rings of sound roll out along the
   // floor, each stunning the hero it passes over (the mist passes through them, and they die out at `reach`). Each
   // strike quickens the Order's men round him for a while.
@@ -173,7 +173,7 @@ export const T = {
     haste: 1.5, hasteMs: 4000, hasteRange: 220, // the Order's men within `hasteRange` move this much faster this long
     light: 4, // his bell's rim in the dark rooms (dark.ts) at the end of the tell, the strike half as much again
   },
-  // The Order's Inquisiteur (« grand pixel » rooms, training only for now): an elite; parries every claw and shard
+  // The Order's Inquisiteur: an elite; parries every claw and shard
   // coming at his front (he turns only so fast: his back is the way in), and the Order's men near him strike more often.
   // The tell: his censer starts whirling overhead, his aim locked; then a sweep through the half circle in front of him.
   // Getting into his back, or out of reach, dodges it.
@@ -194,7 +194,7 @@ export const T = {
     command: 1.6, commandRange: 160, // the Order's men within `commandRange` of him recover from their attacks this much faster
     light: 1.6, whirlLight: 3, // his censer's embers in the dark rooms, fanned by the whirl
   },
-  // L'Amas (« grand pixel » rooms, training only for now): ghouls fused into one slow mass; no blood worth drinking.
+  // L'Amas: ghouls fused into one slow mass; no blood worth drinking.
   // Every blow tears a ghoul off it, which crawls at the hero. The tell: it gathers itself up as every arm rises; then it
   // slams down all round it, the blow spreading out over the floor to `reach`. Getting out of reach dodges it; then it
   // lies sprawled a while: the time to strike. Blows never cut it short nor push it back.
@@ -212,7 +212,7 @@ export const T = {
     thralls: 4, // torn-off ghouls of one Amas alive at once, at most
     thrallHp: 1, crawl: 0.6, // they have this much hp and go at this much of a ghoul's pace
   },
-  // Le Bourreau, guardian of the crypt (« grand pixel » rooms, training only for now): a mini-boss, huge, slow; his house
+  // Le Bourreau, guardian of the crypt: a mini-boss, huge, slow; his house
   // chief's reliquary chained at his belt. The tell: he raises his axe overhead, his aim locked; then the blow splits the
   // floor in a long line ahead of him (the crack, running out from the blade, is the attack). Stepping aside dodges it;
   // then he wrenches his axe out of the stone: the time to strike. Blows never cut him short nor push him back.

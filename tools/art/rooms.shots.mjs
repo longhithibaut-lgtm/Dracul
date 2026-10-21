@@ -1,9 +1,10 @@
 // The run rooms baked in the « grand pixel » style (tools/art/rooms.gen.mjs) in headless Chromium on a 1920x1080 PC
 // screen. For each: the whole room, stitched a screen at a time from the stairs to the gate, as a run's room 1 (the
 // hero at his start, no wave, no vignette); then in play: its first wave risen round the hero, the next part's, the
-// portcullis raised; in the cloister, the hero in the Dawn, the danger building until it burns him. Then the frame rate of
-// each, the torture room's and the refuge's (light shader on). Writes <out>/<room>-<what>.png.
-// Usage: node tools/art/rooms.shots.mjs [--out=shots/rooms --port=5210 --only=hall,cloister]   (exit code 1 on a page error)
+// portcullis raised; in the cloister, the hero in the Dawn, the danger building until it burns him. Later in a run:
+// rooms 3 to 6's first waves (<room>-room<n>). Then the frame rate of each, the torture room's and the refuge's (light
+// shader on). Writes <out>/<room>-<what>.png.
+// Usage: node tools/art/rooms.shots.mjs [--out=shots/rooms --port=5210 --only=hall,nave,ossuary,chapel,cloister]   (exit code 1 on a page error)
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
@@ -11,7 +12,7 @@ import { chromium } from 'playwright';
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
 const out = arg('out', 'shots/rooms');
 const port = Number(arg('port', 5210));
-const only = arg('only', 'hall,cloister').split(',');
+const only = arg('only', 'hall,nave,ossuary,chapel,cloister').split(',');
 
 const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
 await server.listen();
@@ -122,6 +123,14 @@ for (const id of only) {
   rates[id] = await fps(); // meanwhile the gate goes up
   await run(() => { const s = window.game.scene.getScene('room'); s.cameras.main.centerOn(240, 135); });
   await shot(`${id}-gate`);
+}
+// Later in a run (T.run.waves): the Order's men in the waves, a room's first wave risen as the hero climbs in.
+for (const [id, room] of [['nave', 3], ['ossuary', 4], ['chapel', 5], ['cloister', 6]].filter(([id]) => only.includes(id))) {
+  await run(([layout, room]) => window.game.scene.getScene('room').scene.restart({ layout, room }), [id, room]);
+  await page.waitForFunction((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.sys.isActive() && s.enemies.getChildren().filter((e) => e.body?.enable).length > 0; }, id, { timeout: 20000 }).catch(() => errors.push(`${id} as room ${room}: no wave`));
+  await run(() => { window.game.scene.getScene('room').invulnUntil = Infinity; });
+  await page.waitForTimeout(2500);
+  await shot(`${id}-room${room}`);
 }
 for (const id of ['torture', 'refuge']) { await enter(id, id === 'torture'); rates[id] = await fps(); }
 // A run through them: out of the crypt (room 1) by its gate into the cloister, climbing in from its stairs, its first

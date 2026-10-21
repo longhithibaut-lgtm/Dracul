@@ -1,6 +1,5 @@
 // The foes of the « grand pixel » rooms (src/foes.ts: Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur,
-// Inquisiteur, Amas, Bourreau) in the
-// torture room, in headless Chromium at 1920x1080 (the PC target), called in from the training room: each idle, giving
+// Inquisiteur, Amas, Bourreau; the arbalétrier, crossbow.ts) in the torture room, in headless Chromium at 1920x1080 (the PC target), called in from the training room: each idle, giving
 // its tell and attacking (crops round them, x2 of the screen's pixels kept), walking and struck, weakened, killed, full
 // frames of them; the bot playing each attack (the crossbowman's too), standing still (it must land) and stepping out
 // REACT ms after the tell starts, at the hero's speed (it must miss): nothing on the floor tells it, the bot only knows
@@ -313,8 +312,39 @@ await step(1500);
 await page.screenshot({ path: `${out}/foes-dead3.png` });
 await clear();
 
+// The crossbowman: idle, walking, raising and shouldering his crossbow, the bolt's glint once the aim is locked, the
+// shot's kick, struck, weakened, dead.
+await hero(240, 330);
+await call([['crossbow', 330, 300]]);
+await still();
+await crop('crossbow', 'crossbow-idle', 420, 440);
+await hero(150, 250);
+for (const k of [0, 1, 2]) { await step(120); await crop('crossbow', `crossbow-walk${k}`, 420, 440); }
+await hold();
+await step(600);
+await hero(150, 330);
+await still();
+await set('crossbow', { readyAt: 0, state: 'chase', until: 0 });
+for (const [ms, what] of [[60, 'raise'], [250, 'aim'], [T.crossbow.aimMs - T.crossbow.lockMs + 60 - 310, 'lock'], [T.crossbow.lockMs + 40, 'shot']]) { await step(ms); await crop('crossbow', `crossbow-${what}`, 520, 440); }
+await page.screenshot({ path: `${out}/foes-crossbow-full.png` });
+await hold();
+await step(1200);
+await run(`${S}.hitEnemy(${foe('crossbow')}, 0, 0, 140, 0)`);
+await step(60);
+await crop('crossbow', 'crossbow-hurt', 420, 440);
+await step(600);
+await run(`(() => { ${S}.hurtEnemy(${foe('crossbow')}, ${foe('crossbow')}.getData('hp') - 1); })()`);
+await step(300);
+await crop('crossbow', 'crossbow-weak', 420, 440);
+await step(900);
+await run(`${S}.kill(${foe('crossbow')})`);
+await step(1500);
+await crop('crossbow', 'crossbow-dead', 420, 440).catch(() => {});
+await page.screenshot({ path: `${out}/foes-dead4.png` });
+await clear();
+
 // The bot plays each attack, the hero mortal and alone with the foe: standing still, then stepping out REACT ms after
-// the tell starts (holding a key: the hero walks at T.grand.speed). `then(t)`, if given, is what the bot does at each
+// the tell starts (holding a key: the hero walks at T.hero.speed). `then(t)`, if given, is what the bot does at each
 // step from then on (t: ms since the tell started), for a dodge that is more than a walk.
 const REACT = 250;
 await run(() => document.querySelector('[data-opt="god"]').click());

@@ -9,7 +9,7 @@ describe('foes sheets', () => {
     for (const [kind, S] of Object.entries(SHEETS)) {
       const frames = ['idle0', 'idle1', 'idle2', 'idle3', 'hurt', 'kneel', ...Array.from({ length: S.WALK }, (_, k) => `walk${k}`),
         ...{ purifier: ['ignite', 'fire0', 'fire1', 'jet0', 'jet1'], priest: ['pray'], hound: ['tele', 'leap'], penitent: ['tele', 'atk'], ringer: ['tele', 'atk'],
-          inquisitor: ['whirl0', 'whirl1', 'whirl2', 'whirl3', 'sweep0', 'sweep1', 'sweep2', 'parry'], amas: ['tele0', 'tele1', 'atk'], bourreau: ['tele', 'atk', 'pull0', 'pull1'] }[kind]!];
+          inquisitor: ['whirl0', 'whirl1', 'whirl2', 'whirl3', 'sweep0', 'sweep1', 'sweep2', 'parry'], amas: ['tele0', 'tele1', 'atk'], bourreau: ['tele', 'atk', 'pull0', 'pull1'], crossbow: ['raise', 'aim', 'lock', 'shot'] }[kind]!];
       for (const view of ['side', 'dside', 'down', 'uside', 'up']) for (const f of frames) expect(S.FRAMES[`${view}-${f}`], `${kind} ${view}-${f}`).toBeDefined();
       expect(S.FRAMES.corpse).toBeDefined();
     }

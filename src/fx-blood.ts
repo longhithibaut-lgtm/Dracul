@@ -1,16 +1,16 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { prelit, SANG } from './dark.ts';
+import { prelit, SANG, ZOOM } from './dark.ts';
 import { stains } from './enemy.ts';
 
-// « A. Sang » (docs/maquettes/fx-a-sang.png, drawn by tools/art/maquettes/fx/fx.py): the torture room's combat effects,
-// fx.ts hands over to these while dark.ts skin.dark is on. Arterial dark red, sprays of drops that fall and stay on the
+// « A. Sang » (docs/maquettes/fx-a-sang.png, drawn by tools/art/maquettes/fx/fx.py): the combat effects (fx.ts hands
+// over to these). Arterial dark red, sprays of drops that fall and stay on the
 // floor, clotted vapour; nothing glows, nothing is white. Drawn on the hero's fine grid: Graphics scaled 1/Z, so a unit
 // here is one screen pixel of the x2 room (coordinates are room px times Z). What lands goes into the floor's blood
 // layer (enemy.ts stains), which keeps it for the rest of the fight. Over the lit room, unlit (ABOVE, or the prelit
 // blend for what sorts among the characters), like the mockup.
 
-const Z = 2; // fine px per room px: the trial room's dark.ts skin.zoom
+const Z = ZOOM; // fine px per room px
 const B = SANG; // the mockup's blood, black to arterial
 const BONE = [0xad9e80, 0xcfc2a2];
 const ABOVE = 9_000;
