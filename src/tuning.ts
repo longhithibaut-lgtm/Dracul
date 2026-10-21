@@ -182,6 +182,44 @@ export const T = {
     command: 1.6, commandRange: 160, // the Order's men within `commandRange` of him recover from their attacks this much faster
     light: 1.6, whirlLight: 3, // his censer's embers in the dark rooms, fanned by the whirl
   },
+  // L'Amas (« grand pixel » rooms, training only for now): ghouls fused into one slow mass; no blood worth drinking.
+  // Every blow tears a ghoul off it, which crawls at the hero. The tell: it gathers itself up as every arm rises; then it
+  // slams down all round it, the blow spreading out over the floor to `reach`. Getting out of reach dodges it; then it
+  // lies sprawled a while: the time to strike. Blows never cut it short nor push it back.
+  amas: {
+    hp: 12,
+    speed: 14,
+    strikeRange: 30, // it gathers itself with the hero this close (floor, from its middle)
+    reach: 44, // the slam, all round it (floor, the ground's foreshortening undone)
+    contractMs: 900, // the tell
+    slamMs: 180, // the slam spreading out to `reach`; the hero it passes over is struck
+    sprawlMs: 1100, // then it lies spread out, slow to gather itself again
+    reloadMs: 2600,
+    firstMs: 1500,
+    damage: 1,
+    thralls: 4, // torn-off ghouls of one Amas alive at once, at most
+    thrallHp: 1, crawl: 0.6, // they have this much hp and go at this much of a ghoul's pace
+  },
+  // Le Bourreau, guardian of the crypt (« grand pixel » rooms, training only for now): a mini-boss, huge, slow; his house
+  // chief's reliquary chained at his belt. The tell: he raises his axe overhead, his aim locked; then the blow splits the
+  // floor in a long line ahead of him (the crack, running out from the blade, is the attack). Stepping aside dodges it;
+  // then he wrenches his axe out of the stone: the time to strike. Blows never cut him short nor push him back.
+  bourreau: {
+    hp: 16,
+    speed: 20,
+    near: 18, far: 30,
+    strikeRange: 80, // he raises his axe with the hero this close
+    reach: 120, half: 8, // the crack: its length from his feet and half its width (floor), stopped by props and walls
+    heaveMs: 1000, // the tell
+    crackMs: 120, // the crack runs out to its end; the hero it reaches is struck
+    chopMs: 200, // the blow, its pose held
+    wrenchMs: 1400, // the axe stuck: he tugs it free
+    recoverMs: 300,
+    reloadMs: 1800,
+    firstMs: 1500,
+    damage: 2,
+    light: 1.2, // his reliquary's faint gold in the dark rooms
+  },
 
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
   lantern: {

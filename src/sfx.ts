@@ -252,6 +252,28 @@ export const recipes = {
     voice(o, { src: 'noise', filter: 'bandpass', ff: 500, ff2: 1600, q: 3, trem: 7, gain: 0.7, attack: dur * 0.6, dur });
     bursts(o, [0, 0.27, 0.5, 0.68, 0.82], { src: 'noise', filter: 'highpass', ff: 3500, gain: 0.25, attack: 0.002, dur: 0.04 });
   },
+  // An Amas gathering itself up for `dur` s: many throats groaning at once, slightly apart, swelling, a wet creak of flesh.
+  groan(o: Play, dur: number) {
+    for (const f of [62, 74, 93]) voice(o, { src: 'sawtooth', f, f2: f * 1.5, filter: 'lowpass', ff: 300, ff2: 900, q: 4, trem: 9 + f / 20, gain: 0.3, attack: dur * 0.7, dur });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 420, ff2: 900, q: 6, trem: 5, gain: 0.5, attack: dur * 0.5, dur });
+  },
+  // A bourreau raising his axe for `dur` s: the haft's leather creaking in his grip, a deep breath drawn, the chain of
+  // his reliquary rattling once.
+  heave(o: Play, dur: number) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 380, ff2: 760, q: 8, trem: 22, gain: 2.6, attack: 0.05, dur: dur * 0.5 });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: 500, ff2: 900, gain: 0.7, attack: dur * 0.8, dur });
+    bursts(o, [0.08, 0.12, 0.17], { src: 'noise', filter: 'bandpass', ff: 3400, q: 6, gain: 0.3, attack: 0.001, dur: 0.03 });
+  },
+  // A blow on the floor. The Amas' slam (0): a deep wet thud of many bodies, a splash. The axe (1): an iron bite, stone
+  // splitting in a running crackle, a low rumble under it.
+  slam(o: Play, axe: number) {
+    voice(o, { src: 'sine', f: axe ? 90 : 70, f2: 28, gain: 1, dur: 0.4 });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: axe ? 3000 : 900, ff2: 120, gain: 0.9, attack: 0.002, dur: 0.35 });
+    if (!axe) return void voice(o, { src: 'noise', filter: 'bandpass', ff: 700, ff2: 250, q: 5, gain: 0.7, attack: 0.01, dur: 0.2, delay: 0.03 });
+    voice(o, { src: 'square', f: 260, f2: 200, filter: 'bandpass', ff: 1800, q: 5, gain: 0.35, attack: 0.001, dur: 0.12 });
+    bursts(o, [0.02, 0.04, 0.07, 0.09, 0.12, 0.16], { src: 'noise', filter: 'highpass', ff: 2200, gain: 0.45, attack: 0.001, dur: 0.03 });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: 200, trem: 12, gain: 0.5, attack: 0.05, dur: 0.8 });
+  },
   // A blow turned aside: steel on steel, a bright ring over a dry knock.
   parry(o: Play) {
     voice(o, { src: 'noise', filter: 'highpass', ff: 3000, gain: 0.8, attack: 0.001, dur: 0.05 });

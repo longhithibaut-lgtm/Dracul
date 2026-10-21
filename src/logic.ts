@@ -193,3 +193,10 @@ export function aimAt(dx: number, dy: number, squash: number, dirs: number): num
   const step = (2 * Math.PI) / dirs;
   return Math.round(Math.atan2(dy / squash, dx) / step) * step;
 }
+
+/** True when `target` lies on the strip `half` wide either side of the line from `origin` along `angle`, `length` long
+ *  (a split in the floor: no farther back than `origin`, nor past its end). */
+export function onLine(origin: { x: number; y: number }, angle: number, target: { x: number; y: number }, length: number, half: number): boolean {
+  const dx = target.x - origin.x, dy = target.y - origin.y, along = dx * Math.cos(angle) + dy * Math.sin(angle);
+  return along >= 0 && along <= length && Math.abs(dy * Math.cos(angle) - dx * Math.sin(angle)) <= half;
+}

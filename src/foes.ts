@@ -10,16 +10,18 @@ import houndSheet from './hound.png';
 import penitentSheet from './penitent.png';
 import ringerSheet from './ringer.png';
 import inquisitorSheet from './inquisitor.png';
+import amasSheet from './amas.png';
+import bourreauSheet from './bourreau.png';
 
-// How the Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur (docs/maquettes/ennemis-planche-1.png) and
-// Inquisiteur (ennemis-planche-2.png) look: the
-// validated sheet's own models rendered offline, already lit, in five views (tools/art/foes.gen.mjs), drawn at half
+// How the Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur (docs/maquettes/ennemis-planche-1.png),
+// Inquisiteur and Bourreau, and the ghouls' Amas (ennemis-planche-2.png) look: the validated sheet's own models rendered offline, already lit, in five views (tools/art/foes.gen.mjs), drawn at half
 // scale like the grand hero (wanderer.ts), so each of their pixels is a screen pixel of the x2 rooms. Gameplay owns the
 // AI state (RoomScene); this file shows it. No mark on the floor announces an attack (docs/decisions.md): only their
 // bodies do (the pilot lit, the monstrance raised, the hound flattened, the scourge cocked, the bell's rim lit, the censer
-// whirled), then the attack itself (the jet, the falling light, the lash, the bell's rings rolling out, the sweep).
+// whirled, the Amas gathered up with its arms raised, the axe raised), then the attack itself (the jet, the falling
+// light, the lash, the bell's rings rolling out, the sweep, the Amas' slam spreading over the floor, the crack).
 export type Kind = keyof typeof SHEETS;
-export type FoeState = 'chase' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'held' | 'kneel';
+export type FoeState = 'chase' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'contract' | 'slam' | 'sprawl' | 'heave' | 'chop' | 'wrench' | 'held' | 'kneel';
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
 
@@ -35,12 +37,14 @@ const GROUND = ORIGIN / 2;
 const SQ = T.lantern.squash; // the floor seen at an angle
 const STRUCK = 0xff4a3a; // the hit flash: dyed with blood, never white (fx-blood.ts)
 // The states that face the aim locked at their start, and the pose each one holds.
-const LOCKED: FoeState[] = ['ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep'];
-const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk' };
-const HEAD: Record<Kind, number> = { purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50 }; // the blood drop of the weak, over the feet
+const LOCKED: FoeState[] = ['ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench'];
+const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk', slam: 'atk', sprawl: 'atk', heave: 'tele', chop: 'atk' };
+const HEAD: Record<Kind, number> = { purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50, amas: 0, bourreau: 62 };
+// Their feet on the floor, sheet px (half as many room px): a man's like the crossbowman's, the big ones' broader.
+const FEET: Partial<Record<Kind, [number, number]>> = { amas: [52, 22], bourreau: [36, 16] }; // the blood drop of the weak, over the feet
 
 export function preload(scene: Scene) {
-  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
+  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet], ['amas', amasSheet], ['bourreau', bourreauSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
 }
 
 export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: Kind, x: number, y: number): Sprite {
@@ -48,7 +52,8 @@ export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: K
   if (!tex.has('corpse')) for (const [name, { cell, lamp }] of Object.entries(S.FRAMES))
     Object.assign(tex.add(name, 0, (cell % S.COLS) * S.FW, Math.floor(cell / S.COLS) * S.FH, S.FW, S.FH)!.customData, { lamp });
   const s = (group.create(x, y, kind, 'down-idle0') as Sprite).setOrigin(0.5, (S.SOLE - ORIGIN) / S.FH).setScale(0.5);
-  s.setSize(24, 12).setOffset(S.FW / 2 - 12, S.SOLE - 8); // feet, 12x6 room px like the crossbowman's
+  const [w, h] = FEET[kind] ?? [24, 12];
+  s.setSize(w, h).setOffset(S.FW / 2 - w / 2, S.SOLE - 2 - h / 2);
   if (skin.dark) s.setBlendMode(prelit(scene));
   // The jet of fire is drawn apart from him, turned from its view to his real aim.
   const jet = scene.add.image(0, 0, kind, 'down-idle0').setScale(0.5).setVisible(false).setBlendMode(s.blendMode);
@@ -85,6 +90,8 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
   if (state === 'fire') f = 'fire' + (Math.floor(now / 70) % 2);
   else if (state === 'whirl') f = 'whirl' + (Math.floor((t / 110) * (0.6 + (0.8 * t) / T.inquisitor.whirlMs)) % 4); // gathering speed
   else if (state === 'sweep') f = 'sweep' + Math.min(2, Math.floor((t * 3) / T.inquisitor.sweepMs));
+  else if (state === 'contract') f = t < T.amas.contractMs * 0.45 ? 'tele0' : 'tele1'; // gathering itself, arms rising
+  else if (state === 'wrench') f = 'pull' + (Math.floor(t / 230) % 2); // tugging the stuck axe
   else if (POSE[state]) f = POSE[state]!;
   else if (now - (s.getData('parryAt') ?? -1e9) < 300) f = 'parry';
   else if (state !== 'held' && hurt < 200) f = 'hurt'; // struck: he reels back (the blow's knockback carries him)
@@ -148,6 +155,76 @@ function rings(g: Phaser.GameObjects.Graphics, at: { x: number; y: number; at: n
   }
 }
 
+/** How far over the floor an Amas' slam struck at `at` has spread by `now`: from under its body out to T.amas.reach. */
+export const slamAt = (at: number, now: number) =>
+  Phaser.Math.Linear(12, T.amas.reach, Phaser.Math.Easing.Quadratic.Out(Phaser.Math.Clamp((now - at) / T.amas.slamMs, 0, 1)));
+
+/** An Amas slams down round its feet (x, y): a wave of dust and blood spreads over the floor to its reach (slamAt), the
+ *  floor shakes, blood is flung all round and stains it. Drawn unlit, like the bell's rings: the blow shows in the dark. */
+export function slam(scene: Scene, x: number, y: number) {
+  const g = scene.add.graphics().setDepth(7990), at = scene.time.now;
+  scene.cameras.main.shake(180, new Phaser.Math.Vector2(3 / scene.cameras.main.width, 3 / scene.cameras.main.height));
+  for (let i = 0; i < 6; i++) bleed(scene, x, y - GROUND, (i * Math.PI) / 3, 8, Math.PI / 6, 1.4, 4);
+  run(scene, 700, () => {
+    const now = scene.time.now, r = slamAt(at, now), fade = 1 - Phaser.Math.Clamp((now - at - T.amas.slamMs) / 480, 0, 1);
+    g.clear();
+    for (let k = 0, n = Math.round((2 * Math.PI * r) / 0.8); k < n; k++) {
+      const a = (k / n) * 2 * Math.PI, h = Math.sin(k * 12.9898 + 4.1) * 43758.5453, u = h - Math.floor(h), rr = r - u * 7; // a ragged crest
+      const px = Math.round(x + Math.cos(a) * rr), py = Math.round(y + Math.sin(a) * rr * SQ), up = Math.round(u * u * 6 * fade); // dust thrown up off it
+      g.fillStyle(u > 0.88 ? BLOOD.light : u > 0.45 ? 0xb0a288 : 0x6e6252, fade * (0.55 + 0.45 * u)).fillRect(px, py - up, 1, 1);
+      if (u > 0.6) g.fillStyle(0x8a7c66, 0.35 * fade).fillRect(px - 1, py - up - 1, 2, 1); // its haze
+    }
+  }, () => g.destroy());
+}
+
+/** The Bourreau's blow splits the floor from his blade at (x, y) along floor angle `aim`, `len` room px of floor: a
+ *  jagged crack runs out in T.bourreau.crackMs, chips and dust bursting up where it passes. The fresh split is drawn unlit
+ *  (it shows in the dark) and fades into the scar it leaves in the floor. */
+export function crack(scene: Scene, x: number, y: number, aim: number, len: number) {
+  const ux = Math.cos(aim), uy = Math.sin(aim) * SQ, nx = -Math.sin(aim), ny = Math.cos(aim) * SQ, rnd = new Phaser.Math.RandomDataGenerator([`${x}${y}`]);
+  const segs: [number, number, number, number, number][] = []; // x0, y0, x1, y1, width
+  let px = x, py = y;
+  for (let d = 2, off = 0; d <= len; d += 2) { // wandering a little either side of the line, wide at the blade, thinning out
+    off = Phaser.Math.Clamp(off + rnd.realInRange(-1.4, 1.4), -3, 3);
+    const qx = x + ux * d + nx * off, qy = y + uy * d + ny * off;
+    segs.push([px, py, qx, qy, d < len / 3 ? 1.5 : d < (2 * len) / 3 ? 1 : 0.5]);
+    if (d > 6 && rnd.frac() < 0.12) {
+      const a = aim + rnd.pick([-1, 1]) * rnd.realInRange(0.5, 1.1), l = rnd.realInRange(4, 12);
+      segs.push([qx, qy, qx + Math.cos(a) * l, qy + Math.sin(a) * l * SQ, 0.5]);
+    }
+    [px, py] = [qx, qy];
+  }
+  const rt = stains(scene), g = scene.add.graphics().setDepth(7990), at = scene.time.now, ms = T.bourreau.crackMs;
+  // A split line at the x2 rooms' finer pixels: black depth, its lips catching the light.
+  const split = (s: number[], fill: (c: number, a: number, x: number, y: number, w: number, h: number) => void, a: number) => {
+    const [x0, y0, x1, y1, w] = s;
+    for (let k = 0, n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 2); k <= n; k++) {
+      const sx = Math.round((x0 + ((x1 - x0) * k) / n) * 2) / 2, sy = Math.round((y0 + ((y1 - y0) * k) / n) * 2) / 2;
+      fill(0x080605, 0.95 * a, sx - (w - 0.5) / 2, sy - (w - 0.5) / 2, w, w);
+      fill(0xb4a68c, 0.7 * a, sx, sy + w / 2, 0.5, 0.5);
+      if (w > 0.5) fill(0x8a7c68, 0.6 * a, sx, sy - w / 2, 0.5, 0.5);
+    }
+  };
+  let drawn = 0;
+  run(scene, ms + 900, () => {
+    const t = scene.time.now - at, upto = Math.min(segs.length, Math.ceil((t / ms) * segs.length)), fade = 1 - Phaser.Math.Clamp((t - ms) / 900, 0, 1);
+    for (; drawn < upto; drawn++) split(segs[drawn], (c, a, x, y, w, h) => rt.fill(c, a, x, y, w, h), 1); // the scar it leaves
+    rt.render();
+    g.clear();
+    for (let i = 0; i < upto; i++) split(segs[i], (c, a, x, y, w, h) => g.fillStyle(c, a).fillRect(x, y, w, h), fade);
+    // Where it has passed: chips of stone leap up and fall back, dust hangs a moment.
+    for (let i = 0; i < upto; i += 2) {
+      const age = (t - (i / segs.length) * ms) / 1000, [sx, sy] = segs[i];
+      if (age < 0 || age > 0.7) continue;
+      for (let c = 0; c < 2; c++) {
+        const h = Math.sin(i * 12.9898 + c * 78.233) * 43758.5453, u = h - Math.floor(h), z = (40 + 50 * u) * age - 160 * age * age;
+        if (z > 0) g.fillStyle(u > 0.5 ? 0xb4a68c : 0x6a5e50, 1).fillRect(Math.round(sx + (u - 0.5) * 56 * age), Math.round(sy - z), 1, 1);
+      }
+      g.fillStyle(0x9a8c76, 0.45 * (1 - age / 0.7)).fillRect(Math.round(sx - 2), Math.round(sy - 2 - age * 10), 4, 2);
+    }
+  }, () => g.destroy());
+}
+
 /** A blow turned aside at floor point (x, y) coming from `angle`: sparks off his gauntlet, flying back the way it came. */
 export function parry(scene: Scene, x: number, y: number, angle: number) {
   const g = scene.add.graphics().setDepth(9000), z = 22; // at his chest
@@ -175,8 +252,8 @@ export function die(scene: Scene, s: Sprite) {
     const { x, y, flipX, originY } = s, away = (s.getData('facing') ?? 0) + Math.PI;
     s.destroy();
     // They bleed: a red burst, a man sinks to his knees (a hound reels), falls, and a pool spreads under him.
-    bleed(scene, x, y, away, 20, 1.2, 1);
-    const body = scene.add.image(x, y, key, `${view}-${key === 'hound' ? 'hurt' : 'kneel'}`).setOrigin(0.5, originY).setScale(0.5).setFlipX(flipX).setDepth(y).setBlendMode(blend);
+    bleed(scene, x, y, away, key === 'amas' ? 40 : 20, 1.2, 1);
+    const body = scene.add.image(x, y, key, `${view}-${key === 'hound' || key === 'amas' ? 'hurt' : 'kneel'}`).setOrigin(0.5, originY).setScale(0.5).setFlipX(flipX).setDepth(y).setBlendMode(blend);
     scene.time.delayedCall(220, () => {
       body.setFrame('corpse').setDepth(1.5); // on the floor, over its blood, under everyone
       run(scene, 600, (t) => {

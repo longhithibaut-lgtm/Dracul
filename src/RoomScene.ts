@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { aimAt, biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
+import { aimAt, biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, onLine, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -155,9 +155,9 @@ export class RoomScene extends Phaser.Scene {
     this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
     this.shards = this.physics.add.group();
     // The Order's lights: each priest's monstrance (brightening as he prays), each inquisiteur's censer (fanned as it
-    // whirls), each purificateur's pilot while it flares and burns, each sonneur's bell while its rim glows and rings,
-    // then its lanterns. Their bodies' tells, in the dark rooms.
-    const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (['priest', 'inquisitor'].includes(e.getData('kind')) || ['ignite', 'fire', 'raise', 'toll'].includes(e.getData('state'))))
+    // whirls), each bourreau's reliquary, each purificateur's pilot while it flares and burns, each sonneur's bell while
+    // its rim glows and rings, then its lanterns. Their bodies' tells, in the dark rooms.
+    const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (['priest', 'inquisitor', 'bourreau'].includes(e.getData('kind')) || ['ignite', 'fire', 'raise', 'toll'].includes(e.getData('state'))))
       .map((e) => ({ ...Foes.lamp(e), lit: true, I: this.glow(e) })), ...this.lanterns];
     if (Dark.skin.dark) Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
@@ -386,9 +386,12 @@ export class RoomScene extends Phaser.Scene {
         else if (kind === 'penitent') this.stepPenitent(e, time);
         else if (kind === 'ringer') this.stepRinger(e, time);
         else if (kind === 'inquisitor') this.stepInquisitor(e, time, delta);
+        else if (kind === 'amas') this.stepAmas(e, time);
+        else if (kind === 'bourreau') this.stepBourreau(e, time);
         else this.stepEnemy(e, time);
         // Quickened by a sonneur's bell: faster on its feet (its walk, set afresh each frame it closes in or keeps its distance).
         if (e.getData('state') === 'chase' && time < (e.getData('hasteUntil') ?? 0)) e.body!.velocity.scale(T.ringer.haste);
+        if (e.getData('state') === 'chase' && e.getData('torn')) e.body!.velocity.scale(T.amas.crawl); // torn off an Amas, it crawls
       }
       // Commanded: its wait between attacks runs out faster.
       if (this.order(e) && e.getData('readyAt') > time && commanders.some((c) => c !== e && Phaser.Math.Distance.BetweenPoints(c, e) < T.inquisitor.commandRange))
@@ -572,6 +575,7 @@ export class RoomScene extends Phaser.Scene {
    *  half as much again as it rings; a censer fanned by its whirl. */
   private glow(e: Sprite) {
     const now = this.time.now, P = T.purifier, R = T.priest, B = T.ringer, I = T.inquisitor;
+    if (e.getData('kind') === 'bourreau') return T.bourreau.light;
     if (e.getData('kind') === 'inquisitor') return ['whirl', 'sweep'].includes(e.getData('state')) ? I.whirlLight : I.light;
     switch (e.getData('state')) {
       case 'toll': return B.light * 1.5;
@@ -715,10 +719,82 @@ export class RoomScene extends Phaser.Scene {
     e.setData('facing', facing);
   }
 
-  /** One of the Order: its men and hounds (not the ghouls), whom a sonneur quickens and an inquisiteur commands. */
+  /** One of the Order: its men and hounds (not the ghouls, nor their Amas), whom a sonneur quickens and an inquisiteur commands. */
   private order(e: Sprite) {
     const kind = e.getData('kind');
-    return kind === 'crossbow' || Foes.isFoe(kind);
+    return kind === 'crossbow' || (Foes.isFoe(kind) && kind !== 'amas');
+  }
+
+  // Amas: crawls straight at the hero; with him close, gathers itself up, every arm rising, then slams down all round it,
+  // the blow spreading out over the floor (Foes.slam), striking him where it passes; lies sprawled a while, reloads.
+  private stepAmas(e: Sprite, time: number) {
+    const A = T.amas, from = e.body!.center, to = this.hero.body!.center;
+    const toHero = Phaser.Math.Angle.BetweenPoints(from, to), floor = Math.hypot(to.x - from.x, (to.y - from.y) / T.lantern.squash);
+    switch (e.getData('state')) {
+      case 'contract':
+        if (time < e.getData('fireAt')) return;
+        e.setData({ state: 'slam', slamAt: time });
+        Foes.slam(this, from.x, from.y);
+        Sfx.play(this, 'slam');
+        return;
+      case 'slam':
+        if (floor <= Foes.slamAt(e.getData('slamAt'), time) + 3) this.damageHero(A.damage);
+        if (time >= e.getData('slamAt') + A.slamMs) e.setData({ state: 'sprawl', until: time + A.sprawlMs, readyAt: time + A.reloadMs });
+        return;
+    }
+    if (time >= e.getData('readyAt') && floor <= A.strikeRange && this.cameras.main.worldView.contains(from.x, from.y)) {
+      e.setVelocity(0).setData({ state: 'contract', fireAt: time + A.contractMs, facing: toHero });
+      Sfx.play(this, 'groan', A.contractMs / 1000);
+      return;
+    }
+    this.physics.velocityFromRotation(this.wayToHero(e).angle, floor < 16 ? 0 : A.speed, e.body!.velocity);
+    e.setData({ state: 'chase', facing: toHero });
+  }
+
+  /** A blow on an Amas tears one of its ghouls off it, which crawls at the hero once it has found its limbs; no more
+   *  than T.amas.thralls of them at once. */
+  private tear(e: Sprite) {
+    const A = T.amas, now = this.time.now, c = e.body!.center;
+    if ((this.enemies.getChildren() as Sprite[]).filter((o) => o.body?.enable && o.getData('torn') === e).length >= A.thralls) return;
+    const a = Phaser.Math.Angle.BetweenPoints(c, this.hero.body!.center) + Phaser.Math.FloatBetween(-1.2, 1.2);
+    const g = Enemy.create(this, this.enemies, c.x + Math.cos(a) * 16, c.y + Math.sin(a) * 16 * T.lantern.squash - 10).setCollideWorldBounds(true);
+    g.setData({ state: 'chase', until: 0, stunnedUntil: now + 450, flashUntil: 0, facing: a, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0, hp: A.thrallHp, restUntil: 0, torn: e });
+    Sfx.play(this, 'spawn');
+  }
+
+  // Bourreau: walks at the hero; with him in reach, raises his axe overhead (his aim locked), then the blow splits the
+  // floor in a line ahead of him (Foes.crack), striking the hero where the crack reaches; the axe stuck in the stone, he
+  // wrenches it free (the time to strike him), recovers, reloads.
+  private stepBourreau(e: Sprite, time: number) {
+    const B = T.bourreau, sq = T.lantern.squash, from = e.body!.center, to = this.hero.body!.center;
+    const toHero = Phaser.Math.Angle.BetweenPoints(from, to), dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    switch (e.getData('state')) {
+      case 'heave': {
+        if (time < e.getData('fireAt')) return;
+        // The crack runs along his aim until a prop or a wall stops it, out from where his blade lands (the way his body faces).
+        const aim = e.getData('aim'), k = Math.hypot(Math.cos(aim), Math.sin(aim) * sq), o = (Foes.octant(aim) * Math.PI) / 4, blade = 30;
+        const len = Math.min(B.reach, this.boltReach(from, Math.atan2(Math.sin(aim) * sq, Math.cos(aim))) / k);
+        e.setData({ state: 'chop', chopAt: time, len });
+        Foes.crack(this, from.x + Math.cos(o) * blade, from.y + Math.sin(o) * blade * sq, aim, Math.max(0, len - blade));
+        Sfx.play(this, 'slam', 1);
+        return;
+      }
+      case 'chop': {
+        const t = time - e.getData('chopAt');
+        if (onLine({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / sq }, e.getData('len') * Math.min(1, t / B.crackMs), B.half)) this.damageHero(B.damage);
+        if (t >= B.chopMs) e.setData({ state: 'wrench', until: time + B.wrenchMs, readyAt: time + B.wrenchMs + B.reloadMs });
+        return;
+      }
+      case 'wrench': // the axe comes free
+        e.setData({ state: 'recover', until: time + B.recoverMs });
+        return;
+    }
+    if (time >= e.getData('readyAt') && dist <= B.strikeRange && this.cameras.main.worldView.contains(from.x, from.y)) {
+      e.setVelocity(0).setData({ state: 'heave', fireAt: time + B.heaveMs, facing: toHero, aim: aimAt(to.x - from.x, to.y - from.y, sq, Foes.DIRS) });
+      Sfx.play(this, 'heave', B.heaveMs / 1000);
+      return;
+    }
+    this.keepAt(e, toHero, dist, B.near, B.far, B.speed);
   }
 
   /** An inquisiteur turns aside a blow coming at his front from floor point `from` (claws, a shard): sparks off his
@@ -831,7 +907,7 @@ export class RoomScene extends Phaser.Scene {
     const damage = dash ? S.damage + D.strikeBonus : fin ? S.damage * S.finisherMult + (this.gifts.includes('rongeur') ? T.gifts.gnaw : 0) : S.damage;
     const knock = S.knockback * (dash ? D.strikeKnock : fin ? S.finisherKnock : 1);
     let hits = 0;
-    for (const e of this.enemies.getChildren() as Sprite[]) {
+    for (const e of [...this.enemies.getChildren()] as Sprite[]) { // not the ghouls this blow tears off an Amas
       if (!e.body?.enable || !inArc(this.hero, angle, e, range, arc)) continue;
       hits++;
       this.hitEnemy(e, angle, damage, knock, kind);
@@ -880,7 +956,7 @@ export class RoomScene extends Phaser.Scene {
     if (pierce && !turned) hit.push(e);
     else b.destroy();
     if (turned) return;
-    if (e !== this.prey && !this.kneeling(e)) { // a prey stays held in the bite, a kneeling human down
+    if (e !== this.prey && !this.kneeling(e) && !this.heavy(e)) { // a prey stays held in the bite, a kneeling human down
       e.setData('stunnedUntil', Math.max(e.getData('stunnedUntil'), this.time.now + T.shot.stunMs));
       this.physics.velocityFromRotation(angle, T.shot.knockback, e.body.velocity);
     }
@@ -898,13 +974,19 @@ export class RoomScene extends Phaser.Scene {
       this.shoveUntil = now + 90;
       return;
     }
-    // A hit interrupts whatever the enemy was doing, including a windup: aggression is rewarded.
-    e.setData({ state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs });
-    if (!this.kneeling(e)) this.physics.velocityFromRotation(angle, knock, e.body!.velocity);
+    // A hit interrupts whatever the enemy was doing, including a windup: aggression is rewarded. Not the heavy ones'.
+    const heavy = this.heavy(e);
+    if (!heavy) e.setData({ state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs });
+    if (!this.kneeling(e) && !heavy) this.physics.velocityFromRotation(angle, knock, e.body!.velocity);
     Fx.hit(this, e.x, e.y, angle);
     Sfx.play(this, 'hit', kind);
     if (this.gifts.includes('griffes')) this.infect(e);
     this.hurtEnemy(e, damage);
+  }
+
+  /** The Amas and the Bourreau: blows never cut them short nor push them back. */
+  private heavy(e: Sprite) {
+    return ['amas', 'bourreau'].includes(e.getData('kind'));
   }
 
   private kneeling(e: Sprite) {
@@ -928,6 +1010,7 @@ export class RoomScene extends Phaser.Scene {
     e.setData({ hp, flashUntil: now + 70 });
     if (kneels) e.setVelocity(0).setData({ state: 'chase', until: 0, kneelUntil: now + T.bite.kneelMs });
     if (hp <= 0) this.kill(e);
+    else if (e.getData('kind') === 'amas') this.tear(e);
   }
 
   /** Every enemy death goes through here, and here only it is decided whether the wave, or the room, is over. */
@@ -1182,16 +1265,17 @@ export class RoomScene extends Phaser.Scene {
   }
 
   /** An enemy rises at `p` after its telegraph: a ghoul, or one of the Order: a crossbowman (`hp` to start it
-   *  weakened), a purificateur, a prêtre, a hound or a pénitent (the training room's only, for now). */
+   *  weakened), a purificateur, a prêtre, a hound, a pénitent, a sonneur, an inquisiteur or a bourreau, or an Amas of
+   *  ghouls (the training room's only, for now). */
   private spawn(p: { x: number; y: number }, kind: 'ghoul' | 'crossbow' | Foes.Kind, hp?: number) {
-    const bow = kind === 'crossbow', human = kind !== 'ghoul'; // the Order's gold sigil (its hounds' too)
+    const bow = kind === 'crossbow', human = kind !== 'ghoul' && kind !== 'amas'; // the Order's gold sigil (its hounds' too), else the ghouls' pool of blood
     (human ? Crossbow : Enemy).telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);
     if (!human) Sfx.play(this, 'spawn');
     this.time.delayedCall(T.enemy.spawnTelegraphMs, () => {
       if (this.dead) return;
       const e = (Foes.isFoe(kind) ? Foes.create(this, this.enemies, kind, p.x, p.y) : (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y)).setCollideWorldBounds(true);
       const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0 };
-      if (Foes.isFoe(kind)) e.setData({ ...common, kind, human: kind !== 'hound', hp: T[kind].hp, readyAt: this.time.now + T[kind].firstMs, aim: Math.PI / 2 });
+      if (Foes.isFoe(kind)) e.setData({ ...common, kind, human: kind !== 'hound' && kind !== 'amas', hp: T[kind].hp, readyAt: this.time.now + T[kind].firstMs, aim: Math.PI / 2 });
       else if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs });
       else e.setData({ ...common, hp: hp ?? T.enemy.hp, restUntil: 0 });
     });

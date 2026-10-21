@@ -1,12 +1,13 @@
-// The Order's foes of the « grand pixel » rooms (src/foes.ts: Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur,
-// Inquisiteur) in the
+// The foes of the « grand pixel » rooms (src/foes.ts: Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur,
+// Inquisiteur, Amas, Bourreau) in the
 // torture room, in headless Chromium at 1920x1080 (the PC target), called in from the training room: each idle, giving
 // its tell and attacking (crops round them, x2 of the screen's pixels kept), walking and struck, weakened, killed, full
 // frames of them; the bot playing each attack (the crossbowman's too), standing still (it must land) and stepping out
 // REACT ms after the tell starts, at the hero's speed (it must miss): nothing on the floor tells it, the bot only knows
 // the state, as a player knows the pose (the Sonneur's rings also misted through as they come, the Inquisiteur's sweep
-// dodged by slipping into his back, whose claws land where his front parries them); and the frame rate empty, with the
-// hound pack, six pénitents, a Sonneur and an Inquisiteur fighting.
+// dodged by slipping into his back, whose claws land where his front parries them; the Amas sprawled and the Bourreau
+// wrenching his axe free are struck without being cut short, the Amas losing a ghoul to each blow); and the frame rate
+// empty, with the hound pack, six pénitents, a Sonneur, an Inquisiteur, an Amas and a Bourreau fighting.
 // Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=torture]
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -41,10 +42,10 @@ const fps = async () => {
 const count = () => run(() => window.game.scene.getScene('room').enemies.getChildren().filter((e) => e.body?.enable).length);
 const empty = await fps();
 
-// The hound pack, a wave of six pénitents, a Sonneur and an Inquisiteur, called in by their buttons, fighting the
-// (invincible) hero.
-await run(() => { for (const s of ['hounds', 'penitents', 'ringer', 'inquisitor']) document.querySelector(`[data-spawn="${s}"]`).click(); });
-await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().length === 11);
+// The hound pack, a wave of six pénitents, a Sonneur, an Inquisiteur, an Amas and a Bourreau, called in by their
+// buttons, fighting the (invincible) hero.
+await run(() => { for (const s of ['hounds', 'penitents', 'ringer', 'inquisitor', 'amas', 'bourreau']) document.querySelector(`[data-spawn="${s}"]`).click(); });
+await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().length >= 13);
 const crowd = await fps();
 await page.screenshot({ path: `${out}/foes-crowd-live.png` });
 
@@ -223,6 +224,81 @@ await step(1500);
 await page.screenshot({ path: `${out}/foes-dead2.png` });
 await clear();
 
+// The Amas: crawling, gathering itself up (two frames), slamming, sprawled; struck while sprawled (not cut short, a ghoul
+// torn off it at each blow, crawling at the hero). The Bourreau: walking, the axe raised, the blow and its crack,
+// wrenching the axe free and struck meanwhile (not cut short), weakened. Then both dead.
+await hero(240, 330);
+await call([['amas', 165, 315], ['bourreau', 315, 320]]);
+await still();
+await page.screenshot({ path: `${out}/foes-room3.png` });
+await crop('amas', 'amas-idle', 520, 400, -5);
+await crop('bourreau', 'bourreau-idle', 520, 560);
+await hero(240, 240);
+for (const k of [0, 1, 2]) { await step(110); await crop('amas', `amas-walk${k}`, 520, 400, -5); await crop('bourreau', `bourreau-walk${k}`, 520, 560); }
+await hold();
+await step(600);
+at = await run(`(() => { const e = ${foe('amas')}; return { x: e.x, y: e.y }; })()`);
+await hero(at.x + 26, at.y + 4);
+await still();
+await set('amas', { readyAt: 0, state: 'chase', until: 0 });
+await step(250);
+await crop('amas', 'amas-tell0', 560, 420, -5);
+await step(450);
+await crop('amas', 'amas-tell', 560, 420, -5);
+await step(260);
+await crop('amas', 'amas-attack', 720, 480, -5);
+await page.screenshot({ path: `${out}/foes-amas-slam-full.png` });
+await step(500);
+await crop('amas', 'amas-sprawl', 560, 420, -5);
+const ghouls = () => run(`${S}.enemies.getChildren().filter((e) => e.body?.enable && e.getData('torn')).length`);
+const punish = async (kind, state) => {
+  const before = { hp: await hpOf(kind), torn: await ghouls() };
+  await run(`(() => { const s = ${S}, e = ${foe(kind)}, c = e.body.center; s.hero.body.reset(c.x + 20, c.y); s.slashReadyAt = 0; s.slash(Math.PI); })()`);
+  await step(16);
+  const r = { hp: before.hp - (await hpOf(kind)), torn: (await ghouls()) - before.torn, state: await run(`${foe(kind)}.getData('state')`) };
+  if (!r.hp || r.state !== state) errors.push(`${kind} not punished while ${state}: ${JSON.stringify(r)}`);
+  return r;
+};
+const punished = { Amas: await punish('amas', 'sprawl') };
+await step(60);
+await crop('amas', 'amas-hurt', 560, 420, -5);
+await hold();
+for (let i = 0; i < 3; i++) { await run(`${S}.hurtEnemy(${foe('amas')}, 1)`); await step(200); }
+await hero(at.x + 90, at.y + 10);
+await step(700);
+if ((await ghouls()) < 2) errors.push('the Amas tore no ghouls off');
+await page.screenshot({ path: `${out}/foes-amas-torn-full.png` });
+await crop('amas', 'amas-torn', 900, 520, -5);
+await run(`${S}.enemies.getChildren().filter((e) => e.getData('torn') || e.getData('kind') === 'amas').forEach((e) => ${S}.kill(e))`); // the Bourreau alone now
+await step(800);
+at = await run(`(() => { const e = ${foe('bourreau')}; return { x: e.x, y: e.y }; })()`);
+await hero(at.x - 60, at.y + 6);
+await still();
+await set('bourreau', { readyAt: 0, state: 'chase', until: 0 });
+await step(600);
+await crop('bourreau', 'bourreau-tell', 600, 600);
+await step(470);
+await crop('bourreau', 'bourreau-attack', 900, 600);
+await page.screenshot({ path: `${out}/foes-bourreau-crack-full.png` });
+await step(400);
+punished.Bourreau = await punish('bourreau', 'wrench');
+await step(60);
+await crop('bourreau', 'bourreau-wrench', 900, 600);
+console.log('struck in the punish window:', JSON.stringify(punished));
+await hold();
+await step(1600);
+await run(`${S}.hitEnemy(${foe('bourreau')}, 0, 0, 140, 0)`);
+await step(60);
+await crop('bourreau', 'bourreau-hurt', 520, 560);
+await run(`(() => { ${S}.hurtEnemy(${foe('bourreau')}, ${foe('bourreau')}.getData('hp') - 1); })()`);
+await step(300);
+await crop('bourreau', 'bourreau-weak', 520, 560);
+await step(900);
+await run(`${S}.kill(${foe('bourreau')})`);
+await step(1500);
+await page.screenshot({ path: `${out}/foes-dead3.png` });
+await clear();
+
 // The bot plays each attack, the hero mortal and alone with the foe: standing still, then stepping out REACT ms after
 // the tell starts (holding a key: the hero walks at T.grand.speed). `then(t)`, if given, is what the bot does at each
 // step from then on (t: ms since the tell started), for a dodge that is more than a walk.
@@ -278,13 +354,20 @@ const fights = {
 if (!misted) errors.push('the bot never misted through the rings');
 const back = await run(`(() => { const e = ${foe('inquisitor')}, c = ${S}.hero.body.center; return { dx: Math.round(c.x - e.body.center.x), dy: Math.round(c.y - e.body.center.y), aim: +e.getData('aim').toFixed(2) }; })()`);
 console.log('the hero once behind the Inquisiteur (from his feet, room px; his aim, rad):', JSON.stringify(back));
+// The Amas and the Bourreau, after the Inquisiteur is looked at from behind.
+Object.assign(fights, {
+  'Amas, immobile': await play('amas', 26, 0, null, 'contract', ['slam']), 'Amas, s\'éloigne': await play('amas', 26, 0, 'd', 'contract', ['slam']),
+  'Amas, immobile (en haut)': await play('amas', 0, -16, null, 'contract', ['slam']), 'Amas, s\'éloigne (en haut)': await play('amas', 0, -16, 'w', 'contract', ['slam']),
+  'Bourreau, immobile': await play('bourreau', 50, 0, null, 'heave', ['chop']), 'Bourreau, pas de côté': await play('bourreau', 50, 0, 's', 'heave', ['chop']),
+  'Bourreau, immobile (loin)': await play('bourreau', 0, 70, null, 'heave', ['chop']), 'Bourreau, pas de côté (loin)': await play('bourreau', 0, 70, 'd', 'heave', ['chop']),
+});
 await run(() => document.querySelector('[data-opt="god"]').click());
 const names = Object.keys(fights), fair = names.every((n, i) => (i % 2 ? !fights[n] : fights[n] > 0));
 if (!fair) errors.push(`unfair or toothless attacks: ${JSON.stringify(fights)}`);
 console.log('blood lost:', JSON.stringify(fights));
 
 await run(() => window.game.loop.wake());
-console.log(`${layout}: ${empty} fps empty, ${crowd} fps with the hound pack, six pénitents, a Sonneur and an Inquisiteur fighting, ${await count()} left`);
+console.log(`${layout}: ${empty} fps empty, ${crowd} fps with the hound pack, six pénitents, a Sonneur, an Inquisiteur, an Amas and a Bourreau fighting, ${await count()} left`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();

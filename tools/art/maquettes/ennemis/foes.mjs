@@ -461,12 +461,17 @@ export function pendu(pose = 'idle', seed = 7) {
 }
 
 // ======================= 8. L'AMAS (new, ghouls) =======================
-export function amas(pose = 'idle', seed = 13) {
+// pose: 'idle', 'atk' (every arm raised: the game's tell); o (the game's sheet, tools/art/foes.gen.mjs; given, every
+// frame has the arms of 'atk'): lift (0..1, the arms rising), gait (the crawl's phase, radians: hands and stumps step in
+// turn), slam (the arms slapped flat on the floor, flung out), sx / sz (the mass spread or gathered, sunk or drawn up)
+export function amas(pose = 'idle', seed = 13, o) {
   const atk = pose === 'atk'; const b = B(); const { rc, el } = b; const R = mulberry32(seed); const j = (k = 1) => (R() - 0.5) * 2 * k;
+  const lift = atk ? 1 : o?.lift ?? 0, g = o?.gait, slam = !!o?.slam;
+  const walk = (ph, k) => (g === undefined ? [0, 0] : [Math.cos(g + ph), k * Math.max(0, -Math.sin(g + ph))]); // a hand's step: along, lifted
   el([0, 0, 8], [25, 21, 10], 1, 4); el([2, -3, 19], [17, 14, 12], 1, 5); el([-9, 5, 16], [10, 9, 9], 1, 4);
   const heads = [];
   // half-swallowed bodies: chest + shoulders + neck + head, rising out of the mass
-  const bodies = [[-14, 10, 12, -0.6, 0.5], [13, 12, 14, 0.6, 0.6], [2, -6, 26, 3.0, 1.1], [-2, 10, 22, 0.05, atk ? 1.6 : 0.9], [20, -6, 10, 1.6, 0.3], [-19, -7, 14, -2.2, 0.4]];
+  const bodies = [[-14, 10, 12, -0.6, 0.5], [13, 12, 14, 0.6, 0.6], [2, -6, 26, 3.0, 1.1], [-2, 10, 22, 0.05, lift === 1 ? 1.6 : lerp(0.9, 1.6, lift)], [20, -6, 10, 1.6, 0.3], [-19, -7, 14, -2.2, 0.4]];
   for (const [x, y, z, a, up] of bodies) {
     const d = nz([Math.sin(a), Math.cos(a), up]); const c0 = [x, y, z], c1 = add(c0, sc(d, 12));
     rc(c0, c1, 6.5, 5.2, 1, 3); const sv = nz([d[1], -d[0], 0]);
@@ -477,17 +482,20 @@ export function amas(pose = 'idle', seed = 13) {
     for (const s of [-1, 1]) b.carve(add(h, add(sc(d, 3.0), add(sc(sv, s * 1.4), [0, 0, 1.1]))), 0.9, 0.3);
     rc(add(h, add(sc(d, 1.5), [0, 0, -2.5])), add(h, add(sc(d, 4.5), [0, 0, -6])), 1.0, 0.7, 1, 0.5); // slack jaw
   }
-  // arms: spider-like, elbows high, hands splayed on the floor (raised and clawing on the attack)
+  // arms: spider-like, elbows high, hands splayed on the floor (raised and clawing on the attack, slapped flat on the slam)
   for (let i = 0; i < 11; i++) {
     const a = i / 11 * Math.PI * 2 + j(0.25); const u = [Math.cos(a), Math.sin(a) * 0.9, 0]; const len = 0.75 + R() * 0.5;
     const s0 = [u[0] * 16, u[1] * 14, 12 + j(5)];
-    let e, w;
-    if (atk) { e = add(s0, [u[0] * 9 * len, u[1] * 9 * len, 16 * len]); w = add(e, [u[0] * 7 * len + j(2), u[1] * 7 * len + j(2), 12 * len]); }
-    else { e = add(s0, [u[0] * 12 * len, u[1] * 12 * len, 9 * len]); w = add(e, [u[0] * 9 * len, u[1] * 9 * len, -e[2] + 2.2]); }
+    const jx = atk || o ? j(2) : 0, jy = atk || o ? j(2) : 0, [f, up] = walk(i * 2.3, 3);
+    const eU = add(s0, [u[0] * 9 * len, u[1] * 9 * len, 16 * len]), wU = add(eU, [u[0] * 7 * len + jx, u[1] * 7 * len + jy, 12 * len]);
+    let e = slam ? add(s0, [u[0] * 14 * len, u[1] * 14 * len, 4 * len]) : add(s0, [u[0] * 12 * len, u[1] * 12 * len + 2 * f, 9 * len + up * 0.5]);
+    let w = slam ? add(e, [u[0] * 13 * len + jx * 0.5, u[1] * 13 * len + jy * 0.5, -e[2] + 1.5]) : add(e, [u[0] * 9 * len, u[1] * 9 * len + 3 * f, -e[2] + 2.2 + up]);
+    let dir = [u[0], u[1], slam ? -0.3 : -0.15];
+    if (lift === 1) { e = eU; w = wU; dir = sub(w, e); } else if (lift > 0) { dir = lp(dir, nz(sub(wU, eU)), lift); e = lp(e, eU, lift); w = lp(w, wU, lift); }
     rc(s0, e, 2.5, 1.6, 1, 1.4); rc(e, w, 1.6, 1.1, 1, 0.6);
-    claws(b, w, atk ? sub(w, e) : [u[0], u[1], -0.15], 1, 1, 2, 4.2, 0.9);
+    claws(b, w, dir, 1, 1, 2, 4.2, 0.9);
   }
-  for (let i = 0; i < 3; i++) { const a = 0.8 + i * 2.1; const s0 = [Math.cos(a) * 18, Math.sin(a) * 15, 7]; const k = add(s0, [Math.cos(a) * 12, Math.sin(a) * 10, 9]); rc(s0, k, 3.4, 2.1, 1, 1.5); rc(k, add(k, [Math.cos(a) * 10, Math.sin(a) * 8, -k[2] + 1.6]), 2.1, 1.3, 1, 0.8); }
+  for (let i = 0; i < 3; i++) { const a = 0.8 + i * 2.1; const s0 = [Math.cos(a) * 18, Math.sin(a) * 15, 7]; const k = add(s0, [Math.cos(a) * 12, Math.sin(a) * 10, 9]); const [f, up] = walk(1 + i * 2.1, 2.5); rc(s0, k, 3.4, 2.1, 1, 1.5); rc(k, add(k, [Math.cos(a) * 10, Math.sin(a) * 8 + 4 * f, -k[2] + 1.6 + up]), 2.1, 1.3, 1, 0.8); }
   const mat = (m, x, y, z) => {
     if (m === 2) return { alb: mix(S.nail, S.blood, 0.4), spec: 0.4, gloss: 40 };
     const pick = vn3(x * 0.05, y * 0.05, z * 0.05, seed);
@@ -499,7 +507,8 @@ export function amas(pose = 'idle', seed = 13) {
     return { alb: c, sss: 0.5, wrap: 0.3, spec: 0.2, gloss: 35 };
   };
   const r = done(b, mat, { yawFront: 0.3 });
-  const k = 1.35, sd = r.sdf; r.sdf = (x, y, z) => sd(x / k, y / k, z / k) * k; r.mat = (m, x, y, z) => mat(m, x / k, y / k, z / k); r.bounds = r.bounds.map(v => v * k);
+  const kx = 1.35 * (o?.sx ?? 1), kz = 1.35 * (o?.sz ?? 1), sd = r.sdf, [x0, y0, z0, x1, y1, z1] = r.bounds;
+  r.sdf = (x, y, z) => sd(x / kx, y / kx, z / kz) * Math.min(kx, kz); r.mat = (m, x, y, z) => mat(m, x / kx, y / kx, z / kz); r.bounds = [x0 * kx, y0 * kx, z0 * kz, x1 * kx, y1 * kx, z1 * kz];
   r.fx = atk ? [{ k: 'ring', c: [0, 0], r: 64, w: 2, col: 'red' }, { k: 'disc', c: [0, 0], r: 64, col: 'red' }] : [];
   return r;
 }
@@ -584,8 +593,11 @@ export function inquisiteur(pose = 'idle', over = {}) {
 }
 
 // ======================= 10. BOURREAU, gardien de la crypte (mini-boss) =======================
-export function bourreau(pose = 'idle') {
-  const atk = pose === 'atk'; const b = B(); const { rc, el, tor } = b; const s = 1.5;
+// pose: 'idle', 'atk' (the axe raised overhead: the game's tell), 'chop' (the game's attack: bent over the blow, the
+// blade sunk in the floor ahead of him; it stays there whatever his arms do); over: joints to override, or a function of
+// the joints returning them (the game's sheet, tools/art/foes.gen.mjs, poses its frames with it)
+export function bourreau(pose = 'idle', over = {}) {
+  const atk = pose === 'atk', chop = pose === 'chop'; const b = B(); const { rc, el, tor } = b; const s = 1.5;
   const J = {}; for (const k in std) J[k] = std[k].map(v => v * s);
   Object.assign(J, {
     head: [0, 6, 134], neck: [0, 4, 124], chest: [0, 3, 108], pelvis: [0, 0, 76],
@@ -593,9 +605,14 @@ export function bourreau(pose = 'idle') {
   }, atk ? {
     head: [0, 2, 135], neck: [0, 1, 125], chest: [0, -1, 109],
     Sr: [-17, -1, 120], Er: [-16, -6, 140], Wr: [-6, -9, 152], Hr_: [-4, -9.5, 155], Sl: [17, -1, 120], El: [16, -6, 140], Wl: [6, -9, 150], Hl_: [4, -9.5, 153],
+  } : chop ? {
+    head: [0, 17, 123], neck: [0, 13, 114], chest: [0, 8, 101], pelvis: [0, 0, 73],
+    Sr: [-16, 8, 112], Er: [-17, 16, 90], Wr: [-6, 27, 77], Hr_: [-4, 30, 73], Sl: [16, 8, 112], El: [15, 12, 92], Wl: [-2, 21, 85], Hl_: [-4.4, 24, 81.4],
+    Hr: [-8, 0, 71], Kr: [-11, -6, 40], Ar: [-11, -14, 7], Tr: [-12, -4, 1.6], Hl: [8, 0, 71], Kl: [11, 12, 39], Al: [11, 9, 7], Tl: [12, 20, 1.6],
   } : {
     Sr: [-17, 2, 118], Er: [-22, 6, 92], Wr: [-18, 14, 74], Hr_: [-17, 16, 70], Sl: [17, 2, 118], El: [21, 4, 92], Wl: [17, 12, 76], Hl_: [15, 15, 74],
   });
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   humanoid(J, b, { thin: 1.7, pelvisM: 4, legM: 4, shinM: 6, footM: 6 });
   el(add(J.chest, [0, 5, -18]), [17, 15, 18], 1, 5); // belly
   // leather hood: cone, eyeholes
@@ -614,9 +631,9 @@ export function bourreau(pose = 'idle') {
   b.box([-17, 6, 66], [3.2, 2.4, 4.2], 8, 0, 0.5); el([-17, 8.6, 66], [1.6, 0.4, 2.4], 10);
   b.chain([[-14, 5, 82], [-16, 6, 74], [-17, 6, 70.5]], 0.6, 9);
   // headsman's axe
-  let h0, h1; if (atk) { h0 = add(J.Hr_, [0, 4, -10]); h1 = add(J.Hr_, [0, -30, 20]); } else { h0 = [-16, 18, 58]; h1 = [-30, 8, 156]; }
+  let h0, h1; if (atk) { h0 = add(J.Hr_, [0, 4, -10]); h1 = add(J.Hr_, [0, -30, 20]); } else if (chop) { h1 = [-1, 70, 16]; h0 = add(J.Hr_, sc(nz(sub(J.Hr_, h1)), 8)); } else { h0 = add(J.Hr_, [1, 2, -12]); h1 = add(J.Hr_, [-13, -8, 86]); }
   rc(h0, h1, 1.9, 1.7, 6);
-  const ad = nz(sub(h1, h0)), side = atk ? [0, 0, 1] : [-1, 0, 0]; const sv = nz(side.map((v, i) => v - ad[i] * (side[0] * ad[0] + side[1] * ad[1] + side[2] * ad[2])));
+  const ad = nz(sub(h1, h0)), side = atk ? [0, 0, 1] : chop ? [0, 0, -1] : [-1, 0, 0]; const sv = nz(side.map((v, i) => v - ad[i] * (side[0] * ad[0] + side[1] * ad[1] + side[2] * ad[2])));
   const bc = add(h1, sc(ad, -9));
   const nv = [ad[1] * sv[2] - ad[2] * sv[1], ad[2] * sv[0] - ad[0] * sv[2], ad[0] * sv[1] - ad[1] * sv[0]];
   b.f((x, y, z) => { const q = sub([x, y, z], bc); const u = q[0] * ad[0] + q[1] * ad[1] + q[2] * ad[2], v = q[0] * sv[0] + q[1] * sv[1] + q[2] * sv[2], w = q[0] * nv[0] + q[1] * nv[1] + q[2] * nv[2];
@@ -640,6 +657,7 @@ export function bourreau(pose = 'idle') {
   const r = done(b, mat, { big: true });
   r.lights = [{ p: [-17, 12, 66], c: L('#e0b060'), I: 1.2, r0: 12, R: 70, pad: 3, haze: 0.03, hazeR: 2 }];
   if (atk) r.fx = [{ k: 'rect', a: [0, 14], b: [0, 118], w: 15, col: 'red', fill: true }];
+  if (chop) { const sd = r.sdf; r.sdf = (x, y, z) => Math.max(sd(x, y, z), -z); } // the blade sunk: nothing under the floor
   return r;
 }
 

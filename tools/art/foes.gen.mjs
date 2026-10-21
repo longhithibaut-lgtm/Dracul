@@ -1,15 +1,16 @@
-// The Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur and Inquisiteur for the « grand pixel » rooms
-// (docs/decisions.md): the validated enemy sheets' own 3D models (tools/art/maquettes/ennemis/foes.mjs,
+// The Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur, Inquisiteur and Bourreau, and the ghouls' Amas,
+// for the « grand pixel » rooms (docs/decisions.md): the validated enemy sheets' own 3D models (tools/art/maquettes/ennemis/foes.mjs,
 // docs/maquettes/ennemis-planche-1.png and -2.png) posed per frame and rendered with their lights (the cold rim from
 // behind, the warm fill, the vampire's lantern off-frame, their own pilot light, monstrance, bell rim and censer) and its post (snapped onto its palette, tarnished gold included). One model unit is one pixel at
 // 960x540, like the grand hero (tools/art/grand-hero.gen.mjs): the game draws the sheets at half scale on the x2 view.
 // Five views (facing right, down-right, down, up-right, up: the game mirrors them for the left), each: idle (breathing,
 // the pilot light or the monstrance flickering), the walk (a stride the game turns by the distance walked), the
-// tell (ignite / pray / the hound flattened / the scourge cocked / the mallet raised / the censer whirling), the attack
-// (the hound's leap, the lash, the bell struck, the censer's sweep), the jet of fire (two flickers; the body and the jet
-// apart, so the game can turn the jet to its real aim), the Inquisiteur's parry, the recoil of a hit, kneeling (the idle
-// sunk to the knees, cut at the floor); one bloodied corpse.
-// Writes src/<id>.png for each (purifier, priest, hound, penitent, ringer, inquisitor) and src/foes.data.ts.
+// tell (ignite / pray / the hound flattened / the scourge cocked / the mallet raised / the censer whirling / the Amas
+// gathering up, arms rising / the axe raised), the attack (the hound's leap, the lash, the bell struck, the censer's
+// sweep, the Amas' slam, the axe sunk in the floor), the jet of fire (two flickers; the body and the jet apart, so the
+// game can turn the jet to its real aim), the Inquisiteur's parry, the Bourreau wrenching his axe free, the recoil of a
+// hit, kneeling (the idle sunk to the knees, cut at the floor); one bloodied corpse.
+// Writes src/<id>.png for each (purifier, priest, hound, penitent, ringer, inquisitor, amas, bourreau) and src/foes.data.ts.
 // Usage: node tools/art/foes.gen.mjs (~30 s on 4 cores); ONLY=priest renders one of them to
 // shots/priest-preview.png (x2, on grey) instead, to try a pose.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
@@ -17,7 +18,7 @@ import { writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { camera, render, post, haze, project, L, mix, vn3 } from './maquettes/ennemis/lib.mjs';
 import { writePNG } from './grand/lib.mjs'; // keeps the alpha channel
-import { purificateur, pretre, chien, penitent, sonneur, inquisiteur } from './maquettes/ennemis/foes.mjs';
+import { purificateur, pretre, chien, penitent, sonneur, inquisiteur, amas, bourreau } from './maquettes/ennemis/foes.mjs';
 import { place } from './maquettes/ennemis/fx.mjs';
 import { std } from './maquettes/ennemis/cast.mjs';
 
@@ -71,6 +72,7 @@ const BREATH = [0, 0.5, 1, 0.5], FLAME = [1, 1.4, 0.8, 1.2], GLOW = [1, 1.15, 1.
 // The Sonneur's short fat legs; the Inquisiteur's, a twentieth taller than the standard (his model's).
 const RINGER = { H: { Hr: [-5.5, 0, 42], Hl: [5.5, 0, 42] }, L: [20.3, 18.7], w: 6.5, step: 7 };
 const INQ = { H: { Hr: [-3.6, 0, 51.45], Hl: [3.6, 0, 51.45] }, L: [23.4, 24.4] };
+const HEADSMAN = { H: { Hr: [-8, 0, 74], Hl: [8, 0, 74] }, L: [34.2, 33.2], w: 10, step: 12 }; // the Bourreau's, half as big again
 
 // Each foe: its sheet cell (FW x FH, soles on row SOLE, centred); its walk (WALK frames a cycle of 4 STEP model units);
 // its frames: [name,
@@ -151,6 +153,34 @@ const FOES = {
     // On his back, arms fallen open, the censer by his hand.
     corpse: () => lying(inquisiteur('idle', { Er: [-12, 1, 64], Wr: [-17, 3, 50], Hr_: [-18, 4, 45], El: [12, 1, 64], Wl: [17, 3, 50], Hl_: [18, 4, 45] }), false),
   },
+  // The mass heaves as it breathes; it crawls on its hands and stumps, each stepping in turn; the tell: it gathers
+  // itself up as every arm rises (two frames); the slam: sunk and spread, the arms slapped flat round it.
+  amas: {
+    FW: 176, FH: 136, SOLE: 81, WALK: 6, STEP: 7, rim: 3, exposure: 2.8, // low, pale flesh lit from above: it would burn out
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => amas('idle', 13, { sx: 1 + 0.012 * b, sz: 1 + 0.035 * b })]),
+      ...[0, 1, 2, 3, 4, 5].map((k) => [`walk${k}`, () => amas('idle', 13, { gait: (2 * Math.PI * k) / 6 }), { bob: -1 * Math.abs(Math.cos((2 * Math.PI * k) / 6)) }]),
+      ['tele0', () => amas('idle', 13, { lift: 0.5, sx: 0.95, sz: 1.04 })], ['tele1', () => amas('idle', 13, { lift: 1, sx: 0.9, sz: 1.08 })],
+      ['atk', () => amas('idle', 13, { slam: true, sx: 1.1, sz: 0.78 })],
+      ['hurt', () => amas('idle', 13, { lift: 0.3, sx: 1.04, sz: 0.9 })],
+    ],
+    // Collapsed for good, sunk and spread, soaked.
+    corpse: () => { const m = amas('idle', 13, { slam: true, sx: 1.1, sz: 0.78 }), [x0, y0, , x1, y1, z1] = m.bounds; return fallen(m, (X, Y, Z) => [X, Y, Z / FLAT], [x0, y0, 0, x1, y1, z1 * FLAT], [0, 0, 10]); },
+  },
+  // Huge and slow, heavy steps; the tell: the axe raised overhead; the blow: bent over it, the blade sunk in the floor
+  // ahead; then he wrenches it free (two frames, tugging back on the haft).
+  bourreau: {
+    FW: 180, FH: 242, SOLE: 177, WALK: 4, STEP: 12,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => bourreau('idle', (J) => breathe(J, 1.5 * b))]),
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => bourreau('idle', legs(k, 4, HEADSMAN)), { bob: -1.2 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ['tele', () => bourreau('atk')], ['atk', () => bourreau('chop')],
+      ['pull0', () => bourreau('chop', (J) => lean(J, -0.07))], ['pull1', () => bourreau('chop', (J) => lean(J, -0.15))],
+      ['hurt', () => bourreau('idle', (J) => lean(J, -0.12))],
+    ],
+    // On his back, arms fallen open, the axe by his hand, the reliquary still chained at his hip.
+    corpse: () => lying(bourreau('idle', { Er: [-18, 1.5, 93], Wr: [-25, 4, 72], Hr_: [-27, 6, 65], El: [18, 1.5, 93], Wl: [25, 4, 72], Hl_: [27, 6, 65] }), false),
+  },
 };
 // Lying on the floor, head to the right (model up <- world x), on his back (model forward <- up) or face down, slumped
 // (cloth and limbs settle: heights x FLAT); what would sink under the floor is cut off. Blood soaks his chest (or back)
@@ -192,7 +222,7 @@ function scene(job) {
   if (layer !== 'jet') objects.push({ name: 'foe', pos: [P.x, P.y, bob], yaw, sdf: m.sdf, mat: m.mat, bounds: m.bounds, id: 1, step: m.step });
   if (m.vfx && layer !== 'body') objects.push({ name: 'vfx', pos: [P.x, P.y, bob], yaw, sdf: m.vfx.sdf, mat: m.vfx.mat, bounds: m.vfx.bounds, id: 2, step: m.vfx.step, noShadow: true, noSelfAO: true });
   const lights = [
-    { p: [P.x + 30, P.y - 60, 75], c: L('#8098a2'), I: dead ? 3 : 9, r0: 90, R: 260, soft: 10, only: ['foe'] }, // (it would lay a cold sheen all over a body lying down)
+    { p: [P.x + 30, P.y - 60, 75], c: L('#8098a2'), I: dead ? 3 : F.rim ?? 9, r0: 90, R: 260, soft: 10, only: ['foe'] }, // (it would lay a cold sheen all over a body lying down, or a low one)
     { p: [P.x - 70, P.y + 70, 140], c: L('#a08a70'), I: 0.9, r0: 130, R: 420, soft: 12 },
     { p: [P.x + 28, P.y + 50, 60], c: L('#b8a68a'), I: 2.4, r0: 40, R: 170, soft: 6 }, // the vampire's lantern, off-frame
     // its own (the priest's light on the holy zone falls on the floor, which the game draws)
@@ -243,7 +273,7 @@ if (isMainThread) {
 // cell and where its own light is (sheet px: the pilot light, the monstrance; for the jet, its pivot on the lance).
 export const FLOOR = ${cam.s.toFixed(4)}; // how much the sheets' floor is foreshortened up the screen
 export type Sheet = { FW: number; FH: number; COLS: number; SOLE: number; WALK: number; STRIDE: number; FRAMES: Record<string, { cell: number; lamp: [number, number] }> };
-export const SHEETS: Record<'purifier' | 'priest' | 'hound' | 'penitent' | 'ringer' | 'inquisitor', Sheet> = ${JSON.stringify(data)};
+export const SHEETS: Record<'purifier' | 'priest' | 'hound' | 'penitent' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau', Sheet> = ${JSON.stringify(data)};
 `);
   console.log(`${((Date.now() - t0) / 1000).toFixed(1)} s`);
 } else {
@@ -251,7 +281,7 @@ export const SHEETS: Record<'purifier' | 'priest' | 'hound' | 'penitent' | 'ring
   for (let i = w; i < JOBS.length; i += N) {
     const job = JOBS[i], { sc, lamp } = scene(job), img = render(sc);
     haze(img, sc);
-    const px = post(img, { exposure: 3.6, vignette: 0, desat: 0.15, grain: 0.004, dither: 0.015 });
+    const px = post(img, { exposure: FOES[job.id].exposure ?? 3.6, vignette: 0, desat: 0.15, grain: 0.004, dither: 0.015 });
     for (let p = 0; p < sc.W * sc.H; p++) px[p * 4 + 3] = img.oid[p] >= 0 ? 255 : 0;
     out.push({ ...job, px, lamp });
   }
