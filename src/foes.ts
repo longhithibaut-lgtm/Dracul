@@ -21,7 +21,7 @@ import bourreauSheet from './bourreau.png';
 // whirled, the Amas gathered up with its arms raised, the axe raised), then the attack itself (the jet, the falling
 // light, the lash, the bell's rings rolling out, the sweep, the Amas' slam spreading over the floor, the crack).
 export type Kind = keyof typeof SHEETS;
-export type FoeState = 'chase' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'contract' | 'slam' | 'sprawl' | 'heave' | 'chop' | 'wrench' | 'held' | 'kneel';
+export type FoeState = 'chase' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'contract' | 'slam' | 'sprawl' | 'heave' | 'chop' | 'wrench' | 'rip' | 'swing' | 'held' | 'kneel';
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
 
@@ -37,8 +37,8 @@ const GROUND = ORIGIN / 2;
 const SQ = T.lantern.squash; // the floor seen at an angle
 const STRUCK = 0xff4a3a; // the hit flash: dyed with blood, never white (fx-blood.ts)
 // The states that face the aim locked at their start, and the pose each one holds.
-const LOCKED: FoeState[] = ['ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench'];
-const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk', slam: 'atk', sprawl: 'atk', heave: 'tele', chop: 'atk' };
+const LOCKED: FoeState[] = ['ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench', 'rip', 'swing'];
+const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk', slam: 'atk', sprawl: 'atk', heave: 'tele', chop: 'atk', swing: 'tele' }; // swing: the axe torn up
 const HEAD: Record<Kind, number> = { purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50, amas: 0, bourreau: 62 };
 // Their feet on the floor, sheet px (half as many room px): a man's like the crossbowman's, the big ones' broader.
 const FEET: Partial<Record<Kind, [number, number]>> = { amas: [52, 22], bourreau: [36, 16] }; // the blood drop of the weak, over the feet
@@ -91,7 +91,7 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
   else if (state === 'whirl') f = 'whirl' + (Math.floor((t / 110) * (0.6 + (0.8 * t) / T.inquisitor.whirlMs)) % 4); // gathering speed
   else if (state === 'sweep') f = 'sweep' + Math.min(2, Math.floor((t * 3) / T.inquisitor.sweepMs));
   else if (state === 'contract') f = t < T.amas.contractMs * 0.45 ? 'tele0' : 'tele1'; // gathering itself, arms rising
-  else if (state === 'wrench') f = 'pull' + (Math.floor(t / 230) % 2); // tugging the stuck axe
+  else if (state === 'wrench' || state === 'rip') f = 'pull' + (Math.floor(t / (state === 'rip' ? 90 : 230)) % 2); // tugging the stuck axe; at the hero, hard
   else if (POSE[state]) f = POSE[state]!;
   else if (now - (s.getData('parryAt') ?? -1e9) < 300) f = 'parry';
   else if (state !== 'held' && hurt < 200) f = 'hurt'; // struck: he reels back (the blow's knockback carries him)
@@ -195,6 +195,7 @@ export function crack(scene: Scene, x: number, y: number, aim: number, len: numb
     [px, py] = [qx, qy];
   }
   const rt = stains(scene), g = scene.add.graphics().setDepth(7990), at = scene.time.now, ms = T.bourreau.crackMs;
+  scene.cameras.main.shake(160, new Phaser.Math.Vector2(Math.abs(ux) * 3 / scene.cameras.main.width, (1 + Math.abs(uy) * 3) / scene.cameras.main.height));
   // A split line at the x2 rooms' finer pixels: black depth, its lips catching the light.
   const split = (s: number[], fill: (c: number, a: number, x: number, y: number, w: number, h: number) => void, a: number) => {
     const [x0, y0, x1, y1, w] = s;

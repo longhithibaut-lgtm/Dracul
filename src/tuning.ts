@@ -75,35 +75,42 @@ export const T = {
     damage: 1,
   },
 
+  // The grand foes (« grand pixel » rooms, below) when their blow lands on the hero: the game freezes `hitStopMs` and he is
+  // thrown back at `knock` px/s for `knockMs`, both per point of blood lost, so a heavier blow lands harder. `poiseMs`:
+  // struck out of an attack, a foe holds firm through the blows that follow this long (an attack begun meanwhile goes
+  // on), so the claws cannot pin it down.
+  foes: { hitStopMs: 45, knock: 110, knockMs: 90, poiseMs: 700 },
+
   // The Order's Purificateur (« grand pixel » rooms, training only for now): a heavy flamethrower. He walks into range,
   // turns to the hero and lights his pilot, flaring (the tell, his aim locked: stepping aside dodges), then burns along
   // that aim. Nothing is marked on the floor.
   purifier: {
     hp: 3,
-    speed: 30,
+    speed: 46,
     near: 22, far: 38, // keeps the hero between these distances, in his flame's reach
     reach: 44, // the jet's length from his feet; he lights up only with the hero this close
     halfDeg: 18, // the jet's half-spread on the floor, as on the enemy sheet
-    igniteMs: 750, // the tell: the stance, the pilot flaring
-    fireMs: 550, // the jet; the hero standing in it is burnt (once: his invulnerability covers the rest)
-    recoverMs: 450,
-    reloadMs: 1900, // from one jet to the next ignition
-    firstMs: 1200, // after he appears
-    damage: 1,
+    igniteMs: 600, // the tell: the stance, the pilot flaring
+    fireMs: 500, // the jet; the hero standing in it is burnt (once: his invulnerability covers the rest)
+    press: 24, // he walks on into his jet, along its aim, this fast
+    recoverMs: 250,
+    reloadMs: 1100, // from one jet to the next ignition
+    firstMs: 700, // after he appears
+    damage: 2,
     pilotLight: 3, // his pilot lighting the dark rooms (dark.ts) at the end of the tell; the jet, half as much again
   },
   // The Order's Prêtre (« grand pixel » rooms, training only for now): keeps behind, far from the hero; points his
   // monstrance, brightening as he prays, then the holy light falls where the hero stood (nothing marks the spot).
   priest: {
     hp: 2,
-    speed: 28,
+    speed: 40,
     near: 120, far: 160, // stays this far from the hero: behind the others
     maxCast: 230, // prays only at a hero this close, on screen
     radius: 22, // the light's half-width where it falls; an ellipse squashed like the ground (T.lantern.squash)
-    fillMs: 1100, // the prayer: be gone from where you stood before it ends
+    fillMs: 850, // the prayer: be gone from where you stood before it ends
     smiteMs: 350, // the light falls (it burns at its first instant)
-    reloadMs: 2600,
-    firstMs: 1500,
+    reloadMs: 1600,
+    firstMs: 900,
     damage: 1,
     light: 2, // his monstrance's light in the dark rooms (dark.ts), rising to prayLight as he prays
     prayLight: 5,
@@ -113,16 +120,18 @@ export const T = {
   // flattens, muzzle open, its aim locked; then a straight leap that shoves the hero along it. Stepping aside dodges.
   hound: {
     hp: 2,
-    speed: 80,
+    speed: 105,
     ring: 64, // the pack waits this far from the hero
     spreadDeg: 50, // between packmates round him
     leapRange: 72, // it flattens only with the hero this close, in a straight line
-    crouchMs: 500, // the tell
-    leapSpeed: 270, leapMs: 280, // about 75 px
-    recoverMs: 450,
-    restMs: 900, // then back to the ring before it may leap again; one hound of the pack leaps at a time
+    crouchMs: 380, // the tell
+    leapSpeed: 340, leapMs: 230, // about 78 px
+    releapMs: 300, // a leap that missed: it flattens again this long, at where he is now, and leaps once more
+    recoverMs: 250,
+    restMs: 450, // then back to the ring before it may leap again
+    staggerMs: 350, // the pack leaps in turn: a hound flattens no sooner than this after a packmate did
     shove: 170, shoveMs: 160, // the hero thrown along the leap
-    firstMs: 1000,
+    firstMs: 600,
     damage: 1,
   },
   // The Order's Pénitent (« grand pixel » rooms, training only for now): cannon fodder in waves of six; drags his cross
@@ -130,15 +139,17 @@ export const T = {
   // in a cone. Stepping back dodges, and so does striking him first (a claw cuts the tell short).
   penitent: {
     hp: 2,
-    speed: 24,
+    speed: 40,
     strikeRange: 30, // he cocks his scourge with the hero this close
     reach: 36, halfDeg: 50, // the lash on the floor, from his feet
-    cockMs: 600,
-    lashMs: 180, // the hero in the cone meanwhile is struck
-    recoverMs: 600,
-    reloadMs: 1600,
-    together: 2, // no more than this many lash at once
-    firstMs: 800,
+    cockMs: 480, drawBack: 15, // the tell; he leans back from the hero this fast meanwhile
+    lashMs: 140, lunge: 90, // the hero in the cone meanwhile is struck; he steps into it this fast
+    recockMs: 220, // then he cocks again at the hero, aim locked anew, and lashes a second time
+    recoverMs: 350,
+    reloadMs: 900,
+    together: 3, // no more than this many lash at once,
+    staggerMs: 200, // each one cocking no sooner than this after another
+    firstMs: 500,
     damage: 1,
   },
   // The Order's Sonneur (« grand pixel » rooms, training only for now): support, deaf, keeps far behind the others. The
@@ -147,16 +158,16 @@ export const T = {
   // strike quickens the Order's men round him for a while.
   ringer: {
     hp: 3,
-    speed: 22,
+    speed: 32,
     near: 85, far: 115, // keeps the hero between these distances: behind the others
-    raiseMs: 900, // the tell
-    strikeMs: 350, // the mallet on the rim
+    raiseMs: 750, // the tell
+    strikeMs: 250, // the mallet on the rim
     reach: 100, // how far the rings roll on the floor (ground foreshortening undone); he strikes with the hero within `reach - 15`
     ringSpeed: 140, ringGapMs: 110, ringHalf: 4, // three rings, `ringGapMs` apart; one hits a hero within `ringHalf` of it
     stunMs: 900, // the hero struck stands dazed: no move, no dash, no blow
-    recoverMs: 500,
-    reloadMs: 3200,
-    firstMs: 1800,
+    recoverMs: 300,
+    reloadMs: 2200,
+    firstMs: 1100,
     damage: 1,
     haste: 1.5, hasteMs: 4000, hasteRange: 220, // the Order's men within `hasteRange` move this much faster this long
     light: 4, // his bell's rim in the dark rooms (dark.ts) at the end of the tell, the strike half as much again
@@ -167,18 +178,18 @@ export const T = {
   // Getting into his back, or out of reach, dodges it.
   inquisitor: {
     hp: 6,
-    speed: 30,
+    speed: 44,
     near: 20, far: 30,
     turnDeg: 150, // how fast he turns to the hero, degrees a second
     parryDeg: 90, // the half-angle of the front he parries, from where he faces: his whole front half
     strikeRange: 32, // he whirls his censer with the hero this close
     reach: 40, // the sweep, from his feet; the half circle in front of his locked aim
-    whirlMs: 900, // the tell
-    sweepMs: 300,
-    recoverMs: 700,
-    reloadMs: 2200,
-    firstMs: 1500,
-    damage: 1,
+    whirlMs: 700, // the tell
+    sweepMs: 200, lunge: 110, // he steps into the sweep this fast
+    recoverMs: 400,
+    reloadMs: 1300,
+    firstMs: 900,
+    damage: 2,
     command: 1.6, commandRange: 160, // the Order's men within `commandRange` of him recover from their attacks this much faster
     light: 1.6, whirlLight: 3, // his censer's embers in the dark rooms, fanned by the whirl
   },
@@ -188,15 +199,15 @@ export const T = {
   // lies sprawled a while: the time to strike. Blows never cut it short nor push it back.
   amas: {
     hp: 12,
-    speed: 14,
+    speed: 22,
     strikeRange: 30, // it gathers itself with the hero this close (floor, from its middle)
     reach: 44, // the slam, all round it (floor, the ground's foreshortening undone)
-    contractMs: 900, // the tell
-    slamMs: 180, // the slam spreading out to `reach`; the hero it passes over is struck
-    sprawlMs: 1100, // then it lies spread out, slow to gather itself again
-    reloadMs: 2600,
-    firstMs: 1500,
-    damage: 1,
+    contractMs: 720, // the tell
+    slamMs: 150, // the slam spreading out to `reach`; the hero it passes over is struck
+    sprawlMs: 800, // then it lies spread out, slow to gather itself again
+    reloadMs: 1500,
+    firstMs: 1000,
+    damage: 2,
     thralls: 4, // torn-off ghouls of one Amas alive at once, at most
     thrallHp: 1, crawl: 0.6, // they have this much hp and go at this much of a ghoul's pace
   },
@@ -206,18 +217,21 @@ export const T = {
   // then he wrenches his axe out of the stone: the time to strike. Blows never cut him short nor push him back.
   bourreau: {
     hp: 16,
-    speed: 20,
+    speed: 30,
     near: 18, far: 30,
     strikeRange: 80, // he raises his axe with the hero this close
     reach: 120, half: 8, // the crack: its length from his feet and half its width (floor), stopped by props and walls
-    heaveMs: 1000, // the tell
-    crackMs: 120, // the crack runs out to its end; the hero it reaches is struck
-    chopMs: 200, // the blow, its pose held
-    wrenchMs: 1400, // the axe stuck: he tugs it free
-    recoverMs: 300,
-    reloadMs: 1800,
-    firstMs: 1500,
-    damage: 2,
+    heaveMs: 800, // the tell
+    crackMs: 90, // the crack runs out to its end; the hero it reaches is struck
+    chopMs: 160, // the blow, its pose held
+    wrenchMs: 1000, // the axe stuck: he tugs it free
+    // With the hero still close in front (`ripRange`, floor) as the axe lands, he tears it out at him instead: tugging
+    // hard (`ripMs`, the tell), then the axe rips up through the half circle before him (`swingMs`); he recovers longer.
+    ripRange: 36, ripMs: 450, swingMs: 140, ripDamage: 2, ripRecoverMs: 600,
+    recoverMs: 200,
+    reloadMs: 1100,
+    firstMs: 900,
+    damage: 3,
     light: 1.2, // his reliquary's faint gold in the dark rooms
   },
 

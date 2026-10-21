@@ -423,9 +423,10 @@ export function heal(scene: Phaser.Scene, hero: Phaser.GameObjects.Sprite) {
   }).once('destroy', () => flush.destroy());
 }
 
-export function hurt(scene: Phaser.Scene) {
+/** The hero is hurt; `k`: how hard the blow was (blood lost), for the shake. */
+export function hurt(scene: Phaser.Scene, k = 1) {
   const cam = scene.cameras.main, w = cam.width / cam.zoom, h = cam.height / cam.zoom;
-  cam.shake(130, new Phaser.Math.Vector2(3 / w, 3 / h));
+  cam.shake(130 + 50 * (k - 1), new Phaser.Math.Vector2((3 * Math.sqrt(k)) / w, (3 * Math.sqrt(k)) / h));
   // One soft blood-red pulse and a dark frame closing in: short and translucent, never a full-screen white-out.
   animate(scene, 19_000, 260, (g, t) => {
     const k = t / 260, b = Math.round(14 * (1 - k) ** 2);

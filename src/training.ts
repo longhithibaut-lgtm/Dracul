@@ -38,6 +38,12 @@ const KNOBS = [
   ['Glyphe : rayon', 'glyph', 'radius', 15, 60, 1],
   ['Glyphe : durée (ms)', 'glyph', 'holdMs', 500, 6000, 100],
   ['Glyphe : recharge (ms)', 'glyph', 'cooldownMs', 0, 10000, 250],
+  ['Ennemis « grand pixel » : gel quand ils touchent (ms par sang)', 'foes', 'hitStopMs', 0, 150, 5],
+  ['Ennemis « grand pixel » : recul du héros touché', 'foes', 'knock', 0, 300, 10],
+  ['Ennemis « grand pixel » : tenue après un coup (ms)', 'foes', 'poiseMs', 0, 2000, 50],
+  ['Chien : préparation (ms)', 'hound', 'crouchMs', 150, 1000, 10],
+  ['Pénitent : préparation (ms)', 'penitent', 'cockMs', 150, 1000, 10],
+  ['Bourreau : préparation (ms)', 'bourreau', 'heaveMs', 300, 1500, 25],
   ['Aube (cloître) : grâce avant de brûler (ms)', 'dawn', 'graceMs', 0, 5000, 100],
   ['Aube (cloître) : une brûlure toutes les (ms)', 'dawn', 'burnEveryMs', 300, 3000, 50],
 ] as const;

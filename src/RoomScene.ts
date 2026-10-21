@@ -534,11 +534,12 @@ export class RoomScene extends Phaser.Scene {
       case 'ignite':
         if (time < e.getData('fireAt')) return;
         e.setData({ state: 'fire', fireUntil: time + P.fireMs });
+        this.physics.velocityFromRotation(e.getData('facing'), P.press, e.body!.velocity);
         Sfx.play(this, 'burn');
         return;
       case 'fire':
-        if (inCone()) this.damageHero(P.damage);
-        if (time >= e.getData('fireUntil')) e.setData({ state: 'recover', until: time + P.recoverMs, readyAt: time + P.reloadMs });
+        if (inCone()) this.damageHero(P.damage, from);
+        if (time >= e.getData('fireUntil')) e.setVelocity(0).setData({ state: 'recover', until: time + P.recoverMs, readyAt: time + P.reloadMs });
         return;
     }
     if (time >= e.getData('readyAt') && dist <= P.reach && this.cameras.main.worldView.contains(from.x, from.y)) {
@@ -557,7 +558,7 @@ export class RoomScene extends Phaser.Scene {
     switch (e.getData('state')) {
       case 'pray':
         if (time < e.getData('smiteAt')) return;
-        if (ellipseDist(e.getData('zone'), to, P.radius, P.radius * T.lantern.squash) <= 1 && this.damageHero(P.damage)) Sfx.play(this, 'burn');
+        if (ellipseDist(e.getData('zone'), to, P.radius, P.radius * T.lantern.squash) <= 1 && this.damageHero(P.damage, e.getData('zone'))) Sfx.play(this, 'burn');
         e.setData({ state: 'smite', until: time + P.smiteMs, readyAt: time + P.reloadMs });
         Sfx.play(this, 'holy');
         return;
@@ -588,11 +589,17 @@ export class RoomScene extends Phaser.Scene {
     return R.light;
   }
 
-  // Chien de chasse: the pack keeps a ring round the hero on the side away from the Order's shooters, spread apart; one
-  // at a time flattens (its aim locked), then leaps straight through him, shoving him on toward them; it recovers, and
-  // rests before it may leap again.
+  // Chien de chasse: the pack keeps a ring round the hero on the side away from the Order's shooters, spread apart; in
+  // turn, they flatten (the aim locked), then leap straight through him, shoving him on toward them; one that missed
+  // flattens again at once and leaps a second time; it recovers, and rests before it may leap again.
   private stepHound(e: Sprite, time: number) {
     const H = T.hound, from = e.body!.center, to = this.hero.body!.center;
+    const alive = (this.enemies.getChildren() as Sprite[]).filter((o) => o.body?.enable);
+    const pack = alive.filter((o) => o.getData('kind') === 'hound'), dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    const toHero = Phaser.Math.Angle.BetweenPoints(from, to), crouch = (ms: number, again: boolean) => {
+      e.setVelocity(0).setData({ state: 'crouch', until: time + ms, crouchAt: time, again, facing: toHero, aim: aimAt(to.x - from.x, to.y - from.y, T.lantern.squash, Foes.DIRS) });
+      Sfx.play(this, 'windup');
+    };
     switch (e.getData('state')) {
       case 'crouch':
         this.physics.velocityFromRotation(e.getData('facing'), H.leapSpeed, e.body!.velocity);
@@ -600,15 +607,13 @@ export class RoomScene extends Phaser.Scene {
         Sfx.play(this, 'lunge');
         return;
       case 'leap':
+        if (!e.getData('struck') && !e.getData('again') && dist <= H.leapRange && this.wayToHero(e).straight) return crouch(H.releapMs, true);
         e.setVelocity(0).setData({ state: 'recover', until: time + H.recoverMs, readyAt: time + H.recoverMs + H.restMs });
         return;
     }
-    const alive = (this.enemies.getChildren() as Sprite[]).filter((o) => o.body?.enable);
-    const pack = alive.filter((o) => o.getData('kind') === 'hound'), dist = Phaser.Math.Distance.BetweenPoints(from, to);
-    const toHero = Phaser.Math.Angle.BetweenPoints(from, to);
-    if (time >= e.getData('readyAt') && dist <= H.leapRange && !pack.some((o) => ['crouch', 'leap'].includes(o.getData('state')))
+    if (time >= e.getData('readyAt') && dist <= H.leapRange && !pack.some((o) => time - (o.getData('crouchAt') ?? -1e9) < H.staggerMs)
       && this.wayToHero(e).straight && this.cameras.main.worldView.contains(from.x, from.y)) {
-      e.setVelocity(0).setData({ state: 'crouch', until: time + H.crouchMs, facing: toHero, aim: aimAt(to.x - from.x, to.y - from.y, T.lantern.squash, Foes.DIRS) });
+      crouch(H.crouchMs, false);
       Sfx.play(this, 'windup');
       return;
     }
@@ -624,27 +629,33 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // Pénitent: drags his cross straight at the hero, never backing off; with him close, cocks his scourge (its aim locked),
-  // then lashes a short cone; recovers, reloads. A few at a time, so a wave of six presses without striking all at once.
+  // leaning back, then lashes a short cone, stepping into it, and once more at once; recovers, reloads. A few at a time
+  // and in turn, so a wave of six presses without striking all at once.
   private stepPenitent(e: Sprite, time: number) {
     const P = T.penitent, from = e.body!.center, to = this.hero.body!.center;
     const toHero = Phaser.Math.Angle.BetweenPoints(from, to), dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    const cock = (ms: number, again: boolean) => {
+      this.physics.velocityFromRotation(toHero + Math.PI, P.drawBack, e.body!.velocity); // leaning back
+      e.setData({ state: 'cock', fireAt: time + ms, cockAt: time, again, facing: toHero, aim: aimAt(to.x - from.x, to.y - from.y, T.lantern.squash, Foes.DIRS) });
+      Sfx.play(this, 'aim', ms / 1000);
+    };
     switch (e.getData('state')) {
       case 'cock':
         if (time < e.getData('fireAt')) return;
+        this.physics.velocityFromRotation(e.getData('facing'), P.lunge, e.body!.velocity);
         e.setData({ state: 'lash', fireUntil: time + P.lashMs });
         Sfx.play(this, 'lunge');
         return;
       case 'lash':
-        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, P.reach, 2 * P.halfDeg)) this.damageHero(P.damage);
-        if (time >= e.getData('fireUntil')) e.setData({ state: 'recover', until: time + P.recoverMs, readyAt: time + P.reloadMs });
+        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, P.reach, 2 * P.halfDeg)) this.damageHero(P.damage, from);
+        if (time < e.getData('fireUntil')) return;
+        if (!e.getData('again')) return cock(P.recockMs, true); // the backhand
+        e.setVelocity(0).setData({ state: 'recover', until: time + P.recoverMs, readyAt: time + P.reloadMs });
         return;
     }
     const pack = (this.enemies.getChildren() as Sprite[]).filter((o) => o !== e && o.body?.enable);
-    if (time >= e.getData('readyAt') && dist <= P.strikeRange && pack.filter((o) => ['cock', 'lash'].includes(o.getData('state'))).length < P.together) {
-      e.setVelocity(0).setData({ state: 'cock', fireAt: time + P.cockMs, facing: toHero, aim: aimAt(to.x - from.x, to.y - from.y, T.lantern.squash, Foes.DIRS) });
-      Sfx.play(this, 'aim', P.cockMs / 1000);
-      return;
-    }
+    if (time >= e.getData('readyAt') && dist <= P.strikeRange && pack.filter((o) => ['cock', 'lash'].includes(o.getData('state'))).length < P.together
+      && !pack.some((o) => time - (o.getData('cockAt') ?? -1e9) < P.staggerMs)) return cock(P.cockMs, false);
     // Close packmates push apart a little (half a ghoul's spacing), so a wave crowds round him without stacking.
     const v = this.physics.velocityFromRotation(this.wayToHero(e).angle, dist < 16 ? 0 : P.speed, e.body!.velocity);
     for (const o of pack) {
@@ -688,7 +699,7 @@ export class RoomScene extends Phaser.Scene {
     if (Foes.ringAt(g.at, time, 2) > R.reach) return void e.setData('rings', undefined);
     for (let i = 0; i < 3; i++) {
       const r = Foes.ringAt(g.at, time, i);
-      if (r > 0 && r <= R.reach && Math.abs(r - d) <= R.ringHalf && this.damageHero(R.damage)) this.dazedUntil = time + R.stunMs;
+      if (r > 0 && r <= R.reach && Math.abs(r - d) <= R.ringHalf && this.damageHero(R.damage, g)) this.dazedUntil = time + R.stunMs;
     }
   }
 
@@ -701,11 +712,12 @@ export class RoomScene extends Phaser.Scene {
       case 'whirl':
         if (time < e.getData('fireAt')) return;
         e.setData({ state: 'sweep', fireUntil: time + I.sweepMs });
+        this.physics.velocityFromRotation(e.getData('facing'), I.lunge, e.body!.velocity);
         Sfx.play(this, 'lunge');
         return;
       case 'sweep':
-        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, I.reach, 180)) this.damageHero(I.damage);
-        if (time >= e.getData('fireUntil')) e.setData({ state: 'recover', until: time + I.recoverMs, readyAt: time + I.reloadMs });
+        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, I.reach, 180)) this.damageHero(I.damage, from);
+        if (time >= e.getData('fireUntil')) e.setVelocity(0).setData({ state: 'recover', until: time + I.recoverMs, readyAt: time + I.reloadMs });
         return;
     }
     const facing = Phaser.Math.Angle.Wrap(Phaser.Math.Angle.RotateTo(e.getData('facing'), toHero, Phaser.Math.DegToRad(I.turnDeg) * (delta / 1000)));
@@ -738,7 +750,7 @@ export class RoomScene extends Phaser.Scene {
         Sfx.play(this, 'slam');
         return;
       case 'slam':
-        if (floor <= Foes.slamAt(e.getData('slamAt'), time) + 3) this.damageHero(A.damage);
+        if (floor <= Foes.slamAt(e.getData('slamAt'), time) + 3) this.damageHero(A.damage, from);
         if (time >= e.getData('slamAt') + A.slamMs) e.setData({ state: 'sprawl', until: time + A.sprawlMs, readyAt: time + A.reloadMs });
         return;
     }
@@ -764,10 +776,12 @@ export class RoomScene extends Phaser.Scene {
 
   // Bourreau: walks at the hero; with him in reach, raises his axe overhead (his aim locked), then the blow splits the
   // floor in a line ahead of him (Foes.crack), striking the hero where the crack reaches; the axe stuck in the stone, he
-  // wrenches it free (the time to strike him), recovers, reloads.
+  // wrenches it free (the time to strike him), recovers, reloads. With the hero still close in front, he tears it out at
+  // him instead: a hard tug, then the axe rips up through the half circle before him; a longer recovery.
   private stepBourreau(e: Sprite, time: number) {
     const B = T.bourreau, sq = T.lantern.squash, from = e.body!.center, to = this.hero.body!.center;
     const toHero = Phaser.Math.Angle.BetweenPoints(from, to), dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    const front = (r: number) => inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / sq }, r, 180);
     switch (e.getData('state')) {
       case 'heave': {
         if (time < e.getData('fireAt')) return;
@@ -781,10 +795,21 @@ export class RoomScene extends Phaser.Scene {
       }
       case 'chop': {
         const t = time - e.getData('chopAt');
-        if (onLine({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / sq }, e.getData('len') * Math.min(1, t / B.crackMs), B.half)) this.damageHero(B.damage);
-        if (t >= B.chopMs) e.setData({ state: 'wrench', until: time + B.wrenchMs, readyAt: time + B.wrenchMs + B.reloadMs });
+        if (onLine({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / sq }, e.getData('len') * Math.min(1, t / B.crackMs), B.half)) this.damageHero(B.damage, from);
+        if (t < B.chopMs) return;
+        if (front(B.ripRange)) e.setData({ state: 'rip', fireAt: time + B.ripMs });
+        else e.setData({ state: 'wrench', until: time + B.wrenchMs, readyAt: time + B.wrenchMs + B.reloadMs });
         return;
       }
+      case 'rip':
+        if (time < e.getData('fireAt')) return;
+        e.setData({ state: 'swing', fireUntil: time + B.swingMs });
+        Sfx.play(this, 'lunge');
+        return;
+      case 'swing':
+        if (front(B.ripRange)) this.damageHero(B.ripDamage, from);
+        if (time >= e.getData('fireUntil')) e.setData({ state: 'recover', until: time + B.ripRecoverMs, readyAt: time + B.ripRecoverMs + B.reloadMs });
+        return;
       case 'wrench': // the axe comes free
         e.setData({ state: 'recover', until: time + B.recoverMs });
         return;
@@ -974,9 +999,10 @@ export class RoomScene extends Phaser.Scene {
       this.shoveUntil = now + 90;
       return;
     }
-    // A hit interrupts whatever the enemy was doing, including a windup: aggression is rewarded. Not the heavy ones'.
-    const heavy = this.heavy(e);
-    if (!heavy) e.setData({ state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs });
+    // A hit interrupts whatever the enemy was doing, including a windup: aggression is rewarded. Not the heavy ones', nor
+    // the attack a grand foe began soon after it was last cut short (its poise): claws cannot pin it down.
+    const heavy = this.heavy(e) || (now < (e.getData('poiseUntil') ?? 0) && !['chase', 'recover'].includes(e.getData('state')));
+    if (!heavy) e.setData({ state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs, poiseUntil: Foes.isFoe(e.getData('kind')) ? now + T.foes.poiseMs : 0 });
     if (!this.kneeling(e) && !heavy) this.physics.velocityFromRotation(angle, knock, e.body!.velocity);
     Fx.hit(this, e.x, e.y, angle);
     Sfx.play(this, 'hit', kind);
@@ -1217,23 +1243,32 @@ export class RoomScene extends Phaser.Scene {
     // A hound's leap strikes once and throws him along it, unless he mists through.
     else if (state === 'leap' && !e.getData('struck') && this.time.now >= this.dashUntil) {
       e.setData('struck', true);
-      this.damageHero(T.hound.damage);
+      this.damageHero(T.hound.damage, e.body!.center);
       this.physics.velocityFromRotation(e.getData('facing'), T.hound.shove, this.shove);
       this.shoveUntil = this.time.now + T.hound.shoveMs;
     }
   }
 
   /** Every source of harm to the hero goes through here (lunges, bolts, holy light): invulnerability, the mist dash,
-   *  HUD, feedback and death are handled once. Returns false when the hit didn't land. */
-  damageHero(amount: number): boolean {
+   *  HUD, feedback and death are handled once. A grand foe's blow comes `from` a floor point: it lands harder (hit-stop,
+   *  shake and knockback scaled to the blood lost, blood flung off him). Returns false when the hit didn't land. */
+  damageHero(amount: number, from?: Phaser.Types.Math.Vector2Like): boolean {
     const now = this.time.now;
     if (this.dead || (this.training && Training.opts.god) || now < this.invulnUntil || now < this.dashUntil) return false;
     this.invulnUntil = now + T.hero.hurtInvulnMs;
     this.hurtAt = now;
     this.health -= amount;
     this.hud.health(this.health, this.maxHealth());
-    Fx.hurt(this);
+    Fx.hurt(this, from ? amount : 1);
     Sfx.play(this, 'hurt');
+    if (from) {
+      const F = T.foes, a = Phaser.Math.Angle.BetweenPoints(from, this.hero.body!.center), stop = F.hitStopMs * amount;
+      Enemy.bleed(this, this.hero.x, this.hero.y, a, 6 * amount, 0.7, 0.8 + 0.3 * amount);
+      this.physics.velocityFromRotation(a, F.knock * amount, this.shove);
+      this.shoveUntil = now + stop + F.knockMs; // the freeze holds him; then he is thrown
+      this.physics.pause();
+      this.time.delayedCall(stop, () => this.phase !== 'choose' && this.physics.resume());
+    }
     if (this.health > 0) return true;
     this.dead = true;
     Sfx.play(this, 'death');
