@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import * as Crypt from './crypt.data.ts';
+import * as Nave from './nave.data.ts';
+import * as Ossuary from './ossuary.data.ts';
+import * as Chapel from './chapel.data.ts';
 import * as Cloister from './cloister.data.ts';
 import type { Plan } from './baked.ts';
 import { runMask } from './logic.ts';
 
-// The run rooms baked by tools/art/rooms.gen.mjs keep their painted versions' rules (room.ts build's self-checks): every
-// start point clear of props and pits, the Order's lantern spots too; a way from the stairs to the gate; and under the
-// Dawn, the hero's start, the gift and the lanes up to them in shade.
-const ROOMS: [string, Plan][] = [['crypt', Crypt], ['cloister', Cloister]];
+// The run rooms baked by tools/art/rooms.gen.mjs keep the rules their painted versions checked: every start point clear
+// of props and pits, the Order's lantern spots too; a way from the stairs to the gate; and out of holy light (the Dawn,
+// the chapel's stained glass), the hero's start, the gift and the lanes up to them.
+const ROOMS: [string, Plan][] = [['crypt', Crypt], ['nave', Nave], ['ossuary', Ossuary], ['chapel', Chapel], ['cloister', Cloister]];
 const boxes = (D: Plan) => [...D.BOXES, ...D.PITS.map((b) => [b.x, b.y, b.w, b.h])];
 const dist = (D: Plan, x: number, y: number) => Math.min(...boxes(D).map(([bx, by, bw, bh]) => Math.hypot(Math.max(bx - x, 0, x - bx - bw), Math.max(by - y, 0, y - by - bh))));
 const sky = (D: Plan) => { const m = runMask(D.HOLY, D.W, D.H); return (x: number, y: number) => m[Math.floor(y) * D.W + Math.floor(x)] === 1; };
@@ -53,5 +56,15 @@ describe('the cloister under the Dawn', () => {
     expect(lit(Cloister.FY1 - 30, Cloister.FY1)).toBe(0); // the south walk, up from the stairs
     expect(lit(380, 520)).toBeGreaterThan(0.4); // the graves' garden
     expect(lit(y0, y0 + h)).toBeLessThan(0.75);
+  });
+});
+
+describe('the chapel under its stained glass', () => {
+  const holy = sky(Chapel), [x0, y0, w, h] = Chapel.BOUNDS;
+  let n = 0, k = 0;
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) { n++; if (holy(x, y)) k++; }
+  it('lays panes of burning light, a few, on the floor', () => {
+    expect(k / n).toBeGreaterThan(0.01);
+    expect(k / n).toBeLessThan(0.15);
   });
 });

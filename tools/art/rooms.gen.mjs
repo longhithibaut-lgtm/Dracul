@@ -2,10 +2,11 @@
 // engine) the way tools/art/refuge.gen.mjs bakes the refuge (tools/art/bake.mjs): src/<id>-albedo.png (what the world
 // camera draws, two texels per room px), src/<id>-light.png (dark.ts's three bands of light), src/<id>-over.png (what
 // stands in front of the floor cut into sprites by floor row, the front wall over the stairs, the portcullis' frames as
-// it rises) and src/<id>.data.ts (the scene's gameplay plan, unchanged from the painted room it replaces, the sprites,
+// it rises) and src/<id>.data.ts (the scene's gameplay plan, the sprites,
 // the flames and, open to the sky, the floor the Dawn burns: the same shadows the render paints).
-// Usage: node tools/art/rooms.gen.mjs <crypt|cloister> [--fresh] (re-renders; the render is cached in shots/<id>.cache)
-// Also writes shots/<id>-preview.png (lit as the mockups post it, no hero) and shots/<id>-walk.png (the plan over it).
+// Usage: node tools/art/rooms.gen.mjs <crypt|nave|ossuary|chapel|cloister> [--fresh] (re-renders; the render is cached in shots/<id>.cache)
+// Also writes shots/<id>-preview.png (lit as the mockups post it, no hero) and shots/<id>-walk.png (the plan over it, and
+// the floor that burns).
 import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { writeFileSync } from 'node:fs';
 import { render, haze, post } from './maquettes/hub3/lib.mjs';
@@ -34,8 +35,8 @@ function bake(img) {
   const walk = new Uint8Array(RW * RH);
   for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++)
     walk[y * RW + x] = inBox(x + 0.5, y + 0.5, P.BOUNDS) && ![...P.BOXES, ...P.PITS.map((b) => [b.x, b.y, b.w, b.h])].some((b) => inBox(x + 0.5, y + 0.5, b)) ? 1 : 0;
-  let holy = '';
-  if (P.HOLY) holy = dawn(img);
+  let holy = '', lit;
+  if (P.HOLY) ({ holy, lit } = dawn(img));
 
   // ---- the light, then what stands in front: by floor row, and the front wall over the stairs, always on top ----
   const { albedo, light, Yrow, Z } = bands(img, W, H, SN, CS, 0, hz.out);
@@ -92,7 +93,10 @@ export const PALETTE = ${J(pal)};
   const pre = post({ ...img, out: img.out.map((v, i) => v + hz.out[i]), emis: img.emi.filter((_, i) => i % 3 === 0).map((v, i) => v + img.emi[i * 3 + 1] + img.emi[i * 3 + 2]) }, { ...S.POST, palette: S.PAL });
   png(`shots/${id}-preview.png`, pre, W, H);
   const chk = Uint8ClampedArray.from(albedo), dot = (x, y, c) => { if (x >= 0 && y >= 0 && x < W && y < H) chk.set(c, (y * W + x) * 4); };
-  for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) if (walk[y * RW + x] && (x + y) % 3 === 0) dot(2 * x, 2 * y, [60, 200, 60, 255]);
+  for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
+    if (walk[y * RW + x] && (x + y) % 3 === 0) dot(2 * x, 2 * y, [60, 200, 60, 255]);
+    if (lit?.[y * RW + x] && (x + y) % 3 === 1) dot(2 * x + 1, 2 * y, [255, 190, 0, 255]); // where it burns
+  }
   for (const [x, y, w, h] of [...P.BOXES, ...P.PITS.map((b) => [b.x, b.y, b.w, b.h])]) for (let k = 0; k < 2 * w; k++) { dot(2 * x + k, 2 * y, [220, 40, 40, 255]); dot(2 * x + k, 2 * (y + h) - 1, [220, 40, 40, 255]); }
   for (const p of [P.START, ...P.SPAWNS]) for (let d = -4; d <= 4; d++) { dot(2 * p.x + d, 2 * p.y, [80, 160, 255, 255]); dot(2 * p.x, 2 * p.y + d, [80, 160, 255, 255]); }
   for (const p of P.SPOTS) for (let d = -3; d <= 3; d++) { dot(2 * p.x + d, 2 * p.y + d, [240, 220, 40, 255]); dot(2 * p.x + d, 2 * p.y - d, [240, 220, 40, 255]); }
@@ -139,5 +143,5 @@ function dawn(img) {
     runs.push(n);
     rows.push(runs.map((k) => k.toString(36)).join(','));
   }
-  return rows.join(';');
+  return { holy: rows.join(';'), lit };
 }
