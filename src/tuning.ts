@@ -90,9 +90,10 @@ export const T = {
     near: 22, far: 38, // keeps the hero between these distances, in his flame's reach
     reach: 44, // the jet's length from his feet; he lights up only with the hero this close
     halfDeg: 18, // the jet's half-spread on the floor, as on the enemy sheet
-    igniteMs: 600, // the tell: the stance, the pilot flaring
+    igniteMs: 480, // the tell: the stance, the pilot flaring
+    burstMs: 90, // the jet shoots out of the lance to its full length (overshooting a little)
     fireMs: 500, // the jet; the hero standing in it is burnt (once: his invulnerability covers the rest)
-    press: 24, // he walks on into his jet, along its aim, this fast
+    press: 60, // he lunges on into his jet, along its aim, this fast
     recoverMs: 250,
     reloadMs: 1100, // from one jet to the next ignition
     firstMs: 700, // after he appears

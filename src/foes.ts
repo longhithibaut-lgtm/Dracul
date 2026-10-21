@@ -111,6 +111,7 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
     const A = Math.atan2(Math.sin(aim) * SQ, Math.cos(aim)), k = s.flipX ? -1 : 1;
     jet.setFrame(name).setFlipX(s.flipX).setOrigin(s.flipX ? 1 - px / S.FW : px / S.FW, py / S.FH)
       .setPosition(s.x + ((px - S.FW / 2) / 2) * k, s.y + (py - (S.SOLE - ORIGIN)) / 2).setRotation(A - (s.flipX ? Math.PI - V : V))
+      .setScale(0.5 * Phaser.Math.Easing.Back.Out(Phaser.Math.Clamp((now - s.getData('fireUntil') + T.purifier.fireMs) / T.purifier.burstMs, 0, 1), 3), 0.5) // bursts out of the lance
       .setDepth(s.y + (o >= 5 ? -1 : T.purifier.reach)); // away from the camera behind him, else over whoever it burns
   }
 

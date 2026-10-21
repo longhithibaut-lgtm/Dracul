@@ -536,6 +536,7 @@ export class RoomScene extends Phaser.Scene {
         e.setData({ state: 'fire', fireUntil: time + P.fireMs });
         this.physics.velocityFromRotation(e.getData('facing'), P.press, e.body!.velocity);
         Sfx.play(this, 'burn');
+        this.cameras.main.shake(140, new Phaser.Math.Vector2(2.5 / this.cameras.main.width, 2.5 / this.cameras.main.height));
         return;
       case 'fire':
         if (inCone()) this.damageHero(P.damage, from);
