@@ -7,7 +7,7 @@ describe('foes sheets', () => {
   it('has every frame in every view, and the corpse', () => {
     for (const [kind, S] of Object.entries(SHEETS)) {
       const frames = ['idle0', 'idle1', 'idle2', 'idle3', 'hurt', 'kneel', ...Array.from({ length: S.WALK }, (_, k) => `walk${k}`),
-        ...(kind === 'purifier' ? ['ignite', 'fire0', 'fire1', 'jet0', 'jet1'] : ['pray'])];
+        ...{ purifier: ['ignite', 'fire0', 'fire1', 'jet0', 'jet1'], priest: ['pray'], hound: ['tele', 'leap'], penitent: ['tele', 'atk'] }[kind]!];
       for (const view of ['side', 'dside', 'down', 'uside', 'up']) for (const f of frames) expect(S.FRAMES[`${view}-${f}`], `${kind} ${view}-${f}`).toBeDefined();
       expect(S.FRAMES.corpse).toBeDefined();
     }

@@ -169,7 +169,7 @@ if (captured) {
   }
 }
 
-// A crossbowman of the Order mid-aim, its dotted aim line out but not yet locked. They join from the second wave, so
+// A crossbowman of the Order mid-aim, raised and sighting, not yet locked. They join from the second wave, so
 // that wave is called now, with the hero kept alive for it, in the room's middle part where it rises.
 let bow = null;
 {
@@ -200,7 +200,7 @@ let bit = null;
     const s = window.game.scene.getScene('room');
     const prey = s.enemies.getChildren().find((e) => e.body?.enable && e.getData('kind') === 'crossbow');
     if (s.dead || !prey) return null;
-    for (const e of s.enemies.getChildren().slice()) if (e !== prey) { e.getData('aimG')?.destroy(); e.destroy(); }
+    for (const e of s.enemies.getChildren().slice()) if (e !== prey) { e.getData('markG')?.destroy(); e.destroy(); }
     s.bolts.clear(true, true);
     s.invulnUntil = 0; // nothing left can hurt him, and an invulnerable hero blinks
     prey.body.reset(256, 226); // below the medallion, out of every lantern's light

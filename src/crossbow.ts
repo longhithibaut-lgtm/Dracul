@@ -350,7 +350,7 @@ export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, x: numb
   if (!scene.textures.exists(key)) bake(scene, key, skin.dark ? DARK : PAL, skin.dark ? DARK_FLASH : FLASH);
   const s = (group.create(x, y, key, 'idle!') as Sprite).setOrigin(0.5, ORIGIN / SIZE);
   s.setSize(12, 6).setOffset(14, 30); // feet
-  s.setData({ born: scene.time.now, phase: Math.round(x * 3), aimG: scene.add.graphics().setDepth(7990) });
+  s.setData({ born: scene.time.now, phase: Math.round(x * 3), markG: scene.add.graphics().setDepth(7990) });
   return s;
 }
 
@@ -373,9 +373,9 @@ export function telegraphSpawn(scene: Scene, x: number, y: number, ms: number) {
   }, () => g.destroy());
 }
 
-/** Shows the crossbowman; while it aims, `reach` is how far its bolt would fly along `facing` (the aim line). `weak`:
- *  hurt enough to be bitten. */
-export function show(s: Sprite, state: CrossbowState, facing: number, flash: boolean, reach: number, weak: boolean) {
+/** Shows the crossbowman. Its aim is told by its body alone (raised, sighting, the bolt's glint once locked), never by a
+ *  line on the floor (docs/decisions.md). `weak`: hurt enough to be bitten. */
+export function show(s: Sprite, state: CrossbowState, facing: number, flash: boolean, weak: boolean) {
   const now = s.scene.time.now;
   const c = Math.cos(facing);
   if (Math.abs(c) > 0.2) s.setFlipX(c < 0);
@@ -400,10 +400,10 @@ export function show(s: Sprite, state: CrossbowState, facing: number, flash: boo
   if (weak) f += '~';
   // It appears in a flash of the Dawn's light (not in the dark, where '!' is blood), then the white rim pops on each hit.
   s.setFrame((age < 120 && !skin.dark) || (flash && hurt > 0 && hurt < 50) ? f + '!' : f);
-  aimLine(s, state === 'aim' && hurt >= 220 ? t : -1, facing, reach);
   // Over the hunched head; on its knees, lower and on a slower, failing beat.
   const down = state === 'kneel';
-  if (weak && state !== 'held') mark(s.getData('aimG'), s.x + (s.flipX ? -1 : 1), s.y - (down ? 16 : 19), now + s.getData('phase'), down ? 1100 : 700);
+  const g = (s.getData('markG') as Phaser.GameObjects.Graphics).clear();
+  if (weak && state !== 'held') mark(g, s.x + (s.flipX ? -1 : 1), s.y - (down ? 16 : 19), now + s.getData('phase'), down ? 1100 : 700);
 }
 
 // The tell of a human weak enough to bite: a blood drop over its head, like a drop of the hero's health, beating like
@@ -438,29 +438,8 @@ export function mark(g: Phaser.GameObjects.Graphics, x: number, bottom: number, 
   rows.forEach((row, j) => [...row].forEach((c, i) => c !== '.' && g.fillStyle(MARK_PAL[c]).fillRect(x0 + i, y0 + j, 1, 1)));
 }
 
-// The telegraph: a dotted gold line (red in the torture room) along the bolt's path, marching toward the target, that turns solid and
-// flickers white once the aim is locked. It ends where the bolt would stop.
-function aimLine(s: Sprite, t: number, facing: number, reach: number) {
-  const g = s.getData('aimG') as Phaser.GameObjects.Graphics;
-  g.clear();
-  if (t < 0) return;
-  const C = T.crossbow;
-  const locked = t >= C.aimMs - C.lockMs;
-  const cx = Math.cos(facing), cy = Math.sin(facing);
-  const x0 = s.body!.center.x, y0 = s.body!.center.y - BOLT_HEIGHT;
-  const march = Math.floor(t / 60);
-  const len = Math.min(reach, 12 + (reach - 12) * Math.min(1, t / 200)); // shoots out as it is raised
-  const color = skin.dark ? (locked && Math.floor(t / 50) % 2 ? 0xff3a2a : 0xa0301c) : locked && Math.floor(t / 50) % 2 ? PAL.Y : PAL.G; // red in the dark, as in its mockup
-  g.fillStyle(color, locked ? 1 : 0.6 + 0.4 * Math.min(1, t / (C.aimMs - C.lockMs)));
-  for (let k = 14; k < len; k++) if (locked || (k - march) % 5 < 3) g.fillRect(Math.round(x0 + cx * k), Math.round(y0 + cy * k), 1, 1);
-  if (len >= reach) {
-    const ex = Math.round(x0 + cx * reach), ey = Math.round(y0 + cy * reach);
-    g.fillRect(ex - 2, ey, 5, 1).fillRect(ex, ey - 2, 1, 5); // where it would land
-  }
-}
-
 export function die(scene: Scene, s: Sprite) {
-  (s.getData('aimG') as Phaser.GameObjects.Graphics).destroy();
+  (s.getData('markG') as Phaser.GameObjects.Graphics).destroy();
   const key = s.texture.key;
   s.setFrame('hurt!');
   scene.time.delayedCall(70, () => {

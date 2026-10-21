@@ -18,7 +18,7 @@ export type Hud = {
   glyphReady(ready: boolean, readyAt: number): void; // the same for the glyph
   gifts(held: readonly GiftId[]): void;
   title(text: string): void;
-  threats(enemies: { x: number; y: number; aim: boolean }[]): void; // on the screen's coordinates; off it, a pip points at each
+  threats(enemies: { x: number; y: number }[]): void; // on the screen's coordinates; off it, a pip points at each
 };
 
 // "Nuit de sang" palette (docs/art.md), plus the Rat house's silver and grey for the gift icons.
@@ -155,7 +155,7 @@ export function create(scene: Phaser.Scene): Hud {
   const glyph = { ready: true, spentAt: -1e9, readyAt: -1e9, dueAt: 0 };
   // gifts: undefined until first set; fresh: the one just taken.
   let gifts: GiftId[] | undefined, fresh: GiftId | undefined, giftAt = -1e9, title = '', titleAt = -1e9;
-  let threats: { x: number; y: number; aim: boolean }[] = [];
+  let threats: { x: number; y: number }[] = [];
   // The corner, in from the safe area (native px per CSS px: the scale manager's displayScale).
   const corner = () => {
     const css = getComputedStyle(probe), k = scene.scale.displayScale.x / Z;
@@ -275,8 +275,8 @@ export function create(scene: Phaser.Scene): Hud {
       }
     }
 
-    // Enemies off the screen: a small triangle on its edge points at each, blood red; one aiming its crossbow blinks
-    // rose and white. Outlined in the void, so it reads on any floor.
+    // Enemies off the screen: a small triangle on its edge points at each, blood red (where it is, never what it is
+    // about to do). Outlined in the void, so it reads on any floor.
     for (const e of threats) {
       const p = edgePip(e.x, e.y, scene.scale.width / Z, scene.scale.height / Z, PIP + 2);
       if (!p) continue;
@@ -286,7 +286,7 @@ export function create(scene: Phaser.Scene): Hud {
           if (!p.dx || !p.dy) cells.push(p.dx ? [tx - p.dx * a, ty + c] : [tx + c, ty - p.dy * a]);
           else if (c >= 0 && a - c <= PIP - 1) cells.push([tx - p.dx * c, ty - p.dy * (a - c)]);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const [x, y] of cells) g.fillStyle(C.void).fillRect(x + dx, y + dy, 1, 1);
-      g.fillStyle(e.aim ? (Math.floor(now / 90) % 2 ? C.glow : C.bone) : C.blood[2]);
+      g.fillStyle(C.blood[2]);
       for (const [x, y] of cells) g.fillRect(x, y, 1, 1);
     }
   };

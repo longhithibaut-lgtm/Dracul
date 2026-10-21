@@ -47,27 +47,29 @@ function claws(b, W, d, side, m, mc, len = 5, spread = 0.5) {
 }
 
 // ======================= 1. CHIEN DE CHASSE (lore) =======================
-export function chien(pose = 'idle') {
-  const atk = pose === 'atk'; const b = B(); const { rc, el, tor } = b;
-  const dz = atk ? -8 : 0;
-  const chest = [0, 12, 30 + dz], hips = [0, -18, 30 + dz * 0.4];
+// pose: 'idle', 'atk' (flattened, muzzle open: the game's tell), 'leap' (the game's attack: stretched out in the air);
+// o (the game's sheet, tools/art/foes.gen.mjs): breath (0..1), gait (the trot's phase, radians), recoil (0..1)
+export function chien(pose = 'idle', o = {}) {
+  const atk = pose === 'atk', leap = pose === 'leap', open = atk || leap; const b = B(); const { rc, el, tor } = b;
+  const dz = atk ? -8 : 0, up = leap ? 9 : 0, br = o.breath ?? 0, rec = o.recoil ?? 0;
+  const chest = [0, 12 - 2 * rec, 30 + dz + up + 0.6 * br + 2 * rec], hips = [0, leap ? -20 : -18, 30 + dz * 0.4 + up];
   el(chest, [6.2, 10, 9], 1, 2);
   rc(add(chest, [0, -9, 0.5]), add(hips, [0, 5, 1.5]), 5.0, 4.0, 1, 2.6);
   el(hips, [5.4, 6.5, 6], 1, 2);
   for (let i = 0; i < 12; i++) { const p = lp(add(hips, [0, -2, 5]), add(chest, [0, 4, 8]), i / 11); el(p, [1.1, 1, 1], 1, 0.8); } // spine ridge
   const N0 = add(chest, [0, 8, 4]);
-  const Hd = atk ? [0, 36, 21] : [0, 31, 46];
+  const Hd = atk ? [0, 36, 21] : leap ? [0, 41, 38] : [0, 31 - 3 * rec, 46 + 0.3 * br + 3 * rec];
   rc(N0, add(Hd, [0, -3, -1]), 6.2, 4.0, 1, 2.4);
   el(Hd, [4.6, 5.8, 4.4], 1, 1.2);
-  const jawOpen = atk ? 6 : 0;
+  const jawOpen = atk ? 6 : leap ? 8 : 0;
   rc(add(Hd, [0, 3, -0.3]), add(Hd, [0, 11.5, -1.6]), 3.4, 2.2, 1, 1);
   rc(add(Hd, [0, 2, -2.4]), add(Hd, [0, 10, -3.6 - jawOpen]), 2.0, 1.3, 1, 0.6);
-  if (atk) b.carve(add(Hd, [0, 8, -3.4]), 1.6, 0.4);
+  if (open) b.carve(add(Hd, [0, 8, -3.4]), 1.6, 0.4);
   for (const s of [-1, 1]) { rc(add(Hd, [s * 2.6, -2, 2.4]), add(Hd, [s * 3.6, -3.4, 5.8]), 1.1, 0.4, 1, 0.6); b.carve(add(Hd, [s * 1.9, 3.6, 1.2]), 0.8, 0.3); }
   // fangs
-  for (const s of [-1, 1]) { rc(add(Hd, [s * 1.2, 10, -1.6]), add(Hd, [s * 1.2, 10.4, -3.4]), 0.35, 0.08, 7); if (atk) rc(add(Hd, [s * 1.0, 9.4, -3.6 - jawOpen]), add(Hd, [s * 1.0, 9.6, -2.2 - jawOpen]), 0.3, 0.06, 7); }
+  for (const s of [-1, 1]) { rc(add(Hd, [s * 1.2, 10, -1.6]), add(Hd, [s * 1.2, 10.4, -3.4]), 0.35, 0.08, 7); if (open) rc(add(Hd, [s * 1.0, 9.4, -3.6 - jawOpen]), add(Hd, [s * 1.0, 9.6, -2.2 - jawOpen]), 0.3, 0.06, 7); }
   // iron muzzle cage (open on the attack)
-  const ma = add(Hd, [0, 4, -0.9]), mb = add(Hd, [0, 12, atk ? 1 : -2.2]); const md = nz(sub(mb, ma));
+  const ma = add(Hd, [0, 4, -0.9]), mb = add(Hd, [0, 12, open ? 1 : -2.2]); const md = nz(sub(mb, ma));
   for (const t of [0.1, 0.55, 0.98]) tor(lp(ma, mb, t), md, 3.9 - t * 1.0, 0.45, 9);
   for (const s of [-1, 1]) rc(add(ma, [s * 3.6, 0, 0.5]), add(mb, [s * 2.7, 0, 0.5]), 0.4, 0.4, 9);
   rc(add(ma, [0, 0, 3.9]), add(mb, [0, 0, 2.9]), 0.4, 0.4, 9);
@@ -79,13 +81,19 @@ export function chien(pose = 'idle') {
   // legs
   const legs = atk ? {
     F: [[5.5, 18, 26], [8.5, 26, 13], [8, 30, 4], [8, 33, 1.2]], R: [[5, -18, 27], [6.5, -8, 14], [5.5, -22, 6], [5.5, -17, 1.2]],
+  } : leap ? { // forelegs reaching for the prey, hind legs thrown back
+    F: [[5.5, 19, 37], [6.5, 29, 32], [6.5, 37, 27], [6.5, 41, 25]], R: [[5, -19, 37], [5.5, -27, 30], [5.5, -37, 26], [5.5, -41, 25]],
   } : { F: [[5, 18, 31], [5.6, 15, 17], [5.2, 17.5, 6], [5.2, 20.5, 1.2]], R: [[4.8, -19, 30], [5.6, -12, 18], [5.2, -23.5, 8], [5.2, -20.5, 1.2]] };
   for (const s of [-1, 1]) for (const k of ['F', 'R']) {
-    const [a, c, d, e] = legs[k].map(p => [p[0] * s, p[1], p[2]]);
+    let [a, c, d, e] = legs[k].map(p => [p[0] * s, p[1], p[2]]);
+    if (o.gait !== undefined) { // a trot: diagonal pairs together, each paw lifted on its way forward
+      const ph = o.gait + (k === 'R' ? Math.PI : 0) + (s < 0 ? Math.PI : 0), dy = 7 * Math.sin(ph), lift = 5 * Math.max(0, Math.cos(ph)) ** 1.5;
+      c = add(c, [0, dy * 0.5, lift * 0.5]); d = add(d, [0, dy * 0.9, lift]); e = add(e, [0, dy, lift]);
+    }
     rc(a, c, k === 'F' ? 4.2 : 4.8, 2.6, 1, 1.6); rc(c, d, 2.4, 1.7, 1, 0.6); rc(d, e, 1.9, 1.8, 1, 0.5);
     for (let f = 0; f < 3; f++) rc(add(e, [(f - 1) * 0.9, 1.3, 0]), add(e, [(f - 1) * 1.1, 2.8, -0.6]), 0.4, 0.1, 2, 0.2);
   }
-  rc(add(hips, [0, -6, 2]), atk ? add(hips, [0, -12, 10]) : add(hips, [0, -12, -6]), 1.6, 0.7, 1, 0.8);
+  rc(add(hips, [0, -6, 2]), atk ? add(hips, [0, -12, 10]) : leap ? add(hips, [0, -15, 2]) : add(hips, [0, -12, -6]), 1.6, 0.7, 1, 0.8);
   const mat = (m, x, y, z) => {
     if (m === 7) return { alb: S.tooth, spec: 0.4, gloss: 40 };
     if (m === 9) return ironM(x, y, z);
@@ -96,7 +104,7 @@ export function chien(pose = 'idle') {
     const mg = vn3(x * 0.22, y * 0.22, z * 0.22, 9); if (mg > 0.62) c = mix(c, K.mange, clamp((mg - 0.62) * 6) * 0.85); // mange patches
     if (Math.abs(Math.sin(x * 0.9 + y * 0.35 + z * 0.2)) > 0.97 && mg > 0.4) c = mix(c, L('#8a6a5a'), 0.7); // whip scars
     if (Math.abs(y - chest[1]) < 8 && Math.abs(x) > 4 && Math.sin(y * 1.5) > 0.6) c = mul(c, 0.7); // ribs
-    const md2 = Math.hypot(x - Hd[0], y - Hd[1] - 9, z - Hd[2] + 2); if (md2 < 5) c = mix(c, atk ? S.bloodF : S.bloodD, clamp((5 - md2) / 3) * 0.8); // wet mouth
+    const md2 = Math.hypot(x - Hd[0], y - Hd[1] - 9, z - Hd[2] + 2); if (md2 < 5) c = mix(c, open ? S.bloodF : S.bloodD, clamp((5 - md2) / 3) * 0.8); // wet mouth
     return { alb: c, spec: 0.12, gloss: 25, wrap: 0.25, sss: 0.15 };
   };
   const r = done(b, mat, { yawFront: 0.75 });
@@ -105,18 +113,26 @@ export function chien(pose = 'idle') {
 }
 
 // ======================= 2. PÉNITENT (new) =======================
-export function penitent(pose = 'idle', seed = 2) {
-  const atk = pose === 'atk'; const J = clone(std); const b = B(); const { rc, el } = b;
+// pose: 'idle', 'atk' (the lash), 'tele' (the game's tell: the scourge cocked high behind him); over: joints to override,
+// or a function of the joints returning them (the game's sheet, tools/art/foes.gen.mjs, poses its frames with it)
+export function penitent(pose = 'idle', seed = 2, over = {}) {
+  const atk = pose === 'atk', tele = pose === 'tele'; const J = clone(std); const b = B(); const { rc, el } = b;
   Object.assign(J, atk ? {
     head: [0, 11, 85], neck: [0, 8.5, 78], chest: [0, 6, 68], pelvis: [0, 1, 49],
     Sr: [-8, 5, 75], Er: [-11, 14, 70], Wr: [-8, 24, 64], Hr_: [-7.5, 26.5, 63],
     Sl: [8, 7, 75], El: [11, 15, 66], Wl: [9, 23, 62], Hl_: [8.5, 26, 61.5],
     Hl: [3.6, 2, 47], Kl: [4.5, 13, 28], Al: [4.5, 12, 5], Tl: [5, 18, 1.2], Hr: [-3.6, 0, 47], Kr: [-4.4, -6, 26], Ar: [-4.6, -18, 7], Tr: [-4.6, -14, 1.2],
+  } : tele ? {
+    head: [0, 1.5, 87], neck: [0, 1, 80], chest: [0, 0, 70], pelvis: [0, 0, 50],
+    Sr: [-8.5, -0.5, 77], Er: [-15, -3, 87], Wr: [-14, -6, 100], Hr_: [-13.5, -7, 104],
+    Sl: [8, 0.5, 76], El: [9.5, 6, 62], Wl: [8, 13, 58], Hl_: [7.5, 15, 57],
+    Kl: [4.4, 6, 27], Al: [4.4, 6, 4], Tl: [4.8, 12, 1.2], Kr: [-4, -3, 27], Ar: [-4.2, -8, 4], Tr: [-4.5, -2, 1.2],
   } : {
     head: [0, 3.5, 87], neck: [0, 2.5, 80], chest: [0, 1.5, 70], pelvis: [0, 0, 50],
     Sr: [-8, 0.5, 76], Er: [-9.5, 1, 59], Wr: [-9.3, 4, 45], Hr_: [-9.2, 5.5, 41.5],
     Sl: [8, 0.5, 76], El: [9.4, 1.5, 59], Wl: [8.5, 5, 46], Hl_: [8, 6, 43],
   });
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   humanoid(J, b, { thin: 0.92 });
   const Hd = J.head;
   // burlap hood pulled over the head, eye holes, rope at the neck
@@ -135,12 +151,14 @@ export function penitent(pose = 'idle', seed = 2) {
   b.f((x, y, z) => { const t = clamp((P0[2] + 3 - z) / 26); return Math.max((Math.hypot(x - P0[0], (y - P0[1]) / 0.75) - (6.6 + t * 3.4)) * 0.7, z - P0[2] - 3, P0[2] - 22 - 4 * vn(x * 0.5, y * 0.5, 4) - z); }, [P0[0] - 12, P0[1] - 10, P0[2] - 28, P0[0] + 12, P0[1] + 10, P0[2] + 5], 4, 0.6);
   b.tor(add(P0, [0, 0, 2.5]), [0, 0.15, 1], 6.3, 0.6, 5, 0.2);
   // scourge: handle + 4 nailed cords
-  const hd = J.Hr_, hdir = atk ? nz([0.1, 1, -0.2]) : [0, 0.15, -1];
+  const hd = J.Hr_, hdir = atk ? nz([0.1, 1, -0.2]) : tele ? nz([-0.3, -0.5, 1]) : [0, 0.15, -1];
   const h1 = add(hd, sc(hdir, 6)); rc(hd, h1, 0.8, 0.7, 6);
   for (let i = 0; i < 4; i++) {
     const o = (i - 1.5);
     const pts = []; for (let k = 0; k <= 5; k++) { const t = k / 5;
-      pts.push(atk ? add(h1, [o * 2.2 * t + Math.sin(t * 4 + o) * 1.5, t * 18 - t * t * 4, t * 10 - t * t * 34 + o * 1.2 * t]) : add(h1, [o * 0.9 * t, 2 * t + Math.sin(t * 3 + o) * 1.5, -t * 30])); }
+      pts.push(atk ? add(h1, [o * 2.2 * t + Math.sin(t * 4 + o) * 1.5, t * 18 - t * t * 4, t * 10 - t * t * 34 + o * 1.2 * t])
+        : tele ? add(h1, [-3 * t + o * 1.6 * t, -6 * t - t * t * 4 + Math.sin(t * 3 + o), 4 * t - t * t * 24]) // swinging back, out by his shoulder
+        : add(h1, [o * 0.9 * t, 2 * t + Math.sin(t * 3 + o) * 1.5, -t * 30])); }
     b.chain(pts, 0.6, 7); const tip = pts[5]; el(tip, [1.3, 1.3, 1.3], 9);
   }
   const mat = (m, x, y, z, nx, ny) => {

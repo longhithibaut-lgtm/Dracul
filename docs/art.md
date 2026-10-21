@@ -18,8 +18,9 @@ décision ou une maquette validée.
   contour. Chaque animation est rendue depuis le modèle posé par quelques nombres (`tools/art/grand-hero.gen.mjs`).
 - Lumière de la salle cuite à la construction (G-buffer, torches et lueurs fixes avec leurs ombres) ; un shader
   d'écran ajoute ce qui bouge (lanterne vert-jaune du héros, lanternes de l'Ordre vert sale) puis la post-production :
-  vignette, tonalité filmique, étalonnage désaturé, grain, tramage ordonné, palette de 58 couleurs. Ce qui luit ou
-  prévient (yeux, flammes, ligne de visée rouge, effets) passe par-dessus, non éclairé.
+  vignette, tonalité filmique, étalonnage désaturé, grain, tramage ordonné, palette de 58 couleurs. Ce qui luit
+  (yeux, flammes, effets) passe par-dessus, non éclairé. Aucune marque au sol, ligne ni icône n'annonce une attaque :
+  seuls le corps de l'ennemi (pose, lumière qu'il porte) et le son la préviennent.
 
 **Personnages** : le héros vampire validé (`docs/maquettes/grand-heros.png`, modèle `tools/art/maquettes/grand/hero.mjs`) :
 mince, longs cheveux noirs, yeux de braise rouge, long manteau à doublure violette (sa signature), griffes nues,

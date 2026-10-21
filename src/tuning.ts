@@ -66,7 +66,7 @@ export const T = {
     speed: 38,
     near: 110, far: 140, // keeps the hero between these distances: backs off, strafes, closes in
     minShot: 56, maxShot: 200, // aims only at the hero between these distances, with a clear line
-    aimMs: 650, // telegraph: raise, aim line, creak
+    aimMs: 650, // the tell: raise, sight, creak
     lockMs: 200, // the last part of the aim stops tracking the hero, so a sidestep dodges the bolt
     recoilMs: 300,
     reloadMs: 1700, // from one shot to the next aim
@@ -76,36 +76,70 @@ export const T = {
   },
 
   // The Order's Purificateur (« grand pixel » rooms, training only for now): a heavy flamethrower. He walks into range,
-  // aims at the hero, lights his pilot and marks a cone of fire on the floor (the telegraph, locked: stepping out of it
-  // dodges), then burns along it.
+  // turns to the hero and lights his pilot, flaring (the tell, his aim locked: stepping aside dodges), then burns along
+  // that aim. Nothing is marked on the floor.
   purifier: {
     hp: 3,
     speed: 30,
     near: 22, far: 38, // keeps the hero between these distances, in his flame's reach
-    reach: 44, // the cone's length from his feet; he lights up only with the hero this close
-    halfDeg: 18, // the cone's half-angle, as on the enemy sheet
-    igniteMs: 750, // telegraph: pilot light, cone on the floor
-    fireMs: 550, // the jet; the hero standing in the cone is burnt (once: his invulnerability covers the rest)
+    reach: 44, // the jet's length from his feet; he lights up only with the hero this close
+    halfDeg: 18, // the jet's half-spread on the floor, as on the enemy sheet
+    igniteMs: 750, // the tell: the stance, the pilot flaring
+    fireMs: 550, // the jet; the hero standing in it is burnt (once: his invulnerability covers the rest)
     recoverMs: 450,
     reloadMs: 1900, // from one jet to the next ignition
     firstMs: 1200, // after he appears
     damage: 1,
+    pilotLight: 3, // his pilot lighting the dark rooms (dark.ts) at the end of the tell; the jet, half as much again
   },
   // The Order's Prêtre (« grand pixel » rooms, training only for now): keeps behind, far from the hero; points his
-  // monstrance, a gold circle fills under the hero where he stood, then the holy light falls on it.
+  // monstrance, brightening as he prays, then the holy light falls where the hero stood (nothing marks the spot).
   priest: {
     hp: 2,
     speed: 28,
     near: 120, far: 160, // stays this far from the hero: behind the others
     maxCast: 230, // prays only at a hero this close, on screen
-    radius: 22, // the circle's half-width; an ellipse squashed like the ground (T.lantern.squash)
-    fillMs: 1100, // the circle fills: leave it before it is full
+    radius: 22, // the light's half-width where it falls; an ellipse squashed like the ground (T.lantern.squash)
+    fillMs: 1100, // the prayer: be gone from where you stood before it ends
     smiteMs: 350, // the light falls (it burns at its first instant)
     reloadMs: 2600,
     firstMs: 1500,
     damage: 1,
-    light: 2, // his monstrance's light in the dark rooms (dark.ts), and while he prays
-    prayLight: 4,
+    light: 2, // his monstrance's light in the dark rooms (dark.ts), rising to prayLight as he prays
+    prayLight: 5,
+  },
+  // The Order's Chien de chasse (« grand pixel » rooms, training only for now): hunts in packs of three, fast. The pack
+  // spreads round the hero on the side away from the Order's shooters, so its leaps drive him toward them. The tell: it
+  // flattens, muzzle open, its aim locked; then a straight leap that shoves the hero along it. Stepping aside dodges.
+  hound: {
+    hp: 2,
+    speed: 80,
+    ring: 64, // the pack waits this far from the hero
+    spreadDeg: 50, // between packmates round him
+    leapRange: 72, // it flattens only with the hero this close, in a straight line
+    crouchMs: 500, // the tell
+    leapSpeed: 270, leapMs: 280, // about 75 px
+    recoverMs: 450,
+    restMs: 900, // then back to the ring before it may leap again; one hound of the pack leaps at a time
+    shove: 170, shoveMs: 160, // the hero thrown along the leap
+    firstMs: 1000,
+    damage: 1,
+  },
+  // The Order's Pénitent (« grand pixel » rooms, training only for now): cannon fodder in waves of six; drags his cross
+  // straight at the hero and never backs off. The tell: he cocks his nailed scourge, his aim locked; then a short lash
+  // in a cone. Stepping back dodges, and so does striking him first (a claw cuts the tell short).
+  penitent: {
+    hp: 2,
+    speed: 24,
+    strikeRange: 30, // he cocks his scourge with the hero this close
+    reach: 36, halfDeg: 50, // the lash on the floor, from his feet
+    cockMs: 600,
+    lashMs: 180, // the hero in the cone meanwhile is struck
+    recoverMs: 600,
+    reloadMs: 1600,
+    together: 2, // no more than this many lash at once
+    firstMs: 800,
+    damage: 1,
   },
 
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.

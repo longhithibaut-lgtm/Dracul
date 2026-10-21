@@ -1,21 +1,21 @@
-// The Order's Purificateur and Prêtre for the « grand pixel » rooms (docs/decisions.md): the validated enemy sheet's own
+// The Order's Purificateur, Prêtre, Chien de chasse and Pénitent for the « grand pixel » rooms (docs/decisions.md): the validated enemy sheet's own
 // 3D models (tools/art/maquettes/ennemis/foes.mjs, docs/maquettes/ennemis-planche-1.png) posed per frame and rendered
 // with its lights (the cold rim from behind, the warm fill, the vampire's lantern off-frame, their own pilot light and
 // monstrance) and its post (snapped onto its palette, tarnished gold included). One model unit is one pixel at
 // 960x540, like the grand hero (tools/art/grand-hero.gen.mjs): the game draws the sheets at half scale on the x2 view.
 // Five views (facing right, down-right, down, up-right, up: the game mirrors them for the left), each: idle (breathing,
 // the pilot light or the monstrance flickering), the walk (a stride the game turns by the distance walked), the
-// telegraph (ignite / pray), the jet of fire (two flickers; the body and the jet apart, so the game can turn the jet to
+// tell (ignite / pray / the hound flattened / the scourge cocked), the attack (the hound's leap, the lash), the jet of fire (two flickers; the body and the jet apart, so the game can turn the jet to
 // its real aim), the recoil of a hit, kneeling (the idle sunk to the knees, cut at the floor); one bloodied corpse.
-// Writes src/purifier.png, src/priest.png and src/foes.data.ts.
-// Usage: node tools/art/foes.gen.mjs (~10 s on 4 cores); ONLY=priest renders one of them to
+// Writes src/purifier.png, src/priest.png, src/hound.png, src/penitent.png and src/foes.data.ts.
+// Usage: node tools/art/foes.gen.mjs (~30 s on 4 cores); ONLY=priest renders one of them to
 // shots/priest-preview.png (x2, on grey) instead, to try a pose.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { camera, render, post, haze, project, L, mix, vn3 } from './maquettes/ennemis/lib.mjs';
 import { writePNG } from './grand/lib.mjs'; // keeps the alpha channel
-import { purificateur, pretre } from './maquettes/ennemis/foes.mjs';
+import { purificateur, pretre, chien, penitent } from './maquettes/ennemis/foes.mjs';
 import { place } from './maquettes/ennemis/fx.mjs';
 import { std } from './maquettes/ennemis/cast.mjs';
 
@@ -33,12 +33,12 @@ function knee(H, A, L1 = 22.3, L2 = 23.2) {
   return H.map((v, i) => v + u[i] * a + (pu[i] / pl) * h);
 }
 // The walk's legs, frame k of n: each ankle swings STEP ahead and behind, lifted on its way forward. A foot is planted
-// half the cycle while the body passes over it, so a cycle walks 4 STEP model units: 2 STEP room px (STRIDE).
+// half the cycle while the body passes over it, so a cycle walks 4 STEP model units: 2 STEP room px (a foe's STRIDE).
 const STEP = 9;
 function legs(k, n) {
   const o = {};
   for (const [s, x, ph] of [['r', -1, 0], ['l', 1, Math.PI]]) {
-    const a = (2 * Math.PI * k) / n + ph, f = Math.cos(a), lift = 5 * Math.max(0, Math.sin(a));
+    const a = (2 * Math.PI * k) / n + ph, f = Math.cos(a), lift = 5 * Math.max(0, -Math.sin(a)); // lifted while f grows: forward
     const H = std[`H${s}`], A = [x * 4, -0.5 + STEP * f, 4 + lift];
     Object.assign(o, { [`K${s}`]: knee(H, A), [`A${s}`]: A, [`T${s}`]: [x * 4.4, A[1] + 6.4, Math.max(1, A[2] - 3 + lift * 0.4)] });
   }
@@ -66,11 +66,12 @@ function sway(m, d) {
 const AIM = { Er: [-9, 9, 58], Wr: [-1, 18.5, 58.5], Hr_: [0, 21, 58.8] };
 const BREATH = [0, 0.5, 1, 0.5], FLAME = [1, 1.4, 0.8, 1.2], GLOW = [1, 1.15, 1.3, 1.1];
 
-// Each foe: its sheet cell (FW x FH, soles on row SOLE, centred); its walk (WALK frames a cycle); its frames: [name,
+// Each foe: its sheet cell (FW x FH, soles on row SOLE, centred); its walk (WALK frames a cycle of 4 STEP model units);
+// its frames: [name,
 // () => model, { bob: model z, layer: 'body' (the jet left out) or 'jet' (the jet alone, pivoting on the lance) }].
 const FOES = {
   purifier: {
-    FW: 230, FH: 176, SOLE: 140, WALK: 6,
+    FW: 230, FH: 176, SOLE: 140, WALK: 6, STEP,
     frames: [
       ...BREATH.map((b, k) => [`idle${k}`, () => purificateur('idle', (J) => ({ ...breathe(J, b), flame: FLAME[k] }))]),
       ...[0, 1, 2, 3, 4, 5].map((k) => [`walk${k}`, () => sway(purificateur('idle', legs(k, 6)), -1.6 * Math.sin((2 * Math.PI * k) / 6)), { bob: -0.6 * Math.abs(Math.cos((2 * Math.PI * k) / 6)) }]),
@@ -83,7 +84,7 @@ const FOES = {
     corpse: () => lying(purificateur('idle', { Er: [-17, 4, 80], Wr: [-24, 6, 90], Hr_: [-26, 8, 94], El: [17, 2, 70], Wl: [25, 6, 64], Hl_: [28, 8, 63] }), true),
   },
   priest: {
-    FW: 170, FH: 156, SOLE: 140, WALK: 4,
+    FW: 170, FH: 156, SOLE: 140, WALK: 4, STEP,
     frames: [
       ...BREATH.map((b, k) => [`idle${k}`, () => pretre('idle', (J) => ({ ...breathe(J, b), glow: GLOW[k] }))]),
       // His toes show at the hem in turn, the robe swinging with each step.
@@ -94,6 +95,29 @@ const FOES = {
     // On his back, his arms fallen open at his sides, the staff fallen by him, the gilded mask turned up.
     corpse: () => lying(pretre('idle', { Er: [-12, 1, 62], Wr: [-17, 3, 48], Hr_: [-18, 4, 43], El: [12, 1, 62], Wl: [17, 3, 48], Hl_: [18, 4, 43] }), false),
   },
+  // A trot (diagonal pairs), the body bobbing at each footfall; the tell is the sheet's attack pose (flattened, muzzle
+  // open), the leap stretched out in the air.
+  hound: {
+    FW: 130, FH: 104, SOLE: 80, WALK: 6, STEP: 7,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => chien('idle', { breath: b })]),
+      ...[0, 1, 2, 3, 4, 5].map((k) => [`walk${k}`, () => chien('idle', { gait: (2 * Math.PI * k) / 6 }), { bob: -0.8 * Math.abs(Math.cos((2 * Math.PI * k) / 6)) }]),
+      ['tele', () => chien('atk')], ['leap', () => chien('leap')],
+      ['hurt', () => chien('idle', { recoil: 1 })],
+    ],
+    corpse: () => onSide(chien('idle')), // on its side, legs out
+  },
+  // He drags his cross; the tell: the nailed scourge cocked high behind him; the lash, cords down to the floor ahead.
+  penitent: {
+    FW: 180, FH: 166, SOLE: 134, WALK: 4, STEP,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => penitent('idle', 2, (J) => breathe(J, b))]),
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => sway(penitent('idle', 2, legs(k, 4)), -1.4 * Math.sin((Math.PI * k) / 2)), { bob: -0.8 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ['tele', () => penitent('tele')], ['atk', () => penitent('atk')],
+      ['hurt', () => penitent('idle', 2, (J) => lean(J, -0.2))],
+    ],
+    corpse: () => lying(penitent('idle'), true), // face down under his cross
+  },
 };
 // Lying on the floor, head to the right (model up <- world x), on his back (model forward <- up) or face down, slumped
 // (cloth and limbs settle: heights x FLAT); what would sink under the floor is cut off. Blood soaks his chest (or back)
@@ -101,14 +125,22 @@ const FOES = {
 const GORE = [L('#5a0a10'), L('#7a1016')], FLAT = 0.7;
 function lying(m, prone) {
   const [x0, y0, z0, x1, y1, z1] = m.bounds, c = (z0 + z1) / 2, lift = prone ? 9 : -y0 - 2;
-  const to = (X, Y, Z) => [Y, prone ? lift - Z / FLAT : Z / FLAT - lift, X + c];
-  const blood = (x, y, z) => Math.min(1, Math.max(0, 1.8 - Math.hypot(x * 0.8, (y - (prone ? -8 : 8)) * 0.5, z - 62) / 14 + (vn3(x * 0.4, y * 0.4, z * 0.4, 5) - 0.5) * 1.2));
+  return fallen(m, (X, Y, Z) => [Y, prone ? lift - Z / FLAT : Z / FLAT - lift, X + c], [z0 - c, x0, 0, z1 - c, x1, (prone ? lift - y0 : y1 + lift) * FLAT], [0, prone ? -8 : 8, 62]);
+}
+// A beast on its right side, head to the right, its legs toward the camera; blood at its throat and belly.
+function onSide(m) {
+  const [x0, y0, z0, x1, y1, z1] = m.bounds, zc = 30;
+  return fallen(m, (X, Y, Z) => [Z / FLAT + x0 + 2, X, zc - Y], [y0, zc - z1, 0, y1, zc - z0, (x1 - x0 - 2) * FLAT], [0, 16, 26]);
+}
+// The model m laid down: `to` takes a floor point to the model's, `bounds` holds it; blood soaks round model point `gore`.
+function fallen(m, to, bounds, gore) {
+  const blood = (x, y, z) => Math.min(1, Math.max(0, 1.8 - Math.hypot(x * 0.8, (y - gore[1]) * 0.5, z - gore[2]) / 14 + (vn3(x * 0.4, y * 0.4, z * 0.4, 5) - 0.5) * 1.2));
   return {
     sdf: (X, Y, Z) => Math.max(m.sdf(...to(X, Y, Z)) * FLAT, -Z), mat: (k, X, Y, Z) => {
       const p = to(X, Y, Z), r = m.mat(k, ...p), b = Math.max(blood(...p), Z < 2.5 ? 0.75 : 0);
       return r.emi ? r : { ...r, alb: mix(r.alb.map((v) => v * 0.8), b > 0.6 ? GORE[1] : GORE[0], Math.min(1, b)), spec: (r.spec ?? 0) * (1 - b) + b * 0.15, gloss: 30 };
     },
-    bounds: [z0 - c, x0, 0, z1 - c, x1, (prone ? lift - y0 : y1 + lift) * FLAT], step: m.step, lights: [],
+    bounds, step: m.step, lights: [],
   };
 }
 
@@ -170,16 +202,16 @@ if (isMainThread) {
       continue;
     }
     writePNG(`src/${id}.png`, rgba, W, H);
-    data[id] = { FW: F.FW, FH: F.FH, COLS, SOLE: F.SOLE, WALK: F.WALK, STRIDE: 2 * STEP, FRAMES: frames };
+    data[id] = { FW: F.FW, FH: F.FH, COLS, SOLE: F.SOLE, WALK: F.WALK, STRIDE: 2 * F.STEP, FRAMES: frames };
     console.log(`src/${id}.png ${W}x${H}, ${cells.length} cells`);
   }
   if (!ONLY) writeFileSync('src/foes.data.ts', `// Generated by tools/art/foes.gen.mjs: edit the models there (and in tools/art/maquettes/ennemis/foes.mjs), not this table.
-// The Purificateur's and the Prêtre's sheets (src/purifier.png, src/priest.png): FW x FH cells, COLS per row, soles on row
+// The foes' sheets (src/purifier.png, priest.png, hound.png, penitent.png): FW x FH cells, COLS per row, soles on row
 // SOLE, centred; WALK frames a walk cycle, which covers STRIDE room px of floor (screen rows / ${cam.s.toFixed(4)}); each frame's
 // cell and where its own light is (sheet px: the pilot light, the monstrance; for the jet, its pivot on the lance).
 export const FLOOR = ${cam.s.toFixed(4)}; // how much the sheets' floor is foreshortened up the screen
 export type Sheet = { FW: number; FH: number; COLS: number; SOLE: number; WALK: number; STRIDE: number; FRAMES: Record<string, { cell: number; lamp: [number, number] }> };
-export const SHEETS: Record<'purifier' | 'priest', Sheet> = ${JSON.stringify(data)};
+export const SHEETS: Record<'purifier' | 'priest' | 'hound' | 'penitent', Sheet> = ${JSON.stringify(data)};
 `);
   console.log(`${((Date.now() - t0) / 1000).toFixed(1)} s`);
 } else {

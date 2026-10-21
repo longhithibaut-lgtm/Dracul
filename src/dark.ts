@@ -12,7 +12,7 @@ import { viewSize } from './logic.ts';
 // The refuge (refuge.ts) is lit the same way from its own bake and mockup (its Look): its 'refuge-light' holds the whole
 // static render, two texels per room pixel.
 // What glows or warns is drawn unlit over it, by a second camera that sees only what stands at DEPTH and above: the
-// eyes, the torch flames, the aim lines, the effects.
+// eyes, the torch flames, the effects.
 
 /** The trial room (or the refuge) is on: the sprite modules bake and pick their dark skins (wanderer.ts, enemy.ts,
  *  crossbow.ts). `zoom`: screen pixels per room pixel; 2 in these rooms, so its hero (wanderer.ts) keeps his full detail at half
@@ -55,7 +55,7 @@ type Sprite = Phaser.Physics.Arcade.Sprite;
 type Spot = { x: number; y: number; lit: boolean; h?: number; I?: number }; // h, I: a light held that high (a priest's monstrance), that strong
 type V4 = [number, number, number, number];
 
-const DEPTH = 7980; // from here up, drawn unlit over the lit world: aim lines (7990), effects (9000)
+const DEPTH = 7980; // from here up, drawn unlit over the lit world: marks over heads (7990), effects (9000)
 
 const FRAG = `
 #pragma phaserTemplate(shaderName)
@@ -101,7 +101,7 @@ vec3 point(vec3 P, vec3 n, vec3 p, float I, float r0, float R, vec3 c) {
 vec3 haze(vec2 w, vec2 s, float k, float r0, vec3 c) {
   return c * k * exp(-length(vec2(w.x - s.x, (w.y - s.y) * 1.2)) / (r0 * 1.4));
 }
-// The Order's lights: a lantern (w 0), or a priest's monstrance held w px high, gold, lighting the room.
+// The Order's lights: a lantern (w 0), or a priest's monstrance (a purificateur's pilot) held w px high, gold, lighting the room.
 vec3 order(vec3 P, vec3 n, vec2 w, vec4 o) {
   if (o.z <= 0.0) return vec3(0.0);
   if (o.w > 0.0) return point(P, n, vec3(o.xy, o.w), o.z, 40.0, 220.0, HOLY);
