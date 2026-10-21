@@ -56,6 +56,12 @@ Du plus proche au plus lointain du refuge, donc du plus facile au plus dur :
 Les quatre régions du lore deviennent des **zones du même monde**, reliées entre elles, au lieu de fuites séparées.
 Les chefs restent prisonniers chacun dans sa zone, gardés par un mini-boss (le Bourreau garde la crypte).
 
+### Forme du monde *(validé)*
+Pas une seule carte continue : des **salles** (de la taille des salles actuelles) et de **grands espaces ouverts**
+avec des **points d'intérêt** (une crypte à forcer, un reliquaire, un campement de l'Ordre, un trésor, un raccourci),
+reliés par des passages. Les grands espaces donnent la sensation de monde ; les salles gardent le poids des fichiers
+raisonnable (une carte continue cuite au pixel dépasserait les 150 Mo).
+
 ### Lieux
 Chaque zone a des **lieux** où l'on entre : une crypte scellée, une chapelle, une cave, une salle de torture… Ce
 sont des intérieurs faits à la main, dans le style des salles actuelles. **On réutilise les salles déjà peintes**
@@ -66,6 +72,12 @@ Portes verrouillées d'un seul côté, échelles à descendre, grilles à lever,
 toujours (sauvegardé). C'est ce qui rend les zones lointaines accessibles sans tout retraverser.
 
 ## 5. Ennemis et niveaux cachés
+
+### L'odeur du sang *(validé)*
+Le sang porté **attire l'Ordre** : plus on en porte, plus une **battue** (meute de chiens, puis un Inquisiteur et
+ses chiens) se met en chasse et vient se placer **entre le héros et le refuge**, dans un espace déjà traversé. Le
+retour devient la partie la plus tendue, au lieu d'une marche vide. Seuils et composition dans `T` (premier jet : une
+meute tous les 50 sang portés). Les ennemis tués **restent morts pendant l'expédition** ; seule la battue revient.
 
 - Chaque ennemi a un **niveau** qui n'est **jamais affiché**. On le devine à sa zone, à sa tenue, à son comportement.
 - Le niveau change les PV, les dégâts, la vitesse de réaction et parfois une variante (un pénitent aguerri porte
@@ -106,7 +118,9 @@ Proposition de trois familles, lisibles et peu nombreuses :
 - La rareté passe des Dons aux objets.
 
 ### Le soin
-- **La morsure n'est plus là au départ** : elle devient une **amélioration** à débloquer au refuge *(validé)*.
+- **La morsure n'est plus là au départ** : elle devient une **amélioration** à débloquer au refuge *(validé, maintenu
+  après la revue)*. Conséquence à coder : tant qu'elle n'est pas débloquée, un humain affaibli **meurt normalement**
+  (plus de mise à genoux qui n'attend que la morsure, `wound()` dans `src/logic.ts`).
 - Les autres soins existent mais sont **très rares** (fioles, autels, quêtes) *(validé)*. La vie est donc la
   ressource qui décide du retour.
 
@@ -180,3 +194,32 @@ complet, plusieurs dizaines.
 5. ~~Les zones~~ : validées telles quelles pour l'instant ; on agrandira peut-être plus tard.
 6. Les vampires sans maison et les humains : qui sont-ils, que veulent-ils ?
 7. ~~La fin~~ : elle peut changer ; à réécrire plus tard avec l'utilisateur.
+
+## 12. Revue du juge (2026-10-21)
+
+Note **5,5/10**, « on y va, avec des changements ». Retenu par l'utilisateur : **l'odeur du sang** et **salles +
+grands espaces ouverts à points d'intérêt** (ci-dessus). Maintenu contre l'avis du juge : **la morsure retirée au
+départ**. Prototype : **pas encore**.
+
+Points du juge encore ouverts, à trancher :
+1. **Farm de la zone 1** : rendement du sang croissant avec l'éloignement (×1, ×3, ×8, ×20), coûts d'amélioration
+   géométriques, un seul raccourci par zone qui n'en court-circuite pas l'intérieur.
+2. **Variété entre expéditions** : composition des groupes et emplacements du butin tirés au hasard, un événement par
+   nuit, un Inquisiteur qui rôde dès la zone 3 *(à valider)*.
+3. **Pouvoir fuir** : le chien (105 px/s) est plus rapide que le héros (66 px/s) ; les ennemis abandonnent après 4 s
+   sans le voir, ne passent pas les portes (les chiens une salle au plus), l'ombre réduit leur détection.
+4. **Objets = les Dons** : les 17 Dons existants comme reliques trouvées, un doublon rapporté monte la rareté (raison
+   de faire la 50e expédition) ; pas d'armes ni de talismans au début.
+5. **Mourir loin** : le sang porté reste en cendres là où l'on meurt, une seule chance de le reprendre *(à valider)* ;
+   un raccourci tôt dans chaque zone.
+6. **Réduire le chantier** : pas de niveaux d'ennemis redessinés (une marque d'élite recolorée), pas d'écran
+   d'inventaire (échange en une touche, sac en icônes dans le HUD), pas d'armes qui changent les animations, quêtes
+   plus tard ; sauvegarde = un petit JSON versionné dans le navigateur.
+7. **Contradictions du lore** : Vesna est la marchande du refuge mais prisonnière en zone 2 (qui vend avant sa
+   libération ?) ; le lore dit que ses Dons aident dès le départ, en secret.
+8. **Questions** : durée visée d'une expédition (5 ou 20 min) ; que garde-t-on de la fuite façon Hades (Dons tirés,
+   deux portes) ; que fait-on une fois tout libéré (doublons, nuits plus dures) ?
+
+Prototype proposé par le juge (zéro dessin neuf) : le refuge et les 5 salles peintes reliées en profondeur, sang porté
+au rendement croissant, battue, une amélioration, sauvegarde ; critères : sur 10 expéditions, au moins 4 retours
+volontaires, au moins 2 morts « j'aurais dû rentrer », envie spontanée d'en refaire une.
