@@ -1,16 +1,19 @@
 // Plays a scripted fight in headless Chromium and saves comparable screenshots (1920x1080 = native x4).
 // Usage: npm run shot [-- --out=shots --port=5199]
 // Writes room.png and combat.png (full frames, combat taken 40 ms after a dash-in slash) plus crops:
-// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (3/5 health, dash spent, 5 gifts),
+// hero.png (running diagonally), enemy.png (winding up an attack), fx.png, hud.png (3/5 health, dash spent, a full
+// shelf: four slot gifts, talents, a pact, rare and épique marks, la Nuée ready),
 // light.png (a lit lantern, the hero at the edge of its holy light), crossbow.png (a crossbowman aiming), weak.png (a
 // weakened crossbowman, its heartbeat drop on the beat), bite.png (the hero latched onto it, mid-drain), gifts.png
-// (full frame, the room cleared and the three gift cards open, TIR, GLYPHE and TALENT, the second hovered), gate.png
+// (full frame, the room cleared and three cards dealt: Rat de jet rare replacing Éclats pestilents, Glyphe pestilent
+// épique, hovered, and the pact Vermine), gate.png
 // (the portcullis up), training.png (full frame: the training room, its panel, enemies called in from it), tir.png
 // (the hero mid-throw, a plagued shard of blood in flight toward a ghoul) and glyph.png (the glyph cast with E at the
 // pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png, rooms-ossuary.png,
 // rooms-chapel.png and rooms-cloister.png (each room layout whole, empty, from the gate down to the stairs: they are
 // taller than the screen, so a screen at a time stitched together, without the HUD and the vignette) and dawn.png (the
-// hero standing in the cloister's Eternal Dawn, the danger building before the first burn: smoke, glow, gauge).
+// hero standing in the cloister's Eternal Dawn, the danger building before the first burn: smoke, glow, gauge), and
+// swarm.png (the hero turned into la Nuée from the training panel, running through two dummies and biting them).
 // The rooms are taller than the screen and the camera follows the hero: crops are given in room coordinates.
 // Exit code 1 if the page logged an error or a capture is missing.
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -135,13 +138,21 @@ for (let i = 0; i < 200 && !captured; i++) {
 // HUD in a representative mid-fight state, like the reference: 3 of 5 health, dash just spent, five gifts shown (one
 // per slot, then a talent).
 if (captured) {
-  await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.health = 3; s.hud.health(3, 5); s.hud.gifts(['rongeur', 'nid', 'griffes', 'eclats', 'nuee']); });
+  // The gifts held for the frame only (the pact and the others would change the fights to come), so la Nuée is ready.
+  const held = await page.evaluate(() => {
+    const s = window.game.scene.getScene('room'), held = [s.gifts, s.ranks];
+    s.gifts = ['rongeur', 'nid', 'griffes', 'eclats', 'miasme', 'fievre', 'glaneur', 'noires'];
+    s.ranks = { griffes: 1, nid: 2, fievre: 1 };
+    s.health = 3; s.hud.health(3, 5); s.hud.gifts(s.gifts, s.ranks);
+    return held;
+  });
   await page.waitForTimeout(900); // let the lost-health animation settle
   await page.keyboard.press('Space', { delay: 100 }); // held across a couple of frames, see above
   await page.waitForTimeout(100);
   await freeze(true);
-  await shot('hud', { x: 0, y: 0, width: 400, height: 160 }); // with the gift shelf
+  await shot('hud', { x: 0, y: 0, width: 480, height: 160 }); // with the gift shelf
   await freeze(false);
+  await page.evaluate(([g, r]) => { const s = window.game.scene.getScene('room'); s.gifts = g; s.ranks = r; s.hud.gifts(g, r); }, held);
 }
 
 // A sacred lantern, lit, with the hero just inside the edge of its holy light, smoking before the first burn lands.
@@ -234,8 +245,8 @@ let bit = null;
 }
 
 // The room cleared and its gift taken: the cards open. The bot never clears a room on its own, so the fight is
-// moved on to the room's last wave and its enemies are killed; then the hero is put on the gift. Every gift but three
-// is held, so the draw is always the same: Éclats pestilents (TIR), Glyphe du nid (GLYPHE), Éclats rongeurs (TALENT).
+// moved on to the room's last wave and its enemies are killed; then the hero is put on the gift and the cards are
+// dealt (the draw is random): a rare, an épique and a pact, the first replacing a gift held.
 const room = () => page.evaluate(() => { const s = window.game.scene.getScene('room'); return { phase: s.phase, no: s.roomNo, gifts: s.gifts }; });
 let gifts = false, gate = false;
 {
@@ -243,13 +254,17 @@ let gifts = false, gate = false;
   await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable), null, { timeout: 8000 }).catch(() => {});
   await page.evaluate(() => {
     const s = window.game.scene.getScene('room');
-    s.gifts = ['griffes', 'nuee', 'rongeur', 'fuite', 'morsure', 'survivant', 'contagion'];
+    s.gifts = ['griffes', 'eclats', 'nuee', 'rongeur', 'fuite', 'morsure', 'survivant'];
     s.hud.gifts(s.gifts);
     s.wave = s.roomNo * 3; // T.run.wavesPerRoom
     for (const e of s.enemies.getChildren().filter((e) => e.body?.enable)) s.kill(e);
   });
   if (await page.waitForFunction(() => window.game.scene.getScene('room').pickup?.ready, null, { timeout: 8000 }).catch(() => null)) {
-    await page.evaluate(() => { const s = window.game.scene.getScene('room'), m = s.room.medallion; s.hero.body.reset(m.x, m.y - 8); }); // feet on it
+    await page.evaluate(() => {
+      const s = window.game.scene.getScene('room'), m = s.room.medallion;
+      s.hero.body.reset(m.x, m.y - 8); // feet on it
+      s.openGifts('gift', [{ id: 'jet', rank: 1 }, { id: 'pestilent', rank: 2 }, { id: 'vermine', rank: 0 }]);
+    });
     await snap();
     await page.waitForFunction(() => window.game.scene.getScene('room').cards);
     await page.waitForTimeout(600); // the cards have slid in
@@ -356,6 +371,37 @@ if (training) {
   await freeze(false);
 }
 
+// La Nuée, in the training room (dummies stay put): two ghouls side by side, the hero turned into the swarm from the
+// panel runs through them; caught mid-run, once it has bitten them.
+let swarm = null;
+if (training) {
+  await page.click('#training [data-act="clear"]');
+  for (let i = 0; i < 2; i++) await page.click('#training [data-spawn="ghoul"]');
+  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().filter((e) => e.body?.enable).length === 2, null, { timeout: 15000 }).catch(() => {});
+  await page.evaluate(() => {
+    const s = window.game.scene.getScene('room');
+    const [a, b] = s.enemies.getChildren().filter((e) => e.body?.enable);
+    a?.body.reset(312, 201); // where the glyph was, on its feet line
+    b?.body.reset(334, 201);
+    s.hero.body.reset(268, 196);
+    s.glyph?.end();
+  });
+  await snap();
+  await page.waitForTimeout(1500); // the glyph crumbled away
+  await page.click('#training [data-act="swarm"]');
+  await page.keyboard.down('d');
+  // Caught as it reaches the first ghoul; then it must bite them both on its way through.
+  swarm = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.swarmFx && s.hero.x > 284; }, null, { timeout: 8000 })
+    .then(() => true, () => false);
+  await freeze(true);
+  const at = await page.evaluate(() => { const s = window.game.scene.getScene('room'); return { x: s.hero.x, y: s.hero.y }; });
+  await shot('swarm', await clip(at.x + 20, at.y, 720, 400));
+  await freeze(false);
+  const bitten = await page.waitForFunction(() => window.game.scene.getScene('room').gnawAt.size === 2, null, { timeout: 8000 }).then(() => true, () => false);
+  await page.keyboard.up('d');
+  swarm = swarm && bitten && 'both ghouls bitten';
+}
+
 // Every room layout whole and empty: as a run's room 1, its first wave called off. The camera is moved up the room a
 // screen at a time, from the stairs to the gate, and the screens are stitched together.
 const layouts = [];
@@ -421,8 +467,8 @@ if (layouts.at(-1) === 'cloister') {
   }
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; rooms: ${layouts.join(', ') || 'NO'}; dawn: ${dawn ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; swarm: ${swarm || 'NO'}; rooms: ${layouts.join(', ') || 'NO'}; dawn: ${dawn ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !tir || !glyph || layouts.length < 3 || !dawn ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !tir || !glyph || !swarm || layouts.length < 3 || !dawn ? 1 : 0);

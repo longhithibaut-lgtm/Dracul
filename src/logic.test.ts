@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, stepsFrom, take, wound } from './logic.ts';
-import { GIFTS, GIFT_IDS, KINDS, kind, replacing, shelf } from './gifts.ts';
+import { biteTarget, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawGifts, drawOffer, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, rollRarity, stepsFrom, swarmUnlocked, take, wound } from './logic.ts';
+import { GIFTS, GIFT_IDS, KINDS, RARITY, cost, kind, replacing, shelf, value } from './gifts.ts';
+import { T } from './tuning.ts';
 import { missing, width, wrap } from './font.ts';
 
 describe('inArc', () => {
@@ -178,13 +179,80 @@ describe('gifts', () => {
     expect(shelf(['fuite', 'nuee', 'rongeur', 'griffes', 'nid'])).toEqual(['griffes', 'nid', 'nuee', 'fuite', 'rongeur']);
   });
 
-  it('every gift text is in the typeface and wraps to card width', () => {
+  it('every gift text, at every rarity, is in the typeface and wraps to card width; names fit on one line', () => {
     for (const id of GIFT_IDS) {
-      const g = GIFTS[id];
-      expect(missing(g.name + g.text + KINDS[kind(id)].toUpperCase() + replacing(id))).toEqual([]);
-      for (const t of [g.text, replacing(id)]) expect(wrap(t, 112).every((l) => width(l) <= 112)).toBe(true);
+      const g = GIFTS[id], texts = [0, 1, 2].map(g.text);
+      for (const t of [...texts, replacing(id), cost(id)]) {
+        expect(missing(t)).toEqual([]);
+        expect(wrap(t, 112).every((l) => width(l) <= 112)).toBe(true);
+      }
+      expect(missing(g.name + KINDS[kind(id)].toUpperCase() + RARITY.join('').toUpperCase())).toEqual([]);
+      expect(width(g.name)).toBeLessThanOrEqual(120);
+      if (g.ranked) expect(new Set(texts).size).toBe(3); // the card shows the rarity's numbers
     }
-    expect(missing('Don de la Maison du Rat · Vesna la Grise · Salle 9')).toEqual(['·']);
+    expect(missing('Don de la Maison du Rat · Vesna la Grise · Salle 9 · La Nuée répond : touche R · Amélioration : ')).toEqual(['·']);
+  });
+
+  it('a gift with a rarity is stronger at each rarity; the others have none', () => {
+    for (const id of GIFT_IDS.filter((id) => GIFTS[id].ranked)) expect(value(id, 0) < value(id, 1) && value(id, 1) < value(id, 2)).toBe(true);
+    expect(GIFTS.griffes.ranked && !GIFTS.perce.ranked && !GIFTS.contagion.ranked && !GIFTS.maigre.ranked).toBe(true);
+    expect(value('perce', 2)).toBe(0);
+  });
+
+  const odds = { rare: [0.1, 0.03, 0.4], epic: [0.02, 0.015, 0.2] };
+  it('rolls rare and épique gifts, more often as the run goes on, never past the cap', () => {
+    expect(rollRarity(1, odds, () => 0.019)).toBe(2);
+    expect(rollRarity(1, odds, () => 0.02)).toBe(1);
+    expect(rollRarity(1, odds, () => 0.119)).toBe(1);
+    expect(rollRarity(1, odds, () => 0.121)).toBe(0);
+    expect(rollRarity(6, odds, () => 0.3)).toBe(1); // 9.5 % épique + 25 % rare
+    expect(rollRarity(6, odds, () => 0.35)).toBe(0);
+    expect(rollRarity(99, odds, () => 0.199)).toBe(2);
+    expect(rollRarity(99, odds, () => 0.599)).toBe(1);
+    expect(rollRarity(99, odds, () => 0.601)).toBe(0);
+  });
+
+  const O = { rarity: odds, pacts: { chance: 0.3, fromRoom: 2 } };
+  const pacts = (cards: { id: string }[]) => cards.filter((c) => GIFTS[c.id as keyof typeof GIFTS].pact).length;
+  it('a gift choice: three gifts, at most one pact and never in the first room', () => {
+    for (let i = 0; i < 200; i++) {
+      expect(pacts(drawOffer(GIFTS, [], {}, 'gift', 1, O, Math.random))).toBe(0);
+      const d = drawOffer(GIFTS, ['griffes'], {}, 'gift', 3, O, Math.random);
+      expect(d.length).toBe(3);
+      expect(pacts(d)).toBeLessThanOrEqual(1);
+      expect(d.some((c) => c.id === 'griffes')).toBe(false);
+      if (pacts(d)) expect(GIFTS[d[2].id].pact).toBeTruthy(); // the pact is the last card, the others normal gifts
+    }
+    // rnd 0: a pact whenever one may be offered, every gift épique.
+    expect(pacts(drawOffer(GIFTS, [], {}, 'gift', 2, O, () => 0))).toBe(1);
+    expect(drawOffer<keyof typeof GIFTS>(GIFTS, [], {}, 'gift', 2, O, () => 0).filter((c) => GIFTS[c.id].ranked).every((c) => c.rank === 2)).toBe(true);
+    // Nothing but pacts left: no gift choice.
+    expect(drawOffer(GIFTS, GIFT_IDS.filter((id) => !GIFTS[id].pact), {}, 'gift', 3, O, () => 0)).toEqual([]);
+  });
+
+  it('a pact choice: two pacts and a gift to refuse them with; an upgrade: held gifts a rarity up', () => {
+    const d = drawOffer(GIFTS, [], {}, 'pacte', 1, O, Math.random);
+    expect(pacts(d)).toBe(2);
+    expect(d.length).toBe(3);
+    expect(drawOffer(GIFTS, ['maigre', 'noires', 'curee', 'vermine'], {}, 'pacte', 3, O, Math.random)).toEqual([]);
+    const up = drawOffer(GIFTS, ['griffes', 'perce', 'fuite', 'maigre'], { griffes: 2, fuite: 1 }, 'upgrade', 3, O, Math.random);
+    expect(up).toEqual([{ id: 'fuite', rank: 2, up: true }]); // perce and the pact have no rarity, griffes is épique
+  });
+
+  it('a pact is taken like a talent; a combo is offered once a gift it builds on is held', () => {
+    expect(take(GIFTS, ['griffes', 'rongeur'], 'maigre')).toEqual(['griffes', 'rongeur', 'maigre']);
+    expect(take(GIFTS, ['griffes', 'maigre'], 'grouillantes')).toEqual(['maigre', 'grouillantes']);
+    expect(kind('maigre')).toBe('pacte');
+    expect(shelf(['maigre', 'rongeur', 'jet'])).toEqual(['jet', 'rongeur', 'maigre']);
+    expect(offerable(GIFTS, [])).not.toContain('fievre');
+    expect(offerable(GIFTS, ['miasme'])).toEqual(expect.arrayContaining(['fievre', 'contagion']));
+    expect(offerable(GIFTS, ['miasme'])).not.toContain('grouillement');
+    expect(offerable(GIFTS, ['jet'])).toContain('grouillement');
+  });
+
+  it('la Nuée answers a hero holding enough gifts', () => {
+    expect(swarmUnlocked(['griffes', 'jet'], T.swarm.gifts)).toBe(false);
+    expect(swarmUnlocked(['griffes', 'jet', 'maigre'], T.swarm.gifts)).toBe(true);
   });
 });
 

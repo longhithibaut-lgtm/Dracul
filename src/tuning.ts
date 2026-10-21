@@ -278,15 +278,40 @@ export const T = {
     titleMs: 1200, // "Salle N" stays up this long; the first wave comes when it is gone
   },
 
-  // Gifts of the Rat house (gifts.ts), each taken at most once per run.
+  // Gifts of the Rat house (gifts.ts), each taken at most once per run. The number of a gift with a rarity is named
+  // after it, a triple [commun, rare, épique]: the rarity it is offered at picks one (T.rarity).
   gifts: {
-    plagueMs: 2000, plagueDamage: 1, // la Peste (claws, shards, Contagion): an infected enemy loses this much, this long after
-    contagion: 40, // Contagion: the plague of a sick enemy that dies leaps to the enemies this close to it
-    // Nuée and Glyphe du nid: rats released by a dash (no more than `rats` of the dash's at once) or by the glyph arming.
-    rats: 3, ratSpeed: 150, ratLifeMs: 2500, ratDamage: 1,
-    dashRecharge: 1.4, // Fuite du rat: the dash recharges this many times faster
-    gnaw: 1, // Rongeur: extra damage of the combo's third blow
-    blood: 1, // Survivant: extra max health, healed once when taken
-    bite: 1, // Morsure de rat: extra blood a bite gives back
+    plagueMs: 2000, plagueDamage: 1, // la Peste: an infected enemy loses its gift's number (Contagion's: this) this long after
+    contagion: 40, // Contagion (no rarity): the plague of a sick enemy that dies leaps to the enemies this close to it
+    // Rats, from any gift: released by a dash (no more than its number of the dash's at once), the glyph arming, the
+    // finisher, a throw or a kill; a rat bites once (more with Grouillement), `ratBiteMs` apart.
+    ratSpeed: 150, ratLifeMs: 2500, ratDamage: 1, ratBiteMs: 300,
+    griffes: [1, 1.5, 2], eclats: [1, 1.5, 2], pestilent: [1, 1.5, 2], miasme: [1, 1.5, 2], // plague givers: its damage
+    grouillantes: [2, 3, 4], // Griffes grouillantes: rats released by the finisher
+    jet: [1, 1.5, 2], jetRats: 2, // Rat de jet: the thrown rat's bite (the shard does 0.5); no more than `jetRats` running at once
+    nid: [3, 4, 5], nuee: [3, 4, 5], // Glyphe du nid, Brume aux rats: rats
+    rongeur: [1, 1.5, 2], // extra damage of the combo's third blow
+    fuite: [1.4, 1.6, 1.8], // the dash recharges this many times faster
+    morsure: [1, 2, 3], // extra blood a bite gives back
+    survivant: [1, 2, 3], // extra max health, healed once when taken
+    glaneur: [1, 2, 3], // blood back when a room is cleared
+    fievre: [1, 2, 3], // Fièvre: the plague strikes this many times more, plagueMs apart
+    grouillement: [2, 3, 4], // Grouillement: bites of each rat
   },
+  // The odds of a gift offered as rare or épique: [base, + per room after the first, cap]. Rising slowly: 10 % rare and
+  // 2 % épique in room 1, 25 % and 9.5 % in room 6.
+  rarity: { rare: [0.1, 0.03, 0.4], epic: [0.02, 0.015, 0.2] },
+  // Pactes de sang: Vesna's darker gifts, a strong gift with a cost that lasts the run. One card of a gift choice is a
+  // pact `chance` of the time, from room `fromRoom` on.
+  pacts: {
+    chance: 0.3, fromRoom: 2,
+    maigre: { mult: 1.5, maxBlood: 2 }, // every blow of the hero does `mult` times as much; max blood -maxBlood
+    noires: { mult: 2, burn: 2 }, // the claws do `mult` times as much; holy light burns `burn` times as fast
+    curee: { every: 3, heal: 1, bite: 1 }, // every `every` kills heal `heal`; a bite costs `bite` blood instead of healing
+    vermine: { rats: 2, toll: 1 }, // each kill releases `rats` rats; each new room costs `toll` blood (never the last)
+  },
+  // La Nuée, the Rat house's form of the night: holding `gifts` gifts, R turns the hero into a swarm of rats for
+  // `durationMs`: fast (`speed` times his walk), untouchable by blows, it bites every enemy within `radius` (floor),
+  // each once every `tickMs`; no claws, shard, bite, glyph or dash. Holy light disperses it at once.
+  swarm: { gifts: 3, durationMs: 4000, cooldownMs: 18000, speed: 2, radius: 16, damage: 1, tickMs: 350, rats: 11 },
 } as const;

@@ -116,7 +116,7 @@ export function pickSpot(spots: P[], hero: P, taken: P[], rx: number, ry: number
     .sort((a, b) => d(a) - d(b))[0];
 }
 
-type Gifts<K extends string> = Record<K, { slot?: string; requires?: readonly string[] }>;
+type Gifts<K extends string> = Record<K, { slot?: string; requires?: readonly string[]; pact?: string; ranked?: boolean }>;
 
 /** The gifts that may be offered: not held, and holding one of those they require, if any. */
 export function offerable<K extends string>(defs: Gifts<K>, held: readonly K[]): K[] {
@@ -144,6 +144,37 @@ export function drawGifts<K>(pool: readonly K[], n: number, rnd: () => number): 
   }
   return left.slice(0, n);
 }
+
+/** The rarity a gift is offered at in room `room`: 0 commun, 1 rare, 2 épique. `odds`: for rare and épique, [base, +
+ *  per room after the first, cap]. */
+export function rollRarity(room: number, odds: { rare: readonly number[]; epic: readonly number[] }, rnd: () => number): number {
+  const p = ([base, per, cap]: readonly number[]) => Math.min(cap, base + per * (room - 1)), epic = p(odds.epic), r = rnd();
+  return r < epic ? 2 : r < epic + p(odds.rare) ? 1 : 0;
+}
+
+/** What a room can hand out (the gift on the medallion): a gift choice (now and then with a pact among it), a pact
+ *  choice (pacts, and one gift to refuse them with), or a gift upgrade (held gifts a rarity up). */
+export type Reward = 'gift' | 'pacte' | 'upgrade';
+/** One card of an offer: gift `id` at rarity `rank`; `up`: a held gift raised to it. */
+export type Card<K> = { id: K; rank: number; up?: boolean };
+type Odds = { rarity: { rare: readonly number[]; epic: readonly number[] }; pacts: { chance: number; fromRoom: number } };
+
+/** The cards of reward `kind` in room `room`, for a hero holding `held` at `ranks`; [] when there is nothing to offer.
+ *  A gift choice is three gifts, the last a pact `chance` of the time from `fromRoom` on, and needs one gift that is not
+ *  a pact. A pact choice is two pacts and a gift. An upgrade is up to three held gifts with a rarity below épique. */
+export function drawOffer<K extends string>(defs: Gifts<K>, held: readonly K[], ranks: Partial<Record<K, number>>, kind: Reward, room: number, odds: Odds, rnd: () => number): Card<K>[] {
+  if (kind === 'upgrade')
+    return drawGifts(held.filter((g) => defs[g].ranked && (ranks[g] ?? 0) < 2), 3, rnd).map((id) => ({ id, rank: (ranks[id] ?? 0) + 1, up: true }));
+  const open = offerable(defs, held), gifts = open.filter((g) => !defs[g].pact), pacts = open.filter((g) => defs[g].pact);
+  const card = (id: K): Card<K> => ({ id, rank: defs[id].ranked ? rollRarity(room, odds.rarity, rnd) : 0 });
+  if (kind === 'pacte') return pacts.length ? [...drawGifts(pacts, 2, rnd), ...drawGifts(gifts, 1, rnd)].map(card) : [];
+  if (!gifts.length) return [];
+  const pact = pacts.length && room >= odds.pacts.fromRoom && rnd() < odds.pacts.chance;
+  return [...drawGifts(gifts, pact ? 2 : 3, rnd), ...(pact ? drawGifts(pacts, 1, rnd) : [])].map(card);
+}
+
+/** La Nuée, the Rat house's form of the night, answers a hero holding `need` of its gifts. */
+export const swarmUnlocked = (held: readonly unknown[], need: number) => held.length >= need;
 
 /** The layout of room `room` of a run: the first of `ids` for room 1, then any but `prev` (the last room's). */
 export function nextLayout<K>(room: number, prev: K, ids: readonly K[], rnd: () => number): K {

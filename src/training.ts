@@ -1,7 +1,7 @@
 // The training room (key T): a DOM panel over the game to call enemies in, toggle the gifts and tune the hero live.
 // The knobs change T itself, so a tuned value holds for the whole session, normal runs included, until a reload.
 import { T } from './tuning.ts';
-import { GIFTS, GIFT_IDS, KINDS, kind, type GiftId } from './gifts.ts';
+import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, type GiftId } from './gifts.ts';
 import type { LayoutId } from './room.ts';
 
 export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'priest' | 'hounds' | 'penitents' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau';
@@ -49,6 +49,7 @@ const KNOBS = [
 
 // Folded or not, the panel stays so across the training room's restarts (on a phone, it is folded to play).
 let shown = true;
+let rank = 0; // the rarity of the gifts ticked
 
 const tuned = T as unknown as Record<string, Record<string, number>>;
 const defaults: Record<string, number> = Object.fromEntries(KNOBS.map(([, g, k]) => [`${g}.${k}`, tuned[g][k]]));
@@ -66,7 +67,8 @@ const CSS = `
 #training button:focus-visible,#training input:focus-visible{outline:2px solid #8ff0dc;outline-offset:1px}
 #training label{display:block;cursor:pointer}
 #training .knob{display:grid;grid-template-columns:1fr auto;margin-top:4px}
-#training .knob input{grid-column:1/-1;width:100%;accent-color:#e0284a}
+#training .knob input,#training .knob select{grid-column:1/-1;width:100%;accent-color:#e0284a}
+#training select{font:inherit;color:inherit;background:#0b0710;border:1px solid #2e1838}
 #training output{color:#8ff0dc}
 #training textarea{width:100%;box-sizing:border-box;margin:8px 0 4px;background:#0b0710;color:#e8dcc8;border:1px solid #2e1838;
   font:11px/1.3 ui-monospace,monospace;resize:vertical}
@@ -79,10 +81,13 @@ const CSS = `
 }`;
 
 /** Opens the panel; returns what closes it. */
-export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean): void; restart(layout?: LayoutId): void }) {
+export function panel(api: {
+  gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean, rank: number): void; rank(rank: number): void;
+  swarm(): void; restart(layout?: LayoutId): void;
+}) {
   // Every gift can be ticked, several in one slot too: the one-per-slot rule is the run's, not the training room's.
-  const gifts = (slotted: boolean) => GIFT_IDS.filter((id) => !!GIFTS[id].slot === slotted).map((id) =>
-    `<label><input type="checkbox" data-gift="${id}"${api.gifts.includes(id) ? ' checked' : ''}> ${GIFTS[id].name}${slotted ? ` <small>· ${KINDS[kind(id)]}</small>` : ''}</label>`).join('');
+  const gifts = (k: (id: GiftId) => boolean) => GIFT_IDS.filter(k).map((id) =>
+    `<label><input type="checkbox" data-gift="${id}"${api.gifts.includes(id) ? ' checked' : ''}> ${GIFTS[id].name}${GIFTS[id].slot ? ` <small>· ${KINDS[kind(id)]}</small>` : ''}</label>`).join('');
   const coarse = matchMedia('(pointer: coarse)').matches;
   const root = document.createElement('aside');
   root.id = 'training';
@@ -95,8 +100,11 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
     <h3>Héros</h3>
     <label><input type="checkbox" data-opt="god"> Invincible</label>
     <div class="row"><button type="button" data-act="heal">Soigner</button></div>
-    <h3>Dons du Rat : emplacements</h3>${gifts(true)}
-    <h3>Dons du Rat : talents</h3>${gifts(false)}
+    <h3>Dons du Rat : emplacements</h3>${gifts((id) => !!GIFTS[id].slot)}
+    <h3>Dons du Rat : talents</h3>${gifts((id) => kind(id) === 'talent')}
+    <h3>Pactes de sang</h3>${gifts((id) => kind(id) === 'pacte')}
+    <label class="knob">Rareté des Dons cochés<select data-rank>${RARITY.map((r, i) => `<option value="${i}"${i === rank ? ' selected' : ''}>${r}</option>`).join('')}</select></label>
+    <div class="row"><button type="button" data-act="swarm">La Nuée (touche R)</button></div>
     <h3>Réglages</h3>
     ${KNOBS.map(([l, g, k, min, max, step]) => `<label class="knob">${l}<output>${tuned[g][k]}</output><input type="range" data-knob="${g}.${k}" min="${min}" max="${max}" step="${step}" value="${tuned[g][k]}"></label>`).join('')}
     <textarea readonly rows="3" aria-label="Réglages modifiés" placeholder="Les réglages modifiés s'affichent ici : copie-les dans le chat."></textarea>
@@ -123,7 +131,8 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
   root.addEventListener('change', (ev) => {
     const i = ev.target as HTMLInputElement;
     if (i.dataset.opt) opts[i.dataset.opt as keyof typeof opts] = i.checked;
-    if (i.dataset.gift) api.toggle(i.dataset.gift as GiftId, i.checked);
+    if (i.dataset.gift) api.toggle(i.dataset.gift as GiftId, i.checked, rank);
+    if (i.dataset.rank !== undefined) api.rank((rank = Number(i.value)));
     release();
   });
   root.addEventListener('click', (ev) => {
@@ -133,6 +142,7 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
     else if (b.dataset.spawn) api.spawn(b.dataset.spawn as Spawn);
     else if (b.dataset.act === 'clear') api.clear();
     else if (b.dataset.act === 'heal') api.heal();
+    else if (b.dataset.act === 'swarm') api.swarm();
     else if (b.dataset.act === 'reset') knobs().forEach((i) => set(i, defaults[i.dataset.knob!])), show();
     release();
   });

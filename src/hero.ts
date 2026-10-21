@@ -8,7 +8,7 @@ import grandSheet from './grand-hero.png';
 // tools/art/grand-hero.gen.mjs), already lit, eyes and lantern glowing, drawn at half scale on the x2 view (dark.ts
 // ZOOM) so each of his pixels is a screen pixel. Each of his frames carries the lantern glass centre (customData.lamp).
 // Gameplay calls create() once and show() every frame; everything visual lives here.
-export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; dazed?: boolean; invulnerable: boolean; facing: number };
+export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; dazed?: boolean; invulnerable: boolean; facing: number; swarm?: boolean }; // swarm: turned into la Nuée (rats.ts draws it)
 
 /** Where the hero stands to bite: this far beside the prey's sprite centre, so his mouth lands on its neck. */
 export const BITE_REACH = 8;
@@ -87,6 +87,6 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   if (look.hurt) s.setTint(now - st.hurtAt < 60 ? 0xffffff : 0xe0284a).setTintMode(Phaser.TintModes.FILL);
   else s.clearTint();
   const blink = look.invulnerable && !look.hurt && Math.floor(now / 70) % 2 === 1;
-  s.setAlpha(look.dashing ? 0.85 : blink ? 0.25 : 1);
-  st.shadow.setAlpha(look.dashing ? 0.45 : 1).setScale(look.dashing ? 0.75 : 1);
+  s.setAlpha(look.swarm ? 0 : look.dashing ? 0.85 : blink ? 0.25 : 1);
+  st.shadow.setAlpha(look.swarm ? 0 : look.dashing ? 0.45 : 1).setScale(look.dashing ? 0.75 : 1);
 }
