@@ -71,7 +71,7 @@ function grand(scene: Phaser.Scene, x: number, y: number) {
     Object.assign(tex.add(name, 0, (cell % Grand.COLS) * Grand.FW, Math.floor(cell / Grand.COLS) * Grand.FH, Grand.FW, Grand.FH)!.customData, { lamp });
   const s = Hero.create(scene, x, y).setTexture('wanderer-dark', 'down-idle0').setOrigin(0.5, (Grand.SOLE - 30) / Grand.FH).setScale(0.5);
   s.setSize(16, 12).setOffset(Grand.FW / 2 - 8, Grand.SOLE - 20).setBlendMode(prelit(scene));
-  return s.setData('stride', Grand.STRIDE); // Hero.show turns his run by the distance walked
+  return s.setData('gait', { squash: Grand.SQUASH, ...Grand.GAIT }); // his walks, turned by the distance walked (gait.ts)
 }
 
 // The tail: LINKS links of LINK px hung from the frame's neck point, simulated in that point's frame of reference so

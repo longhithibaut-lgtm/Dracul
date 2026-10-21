@@ -27,7 +27,8 @@ décision ou une maquette validée.
 **Personnages** : le héros vampire validé (`docs/maquettes/grand-heros.png`, modèle `tools/art/maquettes/grand/hero.mjs`) :
 mince, longs cheveux noirs, yeux de braise rouge, long manteau à doublure violette (sa signature), griffes nues,
 lanterne tenue bas ; sa brume est une vapeur de sang caillé. Gestes lourds,
-marche lente, les pieds tiennent au sol (course pilotée par la distance).
+marche lente, les pieds tiennent au sol (course pilotée par la distance) ; 8 directions, recul et pas chassés quand
+il regarde ailleurs que là où il va (`src/gait.ts`).
 
 **Lieux** : le refuge validé (`docs/maquettes/refuge-*.png`, `refuge2-*.png`, plan dans `docs/lore.md`) ; la salle de
 torture (`docs/maquettes/grand-ecran.png`, `src/torture.ts`) : pierre crasseuse, sang séché, torches mourantes, pendus,
