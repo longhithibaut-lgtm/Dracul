@@ -1285,18 +1285,22 @@ export class RoomScene extends Phaser.Scene {
     const part = this.section(), here = (p: { y: number }) => this.section(p.y) === part;
     this.waveDue = part < Math.min(this.wave - (this.roomNo - 1) * T.run.wavesPerRoom, this.room.sections.length);
     if (this.waveDue) return;
-    const spawns = this.room.spawns.filter((p) => here({ y: p.y + 8 })); // sprite position -> feet
-    // From the second wave the Order joins in: crossbowmen (one, then two) take the spawn points farthest from the hero.
-    const far = (p: { x: number; y: number }) => Phaser.Math.Distance.BetweenPoints(p, this.hero);
-    const bows = [...spawns].sort((a, b) => far(b) - far(a)).slice(0, Math.min(2, ++this.wave - 1));
+    // Its wave from the run's table (T.run.waves), on the part's spawn points, the nearest to the hero first: melee in
+    // front, supports behind. More than there are points: they share them, a few px apart (they push each other off).
+    const near = (p: { x: number; y: number }) => Phaser.Math.Distance.BetweenPoints(p, this.hero);
+    const spawns = this.room.spawns.filter((p) => here({ y: p.y + 8 })).sort((a, b) => near(a) - near(b)); // sprite position -> feet
+    const W = T.run.waves, kinds = W[Math.min(this.roomNo, W.length) - 1][++this.wave - (this.roomNo - 1) * T.run.wavesPerRoom - 1];
     const lanterns = this.wave >= T.lantern.twoFromWave ? 2 : this.wave >= T.lantern.fromWave ? 1 : 0;
     while (this.lanterns.filter(here).length < lanterns && this.addLantern(this.room.spots.filter(here)));
-    for (const p of spawns) this.spawn(p, bows.includes(p) ? 'crossbow' : 'ghoul');
+    kinds.forEach((kind, i) => {
+      const p = spawns[i % spawns.length], n = Math.floor(i / spawns.length);
+      this.spawn({ x: p.x + (n % 2 ? 5 : -5) * Math.ceil(n / 2), y: p.y }, kind);
+    });
   }
 
   /** An enemy rises at `p` after its telegraph: a ghoul, or one of the Order: a crossbowman (`hp` to start it
    *  weakened), a purificateur, a prêtre, a hound, a pénitent, a sonneur, an inquisiteur or a bourreau, or an Amas of
-   *  ghouls (the training room's only, for now). */
+   *  ghouls. */
   private spawn(p: { x: number; y: number }, kind: 'ghoul' | 'crossbow' | Foes.Kind, hp?: number) {
     const bow = kind === 'crossbow', human = kind !== 'ghoul' && kind !== 'amas'; // the Order's gold sigil (its hounds' too), else the ghouls' pool of blood
     (human ? Crossbow : Enemy).telegraphSpawn(this, p.x, p.y, T.enemy.spawnTelegraphMs);

@@ -254,9 +254,22 @@ export const T = {
   // on a steady beat until he is back in the shade.
   dawn: { graceMs: 2500, burnEveryMs: 1000, damage: 1 },
 
-  // A run is a string of rooms; the wave count carries on from room to room, so difficulty keeps climbing.
+  // A run is a string of rooms, each climbed in three parts with a wave each; the difficulty climbs room by room.
   run: {
     wavesPerRoom: 3,
+    // Each room's waves, room by room through the run (past the table, its last room again): who rises, melee first,
+    // supports last, as the first take the spawn points nearest the hero (a part has three: more than three share them).
+    // Gentle at first (ghouls, crossbowmen), then the Order's men come in, the hounds in packs of three, the pénitents
+    // in groups, the Inquisiteur with men to command, the Amas; from room 5 the Bourreau guards the last part, alone or
+    // nearly.
+    waves: [
+      [['ghoul', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'crossbow'], ['ghoul', 'crossbow', 'crossbow']],
+      [['ghoul', 'ghoul', 'penitent'], ['penitent', 'penitent', 'penitent'], ['ghoul', 'purifier', 'crossbow']],
+      [['hound', 'hound', 'hound'], ['penitent', 'penitent', 'priest'], ['ghoul', 'purifier', 'crossbow', 'crossbow']],
+      [['penitent', 'penitent', 'penitent', 'ringer'], ['hound', 'hound', 'hound', 'crossbow'], ['inquisitor', 'penitent', 'penitent', 'crossbow']],
+      [['amas', 'ghoul', 'ghoul'], ['purifier', 'inquisitor', 'penitent', 'priest'], ['bourreau']],
+      [['hound', 'hound', 'hound', 'crossbow', 'ringer'], ['amas', 'penitent', 'penitent', 'purifier', 'priest'], ['bourreau', 'penitent', 'penitent']],
+    ],
     slowMo: 0.3, // the last kill of a room plays at this speed...
     slowMoMs: 450, // ...for this long (real time)
     giftDelayMs: 500, // then the gift of the Rat house appears on the medallion
