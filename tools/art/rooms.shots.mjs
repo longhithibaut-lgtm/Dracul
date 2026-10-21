@@ -1,7 +1,7 @@
 // The run rooms baked in the « grand pixel » style (tools/art/rooms.gen.mjs) in headless Chromium on a 1920x1080 PC
 // screen. For each: the whole room, stitched a screen at a time from the stairs to the gate, as a run's room 1 (the
 // hero at his start, no wave, no vignette); then in play: its first wave risen round the hero, the next part's, the
-// portcullis raised; in the cloister, the hero burning in the Dawn and sheltering in the shade. Then the frame rate of
+// portcullis raised; in the cloister, the hero in the Dawn, the danger building until it burns him. Then the frame rate of
 // each, the torture room's and the refuge's (light shader on). Writes <out>/<room>-<what>.png.
 // Usage: node tools/art/rooms.shots.mjs [--out=shots/rooms --port=5210 --only=hall,cloister]   (exit code 1 on a page error)
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -95,7 +95,7 @@ for (const id of only) {
     await run(() => { const s = window.game.scene.getScene('room'); s.cameras.main.centerOn(s.hero.x, s.hero.y); });
     await shot(`${id}-wave2`);
   }
-  if (id === 'cloister') { // the Dawn: standing in it, the danger building; then in the shade
+  if (id === 'cloister') { // the Dawn: standing in it, the danger building until it burns; then safe in the shade
     const sun = await run(() => {
       const s = window.game.scene.getScene('room');
       for (let y = 600; y < 740; y += 4) for (let x = 120; x < 360; x += 4) if (s.room.holy(x, y) && s.room.holy(x, y + 8) && !s.room.holy(x, y + 40)) return { x, y };
@@ -105,8 +105,15 @@ for (const id of only) {
     else {
       await run(({ x, y }) => { const s = window.game.scene.getScene('room'); s.enemies.clear(true, true); s.time.removeAllEvents(); s.invulnUntil = 0; s.health = 99; s.litMs = 0; }, sun);
       await put(sun.x, sun.y - 8);
-      await page.waitForFunction(() => window.game.scene.getScene('room').litMs > 3200, null, { timeout: 8000 }).catch(() => errors.push('cloister: the Dawn does not burn'));
-      await shot('cloister-dawn');
+      await page.waitForFunction(() => window.game.scene.getScene('room').litMs > 1800, null, { timeout: 8000 }).catch(() => errors.push('cloister: the Dawn does not burn'));
+      await shot('cloister-dawn'); // the danger building, 1.8 s into its 2.5 s grace
+      const h0 = await run(() => window.game.scene.getScene('room').health);
+      await page.waitForFunction((h0) => window.game.scene.getScene('room').health < h0, h0, { timeout: 8000 }).catch(() => errors.push('cloister: the Dawn does not burn'));
+      const start = await run(() => window.game.scene.getScene('room').room.heroStart);
+      await put(start.x, start.y);
+      await page.waitForTimeout(600);
+      if (await run(() => window.game.scene.getScene('room').litMs) > 0) errors.push('cloister: the shade of the south walk burns');
+      await shot('cloister-shade');
     }
   }
   // The room cleared: the portcullis raised, the hero walking up to it.

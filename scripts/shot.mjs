@@ -407,7 +407,7 @@ if (layouts.at(-1) === 'cloister') {
   if (await page.evaluate(({ x, y }) => {
     const s = window.game.scene.getScene('room');
     s.hero.body.reset(x, y);
-    s.cameras.main.setScroll(0, y - 135);
+    s.cameras.main.stopFollow(); s.cameras.main.centerOn(x, y);
     s.litMs = 0;
     return s.room.holy(x, y + 8);
   }, at)) {
