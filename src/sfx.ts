@@ -239,6 +239,25 @@ export const recipes = {
     voice(o, { src: 'sine', f: 75, f2: 45, gain: 0.45, dur: 0.2, delay: 1.0 });
     voice(o, { src: 'noise', filter: 'bandpass', ff: 1500, q: 3, gain: 0.4, attack: 0.001, dur: 0.06, delay: 1.0 });
   },
+  // A sonneur's bell. As his mallet rises (0), the bronze already hums, swelling (a rim rubbed); struck (1), it tolls:
+  // deep inharmonic partials, a hard clang of the mallet and a long beating drone, the mix's lowest and longest sound.
+  toll(o: Play, strike: number) {
+    if (!strike) return void voice(o, { src: 'sine', f: 147, trem: 6, gain: 0.35, attack: 0.7, dur: 0.95 });
+    for (const [r, gain, dur] of [[1, 0.6, 2.2], [1.19, 0.25, 1.4], [2.0, 0.22, 1.1], [2.74, 0.12, 0.6], [5.2, 0.06, 0.3]]) voice(o, { src: 'sine', f: 73.5 * r, gain, attack: 0.003, dur });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 1800, q: 4, gain: 0.7, attack: 0.001, dur: 0.06 });
+    voice(o, { src: 'sine', f: 74.5, trem: 2, gain: 0.3, attack: 0.05, dur: 2.4 });
+  },
+  // An inquisiteur's censer whirling up for `dur` s: its chain hissing round faster and faster, embers roaring.
+  whirl(o: Play, dur: number) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 500, ff2: 1600, q: 3, trem: 7, gain: 0.7, attack: dur * 0.6, dur });
+    bursts(o, [0, 0.27, 0.5, 0.68, 0.82], { src: 'noise', filter: 'highpass', ff: 3500, gain: 0.25, attack: 0.002, dur: 0.04 });
+  },
+  // A blow turned aside: steel on steel, a bright ring over a dry knock.
+  parry(o: Play) {
+    voice(o, { src: 'noise', filter: 'highpass', ff: 3000, gain: 0.8, attack: 0.001, dur: 0.05 });
+    for (const [f, gain, dur] of [[1870, 0.3, 0.45], [2960, 0.18, 0.3], [4410, 0.1, 0.2]]) voice(o, { src: 'triangle', f, gain, attack: 0.001, dur });
+    voice(o, { src: 'square', f: 220, f2: 180, filter: 'lowpass', ff: 1200, gain: 0.3, attack: 0.001, dur: 0.08 });
+  },
 };
 export type SfxName = keyof typeof recipes;
 

@@ -141,6 +141,47 @@ export const T = {
     firstMs: 800,
     damage: 1,
   },
+  // The Order's Sonneur (« grand pixel » rooms, training only for now): support, deaf, keeps far behind the others. The
+  // tell: he raises his mallet and his bell's rim lights up; then he strikes it and three rings of sound roll out along the
+  // floor, each stunning the hero it passes over (the mist passes through them, and they die out at `reach`). Each
+  // strike quickens the Order's men round him for a while.
+  ringer: {
+    hp: 3,
+    speed: 22,
+    near: 85, far: 115, // keeps the hero between these distances: behind the others
+    raiseMs: 900, // the tell
+    strikeMs: 350, // the mallet on the rim
+    reach: 100, // how far the rings roll on the floor (ground foreshortening undone); he strikes with the hero within `reach - 15`
+    ringSpeed: 140, ringGapMs: 110, ringHalf: 4, // three rings, `ringGapMs` apart; one hits a hero within `ringHalf` of it
+    stunMs: 900, // the hero struck stands dazed: no move, no dash, no blow
+    recoverMs: 500,
+    reloadMs: 3200,
+    firstMs: 1800,
+    damage: 1,
+    haste: 1.5, hasteMs: 4000, hasteRange: 220, // the Order's men within `hasteRange` move this much faster this long
+    light: 4, // his bell's rim in the dark rooms (dark.ts) at the end of the tell, the strike half as much again
+  },
+  // The Order's Inquisiteur (« grand pixel » rooms, training only for now): an elite; parries every claw and shard
+  // coming at his front (he turns only so fast: his back is the way in), and the Order's men near him strike more often.
+  // The tell: his censer starts whirling overhead, his aim locked; then a sweep through the half circle in front of him.
+  // Getting into his back, or out of reach, dodges it.
+  inquisitor: {
+    hp: 6,
+    speed: 30,
+    near: 20, far: 30,
+    turnDeg: 150, // how fast he turns to the hero, degrees a second
+    parryDeg: 90, // the half-angle of the front he parries, from where he faces: his whole front half
+    strikeRange: 32, // he whirls his censer with the hero this close
+    reach: 40, // the sweep, from his feet; the half circle in front of his locked aim
+    whirlMs: 900, // the tell
+    sweepMs: 300,
+    recoverMs: 700,
+    reloadMs: 2200,
+    firstMs: 1500,
+    damage: 1,
+    command: 1.6, commandRange: 160, // the Order's men within `commandRange` of him recover from their attacks this much faster
+    light: 1.6, whirlLight: 3, // his censer's embers in the dark rooms, fanned by the whirl
+  },
 
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
   lantern: {

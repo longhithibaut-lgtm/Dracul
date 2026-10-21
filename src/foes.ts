@@ -8,14 +8,18 @@ import purifierSheet from './purifier.png';
 import priestSheet from './priest.png';
 import houndSheet from './hound.png';
 import penitentSheet from './penitent.png';
+import ringerSheet from './ringer.png';
+import inquisitorSheet from './inquisitor.png';
 
-// How the Order's Purificateur, Prêtre, Chien de chasse and Pénitent look (docs/maquettes/ennemis-planche-1.png): the
+// How the Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur (docs/maquettes/ennemis-planche-1.png) and
+// Inquisiteur (ennemis-planche-2.png) look: the
 // validated sheet's own models rendered offline, already lit, in five views (tools/art/foes.gen.mjs), drawn at half
 // scale like the grand hero (wanderer.ts), so each of their pixels is a screen pixel of the x2 rooms. Gameplay owns the
 // AI state (RoomScene); this file shows it. No mark on the floor announces an attack (docs/decisions.md): only their
-// bodies do (the pilot lit, the monstrance raised, the hound flattened, the scourge cocked), then the attack itself.
+// bodies do (the pilot lit, the monstrance raised, the hound flattened, the scourge cocked, the bell's rim lit, the censer
+// whirled), then the attack itself (the jet, the falling light, the lash, the bell's rings rolling out, the sweep).
 export type Kind = keyof typeof SHEETS;
-export type FoeState = 'chase' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'held' | 'kneel';
+export type FoeState = 'chase' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'held' | 'kneel';
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
 
@@ -31,12 +35,12 @@ const GROUND = ORIGIN / 2;
 const SQ = T.lantern.squash; // the floor seen at an angle
 const STRUCK = 0xff4a3a; // the hit flash: dyed with blood, never white (fx-blood.ts)
 // The states that face the aim locked at their start, and the pose each one holds.
-const LOCKED: FoeState[] = ['ignite', 'fire', 'crouch', 'leap', 'cock', 'lash'];
-const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk' };
-const HEAD: Record<Kind, number> = { purifier: 37, priest: 41, penitent: 38, hound: 0 }; // the blood drop of the weak, over the feet
+const LOCKED: FoeState[] = ['ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep'];
+const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk' };
+const HEAD: Record<Kind, number> = { purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50 }; // the blood drop of the weak, over the feet
 
 export function preload(scene: Scene) {
-  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
+  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
 }
 
 export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: Kind, x: number, y: number): Sprite {
@@ -75,13 +79,19 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
   // His steps follow the floor he covers, so his feet hold it (up the screen the floor is foreshortened).
   const [ax, ay] = s.getData('at'), walked = s.getData('walked') + Math.hypot(s.x - ax, (s.y - ay) / FLOOR);
   s.setData({ at: [s.x, s.y], walked });
-  let f = 'idle' + (Math.floor((now + s.getData('phase')) / 250) % 4); // breathing, the pilot or the monstrance flickering
+  // Quickened by a bell (T.ringer.haste), a man pants, flushed: his breath at twice the pace, a warm throb on him.
+  const haste = (s.getData('hasteUntil') ?? 0) > now;
+  let f = 'idle' + (Math.floor((now + s.getData('phase')) / (haste ? 125 : 250)) % 4); // breathing, the pilot or the monstrance flickering
   if (state === 'fire') f = 'fire' + (Math.floor(now / 70) % 2);
+  else if (state === 'whirl') f = 'whirl' + (Math.floor((t / 110) * (0.6 + (0.8 * t) / T.inquisitor.whirlMs)) % 4); // gathering speed
+  else if (state === 'sweep') f = 'sweep' + Math.min(2, Math.floor((t * 3) / T.inquisitor.sweepMs));
   else if (POSE[state]) f = POSE[state]!;
+  else if (now - (s.getData('parryAt') ?? -1e9) < 300) f = 'parry';
   else if (state !== 'held' && hurt < 200) f = 'hurt'; // struck: he reels back (the blow's knockback carries him)
   else if (state !== 'held' && s.body!.velocity.lengthSq() > 25) f = 'walk' + (Math.floor((walked / S.STRIDE) * S.WALK) % S.WALK);
   s.setFrame(`${VIEW[o]}-${f}`);
   if (hurt < 120 && flash) s.setTint(STRUCK);
+  else if (haste) s.setTint(Phaser.Display.Color.GetColor(255, 236 - 14 * Math.abs(Math.sin(now / 160)), 214 - 26 * Math.abs(Math.sin(now / 160))));
   else s.clearTint();
 
   // The jet leaves the lance and runs along his real aim: its view's frame, turned on the lance from the way it points in
@@ -100,6 +110,7 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
   const g = s.getData('markG') as Phaser.GameObjects.Graphics;
   g.clear();
   if (state === 'smite') smite(g, s.getData('zone'), t / T.priest.smiteMs); // the light itself, falling where he stood
+  if (s.getData('rings')) rings(g, s.getData('rings'), now);
   const head = HEAD[kind]; // room px over the feet; kneeling, 9 less
   if (weak && state !== 'held') mark(g, s.x + (s.flipX ? -1 : 1), s.y + GROUND - head + (state === 'kneel' ? 9 : 0), now + s.getData('phase'), state === 'kneel' ? 1100 : 700);
 }
@@ -113,6 +124,47 @@ function smite(g: Phaser.GameObjects.Graphics, at: { x: number; y: number }, k: 
     const x = at.x + Math.cos(u * 6.283) * w * r * 0.9, y = at.y + Math.sin(u * 6.283) * w * r * 0.9 * SQ - z;
     g.fillStyle(z > 40 ? 0xffe8b0 : 0xfff4d8, Math.min(1, z / 12)).fillRect(Math.round(x), Math.round(y), 1, 2);
   }
+}
+
+/** How far ring `i` (0-2) of a bell's strike struck at `at` has rolled out along the floor by `now` (<= 0: not yet out;
+ *  past T.ringer.reach: died out). */
+export const ringAt = (at: number, now: number, i: number) => (T.ringer.ringSpeed * (now - at - i * T.ringer.ringGapMs)) / 1000;
+
+// The bell's three rings rolling out along the floor from his feet: a wavefront of dust and gold motes, brightest at its
+// crest, fading as it spreads.
+function rings(g: Phaser.GameObjects.Graphics, at: { x: number; y: number; at: number }, now: number) {
+  const R = T.ringer.reach;
+  for (let i = 0; i < 3; i++) {
+    const r = ringAt(at.at, now, i);
+    if (r <= 0 || r > R) continue;
+    const fade = (1 - r / R) ** 0.6 * (1 - i * 0.2), n = Math.max(24, Math.round((2 * Math.PI * r) / 1.4));
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * 2 * Math.PI, h = Math.sin(k * 12.9898 + i * 78.233) * 43758.5453, u = h - Math.floor(h);
+      const rr = r + Math.sin(a * 7 + now / 90) * 0.7; // the crest trembles
+      const x = Math.round(at.x + Math.cos(a) * rr), y = Math.round(at.y + Math.sin(a) * rr * SQ);
+      g.fillStyle(u > 0.75 ? 0xfff4d8 : 0xe8c878, fade * (0.55 + 0.45 * u)).fillRect(x, y, 1, 1);
+      if (u > 0.4) g.fillStyle(0x8a6a30, fade * 0.5).fillRect(Math.round(at.x + Math.cos(a) * (rr - 2)), Math.round(at.y + Math.sin(a) * (rr - 2) * SQ), 1, 1); // dust kicked up behind it
+    }
+  }
+}
+
+/** A blow turned aside at floor point (x, y) coming from `angle`: sparks off his gauntlet, flying back the way it came. */
+export function parry(scene: Scene, x: number, y: number, angle: number) {
+  const g = scene.add.graphics().setDepth(9000), z = 22; // at his chest
+  run(scene, 320, (t) => {
+    g.clear();
+    const k = t / 0.32, e = 1 - (1 - k) ** 2; // flung out fast, then slowing
+    for (let i = 0; i < 18; i++) {
+      const a = angle + Math.PI + (((i * 0.618) % 1) - 0.5) * 2.4, v = 16 + ((i * 0.382) % 1) * 26, d = v * e;
+      const sx = x + Math.cos(a) * d, sy = y - z + Math.sin(a) * d * SQ + 24 * k * k; // they fall as they fly
+      g.fillStyle(i % 3 ? 0xffd890 : 0xffffff, 1 - k * k).fillRect(Math.round(sx), Math.round(sy), 1, 1)
+        .fillRect(Math.round(sx - Math.cos(a) * 2), Math.round(sy - Math.sin(a) * 2 * SQ), 1, 1); // a streak
+    }
+    if (k < 0.35) { // the flash of steel on steel: a white star at the contact
+      const f = 1 - k / 0.35, r = Math.round(1 + 3 * f);
+      g.fillStyle(0xffffff, f).fillRect(Math.round(x) - r, Math.round(y - z), 2 * r + 1, 1).fillRect(Math.round(x), Math.round(y - z) - r, 1, 2 * r + 1).fillRect(Math.round(x) - 1, Math.round(y - z) - 1, 3, 3);
+    }
+  }, () => g.destroy());
 }
 
 export function die(scene: Scene, s: Sprite) {

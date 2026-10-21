@@ -1,13 +1,15 @@
-// The Order's Purificateur, Prêtre, Chien de chasse and Pénitent for the « grand pixel » rooms (docs/decisions.md): the validated enemy sheet's own
-// 3D models (tools/art/maquettes/ennemis/foes.mjs, docs/maquettes/ennemis-planche-1.png) posed per frame and rendered
-// with its lights (the cold rim from behind, the warm fill, the vampire's lantern off-frame, their own pilot light and
-// monstrance) and its post (snapped onto its palette, tarnished gold included). One model unit is one pixel at
+// The Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur and Inquisiteur for the « grand pixel » rooms
+// (docs/decisions.md): the validated enemy sheets' own 3D models (tools/art/maquettes/ennemis/foes.mjs,
+// docs/maquettes/ennemis-planche-1.png and -2.png) posed per frame and rendered with their lights (the cold rim from
+// behind, the warm fill, the vampire's lantern off-frame, their own pilot light, monstrance, bell rim and censer) and its post (snapped onto its palette, tarnished gold included). One model unit is one pixel at
 // 960x540, like the grand hero (tools/art/grand-hero.gen.mjs): the game draws the sheets at half scale on the x2 view.
 // Five views (facing right, down-right, down, up-right, up: the game mirrors them for the left), each: idle (breathing,
 // the pilot light or the monstrance flickering), the walk (a stride the game turns by the distance walked), the
-// tell (ignite / pray / the hound flattened / the scourge cocked), the attack (the hound's leap, the lash), the jet of fire (two flickers; the body and the jet apart, so the game can turn the jet to
-// its real aim), the recoil of a hit, kneeling (the idle sunk to the knees, cut at the floor); one bloodied corpse.
-// Writes src/purifier.png, src/priest.png, src/hound.png, src/penitent.png and src/foes.data.ts.
+// tell (ignite / pray / the hound flattened / the scourge cocked / the mallet raised / the censer whirling), the attack
+// (the hound's leap, the lash, the bell struck, the censer's sweep), the jet of fire (two flickers; the body and the jet
+// apart, so the game can turn the jet to its real aim), the Inquisiteur's parry, the recoil of a hit, kneeling (the idle
+// sunk to the knees, cut at the floor); one bloodied corpse.
+// Writes src/<id>.png for each (purifier, priest, hound, penitent, ringer, inquisitor) and src/foes.data.ts.
 // Usage: node tools/art/foes.gen.mjs (~30 s on 4 cores); ONLY=priest renders one of them to
 // shots/priest-preview.png (x2, on grey) instead, to try a pose.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
@@ -15,7 +17,7 @@ import { writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { camera, render, post, haze, project, L, mix, vn3 } from './maquettes/ennemis/lib.mjs';
 import { writePNG } from './grand/lib.mjs'; // keeps the alpha channel
-import { purificateur, pretre, chien, penitent } from './maquettes/ennemis/foes.mjs';
+import { purificateur, pretre, chien, penitent, sonneur, inquisiteur } from './maquettes/ennemis/foes.mjs';
 import { place } from './maquettes/ennemis/fx.mjs';
 import { std } from './maquettes/ennemis/cast.mjs';
 
@@ -35,12 +37,13 @@ function knee(H, A, L1 = 22.3, L2 = 23.2) {
 // The walk's legs, frame k of n: each ankle swings STEP ahead and behind, lifted on its way forward. A foot is planted
 // half the cycle while the body passes over it, so a cycle walks 4 STEP model units: 2 STEP room px (a foe's STRIDE).
 const STEP = 9;
-function legs(k, n) {
+// Another build: its hips `H` (Hr, Hl), thigh and shin `L`, feet `w` apart from the middle, steps `step` long.
+function legs(k, n, { H = std, L = [22.3, 23.2], w = 4, step = STEP } = {}) {
   const o = {};
   for (const [s, x, ph] of [['r', -1, 0], ['l', 1, Math.PI]]) {
     const a = (2 * Math.PI * k) / n + ph, f = Math.cos(a), lift = 5 * Math.max(0, -Math.sin(a)); // lifted while f grows: forward
-    const H = std[`H${s}`], A = [x * 4, -0.5 + STEP * f, 4 + lift];
-    Object.assign(o, { [`K${s}`]: knee(H, A), [`A${s}`]: A, [`T${s}`]: [x * 4.4, A[1] + 6.4, Math.max(1, A[2] - 3 + lift * 0.4)] });
+    const A = [x * w, -0.5 + step * f, 4 + lift];
+    Object.assign(o, { [`K${s}`]: knee(H[`H${s}`], A, ...L), [`A${s}`]: A, [`T${s}`]: [x * (w + 0.4), A[1] + 6.4, Math.max(1, A[2] - 3 + lift * 0.4)] });
   }
   return o;
 }
@@ -65,6 +68,9 @@ function sway(m, d) {
 // The card's lance points up and across; the game's jet runs along the floor cone it burns: level and straight ahead.
 const AIM = { Er: [-9, 9, 58], Wr: [-1, 18.5, 58.5], Hr_: [0, 21, 58.8] };
 const BREATH = [0, 0.5, 1, 0.5], FLAME = [1, 1.4, 0.8, 1.2], GLOW = [1, 1.15, 1.3, 1.1];
+// The Sonneur's short fat legs; the Inquisiteur's, a twentieth taller than the standard (his model's).
+const RINGER = { H: { Hr: [-5.5, 0, 42], Hl: [5.5, 0, 42] }, L: [20.3, 18.7], w: 6.5, step: 7 };
+const INQ = { H: { Hr: [-3.6, 0, 51.45], Hl: [3.6, 0, 51.45] }, L: [23.4, 24.4] };
 
 // Each foe: its sheet cell (FW x FH, soles on row SOLE, centred); its walk (WALK frames a cycle of 4 STEP model units);
 // its frames: [name,
@@ -117,6 +123,33 @@ const FOES = {
       ['hurt', () => penitent('idle', 2, (J) => lean(J, -0.2))],
     ],
     corpse: () => lying(penitent('idle'), true), // face down under his cross
+  },
+  // Squat and fat under his yoke, short heavy steps; the tell: the mallet raised, the bell's rim lit; the strike: the
+  // mallet on the rim, the bell ringing out.
+  ringer: {
+    FW: 200, FH: 190, SOLE: 150, WALK: 4, STEP: 7,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => sonneur('idle', (J) => breathe(J, b))]),
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => sway(sonneur('idle', legs(k, 4, RINGER)), -1.2 * Math.sin((Math.PI * k) / 2)), { bob: -1 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ['tele', () => sonneur('atk')], ['atk', () => sonneur('strike')],
+      ['hurt', () => sonneur('idle', (J) => lean(J, -0.18))],
+    ],
+    corpse: () => lying(sonneur('idle'), true), // face down, the bell on his back
+  },
+  // The tell: the censer whirled overhead (four turns of it); the sweep round his front in three, its trail of embers;
+  // the parry: his forearm up before his face.
+  inquisitor: {
+    FW: 230, FH: 180, SOLE: 140, WALK: 4, STEP,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => inquisiteur('idle', (J) => ({ ...breathe(J, b), glow: GLOW[k] }))]),
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => sway(inquisiteur('idle', legs(k, 4, INQ)), -1.6 * Math.sin((Math.PI * k) / 2)), { bob: -0.8 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ...[0, 1, 2, 3].map((k) => [`whirl${k}`, () => inquisiteur('atk', { whirl: (Math.PI * k) / 2, glow: 1.4 })]),
+      ...[0, 1, 2].map((k) => [`sweep${k}`, () => inquisiteur('sweep', { sweep: 0.2 + 0.35 * k })]),
+      ['parry', () => inquisiteur('parry')],
+      ['hurt', () => inquisiteur('idle', (J) => lean(J, -0.16))],
+    ],
+    // On his back, arms fallen open, the censer by his hand.
+    corpse: () => lying(inquisiteur('idle', { Er: [-12, 1, 64], Wr: [-17, 3, 50], Hr_: [-18, 4, 45], El: [12, 1, 64], Wl: [17, 3, 50], Hl_: [18, 4, 45] }), false),
   },
 };
 // Lying on the floor, head to the right (model up <- world x), on his back (model forward <- up) or face down, slumped
@@ -206,12 +239,11 @@ if (isMainThread) {
     console.log(`src/${id}.png ${W}x${H}, ${cells.length} cells`);
   }
   if (!ONLY) writeFileSync('src/foes.data.ts', `// Generated by tools/art/foes.gen.mjs: edit the models there (and in tools/art/maquettes/ennemis/foes.mjs), not this table.
-// The foes' sheets (src/purifier.png, priest.png, hound.png, penitent.png): FW x FH cells, COLS per row, soles on row
-// SOLE, centred; WALK frames a walk cycle, which covers STRIDE room px of floor (screen rows / ${cam.s.toFixed(4)}); each frame's
+// The foes' sheets (src/<kind>.png): FW x FH cells, COLS per row, soles on row SOLE, centred; WALK frames a walk cycle, which covers STRIDE room px of floor (screen rows / ${cam.s.toFixed(4)}); each frame's
 // cell and where its own light is (sheet px: the pilot light, the monstrance; for the jet, its pivot on the lance).
 export const FLOOR = ${cam.s.toFixed(4)}; // how much the sheets' floor is foreshortened up the screen
 export type Sheet = { FW: number; FH: number; COLS: number; SOLE: number; WALK: number; STRIDE: number; FRAMES: Record<string, { cell: number; lamp: [number, number] }> };
-export const SHEETS: Record<'purifier' | 'priest' | 'hound' | 'penitent', Sheet> = ${JSON.stringify(data)};
+export const SHEETS: Record<'purifier' | 'priest' | 'hound' | 'penitent' | 'ringer' | 'inquisitor', Sheet> = ${JSON.stringify(data)};
 `);
   console.log(`${((Date.now() - t0) / 1000).toFixed(1)} s`);
 } else {

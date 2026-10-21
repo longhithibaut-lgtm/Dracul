@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 // How the hero looks. Gameplay calls create() once and show() every frame; everything visual lives here.
-export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; invulnerable: boolean; facing: number };
+export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; dazed?: boolean; invulnerable: boolean; facing: number };
 
 // Palette "Nuit de sang" (docs/art.md), one char per colour. In a grid '.' leaves the pixel below, ',' erases it;
 // x is the translucent ground shadow.
@@ -647,7 +647,7 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
   else if (look.biting && (view === 'side' || has('bite-0'))) frame = step('bite', st.biteAt, [0, 70], 'bite'); // 70: T.bite.lungeMs
   else if (look.casting) frame = step('cast', st.castAt, [0, 60, 140], 'cast');
-  else if (look.hurt && has('hurt-0')) frame = step('hurt', st.hurtAt, [0, 60], '');
+  else if ((look.hurt || look.dazed) && has('hurt-0')) frame = step('hurt', st.hurtAt, [0, 60], ''); // dazed by a bell: he reels on
   // The arm rakes the way the arc goes: fx.ts sweeps combo 1 back the other way; a sprite mirrored to face left mirrors it.
   else if (look.slashing && has(`claw${look.combo}-0`)) frame = step(`claw${look.combo < 2 && view === 'side' && c < 0 ? 1 - look.combo : look.combo}`, st.slashAt, CLAW, '');
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${Number(look.combo === 1) ^ Number(view === 'side' && c < 0)}`;

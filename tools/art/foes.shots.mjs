@@ -1,9 +1,12 @@
-// The Order's foes of the « grand pixel » rooms (src/foes.ts: Purificateur, Prêtre, Chien de chasse, Pénitent) in the
+// The Order's foes of the « grand pixel » rooms (src/foes.ts: Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur,
+// Inquisiteur) in the
 // torture room, in headless Chromium at 1920x1080 (the PC target), called in from the training room: each idle, giving
 // its tell and attacking (crops round them, x2 of the screen's pixels kept), walking and struck, weakened, killed, full
 // frames of them; the bot playing each attack (the crossbowman's too), standing still (it must land) and stepping out
 // REACT ms after the tell starts, at the hero's speed (it must miss): nothing on the floor tells it, the bot only knows
-// the state, as a player knows the pose; and the frame rate empty, with the hound pack and six pénitents fighting.
+// the state, as a player knows the pose (the Sonneur's rings also misted through as they come, the Inquisiteur's sweep
+// dodged by slipping into his back, whose claws land where his front parries them); and the frame rate empty, with the
+// hound pack, six pénitents, a Sonneur and an Inquisiteur fighting.
 // Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=torture]
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -38,9 +41,10 @@ const fps = async () => {
 const count = () => run(() => window.game.scene.getScene('room').enemies.getChildren().filter((e) => e.body?.enable).length);
 const empty = await fps();
 
-// The hound pack and a wave of six pénitents, called in by their buttons, fighting the (invincible) hero.
-await run(() => { for (const s of ['hounds', 'penitents']) document.querySelector(`[data-spawn="${s}"]`).click(); });
-await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().length === 9);
+// The hound pack, a wave of six pénitents, a Sonneur and an Inquisiteur, called in by their buttons, fighting the
+// (invincible) hero.
+await run(() => { for (const s of ['hounds', 'penitents', 'ringer', 'inquisitor']) document.querySelector(`[data-spawn="${s}"]`).click(); });
+await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().length === 11);
 const crowd = await fps();
 await page.screenshot({ path: `${out}/foes-crowd-live.png` });
 
@@ -152,40 +156,135 @@ await step(1500);
 await page.screenshot({ path: `${out}/foes-dead.png` });
 await clear();
 
+// The Sonneur: his tell and his rings, walking, struck, weakened; a pénitent beside him, quickened by his bell. The
+// Inquisiteur: whirling, sweeping, parrying a claw at his front, struck in the back, walking, weakened. Then both dead.
+await hero(240, 330);
+await call([['ringer', 170, 300], ['inquisitor', 300, 330], ['penitent', 200, 345]]);
+await still();
+await page.screenshot({ path: `${out}/foes-room2.png` });
+await crop('ringer', 'ringer-idle', 420, 440);
+await crop('inquisitor', 'inquisitor-idle', 420, 440);
+await hero(240, 250);
+for (const k of [0, 1, 2]) { await step(110); await crop('ringer', `ringer-walk${k}`, 420, 440); await crop('inquisitor', `inquisitor-walk${k}`, 420, 440); }
+await hold();
+await hero(240, 330);
+await still();
+await set('ringer', { readyAt: 0, state: 'chase', until: 0 });
+await step(600);
+await crop('ringer', 'ringer-tell', 520, 460);
+await step(500);
+await crop('ringer', 'ringer-attack', 760, 520, -5);
+await step(250);
+await page.screenshot({ path: `${out}/foes-ringer-rings-full.png` });
+await set('penitent', { state: 'chase', until: 0 });
+await hero(240, 230); // the pénitent walks after him, quickened
+await step(200);
+await crop('penitent', 'ringer-haste', 420, 440);
+await hold();
+await step(1200);
+at = await run(`(() => { const e = ${foe('inquisitor')}; return { x: e.x, y: e.y }; })()`);
+await hero(at.x - 24, at.y + 4);
+await still();
+await set('inquisitor', { readyAt: 0, state: 'chase', until: 0, facing: Math.PI });
+await step(500);
+await crop('inquisitor', 'inquisitor-tell', 560, 460);
+await step(480);
+await crop('inquisitor', 'inquisitor-attack', 560, 460);
+await hold();
+await step(1000);
+// Struck from the front (where he faces): parried; from behind: it lands.
+const hpOf = (kind) => run(`${foe(kind)}.getData('hp')`);
+const strike = async (dx, angle) => {
+  await run(`(() => { const s = ${S}, e = ${foe('inquisitor')}; e.setVelocity(0); s.hero.body.reset(e.body.center.x + ${dx}, e.body.center.y); })()`);
+  await step(16); // the bodies settle where they were put
+  await run(`(() => { const s = ${S}; ${foe('inquisitor')}.setData({ facing: Math.PI, state: 'chase', until: 0, stunnedUntil: 0 }); s.slashReadyAt = 0; s.slash(${angle}); })()`);
+};
+const hp0 = await hpOf('inquisitor');
+await strike(-20, 0);
+await step(80); // the sparks at their brightest
+await crop('inquisitor', 'inquisitor-parry', 520, 440);
+const hpFront = await hpOf('inquisitor');
+await step(400);
+await strike(20, Math.PI);
+await step(60);
+await crop('inquisitor', 'inquisitor-hurt', 520, 440);
+const hpBack = await hpOf('inquisitor');
+const parry = { 'Inquisiteur, griffes de face': hp0 - hpFront, 'Inquisiteur, griffes dans le dos': hp0 - hpBack };
+if (hpFront !== hp0 || hpBack >= hp0) errors.push(`parry wrong: ${JSON.stringify(parry)}`);
+console.log('hp lost by the Inquisiteur:', JSON.stringify(parry));
+await step(400);
+await run(`(() => { ${S}.hurtEnemy(${foe('inquisitor')}, ${foe('inquisitor')}.getData('hp') - 1); ${S}.hurtEnemy(${foe('ringer')}, 2); })()`);
+await step(300);
+await crop('inquisitor', 'inquisitor-weak', 420, 440);
+await crop('ringer', 'ringer-weak', 420, 440);
+await step(900);
+await run(`(() => { ${S}.kill(${foe('ringer')}); ${S}.kill(${foe('inquisitor')}); })()`);
+await step(1500);
+await page.screenshot({ path: `${out}/foes-dead2.png` });
+await clear();
+
 // The bot plays each attack, the hero mortal and alone with the foe: standing still, then stepping out REACT ms after
-// the tell starts (holding a key: the hero walks at T.grand.speed).
+// the tell starts (holding a key: the hero walks at T.grand.speed). `then(t)`, if given, is what the bot does at each
+// step from then on (t: ms since the tell started), for a dodge that is more than a walk.
 const REACT = 300;
 await run(() => document.querySelector('[data-opt="god"]').click());
-async function play(kind, dx, dy, key, tell, attack) {
+const R = await run(() => import('/src/tuning.ts').then((m) => ({ ...m.T.ringer, squash: m.T.lantern.squash })));
+async function play(kind, dx, dy, key, tell, attack, then) {
   await clear();
   await hero(240, 330);
   await call([[kind, 240 - dx, 330 - dy]]);
   await still();
-  await run(() => { const s = window.game.scene.getScene('room'); s.health = 5; s.invulnUntil = 0; });
-  await set(kind, { readyAt: 0 });
-  const state = () => run(`${foe(kind)}.getData('state')`);
+  await run(() => { const s = window.game.scene.getScene('room'); s.health = 5; s.invulnUntil = s.dazedUntil = 0; });
+  await set(kind, { readyAt: 0, facing: Math.atan2(dy, dx) });
+  const state = () => run(`${foe(kind)}.getData('state')`), busy = () => run(`!!${foe(kind)}.getData('rings')`); // a bell's rings still rolling
   for (let t = 0; t < 2000 && (await state()) !== tell; t += 16) await step(16);
   await step(REACT);
   if (key) await page.keyboard.down(key);
-  for (let t = 0; t < 2500 && [tell, ...attack].includes(await state()); t += 16) await step(16);
+  for (let t = REACT; t < 4000 && ([tell, ...attack].includes(await state()) || (await busy())); t += 16) { await then?.(t); await step(16); }
   await step(700); // a bolt still in flight
   if (key) await page.keyboard.up(key);
   return 5 - (await run(() => window.game.scene.getScene('room').health));
 }
+const keys = async (down, up = []) => { for (const k of up) await page.keyboard.up(k); for (const k of down) await page.keyboard.down(k); };
+// Misting through the rings: once the first is about to reach him (seen: the attack itself), a dash straight at the Sonneur.
+let misted = false;
+const mist = async () => {
+  const near = await run(`(() => { const g = ${foe('ringer')}.getData('rings'), s = ${S}, c = s.hero.body.center; if (!g) return false;
+    const r = ${R.ringSpeed} * (s.time.now - g.at) / 1000, d = Math.hypot(c.x - g.x, (c.y - g.y) / ${R.squash}); return r > 0 && d - r < 12; })()`);
+  if (!near || misted) return;
+  misted = true;
+  await keys(['a']);
+  await page.keyboard.press('Space');
+  await step(150);
+  await keys([], ['a']);
+};
+// Into the Inquisiteur's back: a dash down past his side, then up behind him, staying within his reach.
+const behind = async (t) => {
+  if (t === REACT) { await keys(['s', 'd']); await page.keyboard.press('Space'); }
+  if (t === REACT + 160) await keys(['w'], ['s']);
+  if (t === REACT + 400) await keys([], ['w', 'd']);
+};
 const fights = {
   'Purificateur, immobile': await play('purifier', 28, 4, null, 'ignite', ['fire']), 'Purificateur, pas de côté': await play('purifier', 28, 4, 's', 'ignite', ['fire']),
   'Prêtre, immobile': await play('priest', -90, 30, null, 'pray', []), 'Prêtre, s\'écarte': await play('priest', -90, 30, 'a', 'pray', []),
   'Arbalétrier, immobile': await play('crossbow', 100, 0, null, 'aim', []), 'Arbalétrier, pas de côté': await play('crossbow', 100, 0, 's', 'aim', []),
   'Chien, immobile': await play('hound', 50, 0, null, 'crouch', ['leap']), 'Chien, pas de côté': await play('hound', 50, 0, 's', 'crouch', ['leap']),
   'Pénitent, immobile': await play('penitent', -24, 0, null, 'cock', ['lash']), 'Pénitent, recule': await play('penitent', -24, 0, 'a', 'cock', ['lash']),
+  'Sonneur, immobile': await play('ringer', 70, 0, null, 'raise', ['toll']), 'Sonneur, s\'éloigne': await play('ringer', 70, 0, 'd', 'raise', ['toll']),
+  'Sonneur, immobile (bis)': await play('ringer', 70, 0, null, 'raise', ['toll']), 'Sonneur, brume à travers les anneaux': await play('ringer', 70, 0, null, 'raise', ['toll'], mist),
+  'Inquisiteur, immobile': await play('inquisitor', -24, 0, null, 'whirl', ['sweep']), 'Inquisiteur, recule': await play('inquisitor', -24, 0, 'a', 'whirl', ['sweep']),
+  'Inquisiteur, immobile (bis)': await play('inquisitor', -24, 0, null, 'whirl', ['sweep']), 'Inquisiteur, dans son dos': await play('inquisitor', -24, 0, null, 'whirl', ['sweep'], behind),
 };
+if (!misted) errors.push('the bot never misted through the rings');
+const back = await run(`(() => { const e = ${foe('inquisitor')}, c = ${S}.hero.body.center; return { dx: Math.round(c.x - e.body.center.x), dy: Math.round(c.y - e.body.center.y), aim: +e.getData('aim').toFixed(2) }; })()`);
+console.log('the hero once behind the Inquisiteur (from his feet, room px; his aim, rad):', JSON.stringify(back));
 await run(() => document.querySelector('[data-opt="god"]').click());
 const names = Object.keys(fights), fair = names.every((n, i) => (i % 2 ? !fights[n] : fights[n] > 0));
 if (!fair) errors.push(`unfair or toothless attacks: ${JSON.stringify(fights)}`);
 console.log('blood lost:', JSON.stringify(fights));
 
 await run(() => window.game.loop.wake());
-console.log(`${layout}: ${empty} fps empty, ${crowd} fps with the hound pack and six pénitents fighting, ${await count()} left`);
+console.log(`${layout}: ${empty} fps empty, ${crowd} fps with the hound pack, six pénitents, a Sonneur and an Inquisiteur fighting, ${await count()} left`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();

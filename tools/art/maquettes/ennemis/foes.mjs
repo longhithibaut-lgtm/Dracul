@@ -306,14 +306,19 @@ export function purificateur(pose = 'idle', over = {}) {
 }
 
 // ======================= 5. SONNEUR (new) =======================
-export function sonneur(pose = 'idle') {
-  const atk = pose === 'atk'; const J = clone(std); const b = B(); const { rc, el, tor } = b;
+// pose: 'idle', 'atk' (the game's tell: the mallet raised, the bell's rim lit), 'strike' (the game's attack: the mallet on
+// the rim, the bell ringing); over: joints to override, or a function of the joints returning them (the game's sheet,
+// tools/art/foes.gen.mjs, poses its frames with it)
+export function sonneur(pose = 'idle', over = {}) {
+  const atk = pose === 'atk', strike = pose === 'strike'; const J = clone(std); const b = B(); const { rc, el, tor } = b;
   Object.assign(J, {
     head: [0, 7, 79], neck: [0, 4.5, 73], chest: [0, 2, 63], pelvis: [0, 0, 44],
     Sr: [-11.5, 1.5, 70], Er: [-15, 3, 53], Wr: [-14, 7, 39], Hr_: [-13.5, 8.5, 35.5],
     Sl: [11.5, 1.5, 70], El: [15, 2, 53], Wl: [14, 5, 38], Hl_: [13.5, 6, 34.5],
     Hr: [-5.5, 0, 42], Kr: [-7, 3, 22], Ar: [-6.5, -0.5, 4], Tr: [-7, 6, 1.2], Hl: [5.5, 0, 42], Kl: [7, 3, 22], Al: [6.5, -0.5, 4], Tl: [7, 6, 1.2],
-  }, atk ? { Sr: [-11.5, 0, 71], Er: [-18, -2, 84], Wr: [-16, -4, 97], Hr_: [-15, -4.5, 100], head: [-1, 6, 78] } : {});
+  }, atk ? { Sr: [-11.5, 0, 71], Er: [-18, -2, 84], Wr: [-16, -4, 97], Hr_: [-15, -4.5, 100], head: [-1, 6, 78] }
+    : strike ? { Sr: [-11.5, 2, 70], Er: [-19, 4, 63], Wr: [-17.5, 3, 73], Hr_: [-17, 2.5, 76], head: [0.5, 7.5, 78.5] } : {});
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   humanoid(J, b, { thin: 1.45, torsoM: 4, pelvisM: 4, legM: 4 });
   el(add(J.chest, [0, 2, -9]), [11, 9.5, 12], 4, 3); // gut
   // head bound with bloody rags over the ears (he is deaf)
@@ -328,9 +333,9 @@ export function sonneur(pose = 'idle') {
   b.rev(0, by, bz0, bz1, t => { const u = 1 - t; return 7.5 + 5.5 * u * u + 4 * Math.pow(u, 8) + (t > 0.92 ? -45 * (t - 0.92) : 0); }, 8, 0.5);
   tor([0, by, bz0 + 1.2], [0, 0, 1], 15.8, 1.3, 8, 0.6);
   rc([0, by, bz0 + 3], [0, by, bz0 - 4], 1.1, 2.0, 9); // clapper
-  // mallet
-  const md = atk ? nz([0.3, -0.5, 1]) : [0, 0.25, -1];
-  const m1 = add(J.Hr_, sc(md, atk ? 18 : 30)), m0 = add(J.Hr_, sc(md, -4));
+  // mallet (struck: its head against the rim, on his right)
+  const md = strike ? nz(sub([-19.3, by + 5.7, bz0 + 2], J.Hr_)) : atk ? nz([0.3, -0.5, 1]) : [0, 0.25, -1];
+  const m1 = add(J.Hr_, sc(md, atk || strike ? 18 : 30)), m0 = add(J.Hr_, sc(md, -4));
   rc(m0, m1, 0.9, 0.9, 6);
   const mx = nz([md[1] || 0.0, -md[0] + 1, 0]);
   rc(add(m1, sc(mx, -5)), add(m1, sc(mx, 5)), 3.4, 3.4, 9, 0.3);
@@ -345,7 +350,7 @@ export function sonneur(pose = 'idle') {
         let c = mix(K.bronze, K.verd, clamp(vn3(x * 0.25, y * 0.25, z * 0.12, 5) * 1.8 - 0.75) * 0.7);
         const rim = z < bz0 + 4; if (rim) c = mix(c, K.goldL, 0.45);
         const dz2 = z - (bz0 + 18); if (y > by + 4 && Math.hypot(x, dz2) < 4.5 && (Math.hypot(x, dz2) < 2 || Math.cos(Math.atan2(dz2, x) * 8) > 0.6)) c = K.goldL;
-        const hot = atk && rim ? glow(HOLY, 0.45) : null; if (hot) return { ...hot, alb: c, spec: 0.9, gloss: 40 };
+        const hot = (atk || strike) && rim ? glow(HOLY, strike ? 0.9 : 0.45) : null; if (hot) return { ...hot, alb: c, spec: 0.9, gloss: 40 };
         return { alb: c, spec: 0.8, gloss: 35 }; }
       case 9: return ironM(x, y, z);
     }
@@ -357,6 +362,7 @@ export function sonneur(pose = 'idle') {
     r.fx = [{ k: 'ring', c: [0, 0], r: 22, w: 2.4, col: 'holy' }, { k: 'ring', c: [0, 0], r: 40, w: 1.8, col: 'holy', I: 0.65 }, { k: 'ring', c: [0, 0], r: 57, w: 1.4, col: 'holy', I: 0.35 }];
     r.lights = [{ p: [0, by + 16, bz0 + 4], c: L('#e8c878'), I: 2.5, r0: 24, R: 120, haze: 0.05, hazeR: 7, noShadow: true }];
   }
+  if (strike) r.lights = [{ p: [0, by + 16, bz0 + 2], c: L('#e8c878'), I: 4.5, r0: 30, R: 160, haze: 0.06, hazeR: 9, noShadow: true }];
   return r;
 }
 
@@ -499,13 +505,27 @@ export function amas(pose = 'idle', seed = 13) {
 }
 
 // ======================= 9. INQUISITEUR (lore) =======================
-export function inquisiteur(pose = 'idle') {
-  const atk = pose === 'atk'; const J = clone(std); const b = B(); const { rc, el, tor } = b;
+// pose: 'idle', 'atk' (the game's tell: the censer whirled overhead), 'sweep' (the game's attack: the censer swung low
+// round his front, from his right to his left), 'parry' (his forearm up before his face); over: joints to override, or a
+// function of the joints returning them (the game's sheet, tools/art/foes.gen.mjs, poses its frames with it); its `whirl`
+// turns the whirling censer about his hand (radians), `sweep` how far round the swing is (0..1), `glow` scales the embers
+export function inquisiteur(pose = 'idle', over = {}) {
+  const sweep = pose === 'sweep', atk = pose === 'atk', parry = pose === 'parry'; const J = clone(std); const b = B(); const { rc, el, tor } = b;
   for (const k in J) J[k][2] *= 1.05;
-  Object.assign(J, atk ? {
+  Object.assign(J, sweep ? {
+    chest: [0, 1.5, 74], head: [0, 2.5, 94], Sr: [-8.5, 2, 82], Sl: [8.5, -0.5, 82], El: [11, -2, 68], Wl: [10, 3, 60], Hl_: [9.5, 4, 58],
+    Kl: [4.4, 8, 28], Al: [4.6, 7, 4], Tl: [5, 13, 1.2], Kr: [-4.4, -5, 28], Ar: [-4.6, -11, 5], Tr: [-5, -6, 1.2],
+  } : parry ? {
+    head: [0, 1.5, 94], Sr: [-8.5, 0.5, 82], Er: [-10, 5, 68], Wr: [-6, 10, 66], Hr_: [-5, 11, 65.5], Sl: [8.5, 1, 82], El: [10, 9, 76], Wl: [3, 12, 88], Hl_: [1.5, 12.5, 91],
+    Kl: [4.4, 6, 28], Al: [4.6, 5, 4], Tl: [5, 11, 1.2], Kr: [-4.4, -4, 28], Ar: [-4.6, -9, 5], Tr: [-5, -4, 1.2],
+  } : atk ? {
     Sr: [-8.5, 0.5, 82], Er: [-15, 0, 92], Wr: [-13, 2, 104], Hr_: [-12, 2.5, 107], Sl: [8.5, 0.5, 82], El: [11, 5, 67], Wl: [7, 12, 62], Hl_: [6, 14, 62],
     Kl: [4.4, 8, 28], Al: [4.6, 7, 4], Tl: [5, 13, 1.2], Kr: [-4.4, -5, 28], Ar: [-4.6, -11, 5], Tr: [-5, -6, 1.2],
   } : { Sr: [-8.5, 0, 82], Er: [-10, 1, 64], Wr: [-11, 3, 50], Hr_: [-11.2, 4, 46.5], Sl: [8.5, 0, 82], El: [9.5, 3, 66], Wl: [5, 10, 62], Hl_: [3.5, 11, 62.5] });
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
+  // The swing: the censer at angle `sa` about him (pi: out to his right, pi/2 ahead, 0 his left), his right arm flung after it.
+  const sa = Math.PI * (1 - (J.sweep ?? 0.5)), su = [Math.cos(sa), Math.sin(sa), 0];
+  if (sweep) Object.assign(J, { Er: add([-5, 2, 77], sc(su, 8)), Wr: add([-3, 2, 75], sc(su, 15)), Hr_: add([-3, 2, 75], sc(su, 18)) });
   humanoid(J, b, { thin: 0.95, torsoM: 2, armM: 2, legM: 5, shinM: 6, footM: 6 });
   // long coat with flared skirts, white millstone ruff, capotain hat
   b.rev(0, 0, 16, 78, t => t < 0.5 ? lerp(12.5, 9, t / 0.5) : lerp(9, 8.2, (t - 0.5) / 0.5), 2, 1.2, 0.85, { fold: [8, 0.9] });
@@ -520,10 +540,12 @@ export function inquisiteur(pose = 'idle') {
   // gold chain + sun pendant on the chest
   for (let i = 0; i < 12; i++) { const t = i / 11; el(add(J.chest, [lerp(-5.5, 5.5, t), 6.4, 9 - 9 * Math.sin(t * Math.PI)]), [0.7, 0.7, 0.7], 8); }
   el(add(J.chest, [0, 7, -1.5]), [2.2, 0.6, 2.2], 8);
-  // war censer on a chain: hangs idle, whirls overhead on the attack
-  const hand = J.Hr_; let pts;
-  if (!atk) pts = [...Array(9)].map((_, i) => add(hand, [0.4 * Math.sin(i), 0.6 * i * 0.1, -i * 4.2]));
-  else pts = [...Array(9)].map((_, i) => { const a = -0.6 + i * 0.32; return add(hand, [-Math.cos(a) * i * 3.8 + i * 2.2, -Math.sin(a) * i * 3.8 + i * 1.4, 4 + i * 0.4]); });
+  // war censer on a chain: hangs idle, whirls overhead on the attack (turned by `whirl`), swung out level on the sweep
+  const hand = J.Hr_, wa = J.whirl ?? 0, turn = (p) => [p[0] * Math.cos(wa) - p[1] * Math.sin(wa), p[0] * Math.sin(wa) + p[1] * Math.cos(wa), p[2]]; let pts;
+  if (sweep) pts = [...Array(9)].map((_, i) => add(hand, add(sc(su, i * 3.8), [0, 0, -i * i * 0.1])));
+  else if (parry) pts = [...Array(9)].map((_, i) => add(hand, [0.3 * Math.sin(i), 0.5 + i * 0.2, -i * 3.6]));
+  else if (!atk) pts = [...Array(9)].map((_, i) => add(hand, [0.4 * Math.sin(i), 0.6 * i * 0.1, -i * 4.2]));
+  else pts = [...Array(9)].map((_, i) => { const a = -0.6 + i * 0.32; return add(hand, turn([-Math.cos(a) * i * 3.8 + i * 2.2, -Math.sin(a) * i * 3.8 + i * 1.4, 4 + i * 0.4])); });
   for (let i = 0; i < pts.length - 1; i++) rc(pts[i], pts[i + 1], 0.5, 0.5, 9);
   const cz = pts[pts.length - 1]; el(cz, [3.2, 3.2, 3.8], 9, 0.3); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; const u = [Math.cos(a), Math.sin(a), 0]; rc(add(cz, sc(u, 3)), add(cz, sc(u, 5)), 0.5, 0.1, 9); }
   rc(add(cz, [0, 0, 3]), add(cz, [0, 0, 6]), 0.5, 0.2, 9);
@@ -539,17 +561,24 @@ export function inquisiteur(pose = 'idle') {
       case 5: return { alb: mix(L('#8a8478'), L('#4e4a42'), n), wrap: 0.3 };
       case 6: return { alb: mix(L('#1a1410'), L('#0c0907'), n), spec: 0.4, gloss: 40 };
       case 8: return goldM(x, y, z);
-      case 9: { const d = Math.hypot(...sub([x, y, z], cz)); if (d < 3.6 && Math.abs(Math.sin(z * 2.2)) > 0.8) return glow(HOLY, 1.1); return ironM(x, y, z); }
+      case 9: { const d = Math.hypot(...sub([x, y, z], cz)); if (d < 3.6 && Math.abs(Math.sin(z * 2.2)) > 0.8) return glow(HOLY, 1.1 * (J.glow ?? 1)); return ironM(x, y, z); }
     }
     return { alb: mix(L('#a88e78'), L('#6e5848'), n), sss: 0.4, wrap: 0.3 };
   };
   const r = done(b, mat);
-  r.lights = [{ p: add(cz, [0, 3, 2]), c: L('#e0b060'), I: 1.8, r0: 14, R: 100, pad: 5, haze: 0.04, hazeR: 3 }];
+  r.lights = [{ p: add(cz, [0, 3, 2]), c: L('#e0b060'), I: 1.8 * (J.glow ?? 1), r0: 14, R: 100, pad: 5, haze: 0.04, hazeR: 3 }];
+  if (sweep) {
+    // the swing's trail: embers and smoke the censer leaves round his front, from his right to where it is, brightest behind it
+    const R = Math.hypot(cz[0], cz[1]), zc = cz[2], T0 = (a) => clamp(1 - (a - sa) / 2.2);
+    const trail = (x, y, z) => { const a = Math.atan2(y, x); if (a < sa - 0.08) return 1e3; return Math.hypot(Math.hypot(x, y) - R, (z - zc) * 1.3) - 0.4 - 2.2 * T0(a) + 1.4 * (vn3(x * 0.4, y * 0.4, z * 0.4, 6) - 0.5); };
+    r.vfx = { sdf: trail, mat: (m, x, y, z) => { const k = T0(Math.atan2(y, x)); return glow(mix([0.45, 0.16, 0.05], [1.7, 1.15, 0.5], k * k), 0.2 + 0.8 * k * vn3(x * 0.5, y * 0.5, z * 0.5, 13)); }, bounds: [-R - 6, -6, zc - 7, R + 6, R + 6, zc + 7], step: 0.6 };
+    r.lights = [{ p: add(cz, [0, 0, 3]), c: L('#e0a050'), I: 3.5, r0: 20, R: 140, pad: 6, haze: 0.04, hazeR: 4 }];
+  }
   if (atk) {
     r.fx = [{ k: 'arc', c: [0, 0], a: Math.PI / 2, half: 1.35, r0: 14, r1: 52, col: 'holy' }];
-    // motion smear of the whirling chain
-    const v = B(); v.f((x, y, z) => { const px = x - hand[0], py = y - hand[1], pz = z - hand[2] - 6; const q = Math.hypot(px, py); const a = Math.atan2(py, px); const on = Math.sin(a - 1.2) > -0.35; return on ? Math.hypot(q - 30, pz) - 1.0 : 1e3; }, [hand[0] - 33, hand[1] - 33, hand[2] + 2, hand[0] + 33, hand[1] + 33, hand[2] + 10], 1, 0);
-    r.vfx = { sdf: partsSdf(v.parts), mat: (m, x, y, z) => { const a = Math.atan2(y - hand[1], x - hand[0]); const k = clamp(0.5 + 0.5 * Math.sin(a - 1.2)); return glow([0.9, 0.7, 0.35], 0.15 + 0.6 * k * k); }, bounds: boundsOf(v.parts, 2), step: 0.7 };
+    // motion smear of the whirling chain (turned with it)
+    const v = B(); v.f((x, y, z) => { const px = x - hand[0], py = y - hand[1], pz = z - hand[2] - 6; const q = Math.hypot(px, py); const a = Math.atan2(py, px) - wa; const on = Math.sin(a - 1.2) > -0.35; return on ? Math.hypot(q - 30, pz) - 1.0 : 1e3; }, [hand[0] - 33, hand[1] - 33, hand[2] + 2, hand[0] + 33, hand[1] + 33, hand[2] + 10], 1, 0);
+    r.vfx = { sdf: partsSdf(v.parts), mat: (m, x, y, z) => { const a = Math.atan2(y - hand[1], x - hand[0]) - wa; const k = clamp(0.5 + 0.5 * Math.sin(a - 1.2)); return glow([0.9, 0.7, 0.35], 0.15 + 0.6 * k * k); }, bounds: boundsOf(v.parts, 2), step: 0.7 };
   }
   return r;
 }

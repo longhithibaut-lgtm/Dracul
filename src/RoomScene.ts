@@ -59,6 +59,7 @@ export class RoomScene extends Phaser.Scene {
   private hurtAt = -1e9;
   private shoveUntil = 0; // thrown by a hound's leap: he goes along `shove` until then
   private shove = new Phaser.Math.Vector2();
+  private dazedUntil = 0; // stunned by a bell's ring: no move, no dash, no blow until then
   private dashPressedAt = -1e9;
   private queued?: { act: () => boolean; until: number }; // the input buffer, see press()
   private dead = false;
@@ -96,7 +97,7 @@ export class RoomScene extends Phaser.Scene {
     this.gifts = [...(data.gifts ?? [])];
     this.health = data.health ?? this.maxHealth();
     this.facing = Math.PI / 2; // start facing the camera
-    this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.shotReadyAt = this.shotUntil = this.invulnUntil = this.combo = this.shoveUntil = 0;
+    this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.shotReadyAt = this.shotUntil = this.invulnUntil = this.combo = this.shoveUntil = this.dazedUntil = 0;
     this.lastSlashAt = this.hurtAt = -1e9;
     this.dead = false;
     this.dashPressedAt = -1e9;
@@ -153,9 +154,10 @@ export class RoomScene extends Phaser.Scene {
     // A bolt that lands is spent; one that misses (dash, invulnerability) flies on.
     this.physics.add.overlap(this.hero, this.bolts, (_h, b) => this.damageHero(T.crossbow.damage) && b.destroy());
     this.shards = this.physics.add.group();
-    // The Order's lights: each priest's monstrance (brightening as he prays), each purificateur's pilot while it flares
-    // and burns, then its lanterns. Their bodies' tells, in the dark rooms.
-    const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (e.getData('kind') === 'priest' || ['ignite', 'fire'].includes(e.getData('state'))))
+    // The Order's lights: each priest's monstrance (brightening as he prays), each inquisiteur's censer (fanned as it
+    // whirls), each purificateur's pilot while it flares and burns, each sonneur's bell while its rim glows and rings,
+    // then its lanterns. Their bodies' tells, in the dark rooms.
+    const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (['priest', 'inquisitor'].includes(e.getData('kind')) || ['ignite', 'fire', 'raise', 'toll'].includes(e.getData('state'))))
       .map((e) => ({ ...Foes.lamp(e), lit: true, I: this.glow(e) })), ...this.lanterns];
     if (Dark.skin.dark) Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
@@ -268,13 +270,13 @@ export class RoomScene extends Phaser.Scene {
     if (this.dead || this.phase === 'choose') return;
     const k = this.keys;
     // Climbing in from the stairs or walking out through the gate (down the refuge's stairs), the hero moves on his own.
-    const auto = this.phase === 'enter' || this.phase === 'leave';
-    const x = auto ? 0 : Phaser.Math.Clamp(Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown) + Touch.stick.x, -1, 1);
-    const y = auto ? (this.layout === 'refuge' ? 1 : -1) : Phaser.Math.Clamp(Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown) + Touch.stick.y, -1, 1);
+    const auto = this.phase === 'enter' || this.phase === 'leave', dazed = time < this.dazedUntil;
+    const x = auto || dazed ? 0 : Phaser.Math.Clamp(Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown) + Touch.stick.x, -1, 1);
+    const y = dazed ? 0 : auto ? (this.layout === 'refuge' ? 1 : -1) : Phaser.Math.Clamp(Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown) + Touch.stick.y, -1, 1);
     const posing = time < this.slashUntil || time < this.castUntil;
     if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
-    const wantsDash = time - this.dashPressedAt <= T.hero.bufferMs && !auto; // buffered like the actions, see press()
+    const wantsDash = time - this.dashPressedAt <= T.hero.bufferMs && !auto && !dazed; // buffered like the actions, see press()
     if (wantsDash && time >= this.dashReadyAt && !this.prey) {
       this.dashPressedAt = -1e9;
       if (x || y) this.facing = Math.atan2(y, x); // the way he walks, even mid-swing; else the way he faces
@@ -305,11 +307,11 @@ export class RoomScene extends Phaser.Scene {
       this.hero.body!.velocity.normalize().scale((Dark.skin.dark ? T.grand.speed : T.hero.speed) * (posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
     }
 
-    if (this.queued && (time > this.queued.until || this.queued.act())) this.queued = undefined;
+    if (this.queued && (time > this.queued.until || (!dazed && this.queued.act()))) this.queued = undefined;
     Hero.show(this.hero, {
       moving: (x || y) !== 0, dashing: time < this.dashUntil, slashing: time < this.slashUntil, combo: this.combo, throwing: time < this.shotUntil,
       biting: !!this.prey || time - this.biteAt < 130, casting: time < this.castUntil,
-      hurt: time - this.hurtAt < 120, invulnerable: time < this.invulnUntil, facing: this.facing,
+      hurt: time - this.hurtAt < 120, dazed, invulnerable: time < this.invulnUntil, facing: this.facing,
     });
     // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy;
     // biting, in front of his prey.
@@ -350,8 +352,11 @@ export class RoomScene extends Phaser.Scene {
     Lantern.exposure(this, this.hero, dawn ? this.litMs : 0, T.dawn.graceMs, T.dawn.burnEveryMs);
 
     const held: Sprite[] = []; // bound by the glyph this frame
+    // The inquisiteurs standing (not on their knees) command the Order's men round them.
+    const commanders = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && e.getData('kind') === 'inquisitor' && !this.kneeling(e));
     for (const e of this.enemies.getChildren() as Sprite[]) {
       if (!e.body?.enable) continue;
+      if (e.getData('rings')) this.rollRings(e, time); // rolling on whatever befalls the bell's sonneur
       // La Peste: an infected enemy smokes, then the plague takes its due.
       const sick = e.getData('plagueAt');
       if (sick && time < sick) Rats.plagued(this, e, time);
@@ -379,8 +384,15 @@ export class RoomScene extends Phaser.Scene {
         else if (kind === 'priest') this.stepPriest(e, time);
         else if (kind === 'hound') this.stepHound(e, time);
         else if (kind === 'penitent') this.stepPenitent(e, time);
+        else if (kind === 'ringer') this.stepRinger(e, time);
+        else if (kind === 'inquisitor') this.stepInquisitor(e, time, delta);
         else this.stepEnemy(e, time);
+        // Quickened by a sonneur's bell: faster on its feet (its walk, set afresh each frame it closes in or keeps its distance).
+        if (e.getData('state') === 'chase' && time < (e.getData('hasteUntil') ?? 0)) e.body!.velocity.scale(T.ringer.haste);
       }
+      // Commanded: its wait between attacks runs out faster.
+      if (this.order(e) && e.getData('readyAt') > time && commanders.some((c) => c !== e && Phaser.Math.Distance.BetweenPoints(c, e) < T.inquisitor.commandRange))
+        e.setData('readyAt', e.getData('readyAt') - delta * (T.inquisitor.command - 1));
       if (Foes.isFoe(kind)) Foes.show(e, kneeling ? 'kneel' : e.getData('state'), time < e.getData('flashUntil'), e.getData('human') && e.getData('hp') <= T.bite.weakAt);
       else if (bow) Crossbow.show(e, kneeling ? 'kneel' : e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), e.getData('hp') <= T.bite.weakAt);
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
@@ -556,10 +568,14 @@ export class RoomScene extends Phaser.Scene {
   }
 
   /** How bright an Order light carried by `e` burns (the dark rooms, dark.ts): a monstrance rising through the prayer,
-   *  a pilot flaring through the ignition, half as much again for the jet. */
+   *  a pilot flaring through the ignition, half as much again for the jet; a bell's rim kindling as the mallet rises,
+   *  half as much again as it rings; a censer fanned by its whirl. */
   private glow(e: Sprite) {
-    const now = this.time.now, P = T.purifier, R = T.priest;
+    const now = this.time.now, P = T.purifier, R = T.priest, B = T.ringer, I = T.inquisitor;
+    if (e.getData('kind') === 'inquisitor') return ['whirl', 'sweep'].includes(e.getData('state')) ? I.whirlLight : I.light;
     switch (e.getData('state')) {
+      case 'toll': return B.light * 1.5;
+      case 'raise': return B.light * Phaser.Math.Clamp(1 - (e.getData('fireAt') - now) / B.raiseMs, 0.1, 1);
       case 'fire': return P.pilotLight * 1.5;
       case 'ignite': return P.pilotLight * Phaser.Math.Clamp(1 - (e.getData('fireAt') - now) / P.igniteMs, 0.2, 1);
       case 'pray': return Phaser.Math.Linear(R.light, R.prayLight, Phaser.Math.Clamp(1 - (e.getData('smiteAt') - now) / R.fillMs, 0, 1));
@@ -633,6 +649,88 @@ export class RoomScene extends Phaser.Scene {
     }
     v.limit(P.speed);
     e.setData({ state: 'chase', facing: toHero });
+  }
+
+  // Sonneur: keeps far behind; raises his mallet (his bell's rim kindling), then strikes: three rings roll out along the
+  // floor (rollRings) and the Order's men round him are quickened; recovers, reloads. Deaf, his own bell spares him.
+  private stepRinger(e: Sprite, time: number) {
+    const R = T.ringer, from = e.body!.center, to = this.hero.body!.center;
+    const toHero = Phaser.Math.Angle.BetweenPoints(from, to), dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    switch (e.getData('state')) {
+      case 'raise':
+        if (time < e.getData('fireAt')) return;
+        e.setData({ state: 'toll', until: time + R.strikeMs, readyAt: time + R.reloadMs, rings: { x: from.x, y: from.y, at: time } });
+        for (const o of this.enemies.getChildren() as Sprite[])
+          if (o !== e && o.body?.enable && this.order(o) && Phaser.Math.Distance.BetweenPoints(o, e) < R.hasteRange) o.setData('hasteUntil', time + R.hasteMs);
+        Sfx.play(this, 'toll', 1);
+        return;
+      case 'toll':
+        e.setData({ state: 'recover', until: time + R.recoverMs });
+        return;
+    }
+    const floor = Math.hypot(to.x - from.x, (to.y - from.y) / T.lantern.squash); // the rings roll along the floor
+    if (time >= e.getData('readyAt') && floor <= R.reach - 15 && !e.getData('rings') && this.cameras.main.worldView.contains(from.x, from.y)) {
+      e.setVelocity(0).setData({ state: 'raise', fireAt: time + R.raiseMs, facing: toHero });
+      Sfx.play(this, 'toll', 0);
+      return;
+    }
+    this.keepAt(e, toHero, dist, R.near, R.far, R.speed);
+  }
+
+  /** A sonneur's three rings rolling out from where he struck (Foes.ringAt): each that passes over the hero hurts and dazes
+   *  him, unless he mists through it; gone once they have all died out. */
+  private rollRings(e: Sprite, time: number) {
+    const R = T.ringer, g = e.getData('rings'), c = this.hero.body!.center, d = Math.hypot(c.x - g.x, (c.y - g.y) / T.lantern.squash);
+    if (Foes.ringAt(g.at, time, 2) > R.reach) return void e.setData('rings', undefined);
+    for (let i = 0; i < 3; i++) {
+      const r = Foes.ringAt(g.at, time, i);
+      if (r > 0 && r <= R.reach && Math.abs(r - d) <= R.ringHalf && this.damageHero(R.damage)) this.dazedUntil = time + R.stunMs;
+    }
+  }
+
+  // Inquisiteur: closes in, turning to the hero only so fast (his back is the way in); with him close, whirls his censer
+  // overhead (his aim locked), then sweeps the half circle in front of him; recovers, reloads. He parries (parried()).
+  private stepInquisitor(e: Sprite, time: number, delta: number) {
+    const I = T.inquisitor, from = e.body!.center, to = this.hero.body!.center;
+    const toHero = Phaser.Math.Angle.BetweenPoints(from, to), dist = Phaser.Math.Distance.BetweenPoints(from, to);
+    switch (e.getData('state')) {
+      case 'whirl':
+        if (time < e.getData('fireAt')) return;
+        e.setData({ state: 'sweep', fireUntil: time + I.sweepMs });
+        Sfx.play(this, 'lunge');
+        return;
+      case 'sweep':
+        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, I.reach, 180)) this.damageHero(I.damage);
+        if (time >= e.getData('fireUntil')) e.setData({ state: 'recover', until: time + I.recoverMs, readyAt: time + I.reloadMs });
+        return;
+    }
+    const facing = Phaser.Math.Angle.Wrap(Phaser.Math.Angle.RotateTo(e.getData('facing'), toHero, Phaser.Math.DegToRad(I.turnDeg) * (delta / 1000)));
+    if (time >= e.getData('readyAt') && dist <= I.strikeRange && this.cameras.main.worldView.contains(from.x, from.y)) {
+      // He swings where he faces: a hero slipped round to his side or back is out of it.
+      e.setVelocity(0).setData({ state: 'whirl', fireAt: time + I.whirlMs, facing, aim: aimAt(Math.cos(facing), Math.sin(facing), T.lantern.squash, Foes.DIRS) });
+      Sfx.play(this, 'whirl', I.whirlMs / 1000);
+      return;
+    }
+    this.keepAt(e, toHero, dist, I.near, I.far, I.speed);
+    e.setData('facing', facing);
+  }
+
+  /** One of the Order: its men and hounds (not the ghouls), whom a sonneur quickens and an inquisiteur commands. */
+  private order(e: Sprite) {
+    const kind = e.getData('kind');
+    return kind === 'crossbow' || Foes.isFoe(kind);
+  }
+
+  /** An inquisiteur turns aside a blow coming at his front from floor point `from` (claws, a shard): sparks off his
+   *  gauntlet, a ringing clang, and nothing else: no wound, no flinch. True when he did. */
+  private parried(e: Sprite, from: { x: number; y: number }) {
+    const c = e.body!.center;
+    if (e.getData('kind') !== 'inquisitor' || this.kneeling(e) || e === this.prey || !inArc(c, e.getData('facing'), from, Infinity, 2 * T.inquisitor.parryDeg)) return false;
+    const a = Phaser.Math.Angle.Between(from.x, from.y, c.x, c.y);
+    e.setData('parryAt', this.time.now);
+    Foes.parry(this, c.x - Math.cos(a) * 6, c.y - Math.sin(a) * 6, a);
+    Sfx.play(this, 'parry');
+    return true;
   }
 
   /** A human of the Order keeping between `near` and `far` of the hero, like the crossbowman: closes in, strafes, backs
@@ -709,7 +807,9 @@ export class RoomScene extends Phaser.Scene {
    *  T.hero.bufferMs and fired by update() the moment it can be, so a press a hair early is never lost. */
   private press(act: () => boolean) {
     // Pressed mid-dash, it is kept until the dash is over: a slash then becomes the dash strike.
-    if (!act()) this.queued = { act, until: Math.max(this.time.now, this.dashUntil) + T.hero.bufferMs };
+    // Dazed by a bell, it waits for him to come to.
+    const now = this.time.now;
+    if (now < this.dazedUntil || !act()) this.queued = { act, until: Math.max(now, this.dashUntil, this.dazedUntil) + T.hero.bufferMs };
   }
 
   /** The claws. Swipe, back-swipe, then the finisher (heavier, wider, longer, slower to recover from); a slash pressed
@@ -775,9 +875,11 @@ export class RoomScene extends Phaser.Scene {
    *  each enemy once. */
   private shardHit(b: Phaser.GameObjects.Zone, e: Sprite) {
     if (!b.active || !e.body?.enable || b.getData('hit').includes(e)) return;
-    const { x, y } = b, { angle, plague, pierce, hit } = b.data.values;
-    if (pierce) hit.push(e);
+    const { x, y } = b, { angle, plague, pierce, hit, x0, y0 } = b.data.values;
+    const turned = this.parried(e, { x: x0, y: y0 }); // a parried shard falls
+    if (pierce && !turned) hit.push(e);
     else b.destroy();
+    if (turned) return;
     if (e !== this.prey && !this.kneeling(e)) { // a prey stays held in the bite, a kneeling human down
       e.setData('stunnedUntil', Math.max(e.getData('stunnedUntil'), this.time.now + T.shot.stunMs));
       this.physics.velocityFromRotation(angle, T.shot.knockback, e.body.velocity);
@@ -791,6 +893,11 @@ export class RoomScene extends Phaser.Scene {
   /** A claw lands: `kind` is the slash's (combo step 0-2, 3 the dash strike). */
   private hitEnemy(e: Sprite, angle: number, damage: number, knock: number, kind: number) {
     const now = this.time.now;
+    if (this.parried(e, this.hero.body!.center)) { // his arm jars back
+      this.physics.velocityFromRotation(angle + Math.PI, 110, this.shove);
+      this.shoveUntil = now + 90;
+      return;
+    }
     // A hit interrupts whatever the enemy was doing, including a windup: aggression is rewarded.
     e.setData({ state: 'chase', until: 0, stunnedUntil: now + T.enemy.stunMs });
     if (!this.kneeling(e)) this.physics.velocityFromRotation(angle, knock, e.body!.velocity);
