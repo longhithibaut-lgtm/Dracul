@@ -29,7 +29,7 @@ export function build(scene: Phaser.Scene): Room {
     spawns: D.SPAWNS, // the training room's, in the great hall
     spots: D.SPAWNS,
     medallion: D.START,
-    gate: D.START,
+    exits: [D.START],
     stairs: D.START,
     holy: () => false,
     burn: T.lantern,

@@ -60,7 +60,7 @@ const env = ground(floor({
   pools: [[372, 154, 10, 5], [382, 572, 10, 5], [90, 440, 8, 4], [214, 196, 4, 3], [120, 178, 3, 2], [268, 112, 3, 2], [214, 460, 4, 3], [120, 336, 3, 2], [268, 552, 3, 2]],
   drags: [[[360, 160], [330, 176], [300, 200]], [[368, 566], [330, 540], [300, 520]], [[96, 330], [130, 360], [150, 390]]],
 }));
-const room = shell(HOLES), { S, port, R } = room;
+const room = shell(HOLES), { S, ports, R } = room;
 furnish(room, PROPS.filter((o) => o.kind !== 'fallen'));
 // One pillar fallen whole across the left aisle: its drums lying in a row along x, its plinth's stub left standing.
 for (const o of PROPS.filter((o) => o.kind === 'fallen')) {
@@ -80,5 +80,5 @@ lights(room, PROPS, CANDLES);
 
 const SC = stage(S, env);
 export async function scene() { return SC; }
-export function raise(sc, d) { port.pos[2] = wz(d); }
+export function raise(sc, d) { for (const p of ports) p.pos[2] = wz(d); }
 export const finish = shafts(HOLES);

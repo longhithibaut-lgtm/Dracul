@@ -40,7 +40,7 @@ const env = ground(floor({
   pools: [[350, 230, 12, 6], [66, 246, 14, 6], [350, 316, 11, 5], [70, 592, 13, 6], [134, 400, 8, 4], [204, 506, 4, 3], [282, 572, 3, 3], [126, 452, 4, 3], [360, 446, 3, 3], [196, 128, 4, 3], [112, 172, 5, 3], [286, 196, 3, 2]],
   drags: [[[352, 212], [318, 196], [286, 178]], [[336, 324], [300, 350], [270, 380]], [[110, 380], [150, 420], [196, 470], [220, 506]]],
 }));
-const room = shell(HOLES), { S, port } = room;
+const room = shell(HOLES), { S, ports } = room;
 furnish(room, PROPS);
 // candles in clusters on the floor, a skull or two, bones
 candles(room, CANDLES);
@@ -51,6 +51,6 @@ lights(room, PROPS, CANDLES);
 
 const SC = stage(S, env);
 export async function scene() { return SC; }
-/** The portcullis raised `d` room px up the screen (the game's gate frames). */
-export function raise(sc, d) { port.pos[2] = wz(d); }
+/** The portcullises raised `d` room px up the screen (the game's gate frames). */
+export function raise(sc, d) { for (const p of ports) p.pos[2] = wz(d); }
 export const finish = shafts(HOLES);

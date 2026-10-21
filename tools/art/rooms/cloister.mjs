@@ -30,6 +30,8 @@ const GRAVES = [36, 76, 116, 156, 324, 364, 404, 444].flatMap((x) => [400, 456].
 // cypresses among the graves, a yew and a cypress in the well's garden. Trunk foot, kind, seed.
 const TREES = [[142, 158, 'yew', 40], [367, 236, 'yew', 43], [94, 430, 'yew', 34], [CX - 32, 382, 'cypress', 10], [CX + 32, 500, 'cypress', 21], [84, 616, 'yew', 1], [404, 712, 'cypress', 5]];
 const BURNT = [330, 470]; // a body the Dawn caught in the open, in the graves' garden
+// The church's two doors, the run's exits (room px x): each under a bay of the north arcade, between buttresses.
+const EXITS = [CX - 120, CX + 120];
 
 /** What the game needs (src/cloister.data.ts): gameplay as in src/room.ts LAYOUT.cloister, but for the trees. */
 export const PLAN = {
@@ -44,8 +46,8 @@ export const PLAN = {
   START: { x: CX, y: FY1 - 28 },
   SPAWNS: [{ x: 168, y: 612 }, { x: 348, y: 610 }, { x: 450, y: 690 }, { x: 120, y: 500 }, { x: 360, y: 494 }, { x: CX, y: 466 }, { x: 120, y: 214 }, { x: 406, y: 236 }, { x: CX, y: 240 }],
   SPOTS: [{ x: 132, y: 118 }, { x: 348, y: 118 }, { x: 132, y: 348 }, { x: 348, y: 348 }, { x: 132, y: 578 }, { x: 348, y: 578 }, { x: 108, y: 778 }, { x: 372, y: 778 }],
-  SECTIONS: CROSS.map((c) => c - ARC.d), GIFT: { x: CX, y: 112 }, GATE: { x: CX, y: FY0 }, STAIRS: { x: CX, y: FY1 + 10 },
-  TORCHES: [], GATEBOX: [CX - 36, 0, CX + 36, FY0], GATE_RISE: 48,
+  SECTIONS: CROSS.map((c) => c - ARC.d), GIFT: { x: CX, y: 112 }, EXITS: EXITS.map((x) => ({ x, y: FY0 })), STAIRS: { x: CX, y: FY1 + 10 },
+  TORCHES: [], GATEBOXES: EXITS.map((x) => [x - 36, 0, x + 36, FY0]), GATE_RISE: 48,
   HOLY: true,
 };
 
@@ -149,22 +151,23 @@ function arcade(seed) {
   };
   return { sdf, mat, bounds: [-2, -A.t - 4, 0, W + 2, A.t + 4, A.top + 8], step: 0.75 };
 }
-// ---------- the church's south wall at the back: buttresses, two tall windows dark from outside, the door ----------
+// ---------- the church's south wall at the back: buttresses, two tall windows dark from outside, the two doors ----------
 const DOOR = { hw: 40, z0: 100 };
-const inDoor = (x, z) => { const u = x - wx(CX); return Math.min(DOOR.hw - Math.abs(u), z - 0.5, DOOR.z0 + Math.sqrt(Math.max(0, DOOR.hw * DOOR.hw - u * u)) - z); };
+const doorU = (x) => x - wx(x < wx(CX) ? EXITS[0] : EXITS[1]); // world x from the nearest door's middle
+const inDoor = (x, z) => { const u = doorU(x); return Math.min(DOOR.hw - Math.abs(u), z - 0.5, DOOR.z0 + Math.sqrt(Math.max(0, DOOR.hw * DOOR.hw - u * u)) - z); };
 function churchSdf(x, y, z) {
   let d = sdBox(x, y, z, W / 2, YW - 100, 220, W / 2 + 60, 100, 220);
   for (const c of [CX - 76, CX + 76, CX - 172, CX + 172]) d = Math.min(d, sdBox(x, y, z, wx(c), YW, 220, 12, 10, 220, 1)); // buttresses
-  if (Math.abs(x - wx(CX)) < DOOR.hw + 4) d = Math.max(d, Math.min(inDoor(x, z), y - YW + 150)); // the door, into the dark nave
+  if (Math.abs(doorU(x)) < DOOR.hw + 4) d = Math.max(d, Math.min(inDoor(x, z), y - YW + 150)); // the doors, into the dark nave
   return Math.min(d, Math.max(sdBox(x, y, z, W / 2, (wy(FY1) + wy(RH + 6)) / 2, 7, W / 2 + 4, (wy(RH + 6) - wy(FY1)) / 2, 7, 1), 44 - Math.abs(x - wx(CX)))); // the front wall, the stairs' gap
   return d;
 }
 function churchMat(m, x, y, z, nx, ny, nz) {
-  const u = x - wx(CX);
+  const u = doorU(x);
   if (y > YW + 20) return { alb: mul(K.limeD, 0.7 * (nz > 0.6 ? 1 : 0.6)), spec: 0.03 }; // the front wall
   if (Math.abs(u) < DOOR.hw + 1 && y < YW - 2) return { alb: mul(L('#2a241c'), 0.6), ao: 0.5 }; // inside
   let r = ashlar(x, z, 20, 48, 9), c = mix(r.c, K.limeD, 0.35);
-  for (const w of [CX - 124, CX + 124]) { const v = x - wx(w); if (Math.abs(v) < 16 && z > 60 && z < 150 + Math.sqrt(Math.max(0, 256 - v * v))) c = Math.abs(v) < 12 && z < 150 + Math.sqrt(Math.max(0, 144 - v * v)) ? mul(L('#0e0c0a'), 1 + 0.6 * ((x + z) % 6 < 1 ? 1 : 0)) : mul(K.lime, 0.9); } // tall windows
+  for (const w of [CX - 36, CX + 36]) { const v = x - wx(w); if (Math.abs(v) < 16 && z > 60 && z < 150 + Math.sqrt(Math.max(0, 256 - v * v))) c = Math.abs(v) < 12 && z < 150 + Math.sqrt(Math.max(0, 144 - v * v)) ? mul(L('#0e0c0a'), 1 + 0.6 * ((x + z) % 6 < 1 ? 1 : 0)) : mul(K.lime, 0.9); } // tall windows
   if (Math.abs(u) < DOOR.hw + 12 && inDoor(x, z) > -12 && inDoor(x, z) < 0) c = (Math.floor(Math.atan2(z - DOOR.z0, u) * 5) & 1) ? mix(K.red, K.redD, 0.4) : K.lime; // voussoirs
   c = mix(c, K.soot, clamp((vn3(x * 0.1, 0, z * 0.02, 44) - 0.45) * 2) * 0.6);
   return { alb: c, N: r.N, spec: 0.03, ao: 0.6 + 0.4 * clamp(z / 30) };
@@ -183,7 +186,7 @@ ARCADES.forEach((a, k) => add('arcade', arcade(k), [0, wy(a - ARC.d / 2), 0]));
 const ROOF = 120, shift = [SUN[0] / SUN[2] * ROOF, SUN[1] / SUN[2] * ROOF];
 for (const [a, b] of WALKS) add('roof', { sdf: (x, y, z) => sdBox(x, y, z, W / 2, (wy(a) + wy(b)) / 2, 4, W / 2 + 130, (wy(b) - wy(a)) / 2 + 2, 4), mat: () => ({ alb: K.tile }),
   bounds: [-140, wy(a) - 4, -1, W + 140, wy(b) + 4, 9], step: 0.9 }, [shift[0], shift[1], ROOF], 0, { ghost: true });
-const port = add('portcullis', portcullis(2 * DOOR.hw + 6, DOOR.z0 + DOOR.hw), [wx(CX), YW - 14, 0]);
+const ports = EXITS.map((x) => add('portcullis', portcullis(2 * DOOR.hw + 6, DOOR.z0 + DOOR.hw), [wx(x), YW - 14, 0]));
 add('well', well(), [wx(WELL.x), wy(WELL.y), 0]);
 HEDGES.forEach((b, k) => add('hedge', hedge(2 * b.w, 26, 26, k + 1), [wx(b.x + b.w / 2), wy(b.y + b.h / 2), 0]));
 for (const [x, y, kind, seed] of TREES) add(kind, kind === 'yew' ? yew(seed) : cypress(200, 17, seed), [wx(x), wy(y), 0], h2(seed, 1, 3) * 6);
@@ -196,11 +199,11 @@ const FAR = 1e5, SUNC = L('#fbf4bc');
 light({ name: 'sun', mask: true, p: [W / 2 + SUN[0] * FAR, wy(RH / 2) + SUN[1] * FAR, SUN[2] * FAR], c: SUNC, I: 3.6, r0: 1e9, R: 1e12, soft: 150, pad: 10 });
 light({ name: 'rim', p: [140, -200, 160], c: L('#9aa8b4'), I: 2.0, r0: 400, R: 1600, soft: 10, only: ['well', 'grave', 'burnt'] });
 light({ name: 'bounce', p: [W / 2, wy(RH / 2), 14], c: L('#c8b48a'), I: 0.9, r0: 600, R: 2400, soft: 2, noShadow: true, only: ['arcade', 'church', 'hedge', 'well', 'yew', 'cypress', 'grave'] });
-light({ p: [wx(CX), YW - 110, 40], c: L('#d89048'), I: 1.4, r0: 30, R: 160, soft: 4 }); // the church's candles, beyond the door
+for (const x of EXITS) light({ p: [wx(x), YW - 110, 40], c: L('#d89048'), I: 1.4, r0: 30, R: 160, soft: 4 }); // the church's candles, beyond each door
 
 const SC = { W, H, cam, off: 0, objects, lights: S.lights, env, ambient: L('#41516a').map((v) => v * 0.48) };
 export async function scene() { return SC; }
-export function raise(sc, d) { port.pos[2] = wz(d); }
+export function raise(sc, d) { for (const p of ports) p.pos[2] = wz(d); }
 /** The mockup's veil: light scattered by the dust over the open garth, a little into the shade. */
 export function finish(img) {
   const N = W * H, blur = (src, r) => { const a = new Float32Array(N), b = new Float32Array(N);

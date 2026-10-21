@@ -153,24 +153,44 @@ export function rollRarity(room: number, odds: { rare: readonly number[]; epic: 
 }
 
 /** What a room can hand out (the gift on the medallion): a gift choice (now and then with a pact among it), a pact
- *  choice (pacts, and one gift to refuse them with), or a gift upgrade (held gifts a rarity up). */
-export type Reward = 'gift' | 'pacte' | 'upgrade';
+ *  choice (pacts, and one gift to refuse them with), a gift upgrade (held gifts a rarity up), or blood (no cards). */
+export const REWARDS = ['gift', 'pacte', 'upgrade', 'sang'] as const;
+export type Reward = (typeof REWARDS)[number];
 /** One card of an offer: gift `id` at rarity `rank`; `up`: a held gift raised to it. */
 export type Card<K> = { id: K; rank: number; up?: boolean };
 type Odds = { rarity: { rare: readonly number[]; epic: readonly number[] }; pacts: { chance: number; fromRoom: number } };
 
 /** The cards of reward `kind` in room `room`, for a hero holding `held` at `ranks`; [] when there is nothing to offer.
  *  A gift choice is three gifts, the last a pact `chance` of the time from `fromRoom` on, and needs one gift that is not
- *  a pact. A pact choice is two pacts and a gift. An upgrade is up to three held gifts with a rarity below épique. */
+ *  a pact. A pact choice is two pacts and a gift, from `fromRoom` on. An upgrade is up to three held gifts with a rarity
+ *  below épique. Blood has no cards. */
 export function drawOffer<K extends string>(defs: Gifts<K>, held: readonly K[], ranks: Partial<Record<K, number>>, kind: Reward, room: number, odds: Odds, rnd: () => number): Card<K>[] {
+  if (kind === 'sang') return [];
   if (kind === 'upgrade')
     return drawGifts(held.filter((g) => defs[g].ranked && (ranks[g] ?? 0) < 2), 3, rnd).map((id) => ({ id, rank: (ranks[id] ?? 0) + 1, up: true }));
   const open = offerable(defs, held), gifts = open.filter((g) => !defs[g].pact), pacts = open.filter((g) => defs[g].pact);
   const card = (id: K): Card<K> => ({ id, rank: defs[id].ranked ? rollRarity(room, odds.rarity, rnd) : 0 });
-  if (kind === 'pacte') return pacts.length ? [...drawGifts(pacts, 2, rnd), ...drawGifts(gifts, 1, rnd)].map(card) : [];
+  if (kind === 'pacte') return pacts.length && room >= odds.pacts.fromRoom ? [...drawGifts(pacts, 2, rnd), ...drawGifts(gifts, 1, rnd)].map(card) : [];
   if (!gifts.length) return [];
   const pact = pacts.length && room >= odds.pacts.fromRoom && rnd() < odds.pacts.chance;
   return [...drawGifts(gifts, pact ? 2 : 3, rnd), ...(pact ? drawGifts(pacts, 1, rnd) : [])].map(card);
+}
+
+/** True when reward `kind` has something to hand out in room `room`: blood to a `hurt` hero, cards otherwise. */
+export function offers<K extends string>(defs: Gifts<K>, held: readonly K[], ranks: Partial<Record<K, number>>, kind: Reward, room: number, odds: Odds, hurt: boolean) {
+  return kind === 'sang' ? hurt : drawOffer(defs, held, ranks, kind, room, odds, () => 0).length > 0; // how many cards never depends on the draw
+}
+
+/** The rewards behind a room's `n` exits, like Hades' doors: drawn from the `kinds` the next room can offer by their
+ *  `weights`, all different while there are kinds enough; a gift choice behind each when there is nothing to offer. */
+export function drawDoors(kinds: readonly Reward[], weights: Readonly<Record<Reward, number>>, n: number, rnd: () => number): Reward[] {
+  if (!kinds.length) return Array<Reward>(n).fill('gift');
+  const out: Reward[] = [];
+  for (let left = [...kinds]; out.length < n; left = left.length > 1 ? left.filter((k) => k !== out.at(-1)) : [...kinds]) {
+    let r = rnd() * left.reduce((s, k) => s + weights[k], 0);
+    out.push(left.find((k) => (r -= weights[k]) < 0) ?? left[left.length - 1]);
+  }
+  return out;
 }
 
 /** La Nuée, the Rat house's form of the night, answers a hero holding `need` of its gifts. */

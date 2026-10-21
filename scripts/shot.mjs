@@ -6,13 +6,16 @@
 // light.png (a lit lantern, the hero at the edge of its holy light), crossbow.png (a crossbowman aiming), weak.png (a
 // weakened crossbowman, its heartbeat drop on the beat), bite.png (the hero latched onto it, mid-drain), gifts.png
 // (full frame, the room cleared and three cards dealt: Rat de jet rare replacing Éclats pestilents, Glyphe pestilent
-// épique, hovered, and the pact Vermine), gate.png
-// (the portcullis up), training.png (full frame: the training room, its panel, enemies called in from it), tir.png
+// épique, hovered, and the pact Vermine), doors-hall.png (the top of the crypt: its two portcullises up, the reward
+// behind each hung lit in its arch, a gift choice and blood, the hero come up to the left one, its name shown), then
+// one exit of every kind taken (blood, an upgrade, a pact, a gift choice) and the next room's medallion caught with that
+// reward risen on it, medal-sang.png, medal-upgrade.png, medal-pacte.png, medal-gift.png; training.png (full frame: the training room, its panel, enemies called in from it), tir.png
 // (the hero mid-throw, a plagued shard of blood in flight toward a ghoul) and glyph.png (the glyph cast with E at the
 // pointer, binding two ghouls, the hero beside it), then rooms-hall.png, rooms-nave.png, rooms-ossuary.png,
 // rooms-chapel.png and rooms-cloister.png (each room layout whole, empty, from the gate down to the stairs: they are
 // taller than the screen, so a screen at a time stitched together, without the HUD and the vignette) and dawn.png (the
-// hero standing in the cloister's Eternal Dawn, the danger building before the first burn: smoke, glow, gauge), and
+// hero standing in the cloister's Eternal Dawn, the danger building before the first burn: smoke, glow, gauge),
+// doors-cloister.png (the church's two doors open on an upgrade and a pact, the hero under the north walk), and
 // swarm.png (the hero turned into la Nuée from the training panel, running through two dummies and biting them).
 // The rooms are taller than the screen and the camera follows the hero: crops are given in room coordinates.
 // Exit code 1 if the page logged an error or a capture is missing.
@@ -248,7 +251,24 @@ let bit = null;
 // moved on to the room's last wave and its enemies are killed; then the hero is put on the gift and the cards are
 // dealt (the draw is random): a rare, an épique and a pact, the first replacing a gift held.
 const room = () => page.evaluate(() => { const s = window.game.scene.getScene('room'); return { phase: s.phase, no: s.roomNo, gifts: s.gifts }; });
+// The two exits' rewards are random: `pair` makes them these two kinds (in either order), the next room's canOffer()
+// left alone.
+const rig = (pair) => page.evaluate((pair) => { const s = window.game.scene.getScene('room'); s.canOffer = (k) => pair.includes(k); }, pair);
+const unrig = () => page.evaluate(() => delete window.game.scene.getScene('room').canOffer);
+// Out through the exit announcing `kind`: the hero walks up into it, into the next room.
+const through = async (kind) => {
+  const no = await page.evaluate((kind) => {
+    const s = window.game.scene.getScene('room'), g = s.room.exits[s.doors.indexOf(kind)];
+    s.hero.body.reset(g.x, g.y + 20);
+    return s.roomNo;
+  }, kind);
+  await page.keyboard.down('w');
+  const ok = await page.waitForFunction((no) => { const s = window.game.scene.getScene('room'); return s.roomNo === no + 1 && s.sys.isActive() && s.hero?.body; }, no, { timeout: 8000 }).then(() => true, () => false);
+  await page.keyboard.up('w');
+  return ok;
+};
 let gifts = false, gate = false;
+const medals = [];
 {
   // The bite's kill calls the next wave in: wait for it, then end it as the room's last.
   await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable), null, { timeout: 8000 }).catch(() => {});
@@ -274,17 +294,62 @@ let gifts = false, gate = false;
     await shot('gifts');
     await freeze(false);
     gifts = true;
+    // The two exits open on a gift choice and blood; the hero comes up to the left one, its name shows.
+    await rig(['gift', 'sang']);
     await page.keyboard.press('1');
-    await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.phase === 'exit' && s.time.now > s.gateUpAt + 100; }, null, { timeout: 8000 });
+    await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.phase === 'exit' && s.time.now > s.gateUpAt + 300; }, null, { timeout: 8000 });
+    await unrig();
+    await page.evaluate(() => { const s = window.game.scene.getScene('room'), g = s.room.exits[0]; s.hero.body.reset(g.x + 10, g.y + 34); });
+    await page.waitForTimeout(500); // the camera settles on the top of the room, the name fades in
     await freeze(true);
-    await shot('gate', await clip(240, 38, 400, 300));
+    await shot('doors-hall', { x: 0, y: 0, width: 1920, height: 640 });
     await freeze(false);
     gate = true;
-    // Through the gate to the next room.
-    await page.evaluate(() => { const s = window.game.scene.getScene('room'); s.hero.body.reset(s.room.gate.x, s.room.gate.y + 20); });
-    await page.keyboard.down('w');
-    await page.waitForFunction(() => window.game.scene.getScene('room').roomNo === 2, null, { timeout: 6000 }).catch(() => {});
-    await page.keyboard.up('w');
+  }
+}
+
+// Every kind of exit, taken once: blood out of room 1, then an upgrade, a pact, a gift choice. In each next room its
+// reward rises on the medallion (caught there), is taken (the first card), and the exits open on the next pair.
+{
+  const route = [['sang', ['upgrade', 'pacte']], ['upgrade', ['pacte', 'gift']], ['pacte', ['gift', 'sang']], ['gift', ['gift', 'sang']]];
+  for (let i = 0; gate && i < route.length; i++) {
+    const [kind, next] = route[i];
+    if (!(await through(kind))) break;
+    await page.waitForFunction(() => window.game.scene.getScene('room').phase === 'fight', null, { timeout: 8000 }).catch(() => {});
+    const ok = await page.evaluate((kind) => { // the room cleared at once, its waves called off
+      const s = window.game.scene.getScene('room');
+      s.time.removeAllEvents();
+      s.enemies.clear(true, true);
+      s.invulnUntil = Infinity;
+      s.health = 2;
+      s.hud.health(2, s.maxHealth());
+      s.wave = s.roomNo * 3;
+      s.roomCleared();
+      return s.reward === kind;
+    }, kind);
+    if (!ok || !(await page.waitForFunction(() => window.game.scene.getScene('room').pickup?.ready, null, { timeout: 8000 }).then(() => true, () => false))) break;
+    const m = await page.evaluate(() => { const s = window.game.scene.getScene('room'), m = s.room.medallion; s.hero.body.reset(m.x + 34, m.y - 6); return m; });
+    await snap();
+    await page.waitForTimeout(700); // the camera's view settles (slow headless frames)
+    await freeze(true);
+    await shot(`medal-${kind}`, await clip(m.x, m.y - 12, 400, 260));
+    await freeze(false);
+    await rig(next);
+    await page.evaluate(() => { const s = window.game.scene.getScene('room'), m = s.room.medallion; s.hero.body.reset(m.x, m.y - 8); });
+    if (kind !== 'sang') {
+      await page.waitForFunction(() => window.game.scene.getScene('room').cards, null, { timeout: 5000 });
+      // The first card, pressed until it is taken: a press before the cards are ready picks nothing.
+      for (let k = 0; k < 8 && (await page.evaluate(() => window.game.scene.getScene('room').phase === 'choose')); k++) {
+        await page.keyboard.press('1');
+        await page.waitForTimeout(500);
+      }
+    }
+    if (!(await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.phase === 'exit' && s.time.now > s.gateUpAt + 300; }, null, { timeout: 8000 }).then(() => true, () => false))) {
+      console.log(`exit of a ${kind} room not reached:`, await page.evaluate(() => { const s = window.game.scene.getScene('room'); return JSON.stringify({ phase: s.phase, cards: !!s.cards, offer: s.offer, now: s.time.now, gate: s.gateUpAt, reward: s.reward }); }));
+      break;
+    }
+    await unrig();
+    medals.push(await page.evaluate((kind) => { const s = window.game.scene.getScene('room'); return `${kind} in room ${s.roomNo} (${s.layout}, ${s.health} blood, ${s.gifts.length} gifts; exits ${s.doors.join('/')})`; }, kind));
   }
 }
 
@@ -467,8 +532,28 @@ if (layouts.at(-1) === 'cloister') {
   }
 }
 
-console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; gate: ${gate ? 'yes' : 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; swarm: ${swarm || 'NO'}; rooms: ${layouts.join(', ') || 'NO'}; dawn: ${dawn ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
+// The cloister's two exits open (the church's doors), on an upgrade and a pact, the hero in the north walk's shade.
+let cloister = false;
+if (dawn) {
+  await rig(['upgrade', 'pacte']);
+  await page.evaluate(() => {
+    const s = window.game.scene.getScene('room');
+    s.health = 99; // out of the Dawn's reach in the shade, but the burns that landed meanwhile
+    s.hero.body.reset(s.room.exits[1].x - 12, 84);
+    s.cameras.main.startFollow(s.hero);
+    s.openGate();
+  });
+  await snap();
+  cloister = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.time.now > s.gateUpAt + 300; }, null, { timeout: 8000 }).then(() => true, () => false);
+  await unrig();
+  await page.waitForTimeout(500);
+  await freeze(true);
+  await shot('doors-cloister', { x: 0, y: 0, width: 1920, height: 640 });
+  await freeze(false);
+}
+
+console.log(`captured: ${captured ? 'yes' : 'NO (combat frame missing)'}; light: ${lit ? 'yes' : 'NO'}; crossbow: ${bow ? 'yes' : 'NO'}; bite: ${bit || 'NO'}; gifts: ${gifts ? 'yes' : 'NO'}; doors: ${gate ? 'yes' : 'NO'}; exits taken: ${medals.join(', ') || 'NO'}; training: ${training ? 'yes' : 'NO'}; tir: ${tir || 'NO'}; glyph: ${glyph ? 'yes' : 'NO'}; swarm: ${swarm || 'NO'}; rooms: ${layouts.join(', ') || 'NO'}; dawn: ${dawn ? 'yes' : 'NO'}; cloister doors: ${cloister ? 'yes' : 'NO'}; room: ${JSON.stringify(await room())}; state: ${JSON.stringify(await state())}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
 await server.close();
-process.exit(errors.length || !captured || !bow || !bit || !gifts || !training || !tir || !glyph || !swarm || layouts.length < 3 || !dawn ? 1 : 0);
+process.exit(errors.length || !captured || !bow || !bit || !gifts || !gate || medals.length < 4 || !cloister || !training || !tir || !glyph || !swarm || layouts.length < 3 || !dawn ? 1 : 0);

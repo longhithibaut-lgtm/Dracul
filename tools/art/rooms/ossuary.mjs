@@ -66,7 +66,7 @@ const env = ground(floor({
   pools: [[98, 236, 10, 5], [372, 432, 9, 4], [222, 196, 4, 3], [330, 150, 3, 2], [236, 420, 4, 3], [120, 300, 3, 2], [330, 590, 4, 3]],
   drags: [[[110, 236], [150, 250], [190, 262]], [[370, 440], [330, 430], [300, 420]]],
 }), pit);
-const room = shell(HOLES), { S, port } = room;
+const room = shell(HOLES), { S, ports } = room;
 furnish(room, PROPS);
 // Heaps of the dead spilled from the fallen niches: a mound of earth and bone meal, skulls and long bones on it.
 const R = mulberry32(83);
@@ -95,5 +95,5 @@ lights(room, PROPS, CANDLES);
 
 const SC = stage(S, env, pitShadow(pit));
 export async function scene() { return SC; }
-export function raise(sc, d) { port.pos[2] = wz(d); }
+export function raise(sc, d) { for (const p of ports) p.pos[2] = wz(d); }
 export const finish = shafts(HOLES);

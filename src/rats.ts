@@ -3,11 +3,11 @@ import { T } from './tuning.ts';
 import * as Font from './font.ts';
 import { blot } from './enemy.ts';
 import { GIFTS, ICONS, KINDS, RARITY, cost, kind, replacing, type GiftId } from './gifts.ts';
-import { replaced, type Card } from './logic.ts';
+import { replaced, type Card, type Reward } from './logic.ts';
 import { ZOOM } from './dark.ts';
 
-// How the Rat house shows: Vesna la Grise's gift waiting on the medallion, the gift cards (rarity, pacts), the rats of
-// every gift, the hero turned into la Nuée, and la Peste (on enemies, on shards, leaping with Contagion). Gameplay
+// How the Rat house shows: Vesna la Grise's gift waiting on the medallion, the reward each exit announces, the gift cards
+// (rarity, pacts), the rats of every gift, the hero turned into la Nuée, and la Peste (on enemies, on shards, leaping with Contagion). Gameplay
 // decides what happens; this file only draws it.
 
 type Scene = Phaser.Scene;
@@ -77,24 +77,81 @@ const SIGIL = [
   '........sss..',
 ];
 
-/** A coin of the Rat house, 21 px: dark rim, silver ring, blood field, the rat; lit from the top left. */
-function paintCoin(put: Put) {
+// The other rewards' emblems: a vial of blood (k cork, s glass, W glint, r d blood, R its shine); two chevrons rising (W
+// G g gold, lit to shaded); a fang dripping blood (o its outline, B b bone, r R blood).
+const VIAL = [
+  '...kkk...',
+  '...kkk...',
+  '...sWs...',
+  '...sWs...',
+  '..sW.ss..',
+  '.sW....s.',
+  's.rrrrr.s',
+  'sWRrrrrds',
+  'sRrrrrrds',
+  'srrrrrdds',
+  '.srrrdds.',
+  '..sssss..',
+];
+const RISE = [
+  '.....W.....',
+  '....WGW....',
+  '...WG.GW...',
+  '..WG...Gg..',
+  '.WG..W..Gg.',
+  'WG..WGW..Gg',
+  '...WG.GW...',
+  '..WG...Gg..',
+  '.WG.....Gg.',
+  'WG.......Gg',
+];
+const FANG = [
+  '..ooooooooo',
+  '.oBBBBBBBbo',
+  '.oBBBBBBbbo',
+  '.oBBBBBbbo.',
+  '.oBBBBbbo..',
+  '.oBBBbbo...',
+  '.oBBbbo....',
+  '..oBbbo....',
+  '..oBbo.....',
+  '...obo.....',
+  '...orr.....',
+  '....r......',
+  '...rRr.....',
+  '...rrr.....',
+];
+const GOLD = [0xffd890, 0xe8a040, 0x8a4516], VIOLET = [0xb07ad0, 0x643882, 0x46265a];
+/** Each reward's coin (its ring and field, lit and shaded, its emblem where it goes) and the colour it glows; its name. */
+const MARKS: Record<Reward, { ring: number[]; field: number[]; at: [number, number]; rows: string[]; pal: Record<string, number>; glow: number; name: string }> = {
+  gift: { ring: [SILVER, GREY], field: [BLOOD[1], BLOOD[0]], at: [4, 6], rows: SIGIL, pal: { S: SILVER, s: GREY, k: DARK, n: MAUVE, e: BLOOD[2] }, glow: SILVER, name: 'Don du Rat' },
+  sang: { ring: [SILVER, GREY], field: [NIGHT, VOID], at: [6, 4], rows: VIAL, pal: { k: DARK, s: GREY, W: BONE, r: BLOOD[2], d: BLOOD[1], R: GLOW }, glow: BLOOD[2], name: 'Sang' },
+  upgrade: { ring: [GOLD[0], GOLD[1]], field: [DUSK, NIGHT], at: [5, 5], rows: RISE, pal: { W: GOLD[0], G: GOLD[1], g: GOLD[2] }, glow: GOLD[1], name: 'Amélioration' },
+  pacte: { ring: [VIOLET[0], VIOLET[1]], field: [VIOLET[2], NIGHT], at: [5, 4], rows: FANG, pal: { o: VOID, B: BONE_DIM, b: GREY, r: BLOOD[2], R: GLOW }, glow: VIOLET[0], name: 'Pacte de sang' },
+};
+
+/** The coin of reward `kind`, 21 px: dark rim, its ring and field, its emblem (the Rat house's: a silver ring, a blood
+ *  field, the rat); lit from the top left. */
+function paintCoin(put: Put, kind: Reward) {
+  const M = MARKS[kind];
   for (let y = 0; y < 21; y++)
     for (let x = 0; x < 21; x++) {
       const d = Math.hypot(x - 10, y - 10), lit = x + y < 20;
-      if (d < 10.4) put(x, y, d > 9.4 ? VOID : d > 8.1 ? (lit ? SILVER : GREY) : lit ? BLOOD[1] : BLOOD[0]);
+      if (d < 10.4) put(x, y, d > 9.4 ? VOID : d > 8.1 ? M.ring[lit ? 0 : 1] : M.field[lit ? 0 : 1]);
     }
   [[5, 3], [4, 4], [3, 5]].forEach(([x, y]) => put(x, y, BONE)); // glint on the ring
-  grid(put, 4, 6, SIGIL, { S: SILVER, s: GREY, k: DARK, n: MAUVE, e: BLOOD[2] });
+  grid(put, ...M.at, M.rows, M.pal);
 }
-const coin = (scene: Scene) => bake(scene, 'rat-coin', 21, 21, paintCoin);
+const coin = (scene: Scene, kind: Reward = 'gift') => bake(scene, `rat-coin-${kind}`, 21, 21, (put) => paintCoin(put, kind));
 
 export type Pickup = { x: number; y: number; ready: boolean; take(): void };
 
-/** Vesna's gift: her coin climbs out of the medallion's drain at floor point (x, y) and floats over a pool of red
- *  light, shedding silver and red motes. ready once it has risen. */
-export function pickup(scene: Scene, x: number, y: number): Pickup {
-  const c = scene.add.image(x, y, coin(scene)).setOrigin(0.5, 1).setDepth(y).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+/** The room's reward `kind`: its coin (Vesna's for a gift) climbs out of the medallion's drain at floor point (x, y)
+ *  and floats over a pool of light (red, or the colour the coin glows over its exit), shedding silver and coloured
+ *  motes. ready once it has risen. */
+export function pickup(scene: Scene, x: number, y: number, kind: Reward = 'gift'): Pickup {
+  const tint = kind === 'gift' ? BLOOD[2] : MARKS[kind].glow;
+  const c = scene.add.image(x, y, coin(scene, kind)).setOrigin(0.5, 1).setDepth(y).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
   const glow = scene.add.graphics().setDepth(1.5).setBlendMode(Phaser.BlendModes.ADD);
   const shadow = scene.add.graphics().setDepth(1.6);
   const p: Pickup = { x, y, ready: false, take };
@@ -111,21 +168,56 @@ export function pickup(scene: Scene, x: number, y: number): Pickup {
     const b = Math.floor(t * 2.5) % 2;
     glow.clear();
     for (const [rx, ry, a] of [[15, 6, 0.14], [10, 4, 0.2], [5, 2, 0.3]]) {
-      glow.fillStyle(BLOOD[2], a * k);
+      glow.fillStyle(tint, a * k);
       blot(x, y, rx + b, ry, (bx, by, w) => glow.fillRect(bx, by, w, 1));
     }
     if (t > moteAt) {
       moteAt = t + 0.12;
-      motes(scene, x + Phaser.Math.Between(-7, 7), y - lift - Phaser.Math.Between(2, 14), 1, [Math.random() < 0.5 ? SILVER : BLOOD[2]], y + 1, 2, 12);
+      motes(scene, x + Phaser.Math.Between(-7, 7), y - lift - Phaser.Math.Between(2, 14), 1, [Math.random() < 0.5 ? SILVER : tint], y + 1, 2, 12);
     }
   }, [c, glow, shadow]);
 
   function take() {
     p.ready = false;
     stop();
-    motes(scene, x, y - 10, 18, [SILVER, BLOOD[2], BONE], UI - 1, 14, 18);
+    motes(scene, x, y - 10, 18, [SILVER, tint, BONE], UI - 1, 14, 18);
   }
   return p;
+}
+
+// ---------- the exits' signs ----------
+
+export type Sign = { near(p: { x: number; y: number }): void };
+const SIGN = 7985; // drawn unlit over the dark room (dark.ts), like the flames
+
+/** The reward behind an exit, like Hades' doors: the coin of `kind` hung on a chain in the arch of the exit at floor
+ *  point (x, y), glowing its colour over the dark onto the threshold, lit as the portcullis rises over `ms`; near()
+ *  shows its name while the hero (feet `p`) comes close. */
+export function sign(scene: Scene, x: number, y: number, kind: Reward, ms: number): Sign {
+  const M = MARKS[kind], cy = y - 40; // the coin's middle, half way up the arch
+  const glow = scene.add.graphics().setDepth(SIGN).setBlendMode(Phaser.BlendModes.ADD);
+  const chain = scene.add.graphics().setDepth(SIGN + 1);
+  const c = scene.add.image(x, cy, coin(scene, kind)).setDepth(SIGN + 2).setAlpha(0);
+  const label = scene.add.image(x, cy + 13, Font.bake(scene, [M.name], BONE, VOID)).setOrigin(0.5, 0).setDepth(SIGN + 3).setAlpha(0);
+  let close = false;
+  loop(scene, (t) => {
+    const k = Math.min(1, (t * 1000) / ms), b = Math.floor(t * 2.5) % 2, sway = Math.round(Math.sin(t * 1.6) * 0.6);
+    c.setPosition(x + sway, cy).setAlpha(k);
+    chain.clear();
+    for (let j = cy - 21, n = 0; j < cy - 10; j += 2, n++) chain.fillStyle(n % 2 ? DARK : GREY, k).fillRect(x + (j > cy - 15 ? sway : 0), j, 1, 2); // links from the keystone
+    // A stepped halo round the coin, breathing a pixel in and out, and its light laid on the threshold.
+    glow.clear();
+    for (const [r, a] of [[18, 0.1], [14, 0.16], [12, 0.24]]) {
+      glow.fillStyle(M.glow, a * k);
+      blot(x + sway, cy + 1, r + b, r + b, (bx, by, w) => glow.fillRect(bx, by, w, 1));
+    }
+    for (const [rx, ry, a] of [[24, 7, 0.1], [16, 5, 0.16]]) {
+      glow.fillStyle(M.glow, a * k);
+      blot(x, y + 4, rx, ry, (bx, by, w) => glow.fillRect(bx, by, w, 1));
+    }
+    label.setAlpha(Phaser.Math.Clamp(label.alpha + (close && k >= 1 ? 0.1 : -0.1), 0, 1));
+  }, [glow, chain, c, label]);
+  return { near: (p) => (close = Math.abs(p.x - x) < 32 && p.y - y < 64) };
 }
 
 // ---------- the gift cards ----------

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { aimAt, biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawOffer, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, onLine, pickSpot, rayDistance, stepsFrom, swarmUnlocked, take, wound, type Card, type Reward } from './logic.ts';
+import { aimAt, biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawDoors, drawOffer, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, onLine, pickSpot, offers, rayDistance, REWARDS, stepsFrom, swarmUnlocked, take, wound, type Card, type Reward } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -22,12 +22,13 @@ type Sprite = Phaser.Physics.Arcade.Sprite;
 /** What a run carries from room to room, through scene.restart(data); {} is the refuge, where the game starts and the
  *  hero re-forms after a death; its stairs start a run in the crypt (layout 'hall', room 1). ranks: the rarity of each
  *  gift held (0 commun, 1 rare, 2 épique; none: commun). reward: what the room's medallion hands out once it is cleared
- *  (a gift choice if none), for the doors that announce it. */
+ *  (a gift choice if none: room 1), as the exit the hero took out of the last room announced it. */
 export type Run = { room?: number; layout?: Room.LayoutId; health?: number; gifts?: GiftId[]; ranks?: Ranks; reward?: Reward; training?: boolean };
 type Ranks = Partial<Record<GiftId, number>>;
 type Rat = { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until: number; from?: 'dash' | 'jet'; dmg: number; bites: number; next: number; prey?: Sprite };
-// A room: the hero climbs in (from room 2), fights its waves, takes the gift of the Rat house on the medallion (cards
-// open, the action pauses), then walks out through the portcullis it raised.
+// A room: the hero climbs in (from room 2), fights its waves, takes the room's reward on the medallion (the cards of the
+// Rat house open and the action pauses, or blood), then walks out through one of the two portcullises it raised, each
+// announcing the next room's reward.
 type Phase = 'enter' | 'fight' | 'gift' | 'choose' | 'exit' | 'leave';
 const NAV = 8; // walk grid cell, px
 
@@ -76,6 +77,8 @@ export class RoomScene extends Phaser.Scene {
   private gifts: GiftId[] = [];
   private ranks: Ranks = {};
   private reward: Reward = 'gift';
+  private doors: Reward[] = []; // the reward behind each exit, once they open
+  private signs: Rats.Sign[] = [];
   private kills = 0; // this room's, for La curée
   private phase: Phase = 'fight';
   private pickup?: Rats.Pickup;
@@ -108,6 +111,8 @@ export class RoomScene extends Phaser.Scene {
     this.gifts = [...(data.gifts ?? [])];
     this.ranks = { ...data.ranks };
     this.reward = data.reward ?? 'gift';
+    this.doors = [];
+    this.signs = [];
     this.kills = 0;
     this.swarmUntil = this.swarmReadyAt = 0;
     this.swarmFx = undefined;
@@ -353,9 +358,14 @@ export class RoomScene extends Phaser.Scene {
       this.hero.setCollideWorldBounds(true);
     }
     if (this.waveDue) this.spawnWave();
-    if (this.phase === 'gift' && this.pickup?.ready && Phaser.Math.Distance.BetweenPoints(feet.center, this.pickup) < 10) this.openGifts();
+    if (this.phase === 'gift' && this.pickup?.ready && Phaser.Math.Distance.BetweenPoints(feet.center, this.pickup) < 10) {
+      if (this.reward === 'sang') this.drink();
+      else this.openGifts();
+    }
     if (this.layout === 'refuge' && this.phase === 'fight' && feet.bottom > Refuge.STAIRS) this.leave();
-    if (this.phase === 'exit' && time >= this.gateUpAt && feet.top <= this.room.bounds.top + 1 && Math.abs(feet.center.x - this.room.gate.x) < 14) this.leave();
+    for (const s of this.signs) s.near({ x: feet.center.x, y: feet.bottom });
+    const exit = this.room.exits.findIndex((g) => Math.abs(feet.center.x - g.x) < 14);
+    if (this.phase === 'exit' && time >= this.gateUpAt && feet.top <= this.room.bounds.top + 1 && exit >= 0) this.leave(exit);
 
     // Holy light (a lantern's pool, the chapel's stained glass, the Dawn): free for a grace on stepping in, then it burns
     // on a steady beat until he steps out (or mists through); the room's own light at its own pace. The Dawn's grace is
@@ -1163,8 +1173,9 @@ export class RoomScene extends Phaser.Scene {
     return true;
   }
 
-  /** The room's last enemy is down: it falls in slow motion with a sting (Glaneur gives blood back), then the gift of
-   *  the Rat house rises on the medallion; with nothing left to offer, the gate opens straight away. */
+  /** The room's last enemy is down: it falls in slow motion with a sting (Glaneur gives blood back), then the room's
+   *  reward rises on the medallion; with nothing left to offer, the gates open straight away (blood always rises: the
+   *  door promised it). */
   private roomCleared() {
     if (this.dead) return;
     this.phase = 'gift';
@@ -1177,22 +1188,32 @@ export class RoomScene extends Phaser.Scene {
       this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
       this.time.delayedCall(T.run.giftDelayMs, () => {
         if (this.dead) return;
-        if (!this.canOffer(this.reward)) this.openGate();
-        else this.pickup = Rats.pickup(this, this.room.medallion.x, this.room.medallion.y);
+        if (this.reward !== 'sang' && !this.canOffer(this.reward)) this.openGate();
+        else this.pickup = Rats.pickup(this, this.room.medallion.x, this.room.medallion.y, this.reward);
       });
     });
   }
 
-  // ---- Rewards: what the other door kinds plug into. A room's reward (Run.reward) is handed out on its medallion once
-  // it is cleared; canOffer() says whether there is anything to hand out, openGifts() opens the cards at once. ----
+  // ---- Rewards. A room's reward (Run.reward, chosen by the exit taken out of the last room) is handed out on its
+  // medallion once it is cleared; canOffer() says whether there is anything to hand out, openGifts() opens the cards at
+  // once, drink() gives the blood. ----
 
   /** The cards reward `kind` would offer now (random); [] when there is nothing left to offer. */
   drawReward(kind: Reward): Card<GiftId>[] {
     return drawOffer(GIFTS, this.gifts, this.ranks, kind, this.roomNo, T, Math.random);
   }
 
-  canOffer(kind: Reward) {
-    return this.drawReward(kind).length > 0;
+  /** True when reward `kind` has anything to hand out in room `room` (blood: to a hero not at his max). */
+  canOffer(kind: Reward, room = this.roomNo) {
+    return offers(GIFTS, this.gifts, this.ranks, kind, room, T, this.health < this.maxHealth());
+  }
+
+  /** The « Sang » reward, taken from the medallion: blood back, and the gates rise. */
+  private drink() {
+    this.pickup?.take();
+    this.pickup = undefined;
+    this.heal(T.doors.sang);
+    this.openGate();
   }
 
   /** The cards open, the action paused: reward `kind`, or exactly `cards` (the capture script deals its own). Taken from
@@ -1255,20 +1276,25 @@ export class RoomScene extends Phaser.Scene {
     return this.has(id) ? value(id, this.ranks[id]) : 0;
   }
 
+  /** The portcullises rise, and over each exit the reward of the room it leads to lights up, drawn among those that
+   *  room could offer. */
   private openGate() {
     this.phase = 'exit';
     Room.raiseGate(this, T.run.gateMs);
     this.gateUpAt = this.time.now + T.run.gateMs;
     Sfx.play(this, 'gate');
+    this.doors = drawDoors(REWARDS.filter((k) => this.canOffer(k, this.roomNo + 1)), T.doors.weights, this.room.exits.length, Math.random);
+    this.signs = this.room.exits.map((g, i) => Rats.sign(this, g.x, g.y, this.doors[i], T.run.gateMs));
   }
 
-  /** Into the open gate: fade to black, then the next room (another layout than this one), health and gifts kept. Down
-   *  the refuge's stairs: a new run, room 1 in the crypt (in training, the training room). */
-  private leave() {
+  /** Into open exit `exit`: fade to black, then the next room (another layout than this one), with the reward that exit
+   *  announced, health and gifts kept. Down the refuge's stairs: a new run, room 1 in the crypt (in training, the
+   *  training room). */
+  private leave(exit = 0) {
     this.phase = 'leave';
     this.hero.setCollideWorldBounds(false);
     this.cameras.main.fadeOut(T.run.fadeMs);
-    const next: Run = this.layout !== 'refuge' ? { room: this.roomNo + 1, layout: nextLayout(this.roomNo + 1, this.layout, Room.LAYOUTS, Math.random), health: this.health, gifts: this.gifts, ranks: this.ranks }
+    const next: Run = this.layout !== 'refuge' ? { room: this.roomNo + 1, layout: nextLayout(this.roomNo + 1, this.layout, Room.LAYOUTS, Math.random), health: this.health, gifts: this.gifts, ranks: this.ranks, reward: this.doors[exit] }
       : this.training ? { training: true, gifts: this.gifts, ranks: this.ranks, layout: 'hall' } : { layout: 'hall' };
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(next));
   }

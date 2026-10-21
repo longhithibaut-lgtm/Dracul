@@ -310,6 +310,10 @@ export const T = {
     curee: { every: 3, heal: 1, bite: 1 }, // every `every` kills heal `heal`; a bite costs `bite` blood instead of healing
     vermine: { rats: 2, toll: 1 }, // each kill releases `rats` rats; each new room costs `toll` blood (never the last)
   },
+  // A room's two exits, like Hades' doors: once its own reward is taken, each announces the next room's (logic.ts
+  // drawDoors), drawn by these weights among those that room could offer, different when possible. `sang`: the blood
+  // the « Sang » reward gives back on the medallion.
+  doors: { weights: { gift: 4, upgrade: 2, sang: 2, pacte: 1 }, sang: 3 },
   // La Nuée, the Rat house's form of the night: holding `gifts` gifts, R turns the hero into a swarm of rats for
   // `durationMs`: fast (`speed` times his walk), untouchable by blows, it bites every enemy within `radius` (floor),
   // each once every `tickMs`; no claws, shard, bite, glyph or dash. Holy light disperses it at once.

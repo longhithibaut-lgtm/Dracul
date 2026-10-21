@@ -20,7 +20,7 @@ export type Room = {
   spawns: P[]; // fixed, so screenshots are comparable run to run
   spots: P[]; // where the Order may plant its lanterns
   medallion: P; // centre of the ritual medallion, on the floor: the gift rises there
-  gate: P; // middle of the exit, on the back edge of the floor
+  exits: P[]; // middle of each exit, on the back edge of the floor
   stairs: P; // where the hero climbs in from, below the front edge
   holy(x: number, y: number): boolean; // a floor point in holy light that never goes out (stained glass, the open sky)
   burn: { graceMs: number; burnEveryMs: number; damage: number }; // how that light burns: like a lantern, or the Dawn's
@@ -56,7 +56,7 @@ export function preload(scene: Phaser.Scene, id: LayoutId) {
   if (id !== 'torture') Baked.preload(scene, id === 'refuge' ? 'refuge' : BAKED[id].key);
 }
 
-/** Winches the portcullis up over `ms`, letting the moonlight in. */
+/** Winches the portcullises up over `ms`, letting the moonlight in. */
 export function raiseGate(scene: Phaser.Scene, ms: number) {
   if (Baked.raise(scene, ms)) return;
   let last = 0;
@@ -126,7 +126,7 @@ function torture(scene: Phaser.Scene): Room {
     spots: [{ x: 176, y: 120 }, { x: 304, y: 120 }, { x: 176, y: 210 }, { x: 304, y: 210 }, { x: 150, y: 300 }, { x: 300, y: 290 }, { x: 120, y: 410 }, { x: 260, y: 440 },
       { x: 170, y: 520 }, { x: 310, y: 520 }, { x: 100, y: 600 }, { x: 330, y: 600 }],
     medallion: { x: CX, y: 160 },
-    gate: { x: CX, y: FY0 },
+    exits: [{ x: CX, y: FY0 }],
     stairs: { x: CX, y: FY1 + 10 }, // feet off screen, the head showing above the steps
     holy: () => false,
     burn: T.lantern,

@@ -81,7 +81,7 @@ const env = ground(floor({
   pools: [[104, 176, 9, 4], [380, 352, 9, 4], [362, 214, 4, 3], [170, 132, 3, 2], [150, 316, 3, 3], [300, 540, 4, 3], [196, 456, 3, 2]],
   drags: [[[110, 182], [150, 200], [190, 210]], [[372, 360], [330, 380], [300, 400]]],
 }));
-const room = shell([]), { S, port } = room;
+const room = shell([]), { S, ports } = room;
 furnish(room, PROPS);
 const { add, light } = S;
 const gilt = (x, y, z) => ({ alb: mix(L('#8a6428'), L('#3a2a12'), clamp(vn3(x * 0.5, y * 0.5, z * 0.5, 3) * 1.8 - 0.5)), spec: 0.8, gloss: 40 });
@@ -118,7 +118,7 @@ const SC = stage(S, env);
 // The crypts' palette, with the glass's: the bleached holy light, its golds, a red and a blue.
 export const PAL = [...CRYPT, ...['#5a3a10', '#8a5a18', '#b8822a', '#e0aa40', '#f4d27a', '#fbecc0', '#fff8e4', '#6a1410', '#a8281a', '#3a5868', '#6c98aa'].map((h) => hex(h).map((v) => v * 255))];
 export async function scene() { return SC; }
-export function raise(sc, d) { port.pos[2] = wz(d); }
+export function raise(sc, d) { for (const p of ports) p.pos[2] = wz(d); }
 /** The glass dyes the Dawn it lets in (the render lit it white-gold): each lit texel takes its window's colour where its
  *  ray crossed the wall, the lead's dark lines too; and its shafts hang in the dusty air, dyed the same. */
 export function finish(img) {

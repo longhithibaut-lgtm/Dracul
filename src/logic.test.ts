@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawGifts, drawOffer, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, replaced, rollRarity, stepsFrom, swarmUnlocked, take, wound } from './logic.ts';
+import { biteTarget, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawDoors, drawGifts, drawOffer, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, offers, pickSpot, rayDistance, replaced, rollRarity, stepsFrom, swarmUnlocked, take, wound, type Reward } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, RARITY, cost, kind, replacing, shelf, value } from './gifts.ts';
 import { T } from './tuning.ts';
 import { missing, width, wrap } from './font.ts';
@@ -231,12 +231,46 @@ describe('gifts', () => {
   });
 
   it('a pact choice: two pacts and a gift to refuse them with; an upgrade: held gifts a rarity up', () => {
-    const d = drawOffer(GIFTS, [], {}, 'pacte', 1, O, Math.random);
+    const d = drawOffer(GIFTS, [], {}, 'pacte', 2, O, Math.random);
     expect(pacts(d)).toBe(2);
     expect(d.length).toBe(3);
+    expect(drawOffer(GIFTS, [], {}, 'pacte', 1, O, Math.random)).toEqual([]); // no pact in the first room
     expect(drawOffer(GIFTS, ['maigre', 'noires', 'curee', 'vermine'], {}, 'pacte', 3, O, Math.random)).toEqual([]);
     const up = drawOffer(GIFTS, ['griffes', 'perce', 'fuite', 'maigre'], { griffes: 2, fuite: 1 }, 'upgrade', 3, O, Math.random);
     expect(up).toEqual([{ id: 'fuite', rank: 2, up: true }]); // perce and the pact have no rarity, griffes is épique
+  });
+
+  it('says which rewards a room can offer', () => {
+    const can = (kind: Reward, held: (keyof typeof GIFTS)[] = [], room = 2, hurt = true, ranks = {}) => offers(GIFTS, held, ranks, kind, room, O, hurt);
+    expect(can('gift')).toBe(true);
+    expect(can('gift', GIFT_IDS.filter((id) => !GIFTS[id].pact))).toBe(false); // every gift held
+    expect(can('upgrade')).toBe(false); // nothing to raise
+    expect(can('upgrade', ['perce', 'maigre'])).toBe(false); // no rarity
+    expect(can('upgrade', ['griffes'], 2, true, { griffes: 2 })).toBe(false); // already épique
+    expect(can('upgrade', ['griffes'])).toBe(true);
+    expect(can('pacte', [], 1)).toBe(false);
+    expect(can('pacte')).toBe(true);
+    expect(can('pacte', ['maigre', 'noires', 'curee', 'vermine'])).toBe(false);
+    expect(can('sang', [], 2, false)).toBe(false); // at his max
+    expect(can('sang')).toBe(true);
+    expect(drawOffer(GIFTS, [], {}, 'sang', 2, O, Math.random)).toEqual([]); // blood has no cards
+  });
+
+  it('draws two different rewards for the two exits when it can', () => {
+    const W = { gift: 4, upgrade: 2, sang: 2, pacte: 1 }, all: Reward[] = ['gift', 'pacte', 'upgrade', 'sang'], seen = new Set<string>();
+    for (let i = 0; i < 500; i++) {
+      const [a, b, ...rest] = drawDoors(all, W, 2, Math.random);
+      expect(a).not.toBe(b);
+      expect(rest).toEqual([]);
+      seen.add(a).add(b);
+    }
+    expect(seen.size).toBe(4);
+    for (let i = 0; i < 50; i++) expect(new Set(drawDoors(['gift', 'sang'], W, 2, Math.random)).size).toBe(2);
+    expect(drawDoors(['upgrade'], W, 2, Math.random)).toEqual(['upgrade', 'upgrade']); // one kind: behind both
+    expect(drawDoors([], W, 2, Math.random)).toEqual(['gift', 'gift']); // nothing: a gift choice (it opens at once)
+    expect(drawDoors(all, W, 1, () => 0)).toEqual(['gift']); // by weight: the low end of the draw is the first kind's
+    expect(drawDoors(all, W, 1, () => 0.999)).toEqual(['sang']);
+    expect(drawDoors(all, { ...W, sang: 0 }, 1, () => 0.999)).toEqual(['upgrade']);
   });
 
   it('a pact is taken like a talent; a combo is offered once a gift it builds on is held', () => {

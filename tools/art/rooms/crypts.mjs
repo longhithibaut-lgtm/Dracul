@@ -1,7 +1,7 @@
 // What the four crypt rooms of a run share (la crypte, la nef, l'ossuaire, la chapelle), baked by tools/art/rooms.gen.mjs
 // in the « grand pixel » style: one screen wide, 638 room px tall, the shell of the validated crypt (crypt.mjs): the
-// back wall in ashlar with its two moonlit lancets, its ossuaries, pilasters and rotted banners of the Order, the
-// portcullis before a passage climbing to the moon, side walls at the room's edges (the floor fills the view's width),
+// back wall in ashlar with its two moonlit lancets, its ossuaries, pilasters and rotted banners of the Order, the two
+// exits (a portcullis before a passage climbing to the moon, each), side walls at the room's edges (the floor fills the view's width),
 // the front wall over the stairs, an unseen vault pierced by oculi above the floor's medallions; the refuge's grimy
 // flagstones, medallions, grave slabs, old blood; the props on their footprints (pillars with their dying torches,
 // broken stumps, braziers, coffins on stone biers); the moon, fills, fires and candles; the moon's shafts in the air.
@@ -13,6 +13,9 @@ import { cam, SN, CS, wx, wy, wz, rx, ry, C, scaled, broken, block, stage, flags
 
 export const RW = 480, RH = 638, FX0 = 12, FX1 = 468, FY0 = 64, FY1 = RH - 14, CX = 240, CY = 160;
 export const W = 2 * RW, H = 2 * RH, YW = wy(FY0); // the back wall's face
+/** The two exits' middles (room px x), in the back wall either side of the lancets: the door the hero walks out of
+ *  picks the next room's reward (RoomScene). */
+export const EXITS = [CX - 100, CX + 100];
 export const MOONC = L('#9ab0be'), FIRE = L('#e07a30'), CANDLE = L('#d8b070');
 const BRAZIER_TOP = 36; // z of the bowl's rim, where its flame stands
 const SCONCE_Z = 100; // a dying torch on each whole pillar's face, this high
@@ -25,11 +28,11 @@ export function plan({ props, pits = [], start, spawns, spots, sections, gift = 
   return {
     RW, RH, FY1, BOUNDS: [FX0, FY0, FX1 - FX0, FY1 - FY0],
     BOXES: props.map((o) => [o.x - o.w / 2, o.y - o.h, o.w, o.h]), PITS: pits,
-    START: start, SPAWNS: spawns, SPOTS: spots, SECTIONS: sections, GIFT: gift, GATE: { x: CX, y: FY0 }, STAIRS: { x: CX, y: FY1 + 10 },
+    START: start, SPAWNS: spawns, SPOTS: spots, SECTIONS: sections, GIFT: gift, EXITS: EXITS.map((x) => ({ x, y: FY0 })), STAIRS: { x: CX, y: FY1 + 10 },
     // The braziers' flames, drawn over the dark by dark.ts: x, the row under the flame, strength.
     TORCHES: [...props.filter((o) => o.kind === 'brazier').map((o) => [o.x, Math.round(o.y - 4 - BRAZIER_TOP * CS / 2), 1]),
       ...props.filter((o) => o.kind === 'pillar').map((o) => [o.x, row(pillarFace(o)[1] + 9, SCONCE_Z + 14), 0.6])],
-    GATEBOX: [CX - 36, 0, CX + 36, FY0], GATE_RISE: 48, // room px: the portcullis' frames, how far it rises up the screen
+    GATEBOXES: EXITS.map((x) => [x - 36, 0, x + 36, FY0]), GATE_RISE: 48, // room px: each portcullis' frames, how far it rises up the screen
     HOLY: holy,
   };
 }
@@ -126,25 +129,27 @@ export const pitShadow = (pit) => (px, py, pz, lx, ly, lz) => {
 };
 
 // ---------- the shell: back wall (lancets, gate, ossuary, pilasters, banners), side walls, front wall, the vault ----------
-const LANCETS = [wx(CX - 100), wx(CX + 100)];
+const LANCETS = [wx(CX - 22), wx(CX + 22)]; // a pair between the middle pilasters, the exits either side
 const inPointed = (u, z, hw, z0, r) => Math.abs(u) < hw && (z < z0 || Math.hypot(Math.abs(u) + (r - hw), z - z0) < r); // a pointed arch, springing at z0
 const GATE_HW = 44, GATE_Z = 104;
+/** World x from the middle of the nearest exit. */
+const gateU = (x) => x - wx(x < wx(CX) ? EXITS[0] : EXITS[1]);
 const archTop = (u, hw, z0, r) => z0 + Math.sqrt(Math.max(0, r * r - (Math.abs(u) + r - hw) ** 2)); // a pointed arch's crown over u
 const stairUp = (y) => Math.max(0, Math.floor((YW - 70 - y) / 22) * 9); // the passage's steps, climbing north beyond the gate
 /** How far inside the gate's opening and the passage beyond (> 0 inside): a carve. */
-const inGate = (x, y, z) => { const u = x - wx(CX), f = stairUp(y); return Math.min(GATE_HW - Math.abs(u), z - f, archTop(u, GATE_HW, GATE_Z, 52) + f - z, y - (YW - 380)); };
+const inGate = (x, y, z) => { const u = gateU(x), f = stairUp(y); return Math.min(GATE_HW - Math.abs(u), z - f, archTop(u, GATE_HW, GATE_Z, 52) + f - z, y - (YW - 380)); };
 function wallSdf(x, y, z) { // 40 deep, up to the vault; the lancets and the gate cut through it
   let d = sdBox(x, y, z, W / 2, YW - 20, 200, W / 2 + 40, 20, 200);
   for (const c of [wx(CX - 48), wx(CX + 48), wx(CX - 152), wx(CX + 152)]) d = Math.min(d, sdBox(x, y, z, c, YW, 200, 13, 9, 200, 1)); // pilasters
   for (const c of LANCETS) if (Math.abs(x - c) < 30) d = Math.max(d, Math.min(16 - Math.abs(x - c), z - 46, archTop(x - c, 16, 112, 22) - z));
-  if (Math.abs(x - wx(CX)) < GATE_HW + 30) d = Math.max(d, inGate(x, y, z));
+  if (Math.abs(gateU(x)) < GATE_HW + 30) d = Math.max(d, inGate(x, y, z));
   return d;
 }
-function passageSdf(x, y, z) { // beyond the gate: a vaulted passage, its steps climbing to the moonlit way out
-  return Math.max(sdBox(x, y, z, wx(CX), YW - 220, 200, GATE_HW + 24, 180, 200), inGate(x, y, z));
+function passageSdf(x, y, z) { // beyond a gate: a vaulted passage, its steps climbing to the moonlit way out
+  return Math.max(sdBox(gateU(x), y, z, 0, YW - 220, 200, GATE_HW + 24, 180, 200), inGate(x, y, z));
 }
 function wallMat(m, x, y, z, nx, ny, nz) {
-  const u = x - wx(CX);
+  const u = gateU(x);
   if (Math.abs(u) < GATE_HW + 1 && y < YW - 2) { // the passage: steps and walls in the moonlight's way
     const c = mul(mix(C.stB, C.stC, vn(x / 7, z / 7 + y / 9, 3)), ny < -0.5 ? 0.6 : 1);
     return { alb: mix(c, C.moss, clamp(vn(x / 9, y / 9, 4) - 0.5) * 0.8), spec: 0.04 };
@@ -198,22 +203,22 @@ function banner(seed) { // the Order's banner, rotted, hung on a pilaster: a dul
   };
 }
 
-/** A crypt room's stage with its shell built: `holes` the vault's oculi (oculi()). Returns the stage, its portcullis
- *  and the random the props draw from. */
+/** A crypt room's stage with its shell built: `holes` the vault's oculi (oculi()). Returns the stage, its two
+ *  portcullises and the random the props draw from. */
 export function shell(holes) {
   const S = stage();
   const { add } = S;
   add('backwall', { sdf: wallSdf, mat: wallMat, bounds: [-60, YW - 42, 0, W + 60, YW + 12, 400], step: 0.8 }, [0, 0, 0]);
-  add('passage', { sdf: passageSdf, mat: wallMat, bounds: [wx(CX) - GATE_HW - 26, YW - 402, 0, wx(CX) + GATE_HW + 26, YW - 38, 400], step: 0.7 }, [0, 0, 0]);
+  for (const g of EXITS) add('passage', { sdf: passageSdf, mat: wallMat, bounds: [wx(g) - GATE_HW - 26, YW - 402, 0, wx(g) + GATE_HW + 26, YW - 38, 400], step: 0.7 }, [0, 0, 0]);
   add('sides', { sdf: sideSdf, mat: sideMat, bounds: [wx(FX0 - 20), wy(FY0) - 60, 0, wx(FX1 + 20), wy(RH + 8), 320], step: 0.8 }, [0, 0, 0]);
   // The vault and the side walls up to it: never seen (the view cuts them away), they keep the moon out but for the oculi.
   add('vault', { sdf: (x, y, z) => Math.min(Math.max(sdBox(x, y, z, W / 2, wy(RH / 2), VAULT + 20, W / 2 + 40, wy(RH / 2) + 400, 20), ...holes.map(([ox, oy, r]) => r - Math.hypot(x - ox, y - oy))),
     sdBox(x, y, z, wx(FX0 - 30), wy(RH / 2), VAULT / 2, 36, wy(RH / 2) + 400, VAULT / 2), sdBox(x, y, z, wx(FX1 + 30), wy(RH / 2), VAULT / 2, 36, wy(RH / 2) + 400, VAULT / 2)),
     mat: () => ({ alb: C.void }), bounds: [-40, -400, 0, W + 40, wy(RH) + 400, VAULT + 40], step: 0.9 }, [0, 0, 0], 0, { ghost: true });
   for (const c of LANCETS) add('glass', lancetGlass(), [c, YW - 20, 0]);
-  const port = add('portcullis', portcullis(2 * GATE_HW + 6, GATE_Z + 52), [wx(CX), YW - 20, 0]);
+  const ports = EXITS.map((g) => add('portcullis', portcullis(2 * GATE_HW + 6, GATE_Z + 52), [wx(g), YW - 20, 0]));
   [wx(CX - 48), wx(CX + 48)].forEach((c, k) => add('banner', banner(5 + k), [c, YW + 10, 0]));
-  return { S, port, R: mulberry32(7) };
+  return { S, ports, R: mulberry32(7) };
 }
 
 // The torture room's paler pillars, so they stand out of the dark floor.
@@ -253,7 +258,7 @@ export function candles({ S }, list) {
   for (const [x, y, n] of list) for (let k = 0; k < n; k++) out.push([wx(x + k * 3 + 1), wy(y) + (k % 2) * 4, 0, 4 + h2(x, k, 3) * 9, 1.2 + h2(x, k, 4) * 0.3, (h2(x, k, 5) - 0.5) * 0.8, 0]);
   S.add('candles', candles2(out), [0, 0, 0]);
 }
-/** The moon through the oculi, the cold fills, the lancets and the way out beyond the gate; the torches, braziers and
+/** The moon through the oculi, the cold fills, the lancets and the ways out beyond the gates; the torches, braziers and
  *  candles of `props` and `candleList`. `fill`: the fills' strength. */
 export function lights({ S }, props, candleList, fill = 1) {
   const { light } = S, FAR = 1e5;
@@ -262,7 +267,7 @@ export function lights({ S }, props, candleList, fill = 1) {
   light({ p: [wx(CX), wy(RH / 2), 600], c: MOONC, I: 0.24 * fill, r0: 900, R: 3000, noShadow: true });
   light({ p: [wx(CX), wy(RH) + 900, 500], c: MOONC, I: 0.34 * fill, r0: 1400, R: 4000, noShadow: true }); // and on what faces us
   for (const c of LANCETS) light({ p: [c - 40, YW - 160, 210], c: MOONC, I: 5, r0: 120, R: 700, soft: 20, noEnv: true });
-  light({ p: [wx(CX), YW - 320, stairUp(YW - 320) + 70], c: MOONC, I: 9, r0: 90, R: 700, soft: 12, haze: 0.01, hazeR: 14 }); // up the stairs, beyond the gate
+  for (const g of EXITS) light({ p: [wx(g), YW - 320, stairUp(YW - 320) + 70], c: MOONC, I: 9, r0: 90, R: 700, soft: 12, haze: 0.01, hazeR: 14 }); // up the stairs, beyond each gate
   for (const o of props.filter((o) => o.kind === 'pillar')) { const [fx, fy] = pillarFace(o); light({ p: [fx, fy + 10, SCONCE_Z + 16], c: FIRE, I: 2.2, r0: 36, R: 360, soft: 6, pad: 6, haze: 0.015, hazeR: 5, skip: ['sconce'] }); }
   for (const o of props.filter((o) => o.kind === 'brazier')) light({ p: [wx(o.x), wy(o.y - 4), BRAZIER_TOP + 12], c: FIRE, I: 4, r0: 40, R: 420, soft: 6, pad: 8, haze: 0.02, hazeR: 7, skip: ['brazier'] });
   for (const [x, y, n] of candleList) light({ p: [wx(x + n * 1.5), wy(y) + 2, 16], c: CANDLE, I: 0.8 + 0.4 * n, r0: 20, R: 220, soft: 4, pad: 3, haze: 0.012, hazeR: 3, skip: ['candles'] });

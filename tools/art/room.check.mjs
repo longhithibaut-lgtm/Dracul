@@ -1,5 +1,5 @@
 // Room layout check in headless Chromium, for every layout: on the walk grid, the hero start, every spawn point and the
-// foot of the stairs are walkable (off pits and props) and reach the gate, hence each other; the hero can walk away
+// foot of the stairs are walkable (off pits and props) and reach every exit, hence each other; the hero can walk away
 // from its start in every direction; and wherever it waits (behind props, past pits, in corners) every enemy reaches
 // it instead of sticking on an obstacle or the brink of a pit.
 // Usage: node tools/art/room.check.mjs [--port=5206] [--only=nave]   (exit code 1 on a failure or a page error)
@@ -65,15 +65,15 @@ for (const layout of Object.keys(WAITS).filter((l) => !only || l === only)) {
 
   await restart();
   const reach = await page.evaluate(() => {
-    const s = window.game.scene.getScene('room'), r = s.room, steps = s.stepsTo({ x: r.gate.x, y: r.gate.y + 4 });
+    const s = window.game.scene.getScene('room'), r = s.room, steps = r.exits.map((g) => s.stepsTo({ x: g.x, y: g.y + 4 }));
     const feet = (p, name) => ({ name, x: p.x, y: p.y + 8 }); // sprite position -> feet
     return [feet(r.heroStart, 'hero start'), ...r.spawns.map((p, i) => feet(p, `spawn ${i}`)), { name: 'stairs', x: r.stairs.x, y: r.bounds.bottom - 6 }]
-      .map((p) => ({ ...p, open: s.navOpen[s.cellOf(p)], steps: steps[s.cellOf(p)] }));
+      .map((p) => ({ ...p, open: s.navOpen[s.cellOf(p)], steps: steps.map((d) => d[s.cellOf(p)]) }));
   });
   for (const p of reach) {
-    const ok = p.open && p.steps < Infinity;
+    const ok = p.open && p.steps.every((d) => d < Infinity);
     if (!ok) failed++;
-    console.log(`${p.name} (${p.x},${p.y}): ${ok ? `${p.steps} cells to the gate` : p.open ? 'CUT OFF from the gate' : 'ON A PIT OR PROP'}`);
+    console.log(`${p.name} (${p.x},${p.y}): ${ok ? `${p.steps.join(' and ')} cells to the exits` : p.open ? 'CUT OFF from an exit' : 'ON A PIT OR PROP'}`);
   }
 
   for (const k of ['a', 'd', 'w', 's']) {
