@@ -1,6 +1,8 @@
 // The Purificateur and the Prêtre (src/foes.ts) in the torture room, in headless Chromium at 1920x1080 (the PC target),
 // called in from the training room: each idle, telegraphing and attacking (crops round them, x2 of the screen's pixels
-// kept), weakened, killed, a full frame of both; and the frame rate with neither, then with both fighting.
+// kept; the jet aimed off the eight views), the Purificateur walking and struck, weakened, killed, a full frame of both;
+// the bot playing each attack, standing still (it must burn) and stepping out when the telegraph shows, after a
+// human's reaction time, at the hero's speed (it must miss); and the frame rate with neither, then with both fighting.
 // Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=torture]
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -12,6 +14,7 @@ const server = await createServer({ server: { port, strictPort: true }, logLevel
 await server.listen();
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+page.setDefaultTimeout(180000); // a screenshot waits for every frame stepped by hand to be drawn (software GL: slow)
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
@@ -70,7 +73,7 @@ await crop('priest', 'priest-idle');
 
 // The Purificateur: the hero in reach to his right; he ignites, then burns.
 let at = await run(`(() => { const e = ${foe('purifier')}; return { x: e.x, y: e.y }; })()`);
-await hero(at.x + 34, at.y + 2);
+await hero(at.x + 28, at.y + 14); // down and to his right, between two of his views
 await set('purifier', { readyAt: 0, state: 'chase', until: 0 });
 await step(450);
 await crop('purifier', 'purifier-telegraph', 640, 420);
@@ -78,6 +81,13 @@ await step(450);
 await crop('purifier', 'purifier-attack', 640, 420);
 await hold();
 await step(1200);
+// Walking up to a hero out of reach (his steps follow the floor he covers), then struck by a claw (no damage).
+await hero(at.x + 130, at.y - 20);
+for (const k of [0, 1, 2]) { await step(110); await crop('purifier', `purifier-walk${k}`, 360, 320); await crop('priest', `priest-walk${k}`, 360, 360); }
+await run(`(() => { const s = window.game.scene.getScene('room'), e = ${foe('purifier')}; s.hitEnemy(e, 0, 0, 140, 0); })()`);
+await step(60);
+await crop('purifier', 'purifier-hurt', 360, 320);
+await step(600);
 
 // The Prêtre: the hero within his sight, the circle filling under him, then the light falling.
 at = await run(`(() => { const e = ${foe('priest')}; return { x: e.x, y: e.y }; })()`);
@@ -88,6 +98,33 @@ await page.screenshot({ path: `${out}/foes-priest-telegraph-full.png` });
 await crop('priest', 'priest-telegraph', 760, 440, -10);
 await step(550);
 await crop('priest', 'priest-attack', 760, 440, -10);
+
+// The bot plays each attack, the hero mortal: standing still, then stepping out once the telegraph shows (after
+// REACT ms, holding a key: the hero walks at T.grand.speed).
+const REACT = 300;
+await run(() => document.querySelector('[data-opt="god"]').click());
+async function play(kind, dx, dy, key) {
+  await hold();
+  await step(200);
+  const p = await run(`(() => { const s = window.game.scene.getScene('room'), e = ${foe(kind)}; s.health = 5; s.invulnUntil = 0; for (const o of s.enemies.getChildren()) o.setData({ state: 'chase', until: 0 }); return { x: e.x, y: e.y }; })()`);
+  await hero(p.x + dx, p.y + dy);
+  await set(kind, { readyAt: 0 });
+  const state = () => run(`${foe(kind)}.getData('state')`);
+  for (let t = 0; t < 1500 && !['ignite', 'pray'].includes(await state()); t += 16) await step(16);
+  await step(REACT);
+  if (key) await page.keyboard.down(key);
+  for (let t = 0; t < 2500 && ['ignite', 'fire', 'pray'].includes(await state()); t += 16) await step(16);
+  if (key) await page.keyboard.up(key);
+  return 5 - (await run(() => window.game.scene.getScene('room').health));
+}
+const fights = {
+  'Purificateur, immobile': await play('purifier', 28, 4), 'Purificateur, pas de côté': await play('purifier', 28, 4, 's'),
+  'Prêtre, immobile': await play('priest', -90, 30), 'Prêtre, sort du cercle': await play('priest', -90, 30, 'a'),
+};
+await run(() => document.querySelector('[data-opt="god"]').click());
+const fair = fights['Purificateur, immobile'] > 0 && fights['Prêtre, immobile'] > 0 && !fights['Purificateur, pas de côté'] && !fights['Prêtre, sort du cercle'];
+if (!fair) errors.push(`unfair or toothless attacks: ${JSON.stringify(fights)}`);
+console.log('blood lost:', JSON.stringify(fights));
 
 // Weakened (kneeling, the heartbeat drop), and killed (a corpse in its blood).
 await hold();

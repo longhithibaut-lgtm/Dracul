@@ -76,14 +76,14 @@ export const T = {
   },
 
   // The Order's Purificateur (« grand pixel » rooms, training only for now): a heavy flamethrower. He walks into range,
-  // turns to one of eight directions toward the hero (the way his sprite can face), lights his pilot and marks a cone of
-  // fire on the floor (the telegraph, locked: stepping out of it dodges), then burns along it.
+  // aims at the hero, lights his pilot and marks a cone of fire on the floor (the telegraph, locked: stepping out of it
+  // dodges), then burns along it.
   purifier: {
     hp: 3,
     speed: 30,
     near: 22, far: 38, // keeps the hero between these distances, in his flame's reach
     reach: 44, // the cone's length from his feet; he lights up only with the hero this close
-    halfDeg: 23, // the cone's half-angle (eight directions: a hero anywhere in reach is in one of them)
+    halfDeg: 18, // the cone's half-angle, as on the enemy sheet
     igniteMs: 750, // telegraph: pilot light, cone on the floor
     fireMs: 550, // the jet; the hero standing in the cone is burnt (once: his invulnerability covers the rest)
     recoverMs: 450,

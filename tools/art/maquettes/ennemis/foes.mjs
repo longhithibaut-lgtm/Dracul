@@ -168,13 +168,15 @@ export function penitent(pose = 'idle', seed = 2) {
 }
 
 // ======================= 3. PRÊTRE (lore) =======================
-// over: joints to override (the game's sheet, tools/art/foes.gen.mjs, poses its frames with it)
+// over: joints to override, or a function of the joints returning them (the game's sheet, tools/art/foes.gen.mjs, poses
+// its frames with it); its `glow` scales the monstrance's
 export function pretre(pose = 'idle', over = {}) {
   const atk = pose === 'atk'; const J = clone(std); const b = B(); const { rc, el, tor } = b;
   Object.assign(J, atk ? {
     head: [0, 2.5, 91], neck: [0, 1, 83], Sr: [-8.5, 1, 79], Er: [-8, 9, 80], Wr: [-2, 16, 84], Hr_: [-1, 18, 85],
     Sl: [8.5, 1, 79], El: [8, 7, 70], Wl: [2, 11, 74], Hl_: [1, 12.5, 75],
-  } : { Sr: [-8.5, 0, 78], Er: [-8, 4, 63], Wr: [-3, 8, 64], Hr_: [-1, 8.5, 66], Sl: [8.5, 0, 78], El: [11, 2, 63], Wl: [12, 6, 70], Hl_: [12, 7, 73] }, over);
+  } : { Sr: [-8.5, 0, 78], Er: [-8, 4, 63], Wr: [-3, 8, 64], Hr_: [-1, 8.5, 66], Sl: [8.5, 0, 78], El: [11, 2, 63], Wl: [12, 6, 70], Hl_: [12, 7, 73] });
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   humanoid(J, b, { armM: 2 });
   // robe (bell) + wide sleeves
   b.rev(0, 0, 0.5, 78, t => t < 0.62 ? lerp(15, 9.6, Math.pow(t / 0.62, 0.7)) : lerp(9.6, 7.4, (t - 0.62) / 0.38), 2, 1.5, 0.82, { fold: [9, 1.2] });
@@ -208,12 +210,12 @@ export function pretre(pose = 'idle', over = {}) {
       case 6: return { alb: mix(K.wood, K.woodD, n), spec: 0.2, gloss: 20 };
       case 8: return goldM(x, y, z);
       case 9: return ironM(x, y, z);
-      case 10: return glow(HOLY, atk ? 1.6 : 0.8);
+      case 10: return glow(HOLY, atk ? 1.6 : 0.8 * (J.glow ?? 1));
     }
     return { alb: mix(L('#9a8a78'), L('#6e6050'), n), sss: 0.4, wrap: 0.3 };
   };
   const r = done(b, mat);
-  r.lights = [{ p: add(mo, [0, 3, 0]), c: L('#e8c878'), I: atk ? 5 : 2.2, r0: 30, R: 220, haze: atk ? 0.05 : 0.025, hazeR: atk ? 6 : 4, pad: 4 }];
+  r.lights = [{ p: add(mo, [0, 3, 0]), c: L('#e8c878'), I: atk ? 5 : 2.2 * (J.glow ?? 1), r0: 30, R: 220, haze: atk ? 0.05 : 0.025, hazeR: atk ? 6 : 4, pad: 4 }];
   if (atk) {
     const zc = [0, 54]; r.fx = [{ k: 'zone', c: zc, r: 18, col: 'holy' }]; r.lights.push({ p: [zc[0], zc[1], 8], c: L('#e8c878'), I: 2.0, r0: 20, R: 80, haze: 0.03, hazeR: 10, noShadow: true });
     r.vfx = motes(zc);
@@ -223,14 +225,16 @@ export function pretre(pose = 'idle', over = {}) {
 
 // ======================= 4. PURIFICATEUR (new) =======================
 // pose: 'idle', 'atk' (the jet; 'atk1' another jet), 'tele' (the game's telegraph: the stance, the pilot light flaring, no
-// jet yet); over: joints to override (the game's sheet, tools/art/foes.gen.mjs, poses its frames with it)
+// jet yet); over: joints to override, or a function of the joints returning them (the game's sheet, tools/art/foes.gen.mjs,
+// poses its frames with it); its `flame` scales the pilot light
 export function purificateur(pose = 'idle', over = {}) {
   const fire = pose.startsWith('atk'), tele = pose === 'tele', atk = fire || tele; const J = clone(std); const b = B(); const { rc, el } = b;
   Object.assign(J, {
     head: [0, 7, 84], neck: [0, 4.5, 77], chest: [0, 2.5, 68], pelvis: [0, 0, 50],
     Sr: [-8.5, 2.5, 74], Er: [-10, 8, 60], Wr: [-5, 15, 57], Hr_: [-3.5, 17, 57],
     Sl: [8.5, 2.5, 74], El: [9.5, 3, 59], Wl: [3, 7, 54], Hl_: [1.5, 8, 54],
-  }, atk ? { Kl: [4.5, 9, 26], Al: [5, 8, 4], Tl: [5.5, 14, 1.2], Kr: [-4.5, -5, 26], Ar: [-5, -12, 5], Tr: [-5.5, -7, 1.2], Wr: [-3, 18, 63], Hr_: [-2, 20, 64], Wl: [2, 9, 57], Hl_: [1, 10, 57.5] } : {}, over);
+  }, atk ? { Kl: [4.5, 9, 26], Al: [5, 8, 4], Tl: [5.5, 14, 1.2], Kr: [-4.5, -5, 26], Ar: [-5, -12, 5], Tr: [-5.5, -7, 1.2], Wr: [-3, 18, 63], Hr_: [-2, 20, 64], Wl: [2, 9, 57], Hl_: [1, 10, 57.5] } : {});
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   humanoid(J, b, { thin: 1.1, armM: 2, legM: 6 });
   // waxed leather coat to the ankles + shoulder cape
   b.rev(0, 0.5, 11, 72, t => lerp(12.5, 8.2, Math.pow(t, 0.8)), 2, 1.2, 0.85, { fold: [7, 1.0] });
@@ -250,7 +254,8 @@ export function purificateur(pose = 'idle', over = {}) {
   rc(l0, l1, 1.3, 1.0, 9); el(add(l1, sc(dir, -1)), [1.6, 1.6, 1.6], 8);
   b.chain([[-6, -9, 52], [-9, -2, 44], [-6, 6, 46], l0], 0.9, 5, 0.4);
   const tip = add(l1, sc(dir, 1.5));
-  if (!fire) el(add(tip, sc(dir, tele ? 2 : 1.2)), tele ? [1.6, 1.6, 2.4] : [0.9, 0.9, 1.4], 10); // pilot flame
+  const fl = J.flame ?? 1;
+  if (!fire) el(add(tip, sc(dir, tele ? 2 : 1.2)), (tele ? [1.6, 1.6, 2.4] : [0.9, 0.9, 1.4]).map((v) => v * fl), 10); // pilot flame
   const mat = (m, x, y, z) => {
     const n = fbm3(x * 0.4, y * 0.4, z * 0.4, 3, 21);
     switch (m) {
@@ -268,7 +273,8 @@ export function purificateur(pose = 'idle', over = {}) {
     return { alb: mix(L('#2a221a'), L('#16120e'), n) };
   };
   const r = done(b, mat);
-  r.lights = [{ p: add(tip, sc(dir, 2)), c: L('#e08030'), I: tele ? 5 : 2.6, r0: 16, R: 100, pad: 2, haze: 0.04, hazeR: 2 }];
+  r.lights = [{ p: add(tip, sc(dir, 2)), c: L('#e08030'), I: (tele ? 5 : 2.6) * fl, r0: 16, R: 100, pad: 2, haze: 0.04, hazeR: 2 }];
+  r.tip = tip;
   if (fire) {
     // fire jet: a cone of noisy emissive blobs
     const v = B(); const R = mulberry32(pose === 'atk1' ? 6 : 5);

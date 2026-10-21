@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
+import { aimAt, biteTarget, burnsAfter, dashStopsAt, dashStrikes, drawGifts, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, pickSpot, rayDistance, stepsFrom, take, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -501,13 +501,13 @@ export class RoomScene extends Phaser.Scene {
     e.setData({ state: 'chase', facing: toHero });
   }
 
-  // Purificateur: walks into flame range; ignites (stops, turns to the octant of the hero, the cone on the floor, locked),
+  // Purificateur: walks into flame range; ignites (stops, aims at the hero, the cone on the floor, locked),
   // then burns along the cone; recovers, reloads.
   private stepPurifier(e: Sprite, time: number) {
     const P = T.purifier, from = e.body!.center, to = this.hero.body!.center;
     const toHero = Phaser.Math.Angle.BetweenPoints(from, to), dist = Phaser.Math.Distance.BetweenPoints(from, to);
     // The cone lies on the floor: angles and reach are measured with the ground's foreshortening undone.
-    const inCone = () => inArc({ x: 0, y: 0 }, (e.getData('aim') * Math.PI) / 4, { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, P.reach, 2 * P.halfDeg);
+    const inCone = () => inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, P.reach, 2 * P.halfDeg);
     switch (e.getData('state')) {
       case 'ignite':
         if (time < e.getData('fireAt')) return;
@@ -520,7 +520,7 @@ export class RoomScene extends Phaser.Scene {
         return;
     }
     if (time >= e.getData('readyAt') && dist <= P.reach && this.cameras.main.worldView.contains(from.x, from.y)) {
-      e.setVelocity(0).setData({ state: 'ignite', fireAt: time + P.igniteMs, facing: toHero, aim: Foes.octant(Math.atan2((to.y - from.y) / T.lantern.squash, to.x - from.x)) });
+      e.setVelocity(0).setData({ state: 'ignite', fireAt: time + P.igniteMs, facing: toHero, aim: aimAt(to.x - from.x, to.y - from.y, T.lantern.squash, Foes.DIRS) });
       Sfx.play(this, 'aim', P.igniteMs / 1000);
       return;
     }
@@ -989,7 +989,7 @@ export class RoomScene extends Phaser.Scene {
       if (this.dead) return;
       const e = (Foes.isFoe(kind) ? Foes.create(this, this.enemies, kind, p.x, p.y) : (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y)).setCollideWorldBounds(true);
       const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0 };
-      if (Foes.isFoe(kind)) e.setData({ ...common, kind, human: true, hp: T[kind].hp, readyAt: this.time.now + T[kind].firstMs, aim: 2 });
+      if (Foes.isFoe(kind)) e.setData({ ...common, kind, human: true, hp: T[kind].hp, readyAt: this.time.now + T[kind].firstMs, aim: Math.PI / 2 });
       else if (bow) e.setData({ ...common, kind: 'crossbow', human: true, hp: hp ?? T.crossbow.hp, readyAt: this.time.now + T.crossbow.firstShotMs, reach: 0 });
       else e.setData({ ...common, hp: hp ?? T.enemy.hp, restUntil: 0 });
     });

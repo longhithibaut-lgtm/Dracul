@@ -332,8 +332,8 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
       const dx = s.x - lx, dy = s.body!.bottom - feet, d = Math.hypot(dx, dy);
       sh.setVisible(s.visible && d > 6 && d < 150);
       if (!sh.visible) continue;
-      // A half-scale sheet (foes.ts) casts at its scale; a frame may name the one that casts its shadow (not the jet of fire).
-      sh.setTexture(s.texture.key, (s.frame.customData as { shade?: string }).shade ?? s.frame.name).setPosition(s.x, s.body!.bottom)
+      // A half-scale sheet (foes.ts) casts at its scale.
+      sh.setTexture(s.texture.key, s.frame.name).setPosition(s.x, s.body!.bottom)
         .setOrigin(s.originX, (s.displayOriginY + (s.body!.bottom - s.y) / s.scaleY) / s.frame.height)
         .setFlipX(s.flipX).setRotation(Math.atan2(dy, dx) + Math.PI / 2).setScale(s.scaleX, s.scaleY * Math.min(3.2, Math.max(0.8, d / 22)))
         .setAlpha(0.85 * Math.min(1, 2 - d / 75) * s.alpha).setDepth(s.depth - 0.01);

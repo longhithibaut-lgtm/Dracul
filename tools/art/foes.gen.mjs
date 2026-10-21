@@ -3,15 +3,17 @@
 // with its lights (the cold rim from behind, the warm fill, the vampire's lantern off-frame, their own pilot light and
 // monstrance) and its post (snapped onto its palette, tarnished gold included). One model unit is one pixel at
 // 960x540, like the grand hero (tools/art/grand-hero.gen.mjs): the game draws the sheets at half scale on the x2 view.
-// Five views (facing right, down-right, down, up-right, up: the game mirrors them for the left), each: idle, the walk,
-// the telegraph (ignite / pray), the jet of fire (two flickers), kneeling (the idle sunk to the knees, cut at the floor);
-// one corpse lying on its back. Writes src/purifier.png, src/priest.png and src/foes.data.ts.
+// Five views (facing right, down-right, down, up-right, up: the game mirrors them for the left), each: idle (breathing,
+// the pilot light or the monstrance flickering), the walk (a stride the game turns by the distance walked), the
+// telegraph (ignite / pray), the jet of fire (two flickers; the body and the jet apart, so the game can turn the jet to
+// its real aim), the recoil of a hit, kneeling (the idle sunk to the knees, cut at the floor); one bloodied corpse.
+// Writes src/purifier.png, src/priest.png and src/foes.data.ts.
 // Usage: node tools/art/foes.gen.mjs (~10 s on 4 cores); ONLY=priest renders one of them to
 // shots/priest-preview.png (x2, on grey) instead, to try a pose.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
-import { camera, render, post, haze, project, L } from './maquettes/ennemis/lib.mjs';
+import { camera, render, post, haze, project, L, mix, vn3 } from './maquettes/ennemis/lib.mjs';
 import { writePNG } from './grand/lib.mjs'; // keeps the alpha channel
 import { purificateur, pretre } from './maquettes/ennemis/foes.mjs';
 import { place } from './maquettes/ennemis/fx.mjs';
@@ -30,39 +32,84 @@ function knee(H, A, L1 = 22.3, L2 = 23.2) {
   const pole = [0, 1, 0], pu = pole.map((v, i) => v - u[i] * u[1]), pl = Math.hypot(...pu);
   return H.map((v, i) => v + u[i] * a + (pu[i] / pl) * h);
 }
-// The walk's legs, frame k of 4: contact, passing, contact, passing; each ankle reaches STEP ahead and behind.
+// The walk's legs, frame k of n: each ankle swings STEP ahead and behind, lifted on its way forward. A foot is planted
+// half the cycle while the body passes over it, so a cycle walks 4 STEP model units: 2 STEP room px (STRIDE).
 const STEP = 9;
-function legs(k) {
+function legs(k, n) {
   const o = {};
   for (const [s, x, ph] of [['r', -1, 0], ['l', 1, Math.PI]]) {
-    const a = (k * Math.PI) / 2 + ph, f = Math.cos(a), lift = 5 * Math.max(0, Math.sin(a));
+    const a = (2 * Math.PI * k) / n + ph, f = Math.cos(a), lift = 5 * Math.max(0, Math.sin(a));
     const H = std[`H${s}`], A = [x * 4, -0.5 + STEP * f, 4 + lift];
     Object.assign(o, { [`K${s}`]: knee(H, A), [`A${s}`]: A, [`T${s}`]: [x * 4.4, A[1] + 6.4, Math.max(1, A[2] - 3 + lift * 0.4)] });
   }
   return o;
 }
+// The upper body: breathing lifts it, a recoil tips it back about the hips (a < 0), the head thrown further.
+const UPPER = ['head', 'neck', 'chest', 'Sr', 'Sl', 'Er', 'El', 'Wr', 'Wl', 'Hr_', 'Hl_'];
+const breathe = (J, k) => Object.fromEntries(UPPER.map((n) => [n, add(J[n], [n === 'head' ? 0.3 * k : 0, 0, (n === 'chest' ? 0.5 : 0.8) * k])]));
+function lean(J, a) {
+  const o = Object.fromEntries(UPPER.map((n) => {
+    const y = J[n][1] - J.pelvis[1], z = J[n][2] - J.pelvis[2];
+    return [n, [J[n][0], J.pelvis[1] + y * Math.cos(a) + z * Math.sin(a), J.pelvis[2] + z * Math.cos(a) - y * Math.sin(a)]];
+  }));
+  o.head = add(o.head, [0.8, -2.2, -0.6]);
+  return o;
+}
+// A robe or coat swinging with the stride: shears what hangs below the waist along the model's y, the feet kept planted.
+function sway(m, d) {
+  const k = (z) => { const t = Math.min(1, Math.max(0, (z - 4) / 10)); return t * t * (3 - 2 * t) * Math.max(0, (62 - z) / 52) ** 1.5; };
+  const [x0, y0, z0, x1, y1, z1] = m.bounds;
+  return { ...m, sdf: (x, y, z) => m.sdf(x, y - d * k(z), z) * 0.9, mat: (n, x, y, z, ...r) => m.mat(n, x, y - d * k(z), z, ...r), bounds: [x0, y0 - Math.abs(d), z0, x1, y1 + Math.abs(d), z1] };
+}
 
 // The card's lance points up and across; the game's jet runs along the floor cone it burns: level and straight ahead.
 const AIM = { Er: [-9, 9, 58], Wr: [-1, 18.5, 58.5], Hr_: [0, 21, 58.8] };
+const BREATH = [0, 0.5, 1, 0.5], FLAME = [1, 1.4, 0.8, 1.2], GLOW = [1, 1.15, 1.3, 1.1];
 
-// Each foe: its sheet cell (FW x FH, soles on row SOLE, centred), and its frames: [name, () => model, bob (model z)].
+// Each foe: its sheet cell (FW x FH, soles on row SOLE, centred); its walk (WALK frames a cycle); its frames: [name,
+// () => model, { bob: model z, layer: 'body' (the jet left out) or 'jet' (the jet alone, pivoting on the lance) }].
 const FOES = {
   purifier: {
-    FW: 230, FH: 176, SOLE: 140,
-    frames: [['idle', () => purificateur('idle')], ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => purificateur('idle', legs(k))]),
-      ['ignite', () => purificateur('tele', AIM)], ['fire0', () => purificateur('atk', AIM)], ['fire1', () => purificateur('atk1', AIM)]],
+    FW: 230, FH: 176, SOLE: 140, WALK: 6,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => purificateur('idle', (J) => ({ ...breathe(J, b), flame: FLAME[k] }))]),
+      ...[0, 1, 2, 3, 4, 5].map((k) => [`walk${k}`, () => sway(purificateur('idle', legs(k, 6)), -1.6 * Math.sin((2 * Math.PI * k) / 6)), { bob: -0.6 * Math.abs(Math.cos((2 * Math.PI * k) / 6)) }]),
+      ['ignite', () => purificateur('tele', AIM)],
+      ['fire0', () => purificateur('atk', AIM), { layer: 'body' }], ['fire1', () => purificateur('atk1', AIM), { layer: 'body' }],
+      ['jet0', () => purificateur('atk', AIM), { layer: 'jet' }], ['jet1', () => purificateur('atk1', AIM), { layer: 'jet' }],
+      ['hurt', () => purificateur('idle', (J) => lean(J, -0.2))],
+    ],
+    // Face down, the tanks on his back, arms flung out.
+    corpse: () => lying(purificateur('idle', { Er: [-17, 4, 80], Wr: [-24, 6, 90], Hr_: [-26, 8, 94], El: [17, 2, 70], Wl: [25, 6, 64], Hl_: [28, 8, 63] }), true),
   },
   priest: {
-    FW: 150, FH: 156, SOLE: 140,
-    // Under the bell of his robe the legs never show: he glides, bobbing.
-    frames: [['idle', () => pretre('idle')], ['walk0', () => pretre('idle'), 1.2], ['walk1', () => pretre('idle'), -0.6], ['pray', () => ({ ...pretre('atk'), vfx: null })]],
+    FW: 170, FH: 156, SOLE: 140, WALK: 4,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => pretre('idle', (J) => ({ ...breathe(J, b), glow: GLOW[k] }))]),
+      // His toes show at the hem in turn, the robe swinging with each step.
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => sway(pretre('idle', legs(k, 4)), -2.2 * Math.sin((Math.PI * k) / 2)), { bob: -0.8 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ['pray', () => ({ ...pretre('atk'), vfx: null })],
+      ['hurt', () => pretre('idle', (J) => lean(J, -0.16))],
+    ],
+    // On his back, his arms fallen open at his sides, the staff fallen by him, the gilded mask turned up.
+    corpse: () => lying(pretre('idle', { Er: [-12, 1, 62], Wr: [-17, 3, 48], Hr_: [-18, 4, 43], El: [12, 1, 62], Wl: [17, 3, 48], Hl_: [18, 4, 43] }), false),
   },
 };
-// Lying on his back, head to the right: model x <- world y, model forward <- up, model up <- world x.
-function lying(m) {
-  const [x0, y0, z0, x1, y1, z1] = m.bounds, lift = -y0 - 2, c = (z0 + z1) / 2;
-  const to = (X, Y, Z) => [Y, Z - lift, X + c];
-  return { sdf: (X, Y, Z) => m.sdf(...to(X, Y, Z)), mat: (k, X, Y, Z) => m.mat(k, ...to(X, Y, Z)), bounds: [z0 - c, x0, y0 + lift, z1 - c, x1, y1 + lift], step: m.step, lights: [] };
+// Lying on the floor, head to the right (model up <- world x), on his back (model forward <- up) or face down, slumped
+// (cloth and limbs settle: heights x FLAT); what would sink under the floor is cut off. Blood soaks his chest (or back)
+// and his side on the floor.
+const GORE = [L('#5a0a10'), L('#7a1016')], FLAT = 0.7;
+function lying(m, prone) {
+  const [x0, y0, z0, x1, y1, z1] = m.bounds, c = (z0 + z1) / 2, lift = prone ? 9 : -y0 - 2;
+  const to = (X, Y, Z) => [Y, prone ? lift - Z / FLAT : Z / FLAT - lift, X + c];
+  const blood = (x, y, z) => Math.min(1, Math.max(0, 1.8 - Math.hypot(x * 0.8, (y - (prone ? -8 : 8)) * 0.5, z - 62) / 14 + (vn3(x * 0.4, y * 0.4, z * 0.4, 5) - 0.5) * 1.2));
+  return {
+    sdf: (X, Y, Z) => Math.max(m.sdf(...to(X, Y, Z)) * FLAT, -Z), mat: (k, X, Y, Z) => {
+      const p = to(X, Y, Z), r = m.mat(k, ...p), b = Math.max(blood(...p), Z < 2.5 ? 0.75 : 0);
+      return r.emi ? r : { ...r, alb: mix(r.alb.map((v) => v * 0.8), b > 0.6 ? GORE[1] : GORE[0], Math.min(1, b)), spec: (r.spec ?? 0) * (1 - b) + b * 0.15, gloss: 30 };
+    },
+    bounds: [z0 - c, x0, 0, z1 - c, x1, (prone ? lift - y0 : y1 + lift) * FLAT], step: m.step, lights: [],
+  };
 }
 
 const ONLY = process.env.ONLY?.split(',');
@@ -73,20 +120,21 @@ const JOBS = Object.entries(FOES).filter(([id]) => !ONLY || ONLY.includes(id)).f
 
 // The card's lighting (fiche.mjs put()), the foe standing at the cell's centre turned to `yaw`.
 function scene(job) {
-  const F = FOES[job.id], CX = F.FW / 2, yaw = job.name === 'corpse' ? 0 : VIEWS[job.view];
-  const [, make, bob = 0] = F.frames[Math.max(0, job.n)];
-  let m = make();
-  if (job.name === 'corpse') m = lying(job.id === 'purifier' ? purificateur('idle', { Er: std.Er, Wr: std.Wr, Hr_: std.Hr_, El: std.El, Wl: std.Wl, Hl_: std.Hl_ }) : m);
-  const P = { x: CX, y: job.name === 'corpse' ? -12 : 0, yaw }, objects = [{ name: 'foe', pos: [P.x, P.y, bob], yaw, sdf: m.sdf, mat: m.mat, bounds: m.bounds, id: 1, step: m.step }];
-  if (m.vfx) objects.push({ name: 'vfx', pos: [P.x, P.y, bob], yaw, sdf: m.vfx.sdf, mat: m.vfx.mat, bounds: m.vfx.bounds, id: 2, step: m.vfx.step, noShadow: true, noSelfAO: true });
+  const F = FOES[job.id], CX = F.FW / 2, dead = job.name === 'corpse', yaw = dead ? 0.25 : VIEWS[job.view];
+  const [, make, { bob = 0, layer } = {}] = dead ? [] : F.frames[job.n];
+  const m = dead ? F.corpse() : make();
+  const P = { x: CX, y: dead ? -12 : 0, yaw }, objects = [];
+  if (layer !== 'jet') objects.push({ name: 'foe', pos: [P.x, P.y, bob], yaw, sdf: m.sdf, mat: m.mat, bounds: m.bounds, id: 1, step: m.step });
+  if (m.vfx && layer !== 'body') objects.push({ name: 'vfx', pos: [P.x, P.y, bob], yaw, sdf: m.vfx.sdf, mat: m.vfx.mat, bounds: m.vfx.bounds, id: 2, step: m.vfx.step, noShadow: true, noSelfAO: true });
   const lights = [
-    { p: [P.x + 30, P.y - 60, 75], c: L('#8098a2'), I: 9, r0: 90, R: 260, soft: 10, only: ['foe'] },
+    { p: [P.x + 30, P.y - 60, 75], c: L('#8098a2'), I: dead ? 3 : 9, r0: 90, R: 260, soft: 10, only: ['foe'] }, // (it would lay a cold sheen all over a body lying down)
     { p: [P.x - 70, P.y + 70, 140], c: L('#a08a70'), I: 0.9, r0: 130, R: 420, soft: 12 },
     { p: [P.x + 28, P.y + 50, 60], c: L('#b8a68a'), I: 2.4, r0: 40, R: 170, soft: 6 }, // the vampire's lantern, off-frame
     // its own (the priest's light on the holy zone falls on the floor, which the game draws)
     ...m.lights.filter((l) => !l.noShadow).map((l) => ({ soft: 5, R: 200, ...l, p: add(place(P, l.p), [0, 0, bob]) })),
   ];
-  const own = m.lights[0] ? project(cam, ...add(place(P, m.lights[0].p), [0, 0, bob]), -F.SOLE) : [CX, 0];
+  // Where its own light is (the jet: where it leaves the lance, its pivot in the game).
+  const at = layer === 'jet' ? m.tip : m.lights[0]?.p, own = at ? project(cam, ...add(place(P, at), [0, 0, bob]), -F.SOLE) : [CX, 0];
   return { sc: { W: F.FW, H: F.FH, cam, off: -F.SOLE, objects, lights, env: null, ambient: L('#1a1c1e').map((v) => v * 0.6) }, lamp: own };
 }
 
@@ -105,7 +153,7 @@ if (isMainThread) {
     const cells = [], frames = {};
     for (const view of Object.keys(VIEWS)) {
       for (const [name] of F.frames) cells.push([`${view}-${name}`, all.find((j) => j.id === id && j.view === view && j.name === name)]);
-      const idle = cells.find(([n]) => n === `${view}-idle`)[1], px = new Uint8ClampedArray(idle.px.length);
+      const idle = cells.find(([n]) => n === `${view}-idle0`)[1], px = new Uint8ClampedArray(idle.px.length);
       for (let y = 0; y + KNEEL <= F.SOLE; y++) px.set(idle.px.subarray(y * F.FW * 4, (y + 1) * F.FW * 4), (y + KNEEL) * F.FW * 4);
       cells.push([`${view}-kneel`, { px, lamp: [idle.lamp[0], idle.lamp[1] + KNEEL] }]);
     }
@@ -122,13 +170,15 @@ if (isMainThread) {
       continue;
     }
     writePNG(`src/${id}.png`, rgba, W, H);
-    data[id] = { FW: F.FW, FH: F.FH, COLS, SOLE: F.SOLE, FRAMES: frames };
+    data[id] = { FW: F.FW, FH: F.FH, COLS, SOLE: F.SOLE, WALK: F.WALK, STRIDE: 2 * STEP, FRAMES: frames };
     console.log(`src/${id}.png ${W}x${H}, ${cells.length} cells`);
   }
   if (!ONLY) writeFileSync('src/foes.data.ts', `// Generated by tools/art/foes.gen.mjs: edit the models there (and in tools/art/maquettes/ennemis/foes.mjs), not this table.
 // The Purificateur's and the Prêtre's sheets (src/purifier.png, src/priest.png): FW x FH cells, COLS per row, soles on row
-// SOLE, centred; each frame's cell and where its own light is (sheet px: the pilot light, the monstrance).
-export type Sheet = { FW: number; FH: number; COLS: number; SOLE: number; FRAMES: Record<string, { cell: number; lamp: [number, number] }> };
+// SOLE, centred; WALK frames a walk cycle, which covers STRIDE room px of floor (screen rows / ${cam.s.toFixed(4)}); each frame's
+// cell and where its own light is (sheet px: the pilot light, the monstrance; for the jet, its pivot on the lance).
+export const FLOOR = ${cam.s.toFixed(4)}; // how much the sheets' floor is foreshortened up the screen
+export type Sheet = { FW: number; FH: number; COLS: number; SOLE: number; WALK: number; STRIDE: number; FRAMES: Record<string, { cell: number; lamp: [number, number] }> };
 export const SHEETS: Record<'purifier' | 'priest', Sheet> = ${JSON.stringify(data)};
 `);
   console.log(`${((Date.now() - t0) / 1000).toFixed(1)} s`);

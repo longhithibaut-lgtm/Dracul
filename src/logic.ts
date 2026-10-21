@@ -186,3 +186,10 @@ export function edgePip(x: number, y: number, w: number, h: number, m: number) {
   if (!dx && !dy) return undefined;
   return { x: Math.min(Math.max(x, m), w - m), y: Math.min(Math.max(y, m), h - m), dx, dy };
 }
+
+/** An aim at a target (dx, dy) room px away, as an angle on the floor (the ground's foreshortening `squash` undone),
+ *  snapped to one of `dirs` directions. */
+export function aimAt(dx: number, dy: number, squash: number, dirs: number): number {
+  const step = (2 * Math.PI) / dirs;
+  return Math.round(Math.atan2(dy / squash, dx) / step) * step;
+}
