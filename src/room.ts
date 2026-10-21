@@ -2,7 +2,10 @@ import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import * as Torture from './torture.ts';
 import * as Refuge from './refuge.ts';
-import type { Look } from './dark.ts';
+import * as Baked from './baked.ts';
+import * as Crypt from './crypt.data.ts';
+import * as Cloister from './cloister.data.ts';
+import { TORTURE, type Look } from './dark.ts';
 
 type P = { x: number; y: number };
 // How the arena looks and where its solid parts are.
@@ -20,7 +23,7 @@ export type Room = {
   burn: { graceMs: number; burnEveryMs: number; damage: number }; // how that light burns: like a lantern, or the Dawn's
   arcades: Phaser.GameObjects.Image[]; // the cloister's: their bottom row is their feet line; see through one from behind
   width: number; height: number; // of the whole room: a crypt's (RH), the cloister's three screens, the refuge (the camera follows the hero)
-  look?: Look; // in the dark (dark.ts): how it is lit, the torture room's by default
+  look?: Look; // in the dark (dark.ts): how it is lit
   sections: number[]; // feet lines the hero climbs past into the room's next part, bottom first (none: one part)
 };
 
@@ -36,6 +39,27 @@ export const LAYOUTS = ['hall', 'nave', 'ossuary', 'chapel', 'cloister'] as cons
 // refuge (refuge.ts), in the same dark, is where the game starts and where the hero re-forms after a death.
 type Painted = (typeof LAYOUTS)[number] | 'torture';
 export type LayoutId = Painted | 'refuge';
+
+// The run rooms repainted in the « grand pixel » style (docs/art.md), baked offline by tools/art/rooms.gen.mjs into
+// src/<key>-*.png and src/<key>.data.ts: their gameplay plan unchanged, lit by dark.ts as their Look says (the hero's
+// lantern, the flames, the Order's lights). Their painted versions below stay until every layout is baked.
+const BAKED: Partial<Record<LayoutId, { key: string; D: Baked.Plan; look: Look }>> = {
+  hall: { key: 'crypt', D: Crypt, look: { light: 'crypt-light', texel: 2, torches: [], flicker: true, amb: '#000000', night: 0.2,
+    lamp: [5, 40, 180], ys: 1 / 0.616, post: [3.3, 0.42, 0.18, 0.02], vig: [1.15, 0.4, 0.02, 0.004], pal: [], wY: 1.6 } },
+  // Under the Dawn, brighter than the crypts (its mockup's post): the light is the sun's, the lantern a glow.
+  cloister: { key: 'cloister', D: Cloister, look: { light: 'cloister-light', texel: 2, torches: [], flicker: false, amb: '#000000', night: 0,
+    lamp: [1.6, 13, 70], ys: 1 / 0.616, post: [3, 0.4, 0.2, 0.01], vig: [1.12, 0.22, 0.022, 0.004], pal: [], wY: 1.6, sprites: 0.4, warm: 0.25 } },
+};
+/** How a room in the « grand pixel » style is lit (dark.ts), undefined for the painted ones: its sprites wear their dark
+ *  skin, the view is zoomed x2 and the hero is the grand vampire. */
+export function look(id: LayoutId): Look | undefined {
+  return id === 'refuge' ? Refuge.LOOK : id === 'torture' ? TORTURE : BAKED[id]?.look;
+}
+/** What a room's build needs loaded: a baked room's images. */
+export function preload(scene: Phaser.Scene, id: LayoutId) {
+  const b = id === 'refuge' ? 'refuge' : BAKED[id]?.key;
+  if (b) Baked.preload(scene, b);
+}
 
 // Palette "Nuit de sang" (docs/art.md) plus crimson walls, a moonlit blue floor and the magenta dark beyond.
 const P = {
@@ -1948,6 +1972,7 @@ function paintGateLight(p: Px) {
 
 /** Winches the portcullis up over `ms`, in jerks of a few pixels, letting the moonlight in. */
 export function raiseGate(scene: Phaser.Scene, ms: number) {
+  if (Baked.raise(scene, ms)) return;
   const light = scene.children.getByName('room-gatelight') as Phaser.GameObjects.Image;
   let last = 0;
   scene.tweens.addCounter({ from: 0, to: 1, duration: ms, ease: 'Sine.easeInOut', onUpdate: (tw) => {
@@ -1961,6 +1986,8 @@ export function raiseGate(scene: Phaser.Scene, ms: number) {
 
 export function build(scene: Phaser.Scene, id: LayoutId): Room {
   if (id === 'refuge') return Refuge.build(scene);
+  const b = BAKED[id];
+  if (b) return Baked.room(scene, b.key, b.D, b.look);
   const L = LAYOUT[id], height = L.open ? CH : RH, fy1 = height - 14; // the floor's front edge
   if (!BARS_OF[id]) paintHall(scene, id); // painted on the layout's first build, kept across restarts
   BARS = BARS_OF[id]!;
@@ -2036,6 +2063,7 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
     width: T.width,
     height,
     sections: L.sections ?? [],
+    look: L.dark ? TORTURE : undefined,
   };
   // Self-check: every start point is inside the room and clear of every footprint and pit (with a body's margin), and
   // so is every lantern spot.

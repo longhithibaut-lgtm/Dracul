@@ -69,6 +69,8 @@ export function render(scene) {
   const N = W * H;
   const out = new Float32Array(N * 3), oid = new Int16Array(N).fill(-1), emis = new Float32Array(N), depth = new Float32Array(N).fill(1e9);
   const nrm = new Float32Array(N * 3), alb3 = new Float32Array(N * 3), emi3 = new Float32Array(N * 3); // albedo and emission, for the game's refuge
+  const sun = new Float32Array(N); // how much a `mask` light (the Dawn) is not shadowed at each pixel, for the game's cloister
+  const clip = scene.clip; // [x0, y0, x1, y1]: render only this box (the game's gate frames)
   const [vx, vy, vz] = cam.v;
   // object world AABBs + screen boxes
   for (const o of objects) {
@@ -126,13 +128,14 @@ export function render(scene) {
   const T0 = 4000;
   for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
     if (scene.rowN && py % scene.rowN !== scene.rowK) { px = W; continue; }
+    if (clip && (py < clip[1] || py >= clip[3] || px < clip[0] || px >= clip[2])) continue;
     const i = py * W + px;
     const sy = py + 0.5 + off, sx = px + 0.5 + offX;
     const ox = sx - vx * T0, oy = sy * cam.ey[1] - vy * T0, oz = sy * cam.ey[2] - vz * T0;
     let best = env ? env(ox, oy, oz, vx, vy, vz) : null; let tBest = best ? best.t : 1e9;
     let hitO = null, hitT = 0;
     for (const o of objects) {
-      if (px < o.sb[0] || px > o.sb[2] || py < o.sb[1] || py > o.sb[3]) continue;
+      if (o.ghost || px < o.sb[0] || px > o.sb[2] || py < o.sb[1] || py > o.sb[3]) continue; // a ghost only casts shadows
       const r = slab(o, ox, oy, oz, vx, vy, vz, tBest); if (!r) continue;
       let t = r[0];
       for (let k = 0; k < 220 && t <= r[1]; k++) {
@@ -178,10 +181,11 @@ export function render(scene) {
       const ux = dx / dist, uy = dy / dist, uz = dz / dist;
       let ndl = Nn[0] * ux + Nn[1] * uy + Nn[2] * uz;
       const wrap = m.wrap ?? 0.2; const dif = Math.max(0, (ndl + wrap) / (1 + wrap));
+      if (l.mask) sun[i] = m.noShadow ? 1 : shadow(P[0] + Nn[0] * 0.3, P[1] + Nn[1] * 0.3, P[2] + Nn[2] * 0.3, l.p[0], l.p[1], l.p[2], l); // the Dawn's shade alone
       if (dif <= 0 && !m.trans) continue;
       const fall = l.I / (1 + (dist / l.r0) ** 2) * Math.pow(Math.max(0, 1 - (dist / l.R) ** 2), 2);
       if (fall < 1e-4) continue;
-      const sh = (l.noShadow || m.noShadow) ? 1 : shadow(P[0] + Nn[0] * 0.3, P[1] + Nn[1] * 0.3, P[2] + Nn[2] * 0.3, l.p[0], l.p[1], l.p[2], l);
+      const sh = (l.noShadow || m.noShadow) ? 1 : l.mask ? sun[i] : shadow(P[0] + Nn[0] * 0.3, P[1] + Nn[1] * 0.3, P[2] + Nn[2] * 0.3, l.p[0], l.p[1], l.p[2], l);
       if (sh <= 0) continue;
       let k = fall * sh;
       // diffuse
@@ -196,7 +200,7 @@ export function render(scene) {
     if (m.emi) { r += m.emi[0]; g += m.emi[1]; b += m.emi[2]; emis[i] = m.emi[0] + m.emi[1] + m.emi[2]; emi3.set(m.emi, i * 3); }
     out[i * 3] = r; out[i * 3 + 1] = g; out[i * 3 + 2] = b;
   }
-  return { out, oid, emis, depth, nrm, alb3, emi3, W, H };
+  return { out, oid, emis, depth, nrm, alb3, emi3, sun, W, H };
 }
 
 // screen-space light haze

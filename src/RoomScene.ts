@@ -120,8 +120,8 @@ export class RoomScene extends Phaser.Scene {
   }
 
   preload() {
-    if (this.layout === 'torture' || this.layout === 'refuge') Wanderer.preload(this);
-    if (this.layout === 'refuge') Refuge.preload(this);
+    Wanderer.preload(this); // the grand vampire's sheet, for the rooms in the dark
+    Room.preload(this, this.layout);
     Foes.preload(this); // the training room calls them into any room
   }
 
@@ -129,7 +129,7 @@ export class RoomScene extends Phaser.Scene {
     // Clocks and physics outlive a restart: undo a slow motion or a pause it may have cut short.
     this.time.timeScale = this.tweens.timeScale = this.physics.world.timeScale = 1;
     this.physics.resume();
-    Dark.skin.dark = this.layout === 'torture' || this.layout === 'refuge'; // before anyone is drawn: these rooms' sprites wear their skin
+    Dark.skin.dark = !!Room.look(this.layout); // before anyone is drawn: the rooms in the dark have their sprites wear their skin
     Dark.skin.zoom = Dark.skin.dark ? 2 : 1;
     Dark.fit(this.scale);
     this.cameras.main.setZoom(Dark.skin.zoom);

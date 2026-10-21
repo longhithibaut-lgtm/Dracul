@@ -200,3 +200,14 @@ export function onLine(origin: { x: number; y: number }, angle: number, target: 
   const dx = target.x - origin.x, dy = target.y - origin.y, along = dx * Math.cos(angle) + dy * Math.sin(angle);
   return along >= 0 && along <= length && Math.abs(dy * Math.cos(angle) - dx * Math.sin(angle)) <= half;
 }
+
+/** A w x h mask from rows of base-36 run lengths, out and in by turns ('a,3,1;...': a baked room's HOLY,
+ *  tools/art/rooms.gen.mjs); 1 in. */
+export function runMask(runs: string, w: number, h: number): Uint8Array {
+  const m = new Uint8Array(w * h);
+  runs.split(';').forEach((row, y) => {
+    let x = 0, v = 0;
+    for (const r of row.split(',')) { const n = parseInt(r, 36); if (v) m.fill(1, y * w + x, y * w + x + n); x += n; v ^= 1; }
+  });
+  return m;
+}

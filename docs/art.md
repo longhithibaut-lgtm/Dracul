@@ -1,8 +1,8 @@
 # Direction artistique
 
-Deux directions coexistent. La **« grand pixel »** est en essai (salle de torture) et doit remplacer l'autre ; la
-**« Nuit de sang »**, la direction précédente, reste celle de toutes les autres salles tant qu'elles ne sont pas
-converties. Sections inspirées du modèle d'art bible de
+Deux directions coexistent. La **« grand pixel »** (salle de torture, refuge, crypte et cloître) doit remplacer
+l'autre ; la **« Nuit de sang »**, la direction précédente, reste celle de la nef, de l'ossuaire et de la chapelle tant
+qu'elles ne sont pas converties. Sections inspirées du modèle d'art bible de
 [claude-code-game-studios](https://github.com/donchitos/claude-code-game-studios) (MIT) ; chaque règle cite une
 décision ou une maquette validée.
 
@@ -11,8 +11,10 @@ décision ou une maquette validée.
 **En une phrase** : grand pixel, réaliste, pas de contours, horreur crue et malsaine.
 
 **Technique** (décisions du 2026-10-19 et 2026-10-20)
-- Vue native 960×540 (affichée ×2 en 1080p). Dans le jeu aujourd'hui, seule la salle de torture (essai) passe en ×2
-  (`skin.zoom` de `src/dark.ts`), le héros dessiné à l'échelle ½ ; densités de pixels mêlées acceptées.
+- Vue native 960×540 (affichée ×2 en 1080p). Dans le jeu, les salles de cette direction passent en ×2 (`skin.zoom` de
+  `src/dark.ts`, choisi par `Room.look`), le héros dessiné à l'échelle ½. Le refuge, la crypte et le cloître sont des
+  scènes 3D rendues hors ligne au pixel de la maquette (deux par pixel de salle) ; la salle de torture garde ses gros
+  pixels (densités mêlées acceptées).
 - Personnages d'environ 80 px, rendus hors ligne depuis des modèles 3D simples éclairés (ombres portées, occlusion
   ambiante, liseré froid de dos), puis réduits en pixels sur une palette malade (67 couleurs pour le héros). Aucun
   contour. Chaque animation est rendue depuis le modèle posé par quelques nombres (`tools/art/grand-hero.gen.mjs`).
@@ -29,7 +31,10 @@ marche lente, les pieds tiennent au sol (course pilotée par la distance).
 
 **Lieux** : le refuge validé (`docs/maquettes/refuge-*.png`, `refuge2-*.png`, plan dans `docs/lore.md`) ; la salle de
 torture (`docs/maquettes/grand-ecran.png`, `src/torture.ts`) : pierre crasseuse, sang séché, torches mourantes, pendus,
-cages, fosse aux corps.
+cages, fosse aux corps ; la crypte (`tools/art/rooms/crypt.mjs`) : dalles crasseuses, médaillons gravés sous deux rais
+de lune, cercueils moisis sur leurs socles, piliers à torche, braseros, bougies, ossuaire, os et vieux sang ; le cloître
+sous l'Aube (`docs/maquettes/cloitre.png`, `tools/art/rooms/cloister.mjs`) : soleil sacré dur venu d'en haut à gauche,
+ombres froides nettes, plus clair que les cryptes ; le soleil y est le danger, l'ombre l'abri.
 
 **Maquettes** (`docs/maquettes/`, générateurs dans `tools/art/maquettes/`)
 
@@ -40,7 +45,8 @@ cages, fosse aux corps.
 | `a-encre-gothique.png`, `b-crasse-et-faim.png`, `c-clair-obscur.png` | pistes écartées (la B a donné l'éclairage) |
 | `fx-a-sang*.png` | effets de combat retenus (sang artériel, gouttes, caillots ; `src/fx-blood.ts`) |
 | `fx-b-*.png`, `fx-c-*.png` | pistes d'effets écartées (ombre, cendre) |
-| `cloitre.png`, `ennemis-*.png` | archivées, pas encore de décision |
+| `cloitre.png` | cloître validé (« plus clair dehors, moins d'arbres ») |
+| `ennemis-*.png` | ennemis retenus (voir `docs/decisions.md`) |
 
 **À décider avec l'utilisateur** (aucune règle tant que ce n'est pas tranché) : palette commune des salles, ennemis
 dans cette direction, HUD et police à 960×540, conversion des autres salles.

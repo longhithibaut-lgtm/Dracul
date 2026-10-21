@@ -3,9 +3,7 @@ import type { Room } from './room.ts';
 import type { Look } from './dark.ts';
 import { T } from './tuning.ts';
 import * as D from './refuge.data.ts';
-import albedo from './refuge-albedo.png';
-import light from './refuge-light.png';
-import over from './refuge-over.png';
+import * as Baked from './baked.ts';
 
 // The refuge (docs/lore.md « Le refuge »), as its validated mockup shows it before any chief is freed: the crypt of
 // coffins where the hero re-forms (his coffin, the four chiefs' shut on their catafalques), the great hall round the dry
@@ -21,21 +19,8 @@ export const LOOK: Look = {
 };
 export const STAIRS = D.STAIRS;
 
-export function preload(scene: Phaser.Scene) {
-  for (const [key, url] of [['refuge-albedo', albedo], ['refuge-light', light], ['refuge-over', over]])
-    if (!scene.textures.exists(key)) scene.load.image(key, url);
-}
-
 export function build(scene: Phaser.Scene): Room {
-  scene.add.image(0, 0, 'refuge-albedo').setOrigin(0).setScale(0.5).setDepth(-1000);
-  // What stands in front of the floor, sorted at its floor row like a prop.
-  const tex = scene.textures.get('refuge-over');
-  D.OVER.forEach(([ax, ay, w, h, x, y, depth], n) => {
-    if (!tex.has(String(n))) tex.add(String(n), 0, ax, ay, w, h);
-    scene.add.image(x / 2, y / 2, 'refuge-over', String(n)).setOrigin(0).setScale(0.5).setDepth(depth);
-  });
-  const obstacles = scene.physics.add.staticGroup();
-  for (const [x, y, w, h] of D.BOXES) obstacles.add(scene.add.zone(x + w / 2, y + h / 2, w, h));
+  const obstacles = Baked.draw(scene, 'refuge', D.OVER, D.BOXES);
   return {
     bounds: new Phaser.Geom.Rectangle(0, 0, D.W, D.H),
     obstacles,

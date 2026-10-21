@@ -60,7 +60,7 @@ await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 // The game starts in the refuge: a run, room 1 in the crypt.
 await page.evaluate(() => window.game.scene.getScene('room').scene.restart({ layout: 'hall' }));
-await page.waitForFunction(() => window.game.scene.getScene('room').layout === 'hall' && window.game.scene.getScene('room').hero?.body);
+await page.waitForFunction(() => window.game.scene.getScene('room').layout === 'hall' && window.game.scene.getScene('room').hero?.body && window.game.scene.isActive('room'));
 await page.waitForTimeout(400);
 
 await freeze(true);
@@ -223,7 +223,7 @@ let bit = null;
       s.bite();
       return s.health;
     }, p);
-    await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.time.now - s.biteAt > 300; });
+    await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.time.now - s.biteAt > 150; }); // mid-drain, with frames to spare in the dark rooms' slower headless frames
     await freeze(true);
     const latched = await page.evaluate(() => !!window.game.scene.getScene('room').prey);
     if (latched) await shot('bite', await clip(p.x - 6, p.y - 8, 240, 200));
@@ -281,11 +281,10 @@ let training = false;
     for (const s of ['ghoul', 'weak', 'lantern']) await page.click(`#training [data-spawn="${s}"]`);
     await page.click('#training [data-opt="passive"]');
     for (const g of ['nuee', 'eclats', 'perce']) await page.click(`#training [data-gift="${g}"]`);
-    await page.waitForTimeout(1200); // past the spawn telegraphs
-    training = await page.evaluate(() => {
+    training = await page.waitForFunction(() => { // past the spawn telegraphs (slower in game time when frames are slow)
       const s = window.game.scene.getScene('room');
       return s.training && s.gifts.includes('nuee') && s.enemies.getChildren().filter((e) => e.body?.enable).length === 2 && s.lanterns.length === 1;
-    });
+    }, null, { timeout: 8000 }).then(() => true, () => false);
     await freeze(true);
     await shot('training');
     await freeze(false);
@@ -343,10 +342,10 @@ if (training) {
     s.hero.body.reset(275, 201);
   });
   await snap();
-  await page.waitForTimeout(50);
+  await page.waitForTimeout(300); // the camera's view is updated on its next frame (slow, headless, in the dark rooms)
   const to = await screen(322, 206);
   await page.mouse.move(to.x, to.y);
-  await page.waitForTimeout(100); // the pointer is read on Phaser's next step
+  await page.waitForTimeout(400); // the pointer is read on Phaser's next step (a slow one, headless, in the dark rooms)
   await page.keyboard.press('e');
   glyph = await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.glyph?.chains.size === 2 && s.time.now - s.glyph.caughtAt > 300; }, null, { timeout: 5000 })
     .then(() => true, () => false);
@@ -360,7 +359,7 @@ if (training) {
 const layouts = [];
 for (const id of ['hall', 'nave', 'ossuary', 'chapel', 'cloister']) {
   await page.evaluate((layout) => window.game.scene.getScene('room').scene.restart({ layout }), id);
-  await page.waitForFunction((id) => { const s = window.game.scene.getScene('room'); return s.layout === id && !s.training; }, id);
+  await page.waitForFunction((id) => { const s = window.game.scene.getScene('room'); return s.layout === id && !s.training && s.sys.isActive(); }, id); // active: a baked room's images loaded
   await page.evaluate(() => { // no wave: the room empty (a slow first build's long frame may already have called it)
     const s = window.game.scene.getScene('room');
     s.time.removeAllEvents();
@@ -370,13 +369,15 @@ for (const id of ['hall', 'nave', 'ossuary', 'chapel', 'cloister']) {
   if (!(await page.evaluate((id) => window.game.scene.getScene('room').layout === id && !document.querySelector('#training'), id))) continue;
   const h = await page.evaluate(() => { // the HUD's camera and the vignette framing the screen would show at every seam
     const s = window.game.scene.getScene('room');
-    s.cameras.cameras.slice(1).forEach((c) => c.setVisible(false));
+    s.cameras.cameras.filter((c) => c !== s.cameras.main && c.name !== 'dark-over').forEach((c) => c.setVisible(false));
     s.children.list.find((o) => o.texture?.key === 'room-vignette')?.setVisible(false);
+    const f = s.cameras.main.filters.internal.list[0]; // a room in the dark: its light's own vignette
+    if (f?.look) f.look = { ...f.look, vig: [1, 0, f.look.vig[2], f.look.vig[3]] };
     return s.room.height;
   });
   const parts = [];
   for (let y = h - 270; ; y = Math.max(0, y - 270)) {
-    await page.evaluate((y) => { const c = window.game.scene.getScene('room').cameras.main; c.stopFollow(); c.setScroll(0, y); }, y);
+    await page.evaluate((y) => { const c = window.game.scene.getScene('room').cameras.main; c.stopFollow(); c.setScroll((c.worldView.width - c.width) / 2, y + (c.worldView.height - c.height) / 2); }, y); // zoomed or not: the room point (0, y) at the top left
     await page.waitForTimeout(100);
     await freeze(true);
     parts.push({ y, png: (await page.screenshot()).toString('base64') });
@@ -406,7 +407,7 @@ if (layouts.at(-1) === 'cloister') {
   if (await page.evaluate(({ x, y }) => {
     const s = window.game.scene.getScene('room');
     s.hero.body.reset(x, y);
-    s.cameras.main.setScroll(0, y - 135);
+    s.cameras.main.stopFollow(); s.cameras.main.centerOn(x, y);
     s.litMs = 0;
     return s.room.holy(x, y + 8);
   }, at)) {
