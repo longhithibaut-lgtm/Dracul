@@ -1,6 +1,6 @@
 # Dracul : direction « extraction × ARPG » (document de travail)
 
-Statut : **proposition, à valider avec l'utilisateur**. Rien n'est codé. Les points marqués *(à valider)* touchent au
+Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Rien n'est codé. Les points marqués *(à valider)* touchent au
 lore (`docs/lore.md`) ou sont des choix ouverts.
 
 ## 1. L'idée en une phrase
@@ -81,7 +81,7 @@ toujours (sauvegardé). C'est ce qui rend les zones lointaines accessibles sans 
 - **La monnaie** : tuer, finir une quête, ouvrir un trésor donne du sang.
 - Le sang **porté** est perdu à la mort. Il n'est gagné que **versé au bassin** du refuge.
 - Le sang de vie (les gouttes du HUD) et le sang récolté sont **deux choses différentes** : on ne paie pas avec sa
-  vie. *(à valider : un choix plus horrifique serait une seule réserve, où chaque achat coûte de la vie.)*
+  vie *(validé)*.
 
 ### Les objets
 Proposition de trois familles, lisibles et peu nombreuses :
@@ -94,9 +94,10 @@ Proposition de trois familles, lisibles et peu nombreuses :
 
 - Raretés : commun, rare, épique (déjà en place pour les Dons).
 - Les objets trouvés dans une zone lointaine sont meilleurs.
-- On équipe au refuge **et** sur le terrain. Ce qui est équipé est porté : perdu à la mort aussi.
-  *(à valider : un emplacement « assuré », un seul objet qu'on garde même en mourant, comme dans les jeux
-  d'extraction.)*
+- On équipe au refuge **et** sur le terrain. Ce qui est trouvé en expédition est perdu à la mort tant qu'il n'est
+  pas rapporté ; **un objet rapporté au refuge est acquis pour toujours**, même équipé et même si l'on meurt ensuite
+  avec *(validé ; pas d'emplacement « assuré »)*.
+- **Le sac est limité** : il faut choisir ce qu'on rapporte *(validé ; la taille s'améliore au refuge)*.
 
 ### Ce que deviennent les Dons et les Pactes
 - Les **Dons du Rat** deviennent des **pouvoirs débloqués au refuge** auprès de Vesna, une fois libérée (Peste, rats,
@@ -104,12 +105,17 @@ Proposition de trois familles, lisibles et peu nombreuses :
 - Les **Pactes de sang** restent : ce sont des reliques maudites trouvées dans le monde, très fortes avec un prix.
 - La rareté passe des Dons aux objets.
 
+### Le soin
+- **La morsure n'est plus là au départ** : elle devient une **amélioration** à débloquer au refuge *(validé)*.
+- Les autres soins existent mais sont **très rares** (fioles, autels, quêtes) *(validé)*. La vie est donc la
+  ressource qui décide du retour.
+
 ## 7. Le refuge
 
 - **Le bassin de sang** : on y verse le sang rapporté. C'est la banque.
 - **Le coffre** : les objets rapportés.
 - **Les améliorations** payées en sang :
-  - **le héros** : vie maximum, recharge de la brume, dégâts de base, taille du sac ;
+  - **le héros** : la morsure, vie maximum, recharge de la brume, dégâts de base, taille du sac ;
   - **le refuge** : salles qui se réparent et ouvrent des services (atelier pour améliorer un objet, autel des
     pouvoirs, carte des raccourcis) ;
   - **les maisons** : chaque chef libéré ouvre sa salle et ses améliorations propres (Vesna : rats et Peste ;
@@ -167,10 +173,10 @@ complet, plusieurs dizaines.
 
 ## 11. Questions ouvertes
 
-1. Sang de vie et sang récolté : deux réserves, ou une seule (acheter coûte de la vie) ?
-2. Un emplacement « assuré » qu'on garde en mourant ?
-3. Taille du sac : limitée (choix de ce qu'on rapporte) ou illimitée ?
-4. Le héros peut-il soigner sur le terrain autrement qu'en mordant (fioles trouvées) ?
-5. Les zones : l'ordre et les noms ci-dessus vous vont-ils ?
+1. ~~Sang de vie et sang récolté~~ : deux réserves séparées.
+2. ~~Emplacement assuré~~ : non ; ce qui est rapporté est acquis pour toujours.
+3. ~~Sac~~ : limité.
+4. ~~Soin~~ : la morsure devient une amélioration ; autres soins très rares.
+5. ~~Les zones~~ : validées telles quelles pour l'instant ; on agrandira peut-être plus tard.
 6. Les vampires sans maison et les humains : qui sont-ils, que veulent-ils ?
-7. La fin reste-t-elle la même (libérer l'Ancêtre éteint l'Aube) ?
+7. ~~La fin~~ : elle peut changer ; à réécrire plus tard avec l'utilisateur.
