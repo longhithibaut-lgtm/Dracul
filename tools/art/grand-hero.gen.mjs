@@ -2,10 +2,11 @@
 // (tools/art/grand/hero.mjs) posed per frame, lit by his lantern, a cold back rim and a faint warm fill with real
 // shadows and ambient occlusion (tools/art/grand/lib.mjs), then the mockup's post (filmic, desaturated, light dither,
 // snapped onto its 67 colours). One model unit is one pixel at 960x540: he stands ~80 px tall; the game draws the
-// sheet at half scale on its x2 view of that room (dark.ts). Views down / up / side (side faces right, the game
-// mirrors it): idle 2 frames (breathing, the lantern swaying), run 8, then each action's steps (ACTS: the three claw
-// strikes, the mist, the throw, the glyph, the bite, the flinch), posed from a few numbers each by rig().
-// Writes src/grand-hero.png (two rows per view) and src/grand.data.ts. Usage: node tools/art/grand-hero.gen.mjs (~30 s
+// sheet at half scale on its x2 view of that room (dark.ts). Views down / up / side and the diagonals downside /
+// upside (the side ones face right, the game mirrors them): idle 2 frames (breathing, the lantern swaying), the walks
+// (WALKS: run 8, backpedal and the two side-steps 6), halt 1, then each action's steps (ACTS: the three claw strikes,
+// the mist, the throw, the glyph, the bite, the flinch), posed from a few numbers each by rig().
+// Writes src/grand-hero.png (two rows per view) and src/grand.data.ts. Usage: node tools/art/grand-hero.gen.mjs (~1 min
 // on 4 cores); ONLY=claw0,bite renders just those actions to shots/grand-preview.png (x3, on grey), to try a pose.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { writeFileSync } from 'node:fs';
@@ -14,9 +15,16 @@ import { camera, render, post, writePNG, project, L, h2 } from './grand/lib.mjs'
 import { hero, POSES } from './grand/hero.mjs';
 
 const FW = 120, FH = 120, CX = FW / 2, SOLE = 102; // soles' contact line (sheet rows), the body's centre column
-const VIEWS = { down: 0, up: Math.PI, side: -Math.PI / 2 }; // yaw: the model looks down +y, toward the camera
-const RUN = 8, STEP = 17; // run frames; how far each ankle reaches ahead of and behind the hips (model units)
 const cam = camera(38 * Math.PI / 180);
+// Yaw: the model looks down +y, toward the camera; side faces right (the game mirrors it for the left). The diagonals
+// face the floor's way under a screen diagonal (down-right, up-right): up and down the screen are foreshortened by
+// cam.s, so that is atan(cam.s) off the front or back view, not 45 degrees.
+const VIEWS = { down: 0, up: Math.PI, side: -Math.PI / 2, downside: -Math.atan(cam.s), upside: Math.atan(cam.s) - Math.PI };
+// The walks, each a cycle of n frames tied to the floor (Hero.show turns them by the distance walked): `go`, the way he
+// travels in his own frame (x his left, y ahead); `step`, how far each ankle reaches either side of the hips along it
+// (model units); `lift`, how high the swinging foot rises. Forward the heavy stalk; backward a shorter, upright
+// backpedal; sideways (to his right, to his left) cross-steps.
+const WALKS = { run: { n: 8, go: [0, 1], step: 17, lift: 8 }, back: { n: 6, go: [0, -1], step: 12, lift: 5 }, strafer: { n: 6, go: [-1, 0], step: 10, lift: 5 }, strafel: { n: 6, go: [1, 0], step: 10, lift: 5 } };
 
 const add = (a, b) => a.map((v, i) => v + b[i]);
 const sub = (a, b) => a.map((v, i) => v - b[i]);
@@ -123,18 +131,29 @@ function pose(name, k, view) {
     const up = k ? 0.6 : 0, u = (p) => add(p, [0, 0, up]);
     return { ...I, head: u(I.head), neck: u(I.neck), chest: add(I.chest, [0, 0.3 * k, up]), Sr: u(I.Sr), Sl: u(I.Sl), Er: u(I.Er), El: u(I.El), Wr: u(I.Wr), Wl: u(I.Wl), Kr_: u(I.Kr_), Kl_: u(I.Kl_), lanSway: k ? [0.6, -0.8] : [-0.3, 0.4] };
   }
-  if (name !== 'run') return rig({ ...ACTS[name][k], ...ACTS[name][k][view] }, `${name}-${k}`);
-  // run k of RUN: a heavy stalking stride, long steps, the body sinking onto each foot as it lands, leaning in, the claw
-  // arm against the legs, the lantern lagging, the coat flaring behind and swinging with the hips.
-  const ph = (2 * Math.PI * k) / RUN, bob = 1.5 * Math.cos(2 * ph) - 1.0;
+  // Stopping: the last step planted, his weight rocking back onto it, the coat and the lantern swinging on ahead.
+  if (name === 'halt') return rig({ lean: 0.02, drop: 1.5, feet: [[-5, 5], [5, -5]], back: -0.3, flare: 0.15, sway: [0, 2], tilt: 0.04 }, 'halt');
+  const W = WALKS[name];
+  if (!W) return rig({ ...ACTS[name][k], ...ACTS[name][k][view] }, `${name}-${k}`);
+  // Each foot is planted half the cycle (it slides back along `go` under the hips) and swings ahead along it the other
+  // half, lifted; the body sinks onto each foot as it lands.
+  const ph = (2 * Math.PI * k) / W.n, bob = 1.5 * Math.cos(2 * ph) - 1.0, [gx, gy] = W.go;
   const feet = [1, -1].map((s, i) => {
-    const f = s * Math.sin(ph), lift = 8 * Math.max(0, s * Math.cos(ph)) ** 1.5;
-    return [(i ? 1 : -1) * 4, -0.6 + STEP * f, lift, lift > 0.5 ? (f < 0 ? -0.75 : 0.25) : 0];
+    const x = i ? 1 : -1, f = s * Math.sin(ph), lift = W.lift * Math.max(0, s * Math.cos(ph)) ** 1.5;
+    const toe = lift < 0.5 ? 0 : name === 'run' ? (f < 0 ? -0.75 : 0.25) : name === 'back' ? (f < 0 ? -0.2 : -0.5) : -0.3;
+    // Side-stepping, the trailing foot crosses on the camera's side of the other, so the coat never hides it.
+    return [x * 4 + gx * W.step * f, -0.6 + gy * W.step * f + (gx ? (x === -gx ? 3.5 : -2) * (view.startsWith('up') ? -1 : 1) : 0), lift, toe];
   });
-  const P = rig({ lean: 0.11, drop: 2.5 - bob, feet, back: 0.35, flare: 0.3, side: 0.25 * Math.sin(ph), tilt: 0.08 }, `run${k}`);
-  const ar = -0.55 * Math.sin(ph), al = 0.12 * Math.sin(ph);
-  Object.assign(P, { Er: swing(P.Er, P.Sr, ar), Wr: swing(P.Wr, P.Sr, ar), Kr_: swing(P.Kr_, P.Sr, ar), El: swing(P.El, P.Sl, al), Wl: swing(P.Wl, P.Sl, al), Kl_: swing(P.Kl_, P.Sl, al), lanSway: [0, -2.2 * Math.cos(ph)] });
-  return P;
+  if (name === 'run') { // the heavy stalk: long steps, leaning in, the claw arm against the legs, the lantern lagging, the coat flaring behind
+    const P = rig({ lean: 0.11, drop: 2.5 - bob, feet, back: 0.35, flare: 0.3, side: 0.25 * Math.sin(ph), tilt: 0.08 }, `run${k}`);
+    const ar = -0.55 * Math.sin(ph), al = 0.12 * Math.sin(ph);
+    return Object.assign(P, { Er: swing(P.Er, P.Sr, ar), Wr: swing(P.Wr, P.Sr, ar), Kr_: swing(P.Kr_, P.Sr, ar), El: swing(P.El, P.Sl, al), Wl: swing(P.Wl, P.Sl, al), Kl_: swing(P.Kl_, P.Sl, al), lanSway: [0, -2.2 * Math.cos(ph)] });
+  }
+  // Backing off or side-stepping he faces what he fights: upright, the claw raised on guard, spread; the coat and the
+  // lantern lag behind the way he goes.
+  const guard = [[-7, 17, 68], [-0.6, -0.3, -1], [0.1, 1, 0.5]];
+  return rig({ lean: gy ? -0.03 : 0.05, drop: (gy ? 1.5 : 2.5) - bob * 0.6, at: [0.8 * gx * Math.cos(2 * ph), 0], feet, r: guard, curl: 0.3, spread: 1.4,
+    back: gy ? -0.3 : 0.1, flare: 0.2, side: -gx * 0.35, sway: [-gx * 1.5, gy ? 1.5 : -0.5], tilt: 0.02 }, `${name}${k}`);
 }
 
 // The dash's dissolve, on the rendered cell: the body breaks into clotted blood vapour from the feet and its trailing
@@ -165,9 +184,9 @@ function mist(px, amount, tx, ty) {
 
 // Every cell of the sheet, a row per view: idle 0-1, run 0-7, then each action's steps.
 const ONLY = process.env.ONLY?.split(',');
-const NAMES = [['idle', 2], ['run', RUN], ...Object.entries(ACTS).map(([n, a]) => [n, a.length])].filter(([n]) => !ONLY || ONLY.includes(n));
+const NAMES = [['idle', 2], ...Object.entries(WALKS).map(([n, w]) => [n, w.n]), ['halt', 1], ...Object.entries(ACTS).map(([n, a]) => [n, a.length])].filter(([n]) => !ONLY || ONLY.includes(n));
 const CELLS = Object.keys(VIEWS).flatMap((view) => NAMES.flatMap(([name, n]) => Array.from({ length: n }, (_, k) => [view, name, k])));
-const COLS = Math.ceil(CELLS.length / 6); // two rows per view: the sheet stays under 4096 px wide
+const COLS = Math.ceil(CELLS.length / (2 * Object.keys(VIEWS).length)); // two rows per view: the sheet stays under 4096 px wide
 
 function scene(view, name, k) {
   const yaw = VIEWS[view], h = hero(pose(name, k, view)), c = Math.cos(yaw), s = Math.sin(yaw), l = h.P._lantern;
@@ -194,10 +213,10 @@ if (isMainThread) {
   for (const [i, [view, name, k]] of CELLS.entries()) {
     const f = all.get(i), ox = (i % COLS) * FW, oy = Math.floor(i / COLS) * FH, at = { cell: i, lamp: f.lamp.map((v) => Math.round(v * 2) / 2) };
     for (let y = 0; y < FH; y++) rgba.set(f.px.subarray(y * FW * 4, (y + 1) * FW * 4), ((oy + y) * W + ox) * 4);
-    // The game's frame names (Hero.show): idle and blink 0-3 on the two breaths, run0-7, dash0-1, the steps of the
-    // others as <action>-<step>.
+    // The game's frame names (Hero.show): idle and blink 0-3 on the two breaths, run0-7, back0-5, strafer0-5,
+    // strafel0-5, halt0, dash0-1, the steps of the others as <action>-<step>.
     if (name === 'idle') for (const n of [`idle${2 * k}`, `idle${2 * k + 1}`, `blink${2 * k}`, `blink${2 * k + 1}`]) frames[`${view}-${n}`] = at;
-    else frames[`${view}-${name}${name === 'run' || name === 'dash' ? '' : '-'}${k}`] = at;
+    else frames[`${view}-${name}${WALKS[name] || name === 'dash' || name === 'halt' ? '' : '-'}${k}`] = at;
   }
   if (ONLY) { // on grey, to see the silhouettes
     for (let p = 0; p < W * H; p++) if (!rgba[p * 4 + 3]) rgba.set([70, 70, 74, 255], p * 4);
@@ -206,15 +225,13 @@ if (isMainThread) {
     process.exit(0);
   }
   writePNG('src/grand-hero.png', rgba, W, H);
-  // Native px he walks per run cycle in each view, the planted foot's travel on screen: Hero.show turns the run frames
-  // by the distance walked, so his feet hold the floor at any speed (up and down the screen, the floor is foreshortened).
-  const stride = { side: 4 * STEP * 0.5, down: 4 * STEP * 0.5 * cam.s, up: 4 * STEP * 0.5 * cam.s };
   writeFileSync('src/grand.data.ts', `// Generated by tools/art/grand-hero.gen.mjs: edit the model there, not this table.
 // The hero's sheet (src/grand-hero.png): FW x FH cells, ${COLS} per row; each game frame's cell and its
 // lantern glass centre (sheet px, where dark.ts hangs his light). Soles on row ${SOLE}, centred on column ${CX}.
-// STRIDE: native px walked per run cycle, per view.
-export const FW = ${FW}, FH = ${FH}, COLS = ${COLS}, SOLE = ${SOLE};
-export const STRIDE: Record<string, number> = ${JSON.stringify(Object.fromEntries(Object.entries(stride).map(([v, d]) => [v, Math.round(d * 10) / 10])))};
+// GAIT: each walk's frames and the room px walked across the floor per cycle (the planted foot's travel: two steps of
+// 2 x step model units, a model unit half a room px), and SQUASH, how much shorter the floor is up and down the screen.
+export const FW = ${FW}, FH = ${FH}, COLS = ${COLS}, SOLE = ${SOLE}, SQUASH = ${Math.round(cam.s * 1000) / 1000};
+export const GAIT: Record<string, { n: number; stride: number }> = ${JSON.stringify(Object.fromEntries(Object.entries(WALKS).map(([w, { n, step }]) => [w, { n, stride: 2 * step }])))};
 export const FRAMES: Record<string, { cell: number; lamp: [number, number] }> = ${JSON.stringify(frames)};
 `);
   console.log(`src/grand-hero.png ${W}x${H}, ${CELLS.length} cells, ${((Date.now() - t0) / 1000).toFixed(1)} s`);
@@ -225,7 +242,7 @@ export const FRAMES: Record<string, { cell: number; lamp: [number, number] }> = 
     const px = post(img, { exposure: 3.2, vignette: 0, desat: 0.15, grain: 0.004, dither: 0.015 });
     for (let p = 0; p < FW * FH; p++) px[p * 4 + 3] = img.oid[p] >= 0 ? 255 : 0;
     // The trail streams away from where he goes: left of the side view (he faces right), up the screen facing down.
-    if (name === 'dash') mist(px, [0.3, 0.75][k], view === 'side' ? -1 : 0, { side: 0, down: -1, up: 1 }[view]);
+    if (name === 'dash') mist(px, [0.3, 0.75][k], view.endsWith('side') ? -1 : 0, { down: -1, up: 1 }[view] ?? 0);
     out.push({ i, px, lamp });
   }
   parentPort.postMessage(out);

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { prelit } from './dark.ts';
 import * as Grand from './grand.data.ts';
+import * as Gait from './gait.ts';
 import grandSheet from './grand-hero.png';
 
 // How the hero looks: the validated « grand » vampire rendered from his 3D model (grand-hero.png,
@@ -17,18 +18,10 @@ export function preload(scene: Phaser.Scene) {
   if (!scene.textures.exists('hero')) scene.load.image('hero', grandSheet);
 }
 
-// How many run frames a view of the sheet has, counted once.
-const runCounts = new Map<string, number>();
-function runs(tex: Phaser.Textures.Texture, view: string) {
-  const key = `${tex.key}/${view}`;
-  if (!runCounts.has(key)) runCounts.set(key, tex.getFrameNames().filter((n) => n.startsWith(`${view}-run`)).length);
-  return runCounts.get(key)!;
-}
-
 // Per-hero animation memory: show() only gets the current look, so edges (slash start, dash end...) are kept here.
 type State = {
   shadow: Phaser.GameObjects.Image; was: HeroLook; swing: number; slashAt: number; hurtAt: number; dashAt: number; dashEnd: number;
-  throwAt: number; castAt: number; biteAt: number; walked: number; x: number; y: number;
+  throwAt: number; castAt: number; biteAt: number;
 };
 // The steps of a struck claw (<view>-claw<combo>-<i>, ms after the press): the blow lands on the press and fx.ts sweeps
 // its arc over the first 60-80 ms, so the anticipation is a glimpse and the strike pose holds through the sweep.
@@ -41,7 +34,8 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
     Object.assign(tex.add(name, 0, (cell % Grand.COLS) * Grand.FW, Math.floor(cell / Grand.COLS) * Grand.FH, Grand.FW, Grand.FH)!.customData, { lamp });
   // Soles 15 room px below his y, the 8x6 feet hitbox 5 px below it (sheet px: two per room px).
   const s = scene.physics.add.sprite(x, y, 'hero', 'down-idle0').setOrigin(0.5, (Grand.SOLE - 30) / Grand.FH).setScale(0.5);
-  s.setSize(16, 12).setOffset(Grand.FW / 2 - 8, Grand.SOLE - 20).setBlendMode(prelit(scene)).setData('stride', Grand.STRIDE); // show() turns his run by the distance walked
+  s.setSize(16, 12).setOffset(Grand.FW / 2 - 8, Grand.SOLE - 20).setBlendMode(prelit(scene))
+    .setData('gait', { squash: Grand.SQUASH, ...Grand.GAIT }); // his walks, turned by the distance walked (gait.ts)
   // A soft dark smudge on the floor under him; physics moves the sprite after update(), so it follows on POST_UPDATE.
   if (!scene.textures.exists('hero-shadow')) {
     const t = scene.textures.createCanvas('hero-shadow', 32, 32)!;
@@ -54,7 +48,7 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
   s.once(Phaser.GameObjects.Events.DESTROY, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow));
   const was = { moving: false, dashing: false, slashing: false, combo: 0, throwing: false, biting: false, casting: false, hurt: false, invulnerable: false, facing: 0 };
-  states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9, throwAt: -1e9, castAt: -1e9, biteAt: -1e9, walked: 0, x, y });
+  states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9, throwAt: -1e9, castAt: -1e9, biteAt: -1e9 });
   return s;
 }
 
@@ -70,17 +64,12 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   if (!look.dashing && st.was.dashing) st.dashEnd = now;
   st.was = { ...look };
 
-  const c = Math.cos(look.facing);
-  const view = Math.abs(c) > 0.38 ? 'side' : Math.sin(look.facing) > 0 ? 'down' : 'up'; // diagonals use the side view
+  // The view he faces (eight ways) and, past the action poses, his walk.
+  const g = Gait.pick(s, look, now);
+  let { view, flip } = g;
   const has = (f: string) => s.texture.has(`${view}-${f}`);
   // A sheet may break an action into steps, <action>-<i> from at[i] ms in (the grand hero's), else it has `or`.
   const step = (name: string, since: number, at: number[], or: string) => (has(`${name}-0`) ? `${name}-${Math.max(0, at.findLastIndex((t) => now - since >= t))}` : or);
-  // A sheet that gives its stride (native px per run cycle, per view: the grand hero's) turns its run frames by the
-  // distance walked along the view, so the planted foot holds the floor at any speed.
-  const stride = (s.getData('stride') as Record<string, number> | undefined)?.[view];
-  st.walked += Math.abs(view === 'side' ? s.x - st.x : s.y - st.y);
-  st.x = s.x;
-  st.y = s.y;
   let frame = `${now % 3600 < 140 ? 'blink' : 'idle'}${Math.floor(now / 260) % 4}`;
   // The body turns to mist during the dash and re-forms just after (fx.ts ghosts the intact run pose instead).
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
@@ -88,15 +77,12 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   else if (look.casting) frame = step('cast', st.castAt, [0, 60, 140], 'cast');
   else if ((look.hurt || look.dazed) && has('hurt-0')) frame = step('hurt', st.hurtAt, [0, 60], ''); // dazed by a bell: he reels on
   // The arm rakes the way the arc goes: fx.ts sweeps combo 1 back the other way; a sprite mirrored to face left mirrors it.
-  else if (look.slashing && has(`claw${look.combo}-0`)) frame = step(`claw${look.combo < 2 && view === 'side' && c < 0 ? 1 - look.combo : look.combo}`, st.slashAt, CLAW, '');
-  else if (look.slashing && now - st.slashAt < 150) frame = `slash${Number(look.combo === 1) ^ Number(view === 'side' && c < 0)}`;
+  else if (look.slashing && has(`claw${look.combo}-0`)) frame = step(`claw${look.combo < 2 && flip ? 1 - look.combo : look.combo}`, st.slashAt, CLAW, '');
+  else if (look.slashing && now - st.slashAt < 150) frame = `slash${Number(look.combo === 1) ^ Number(flip)}`;
   else if (look.throwing) frame = step('throw', st.throwAt, [0, 35, 80], `throw${st.swing}`);
   else if (now - st.dashEnd < 70) frame = 'dash0';
-  else if (look.moving) { // else one stride pair per 540ms in every view
-    const n = runs(s.texture, view);
-    frame = `run${Math.floor(stride ? st.walked / (stride / n) : now / (540 / n)) % n}`;
-  }
-  s.setFrame(`${view}-${frame}`).setFlipX(view === 'side' && c < 0);
+  else if (g.walk) ({ view, flip, frame } = g.walk);
+  s.setFrame(`${view}-${frame}`).setFlipX(flip);
 
   if (look.hurt) s.setTint(now - st.hurtAt < 60 ? 0xffffff : 0xe0284a).setTintMode(Phaser.TintModes.FILL);
   else s.clearTint();
