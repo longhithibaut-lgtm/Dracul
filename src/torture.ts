@@ -186,7 +186,7 @@ function floor() {
     const f = fbm(x / 28, y / 22, 4, 21), m = fbm(x / 16, y / 13, 4, 33);
     if (f > 0.52) tint(x, y, C.grime, clamp((f - 0.52) * 4) * 0.8);
     dark(x, y, 0.75 + 0.5 * fbm(x / 60, y / 40, 3, 44));
-    const near = Math.max(clamp(1 - (y - WB) / 40), clamp(1 - (x - 40) / 30), clamp(1 - (440 - x) / 30));
+    const near = Math.max(clamp(1 - (y - WB) / 40), clamp(1 - (x - 12) / 30), clamp(1 - (468 - x) / 30));
     if (m * (0.6 + near) > 0.62) tint(x, y, h2(x, y, 5) < 0.3 ? C.mossL : C.moss, clamp((m * (0.6 + near) - 0.62) * 4) * 0.8);
     if (y < WB + 5) dark(x, y, 0.5 + (y - WB) * 0.1);
   }
@@ -232,6 +232,14 @@ function gore() {
   for (let n = 0; n < 70; n++) bone(46 + R() * 388, WB + 6 + R() * (FY1 - WB - 10), 2 + Math.floor(R() * 4), R() * 6.28);
   for (const [x, y] of [[206, 192], [70, 170], [384, 220], [350, 94], [268, 234], [60, 420], [410, 560], [170, 440], [300, 600], [420, 390],
     [140, 600], [260, 470], [330, 300]]) skull(x, y);
+  // Along the side walls, out of the old plan: straw, bones, a skull or two.
+  const S = rng(4242);
+  for (let n = 0; n < 90; n++) {
+    const x = n & 1 ? 442 + S() * 24 : 14 + S() * 24, y = WB + 4 + S() * (FY1 - WB - 4), a = S() * 1.2 - 0.6 + (n & 2 ? 1.57 : 0), col = L(n % 3 ? '#6e5c34' : '#8a7444');
+    for (let k = 0, len = 2 + S() * 3; k < len; k++) tint(x + Math.cos(a) * k, y + Math.sin(a) * k * 0.6, col, 0.75);
+  }
+  for (let n = 0; n < 16; n++) bone(n & 1 ? 444 + S() * 20 : 16 + S() * 20, WB + 6 + S() * (FY1 - WB - 10), 2 + Math.floor(S() * 4), S() * 6.28);
+  for (const [x, y] of [[22, 250], [452, 132], [26, 520], [448, 470]]) skull(x, y);
 }
 
 /** A tangle of `n` flayed bodies (torsos, heads, limbs) in the box, each outlined against the others; `shade(y)` darkens
@@ -365,15 +373,15 @@ function walls(gate: (x: number, y: number, grow: number) => boolean) {
     for (const dx of [-1, 0, 1]) put(x + dx, y, C.rust, WB, z, SOUTH);
     if (!lit) { glow(x, y - 1, [0.25, 0.03, 0.01]); for (let k = 2; k < 18; k++) dark(x + (k > 9 ? 1 : 0), y - k, 0.55); } // an ember, soot
   }
-  // Side walls' tops: the dark beyond them, their inner rims.
-  for (let y = 0; y < H; y++) for (const [a, b] of [[0, 40], [440, W]]) for (let x = a; x < b; x++) {
-    const rim = x === 39 || x === 440;
-    put(x, y, rim ? C.capEdge : C.cap, y, 60, FLOOR, 0, rim ? 0 : 1);
+  // Side walls' tops at the room's edges, coursed stone (lit, so they read as wall, not void), their inner rims.
+  for (let y = 0; y < H; y++) for (const [a, b] of [[0, 12], [468, W]]) for (let x = a; x < b; x++) {
+    const rim = x === 11 || x === 468, joint = y % 7 === 0 || (x + (Math.floor(y / 7) & 1) * 6) % 12 === 0;
+    put(x, y, rim ? C.capEdge : joint ? C.mortar : mul(mix(C.wallD, C.wall, h2(Math.floor((x + (Math.floor(y / 7) & 1) * 6) / 12), Math.floor(y / 7), 9) * 0.7), 0.8), y, 60, FLOOR, 0, rim ? 0 : 2);
     occ(x, y, -99, 999);
   }
-  for (let y = WB; y < H; y++) { dark(40, y, 0.4); dark(41, y, 0.7); }
+  for (let y = WB; y < H; y++) { dark(12, y, 0.4); dark(13, y, 0.7); dark(467, y, 0.7); }
   // The front wall, and the stairs going down in its middle.
-  for (let y = FY1; y < H; y++) for (let x = 28; x < 452; x++) {
+  for (let y = FY1; y < H; y++) for (let x = 0; x < W; x++) {
     const t = y - FY1, step = Math.floor(t / 4);
     if (x >= 218 && x < 262) put(x, y, t % 4 === 0 ? mul(C.wallL, 1.2 - step * 0.3) : mul(C.wall, 0.7 - step * 0.18), y, -step * 4);
     else put(x, y, t === 0 ? C.wallL : t < 8 ? (x % 16 === 0 ? C.mortar : C.wallD) : C.cap, FY1, 14 - t, SOUTH, 0, t < 8 ? 0 : 1);

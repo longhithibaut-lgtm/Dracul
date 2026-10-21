@@ -41,6 +41,11 @@ describe.each(ROOMS)('%s', (_, D) => {
     for (const s of [{ x: D.START.x, y: D.START.y + 8 }, D.GIFT, ...lane]) expect(holy(s.x, s.y), `${s.x},${s.y}`).toBe(false);
   });
 
+  it('walks out to its side walls, at the edges of the view (no void bands on a 16:9 screen)', () => {
+    expect(D.BOUNDS[0]).toBeLessThanOrEqual(12);
+    expect(D.BOUNDS[0] + D.BOUNDS[2]).toBeGreaterThanOrEqual(D.W - 12);
+  });
+
   it('cuts its sprites inside its atlas and its room', () => {
     for (const [, , w, h, x, y] of D.OVER) expect(x >= 0 && y >= 0 && x + w <= 2 * D.W && y + h <= 2 * D.H).toBe(true);
     expect(D.GATES.frames.length).toBe(17);

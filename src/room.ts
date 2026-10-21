@@ -79,7 +79,7 @@ export function build(scene: Phaser.Scene, id: LayoutId): Room {
 // shell: its six pillars and four floor cages solid, its two body pits gone round. Painted on its first build (about a
 // second), kept across restarts; its portcullis is where the room painted shut differs from it painted open, and slides up
 // into the masonry, clipped to the arch.
-const CX = 240, FX0 = 40, FX1 = 440, FY0 = Torture.WB, FY1 = Torture.H - 14;
+const CX = 240, FX0 = 12, FX1 = 468, FY0 = Torture.WB, FY1 = Torture.H - 14;
 const GATE = { hw: 22, ys: 44, R: 28 }, GX = CX - GATE.hw, GY = 4, GW = GATE.hw * 2 + 1, GH = 59, GATE_RISE = 48;
 /** Inside the gate's pointed arch (`grow` px wider all round), at room px (x, y). */
 const inGate = (x: number, y: number, grow = 0) => {

@@ -22,7 +22,7 @@ const PROPS = [
   { kind: 'brazier', x: 184, y: 488, w: 12, h: 8 }, { kind: 'brazier', x: 296, y: 488, w: 12, h: 8 },
   { kind: 'pew', x: 120, y: 572, w: 64, h: 8 }, { kind: 'pew', x: 360, y: 572, w: 64, h: 8 },
 ];
-const CANDLES = [[52, 80, 3], [418, 84, 2], [58, 242, 2], [412, 244, 3], [56, 432, 3], [414, 420, 2], [52, 610, 2], [414, 612, 3]];
+const CANDLES = [[52, 80, 3], [418, 84, 2], [58, 242, 2], [412, 244, 3], [56, 432, 3], [414, 420, 2], [52, 610, 2], [414, 612, 3], [22, 360, 2], [452, 170, 2], [454, 540, 3]]; // the last: by the side walls
 const GIFT = { x: CX, y: 118 };
 
 /** What the game needs (src/chapel.data.ts): the chapel's gameplay; HOLY: the floor its stained glass light burns. */
@@ -77,7 +77,7 @@ function chapelFloor([X, Y], x, y) {
 
 const env = ground(floor({
   under: chapelFloor,
-  ledgers: [[52, 300, 0], [396, 330, 1], [52, 470, 1], [398, 452, 0]],
+  ledgers: [[52, 300, 0], [396, 330, 1], [52, 470, 1], [398, 452, 0], [13, 200, 1], [439, 384, 0]],
   pools: [[104, 176, 9, 4], [380, 352, 9, 4], [362, 214, 4, 3], [170, 132, 3, 2], [150, 316, 3, 3], [300, 540, 4, 3], [196, 456, 3, 2]],
   drags: [[[110, 182], [150, 200], [190, 210]], [[372, 360], [330, 380], [300, 400]]],
 }));
@@ -106,7 +106,7 @@ for (const o of PROPS) {
   }
 }
 candles(room, CANDLES);
-for (const [x, y, a] of [[424, 236, 0.3], [60, 136, -0.6], [420, 548, 1.2], [64, 392, 2.4]]) add('skull', skull(), [wx(x), wy(y), 0], a);
+for (const [x, y, a] of [[424, 236, 0.3], [60, 136, -0.6], [420, 548, 1.2], [64, 392, 2.4], [28, 520, 1], [450, 330, -0.5], [452, 96, 2]]) add('skull', skull(), [wx(x), wy(y), 0], a);
 add('glasswall', glassWall, [0, 0, 0], 0, { ghost: true });
 lights(room, PROPS.filter((o) => o.kind === 'brazier'), CANDLES);
 // The Dawn through the glass: its shade is the floor's safety (rooms.gen.mjs dawn()); the side walls and the vault are

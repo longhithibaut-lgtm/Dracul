@@ -20,7 +20,8 @@ const PROPS = [
   { kind: 'pillar', x: 92, y: 490, w: 24, h: 12 }, { kind: 'stump', x: 388, y: 490, w: 24, h: 12, tall: 46, flip: true },
   { kind: 'brazier', x: 182, y: 474, w: 12, h: 8 }, { kind: 'brazier', x: 298, y: 474, w: 12, h: 8 },
 ];
-const CANDLES = [[54, 236, 3], [128, 240, 2], [62, 82, 3], [414, 80, 2], [334, 246, 3], [146, 300, 2], [58, 432, 3], [410, 436, 2], [56, 604, 3], [404, 608, 2], [150, 610, 2]];
+const CANDLES = [[54, 236, 3], [128, 240, 2], [62, 82, 3], [414, 80, 2], [334, 246, 3], [146, 300, 2], [58, 432, 3], [410, 436, 2], [56, 604, 3], [404, 608, 2], [150, 610, 2],
+  [20, 168, 2], [452, 196, 3], [18, 470, 3], [450, 560, 2]]; // the last: by the side walls
 
 /** What the game needs (src/crypt.data.ts): the hall's gameplay. */
 export const PLAN = plan({
@@ -34,7 +35,7 @@ export const PLAN = plan({
 const HOLES = oculi(MEDS);
 const env = ground(floor({
   meds: MEDS,
-  ledgers: [[108, 168, 0], [346, 160, 1], [190, 296, 0], [262, 300, 1], [186, 372, 0], [266, 376, 0], [54, 292, 1], [398, 300, 0]],
+  ledgers: [[108, 168, 0], [346, 160, 1], [190, 296, 0], [262, 300, 1], [186, 372, 0], [266, 376, 0], [54, 292, 1], [398, 300, 0], [13, 322, 0], [439, 250, 1]],
   // Old blood: pools by the open coffins, dragged toward the medallions, splashes (room px: x, y, rx, ry).
   pools: [[350, 230, 12, 6], [66, 246, 14, 6], [350, 316, 11, 5], [70, 592, 13, 6], [134, 400, 8, 4], [204, 506, 4, 3], [282, 572, 3, 3], [126, 452, 4, 3], [360, 446, 3, 3], [196, 128, 4, 3], [112, 172, 5, 3], [286, 196, 3, 2]],
   drags: [[[352, 212], [318, 196], [286, 178]], [[336, 324], [300, 350], [270, 380]], [[110, 380], [150, 420], [196, 470], [220, 506]]],
@@ -43,8 +44,9 @@ const room = shell(HOLES), { S, port } = room;
 furnish(room, PROPS);
 // candles in clusters on the floor, a skull or two, bones
 candles(room, CANDLES);
-for (const [x, y, a] of [[70, 152, 0.3], [424, 128, -0.6], [120, 250, 1.2], [236, 266, 2.4], [66, 462, 0.4], [422, 572, -1], [420, 420, 0.8], [352, 236, 2]]) S.add('skull', skull(), [wx(x), wy(y), 0], a);
+for (const [x, y, a] of [[70, 152, 0.3], [424, 128, -0.6], [120, 250, 1.2], [236, 266, 2.4], [66, 462, 0.4], [422, 572, -1], [420, 420, 0.8], [352, 236, 2], [26, 282, 0.9], [454, 420, -0.4]]) S.add('skull', skull(), [wx(x), wy(y), 0], a);
 S.add('bones', pitBones(5), [wx(70), wy(600), 0], 0.3); S.add('bones', pitBones(9), [wx(410), wy(440), 0], -0.8);
+S.add('bones', pitBones(3), [wx(28), wy(112), 0], 1.1); S.add('bones', pitBones(11), [wx(452), wy(330), 0], -0.3);
 lights(room, PROPS, CANDLES);
 
 const SC = stage(S, env);

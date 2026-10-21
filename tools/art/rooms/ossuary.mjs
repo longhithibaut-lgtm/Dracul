@@ -7,7 +7,7 @@ import { pitBones } from '../maquettes/hub/props.mjs';
 import { skull } from '../maquettes/grand/cast.mjs';
 import { sdEll, clamp, vn, vn3, fbm3, h2, mix, mul, mulberry32 } from '../maquettes/hub3/lib.mjs';
 import { wx, wy, wz, rx, ry, C, block, stone3, segDist } from './common.mjs';
-import { CX, CY, plan, oculi, floor, ground, pitShadow, shell, furnish, candles, lights, scene as stage, shafts } from './crypts.mjs';
+import { CX, CY, FX0, FX1, plan, oculi, floor, ground, pitShadow, shell, furnish, candles, lights, scene as stage, shafts } from './crypts.mjs';
 export { PAL, POST } from './crypts.mjs';
 
 const MEDS = [[CY, 0.68]];
@@ -17,21 +17,22 @@ const PROPS = [
   { kind: 'brazier', x: 196, y: 402, w: 12, h: 8 }, { kind: 'brazier', x: 284, y: 402, w: 12, h: 8 },
   { kind: 'heap', x: 420, y: 298, w: 24, h: 8 }, { kind: 'heap', x: 70, y: 604, w: 24, h: 8 }, { kind: 'heap', x: 250, y: 484, w: 24, h: 8 },
 ];
+// The holes against a side wall run into it (FX0, FX1).
 const PITS = [
-  { x: 40, y: 128, w: 80, h: 48 }, { x: 40, y: 172, w: 48, h: 28 }, { x: 96, y: 120, w: 32, h: 28 }, // west: against the wall
-  { x: 360, y: 96, w: 80, h: 48 }, { x: 392, y: 140, w: 48, h: 20 }, { x: 346, y: 116, w: 24, h: 24 }, // east
+  { x: FX0, y: 128, w: 120 - FX0, h: 48 }, { x: FX0, y: 172, w: 88 - FX0, h: 28 }, { x: 96, y: 120, w: 32, h: 28 }, // west: against the wall
+  { x: 360, y: 96, w: FX1 - 360, h: 48 }, { x: 392, y: 140, w: FX1 - 392, h: 20 }, { x: 346, y: 116, w: 24, h: 24 }, // east
   { x: 152, y: 80, w: 32, h: 32 }, // back left
   { x: 280, y: 200, w: 64, h: 32 }, // front right, where the medallion's crack ran
   { x: 128, y: 216, w: 32, h: 24 }, // front left
   // The great collapse, west and east of the middle bridge, short of the east wall.
-  { x: 40, y: 332, w: 172, h: 40 }, { x: 72, y: 318, w: 72, h: 18 }, { x: 120, y: 368, w: 64, h: 16 },
-  { x: 268, y: 332, w: 132, h: 40 }, { x: 300, y: 368, w: 56, h: 16 }, { x: 328, y: 320, w: 40, h: 14 },
+  { x: FX0, y: 332, w: 212 - FX0, h: 40 }, { x: 72, y: 318, w: 72, h: 18 }, { x: 120, y: 368, w: 64, h: 16 },
+  { x: 268, y: 332, w: FX1 - 40 - 268, h: 40 }, // the east bridge: 40 wide along the wall { x: 300, y: 368, w: 56, h: 16 }, { x: 328, y: 320, w: 40, h: 14 },
   // Down by the stairs: the floor gone along both walls and in two holes.
-  { x: 40, y: 468, w: 52, h: 64 }, { x: 40, y: 450, w: 28, h: 24 },
-  { x: 392, y: 500, w: 48, h: 72 }, { x: 372, y: 520, w: 24, h: 28 },
+  { x: FX0, y: 468, w: 92 - FX0, h: 64 }, { x: FX0, y: 450, w: 68 - FX0, h: 24 },
+  { x: 392, y: 500, w: FX1 - 392, h: 72 }, { x: 372, y: 520, w: 24, h: 28 },
   { x: 300, y: 446, w: 40, h: 26 }, { x: 140, y: 546, w: 40, h: 28 },
 ];
-const CANDLES = [[62, 236, 3], [404, 80, 2], [296, 248, 2], [176, 300, 2], [412, 430, 3], [58, 420, 2], [300, 600, 3], [110, 456, 2]];
+const CANDLES = [[62, 236, 3], [404, 80, 2], [296, 248, 2], [176, 300, 2], [412, 430, 3], [58, 420, 2], [300, 600, 3], [110, 456, 2], [20, 262, 2], [450, 420, 3], [22, 590, 2]]; // the last: by the side walls
 
 /** What the game needs (src/ossuary.data.ts): the ossuary's gameplay. */
 export const PLAN = plan({
@@ -84,9 +85,11 @@ for (let i = 0; i < 46; i++) {
 }
 for (const b of PITS) for (let k = 0; k < 3; k++) {
   const side = R(), x = side < 0.5 ? b.x + R() * b.w : (R() < 0.5 ? b.x - 3 : b.x + b.w + 3), y = side < 0.5 ? b.y + b.h + 3 : b.y + R() * b.h;
-  if (x < 46 || x > 434 || pit(x, y) || nearPit(x, y, -1)) continue;
+  if (x < FX0 + 6 || x > FX1 - 6 || pit(x, y) || nearPit(x, y, -1)) continue;
   S.add('rubble', block(-4, -3, 0, 4, 3, 3 + R() * 4, (m, x, y, z) => ({ alb: stone3(x + b.x, y, z) }), 1.2), [wx(x), wy(y), 0], R() * 3);
 }
+for (const [x, y, a] of [[26, 300, 0.4], [30, 410, 2.2], [448, 238, -0.7], [452, 600, 1.4]]) S.add('skull', skull(), [wx(x), wy(y), 0], a); // by the side walls
+S.add('bones', pitBones(6), [wx(26), wy(92), 0], 0.9); S.add('bones', pitBones(10), [wx(452), wy(470), 0], -1.1);
 candles(room, CANDLES);
 lights(room, PROPS, CANDLES);
 

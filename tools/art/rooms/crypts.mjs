@@ -1,17 +1,17 @@
 // What the four crypt rooms of a run share (la crypte, la nef, l'ossuaire, la chapelle), baked by tools/art/rooms.gen.mjs
 // in the « grand pixel » style: one screen wide, 638 room px tall, the shell of the validated crypt (crypt.mjs): the
 // back wall in ashlar with its two moonlit lancets, its ossuaries, pilasters and rotted banners of the Order, the
-// portcullis before a passage climbing to the moon, low side walls, the front wall over the stairs, an unseen vault
-// pierced by oculi above the floor's medallions; the refuge's grimy flagstones, medallions, grave slabs, old blood; the
-// props on their footprints (pillars with their dying torches, broken stumps, braziers, coffins on stone biers); the
-// moon, fills, fires and candles; the moon's shafts in the dusty air.
+// portcullis before a passage climbing to the moon, side walls at the room's edges (the floor fills the view's width),
+// the front wall over the stairs, an unseen vault pierced by oculi above the floor's medallions; the refuge's grimy
+// flagstones, medallions, grave slabs, old blood; the props on their footprints (pillars with their dying torches,
+// broken stumps, braziers, coffins on stone biers); the moon, fills, fires and candles; the moon's shafts in the air.
 import { sdBox, clamp, vn, fbm, h2, L, hex, mix, mul, mulberry32, PALETTE } from '../maquettes/hub3/lib.mjs';
 import { pillar, portcullis, sconce } from '../maquettes/grand/cast.mjs';
 import { oldCoffin } from '../maquettes/hub3/props2.mjs';
 import { candles2, brazier2 } from '../maquettes/hub3/props3.mjs';
 import { cam, SN, CS, wx, wy, wz, rx, ry, C, scaled, broken, block, stage, flags, grime, ashlar, ossuary, stain, segDist, stone3 } from './common.mjs';
 
-export const RW = 480, RH = 638, FX0 = 40, FX1 = 440, FY0 = 64, FY1 = RH - 14, CX = 240, CY = 160;
+export const RW = 480, RH = 638, FX0 = 12, FX1 = 468, FY0 = 64, FY1 = RH - 14, CX = 240, CY = 160;
 export const W = 2 * RW, H = 2 * RH, YW = wy(FY0); // the back wall's face
 export const MOONC = L('#9ab0be'), FIRE = L('#e07a30'), CANDLE = L('#d8b070');
 const BRAZIER_TOP = 36; // z of the bowl's rim, where its flame stands
@@ -152,7 +152,7 @@ function wallMat(m, x, y, z, nx, ny, nz) {
   if (ny < 0.7 && nz > 0.7) return { alb: mul(C.wallD, 0.5) }; // tops
   let r = ashlar(x, z, 24, 46, 5);
   const nearL = LANCETS.some((c) => Math.abs(x - c) < 24) && z > 40;
-  if (!nearL && (Math.abs(x - wx(FX0 + 21)) < 30 || Math.abs(x - wx(FX1 - 21)) < 30) && z > 22 && z < 150) r = ossuary(x, z); // the ossuaries
+  if (!nearL && (Math.abs(x - wx(61)) < 30 || Math.abs(x - wx(419)) < 30) && z > 22 && z < 150) r = ossuary(x, z); // the ossuaries
   if (Math.abs(u) < GATE_HW + 12 && z < GATE_Z + 64 && !inPointed(u, z, GATE_HW, GATE_Z, 52)) { const k = inPointed(u, z, GATE_HW + 10, GATE_Z, 62); if (k) r = { c: mul(mix(C.stB, C.wall, 0.4), (Math.floor(Math.atan2(z - GATE_Z, u) * 4) & 1) ? 0.8 : 1.05), N: [0, 1, 0] }; } // voussoirs
   let c = r.c;
   c = mix(c, C.grime, clamp((vn(x / 9, z / 60, 2) - 0.4) * 2) * 0.6);
@@ -160,14 +160,14 @@ function wallMat(m, x, y, z, nx, ny, nz) {
   if (z < 40 && vn(x / 5, z / 12, 9) > 0.62 && h2(Math.floor(x / 30), 0, 9) < 0.4) c = mix(c, C.bloodD, 0.7); // smears where something was dragged in
   return { alb: mul(c, clamp(1.15 - z / 260)), N: r.N, spec: 0.03, gloss: 10, ao: (r.ao || 1) * (0.55 + 0.45 * clamp(z / 22)) };
 }
-function sideSdf(x, y, z) { // the side walls' tops and the front wall, low, with the stairs' gap
-  const side = Math.min(sdBox(x, y, z, wx(FX0 - 6), wy(RH / 2), 160, 12, wy(RH / 2) + 40, 160), sdBox(x, y, z, wx(FX1 + 6), wy(RH / 2), 160, 12, wy(RH / 2) + 40, 160));
+function sideSdf(x, y, z) { // the side walls, cut low at the room's edges so their tops catch the light, and the front wall with the stairs' gap
+  const side = Math.min(sdBox(x, y, z, wx(FX0 - 6), wy(RH / 2), 30, 12, wy(RH / 2) + 40, 30), sdBox(x, y, z, wx(FX1 + 6), wy(RH / 2), 30, 12, wy(RH / 2) + 40, 30));
   const front = Math.max(sdBox(x, y, z, wx(RW / 2), (wy(FY1) + wy(RH + 6)) / 2, 7, wx(RW / 2), (wy(RH + 6) - wy(FY1)) / 2, 7, 1), -(Math.abs(x - wx(CX)) - 44));
   return Math.min(side, front);
 }
 function sideMat(m, x, y, z, nx, ny, nz) {
   const row = Math.floor((y * SN + 3) / 12), j = (x + row * 9) % 36;
-  let c = nz > 0.6 ? mul(mix(C.wallD, C.stC, 0.3 * h2(Math.floor((x + row * 9) / 36), row, 4)), 0.7) : mul(C.wallD, 0.6);
+  let c = nz > 0.6 ? mul(mix(C.wallD, C.stC, 0.3 + 0.4 * h2(Math.floor((x + row * 9) / 36), row, 4)), 0.9) : mul(C.wallD, 0.6);
   if (nz > 0.6 && (j < 1.4 || (y * SN + 3) % 12 < 1.4)) c = C.mortar;
   return { alb: mix(c, C.grime, clamp(fbm(x / 9, y / 9, 3, 4) - 0.4)), spec: 0.03 };
 }
