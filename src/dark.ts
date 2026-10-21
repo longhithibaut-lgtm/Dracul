@@ -9,14 +9,15 @@ import { viewSize } from './logic.ts';
 // the hero's lantern (green-yellow, from the glass drawn in his hand, a gentle flicker), his night sight (so shapes
 // read in the dark) and the Order's lanterns (small, dirty green). Then the mockup's post: vignette, filmic tone,
 // desaturated grade with green-brown shadows, grain, ordered dither snapped onto its palette.
-// The refuge (refuge.ts) is lit the same way from its own bake and mockup (its Look): its 'refuge-light' holds the whole
-// static render, two texels per room pixel.
+// The refuge (refuge.ts) and the run rooms baked in the same style (baked.ts: the crypt, the cloister) are lit the same
+// way from their own bake and mockup (their Look): their '<key>-light' holds the whole static render, two texels per
+// room pixel; under the cloister's sun, what is drawn over the room's own pixels gets a capped share of that light.
 // What glows or warns is drawn unlit over it, by a second camera that sees only what stands at DEPTH and above: the
 // eyes, the torch flames, the effects.
 
-/** The trial room (or the refuge) is on: the sprite modules bake and pick their dark skins (wanderer.ts, enemy.ts,
- *  crossbow.ts). `zoom`: screen pixels per room pixel; 2 in these rooms, so its hero (wanderer.ts) keeps his full detail at half
- *  scale while the rest shows its 1x pixels doubled. Every other room stays at 1, the game exactly as before. */
+/** A room in the « grand pixel » style is on (room.ts look()): the sprite modules bake and pick their dark skins
+ *  (wanderer.ts, enemy.ts, crossbow.ts). `zoom`: screen pixels per room pixel; 2 in these rooms, so its hero (wanderer.ts)
+ *  keeps his full detail at half scale. The painted rooms stay at 1, the game exactly as before. */
 export const skin = { dark: false, zoom: 1 };
 
 /** Sizes the game to the view (logic.ts viewSize) times skin.zoom; on a resize (main.ts) and on entering a room. */
@@ -63,6 +64,8 @@ precision highp float;
 uniform sampler2D uMainSampler;
 uniform sampler2D uLight;
 uniform sampler2D uLut;
+uniform sampler2D uAlbedo;
+uniform vec2 uKeep;
 uniform vec4 uView;
 uniform vec2 uRoom;
 uniform vec4 uLamp;
@@ -140,6 +143,9 @@ void main() {
     Lt += point(P, n, uNight.xyz, uNight.w, 140.0, 420.0, NIGHT);
     Lt += point(P, n, uLamp.xyz, uLamp.w, uLampR.x, uLampR.y, LAMP);
     Lt += order(P, n, w, uOrder0) + order(P, n, w, uOrder1) + order(P, n, w, uOrder2) + order(P, n, w, uOrder3);
+    // Not the room's own pixel (a character lit with the room's light): what faces us stands with its back to the sun,
+    // so it gets at most uKeep.x of it (a rim of sun, the shade's bounce), never the full glare the floor gets.
+    if (uKeep.x > 0.0 && distance(texture2D(uAlbedo, vec2(uv.x, 1.0 - uv.y)).rgb, src.rgb) > 0.01) Lt = min(Lt, vec3(uKeep.x));
   }
   // The lantern's halo round its glass and its haze; the Order's lanterns' haze.
   float dg = length(vec2(w.x - uGlass.x, (w.y - uGlass.y) * 1.1));
@@ -165,7 +171,7 @@ void main() {
   // Drawn already lit (prelit(): alpha cleared): its own colour, only vignetted, warmed a little by the torches' baked
   // light where he stands (it reads the floor behind him: a hint, not a relight).
   vec3 warm = sqrt(min(T, vec3(1.0)));
-  gl_FragColor = vec4(mix(src.rgb * pow(vig, 0.45) * (1.0 + 0.8 * warm) + warm * vec3(0.05, 0.035, 0.02), lit, src.a), 1.0);
+  gl_FragColor = vec4(mix(src.rgb * pow(vig, 0.45) * (1.0 + uKeep.y * warm) + warm * vec3(0.0625, 0.044, 0.025) * uKeep.y, lit, src.a), 1.0);
 }`;
 function vec(c: number[]) { return `vec3(${c.map((v) => v.toFixed(5)).join(', ')})`; }
 
@@ -173,6 +179,7 @@ function vec(c: number[]) { return `vec3(${c.map((v) => v.toFixed(5)).join(', ')
 class Dark extends Phaser.Filters.Controller {
   light!: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
   lut!: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
+  albedo!: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
   room: [number, number] = [0, 0];
   lamp: V4 = [0, 0, 0, 0];
   glass: [number, number, number] = [0, 0, 0];
@@ -189,11 +196,13 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
   setupTextures(c: Dark, textures: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper[]) {
     textures[1] = c.light;
     textures[2] = c.lut;
+    textures[3] = c.albedo;
   }
   setupUniforms(c: Dark) {
     const pm = this.programManager, v = c.camera.worldView;
     pm.setUniform('uLight', 1);
     pm.setUniform('uLut', 2);
+    pm.setUniform('uAlbedo', 3);
     // Where the camera really draws the room: it rounds each image to whole screen pixels (roundPixels), so must the
     // light, or a half-pixel scroll lays each texel's light on its neighbour.
     const z = c.camera.zoom, snap = (a: number) => -Math.round(-a * z) / z;
@@ -208,6 +217,7 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
     pm.setUniform('uFrame', c.frame);
     const k = c.look;
     pm.setUniform('uTexel', k.texel);
+    pm.setUniform('uKeep', [k.albedo ? k.sprites ?? 0 : 0, k.warm ?? 0.8]);
     pm.setUniform('uAmb', L(k.amb).map((v) => v * 0.9));
     pm.setUniform('uLampR', [k.lamp[1], k.lamp[2], k.ys]);
     pm.setUniform('uPost', k.post);
@@ -268,10 +278,13 @@ let registered = false;
  *  `texel` texels per room px); `torches`: flames drawn over it (x, the row under the flame, strength), `flicker` all its
  *  baked light with them; `amb`: the ambient added to it; `night`: the hero's night sight; `lamp`: his lantern's
  *  strength, near and far radius; `ys`: how much a screen row counts in depth; `post`: exposure, contrast, desaturation,
- *  grain; `vig`: vignette centre and fall, dither, black level (taken off after the exposure); `pal`, `wY`: the palette and its brightness weight. */
+ *  grain; `vig`: vignette centre and fall, dither, black level (taken off after the exposure); `pal`, `wY`: the palette and its brightness weight;
+ *  `albedo`: the texture of the room's own pixels, so `sprites` caps the light on whatever else is drawn (a sun made for
+ *  the ground would burn the dark skins white); `warm`: how much the baked light brightens what is drawn already lit. */
 export type Look = {
   light: string; texel: number; torches: [number, number, number][]; flicker: boolean; amb: string; night: number;
   lamp: [number, number, number]; ys: number; post: [number, number, number, number]; vig: [number, number, number, number]; pal: string[]; wY: number;
+  albedo?: string; sprites?: number; warm?: number;
 };
 /** The torture room's (torture.ts): its mockup « Crasse et faim ». */
 export const TORTURE: Look = {
@@ -288,6 +301,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   const main = scene.cameras.main, f = main.filters.internal.add(new Dark(main, look)) as Dark;
   f.light = scene.textures.get(look.light).source[0].glTexture!;
   f.lut = scene.textures.get(lut(scene, look)).source[0].glTexture!;
+  f.albedo = scene.textures.get(look.albedo ?? look.light).source[0].glTexture!;
   f.room = size;
 
   // The unlit layer: its own camera, scrolled with the world's once that one has followed the hero this frame.

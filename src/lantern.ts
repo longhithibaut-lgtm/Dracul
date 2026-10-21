@@ -266,9 +266,10 @@ export function exposure(scene: Scene, hero: Phaser.GameObjects.Sprite, ms: numb
   const k = Math.min(1, ms / graceMs), burning = ms >= graceMs, beat = burning ? ((ms - graceMs) % everyMs) / everyMs : 0;
   if (Math.random() < 0.2 + 0.8 * k) sizzle(scene, hero, false, burning ? 4 : 1 + Math.round(2 * k));
   // The glow creeps on (an added tint, so the hurt flash, a fill tint, keeps the upper hand).
-  if (!hero.isTinted) hero.setTint(Phaser.Display.Color.GetColor(Math.round(170 * k ** 1.5), Math.round(80 * k ** 1.5), Math.round(20 * k ** 1.5)))
+  const t = (skin.dark ? 0.5 : 1) * k ** 1.5; // the grand vampire is drawn already lit: half the glow reads the same
+  if (!hero.isTinted) hero.setTint(Phaser.Display.Color.GetColor(Math.round(170 * t), Math.round(80 * t), Math.round(20 * t)))
     .setTintMode(Phaser.TintModes.ADD);
-  const x = Math.round(hero.x) - 7, y = Math.round(hero.y) - 24, w = burning ? 13 : Math.round(13 * k);
+  const x = Math.round(hero.x) - 7, y = Math.round(hero.y) - (skin.dark ? 32 : 24), w = burning ? 13 : Math.round(13 * k); // over his head (the grand vampire's is higher)
   const fill = burning ? (beat > 0.8 && Math.floor(ms / 60) % 2 ? PAL.W : 0xe0284a) : k > 0.85 && Math.floor(ms / 80) % 2 ? PAL.W : k > 0.6 ? PAL.Y : PAL.G;
   g.fillStyle(PAL['0']).fillRect(x - 1, y - 1, 15, 4);
   g.fillStyle(PAL.k).fillRect(x, y, 13, 2);
