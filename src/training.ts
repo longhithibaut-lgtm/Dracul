@@ -87,7 +87,7 @@ export function panel(api: { gifts: GiftId[]; spawn(s: Spawn): void; clear(): vo
   const coarse = matchMedia('(pointer: coarse)').matches;
   const root = document.createElement('aside');
   root.id = 'training';
-  root.innerHTML = `<style>${CSS}</style><details${shown ? ' open' : ''}><summary>ENTRAÎNEMENT${coarse ? '' : ' <small>· T pour quitter</small>'}</summary>
+  root.innerHTML = `<style>${CSS}</style><details${shown ? ' open' : ''}><summary>ENTRAÎNEMENT${coarse ? '' : ' <small>· T pour quitter · P plein écran</small>'}</summary>
     <h3>Salle</h3>
     <div class="row">${ROOMS.map(([id, l]) => `<button type="button" data-layout="${id}">${l}</button>`).join('')}</div>
     <h3>Ennemis</h3>

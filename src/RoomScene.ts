@@ -195,6 +195,8 @@ export class RoomScene extends Phaser.Scene {
     };
     this.input.keyboard!.on('keydown-L', castAhead);
     this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
+    // P: full screen in and out (the whole page, so the training panel and touch buttons come along); refused: nothing happens.
+    this.input.keyboard!.on('keydown-P', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}));
     // Gift cards: the 1, 2, 3 keys of the top row (by position, so AZERTY works unshifted) or of the numpad.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const n = /^(?:Digit|Numpad)([1-3])$/.exec(e.code);
