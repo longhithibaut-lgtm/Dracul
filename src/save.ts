@@ -3,8 +3,8 @@
 // game runs without storage (a private window, a framed preview): it then starts afresh each time.
 
 export const VERSION = 1;
-// unlocks: what the Rongé will sell for banked blood (pass 2); the bite for now.
-export type Save = { v: number; banked: number; unlocks: { bite: boolean } };
+// unlocks: what the Rongé will sell for banked blood (pass 2): the bite, and `life` more max blood (life) bought.
+export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number } };
 const KEY = 'dracul.save', LOG = 'dracul.log';
 
 /** A save read back from `json`, whatever it holds: brought up to this version, missing or broken fields to their
@@ -13,8 +13,8 @@ export function parse(json: string | null): Save {
   let o: Partial<Save> | null = null;
   try { o = JSON.parse(json ?? 'null'); } catch { /* broken: start afresh */ }
   if (typeof o !== 'object' || !o) o = {};
-  const banked = Number(o.banked);
-  return { v: VERSION, banked: Number.isFinite(banked) && banked > 0 ? Math.floor(banked) : 0, unlocks: { bite: o.unlocks?.bite === true } };
+  const count = (n: unknown) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.floor(Number(n)) : 0);
+  return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life) } };
 }
 
 const storage = () => { try { return localStorage; } catch { return undefined; } }; // a sandboxed frame throws on access

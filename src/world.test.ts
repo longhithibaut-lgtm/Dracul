@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WORLD, go, parents, type Came, type Place } from './world.ts';
+import { WORLD, go, parents, wayBack, type Came, type Place } from './world.ts';
 import { parse, VERSION } from './save.ts';
 import { T } from './tuning.ts';
 import { missing } from './font.ts';
@@ -46,6 +46,8 @@ describe('the world by depth', () => {
     expect(go({}, 'chapel', -1)).toEqual({ to: 'nave', entry: 0 }); // never came: the first way in
     expect(go(came, 'cloister', 0)).toBeUndefined(); // the deepest: its doors lead nowhere yet
     expect(go(came, 'refuge', -1)).toBeUndefined();
+    expect(wayBack(came, 'chapel')).toEqual(['ossuary', 'hall']); // where the battue will wait for him (pass 2)
+    expect(wayBack(came, 'hall')).toEqual([]);
     expect(parents('chapel')).toEqual([{ from: 'nave', exit: 0 }, { from: 'nave', exit: 1 }, { from: 'ossuary', exit: 0 }, { from: 'ossuary', exit: 1 }]);
   });
 
@@ -64,7 +66,7 @@ describe('the world by depth', () => {
 
 describe('save', () => {
   it('starts afresh without a save, or with a broken one', () => {
-    const fresh = { v: VERSION, banked: 0, unlocks: { bite: false } };
+    const fresh = { v: VERSION, banked: 0, unlocks: { bite: false, life: 0 } };
     expect(parse(null)).toEqual(fresh);
     expect(parse('{not json')).toEqual(fresh);
     expect(parse('42')).toEqual(fresh);
@@ -72,14 +74,15 @@ describe('save', () => {
   });
 
   it('reads back what it stored', () => {
-    const s = { v: VERSION, banked: 120, unlocks: { bite: true } };
+    const s = { v: VERSION, banked: 120, unlocks: { bite: true, life: 2 } };
     expect(parse(JSON.stringify(s))).toEqual(s);
   });
 
   it('brings an older or damaged save up to date: missing fields to their start, bad values cleaned, unknown ones dropped', () => {
-    expect(parse('{"banked":37}')).toEqual({ v: VERSION, banked: 37, unlocks: { bite: false } }); // before versions
-    expect(parse('{"v":1,"banked":-5,"unlocks":{"bite":"yes"},"junk":1}')).toEqual({ v: VERSION, banked: 0, unlocks: { bite: false } });
+    expect(parse('{"banked":37}')).toEqual({ v: VERSION, banked: 37, unlocks: { bite: false, life: 0 } }); // before versions
+    expect(parse('{"v":1,"banked":-5,"unlocks":{"bite":"yes"},"junk":1}')).toEqual({ v: VERSION, banked: 0, unlocks: { bite: false, life: 0 } });
     expect(parse('{"v":1,"banked":12.7}').banked).toBe(12);
     expect(parse('{"v":1,"banked":"NaN"}').banked).toBe(0);
+    expect(parse('{"v":1,"unlocks":{"bite":true,"life":-1}}').unlocks).toEqual({ bite: true, life: 0 });
   });
 });

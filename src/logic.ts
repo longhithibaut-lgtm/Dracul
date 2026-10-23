@@ -132,6 +132,9 @@ export function carry(carried: number, amount: number, bag: number) {
   return { carried: carried + took, left: amount - took };
 }
 
+/** How many of the battue's thresholds (one every `every` blood carried) a pick-up from `before` to `after` crosses. */
+export const scent = (before: number, after: number, every: number) => Math.floor(after / every) - Math.floor(before / every);
+
 /** The foes a room is first found with: `n` groups drawn from `pool`, each on a spawn point of its own at least `clear`
  *  from where the hero comes in (`entry`), and `gap` apart where the room allows. Fewer groups when too few points are clear
  *  of him. */

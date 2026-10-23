@@ -33,6 +33,13 @@ export function go(came: Came, from: Place, exit: number): { to: Place; entry: n
   return back && { to: back.from, entry: back.exit };
 }
 
+/** The rooms between `from` and the refuge on his way back, nearest first: where the battue (pass 2) lies in wait. */
+export function wayBack(came: Came, from: Place): Place[] {
+  const rooms: Place[] = [];
+  for (let at = go(came, from, -1)?.to; at && at !== 'refuge'; at = go(came, at, -1)?.to) rooms.push(at);
+  return rooms;
+}
+
 /** The ways into `to` going deeper: each room and exit leading to it. */
 export function parents(to: Place) {
   return (Object.keys(WORLD) as Place[]).flatMap((from) => WORLD[from].ahead.flatMap((t, exit) => (t === to ? [{ from, exit }] : [])));
@@ -46,5 +53,7 @@ export type RoomState = {
   caches: (P & { blood: number })[];
   drops: (P & { blood: number })[];
 };
-/** The expedition under way: when it started, the deepest ring reached, the way back, the rooms entered. */
-export type Expedition = { startedAt: number; deepest: number; came: Came; rooms: Partial<Record<Place, RoomState>> };
+/** The expedition under way: when it started, the deepest ring reached, the way back, the rooms entered; `packs`: the
+ *  battue's packs his scent has called (logic.ts scent()), for pass 2 to lay in wait in the rooms of wayBack(). */
+export type Expedition = { startedAt: number; deepest: number; came: Came; rooms: Partial<Record<Place, RoomState>>; packs: number };
+export const expedition = (deepest: number): Expedition => ({ startedAt: Date.now(), deepest, came: {}, rooms: {}, packs: 0 });

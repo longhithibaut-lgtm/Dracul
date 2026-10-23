@@ -104,7 +104,6 @@ const DEFS = {
   fuite: { name: 'Fuite du rat', text: (r) => `Ta brume se recharge ${Math.round((G.fuite[r] - 1) * 100)} % plus vite.` },
   morsure: { name: 'Morsure de rat', text: (r) => `Ta morsure rend ${v('morsure', r)} sang de plus.` },
   survivant: { name: 'Survivant', text: (r) => `+${v('survivant', r)} sang maximum, et tu regagnes ${v('survivant', r)} sang.` },
-  glaneur: { name: 'Glaneur', text: (r) => `Chaque salle vidée te rend ${v('glaneur', r)} sang.` },
   // Combos: offered once one of the gifts they build on is held.
   contagion: { name: 'Contagion', requires: PLAGUE, text: () => 'Quand un ennemi pestiféré meurt, la Peste saute sur les ennemis proches.' },
   fievre: { name: 'Fièvre', requires: PLAGUE, text: (r) => `La Peste frappe ${v('fievre', r)} fois de plus, toutes les ${G.plagueMs / 1000} s.` },

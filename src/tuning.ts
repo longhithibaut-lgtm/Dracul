@@ -287,6 +287,9 @@ export const T = {
     cache: 5,
     pickup: 16, search: 24, bag: 400, basin: 52,
   },
+  // The blood's scent (docs/extraction.md §5): every `every` blood carried calls a pack of the battue (counted for now;
+  // pass 2 sends them between the hero and the refuge).
+  battue: { every: 50 },
 
   // Gifts of the Rat house (gifts.ts), toggled in the training room (none is offered on an expedition). The number of a gift with a rarity is named
   // after it, a triple [commun, rare, épique]: the rarity it is offered at picks one (T.rarity).
@@ -304,7 +307,6 @@ export const T = {
     fuite: [1.4, 1.6, 1.8], // the dash recharges this many times faster
     morsure: [1, 2, 3], // extra blood a bite gives back
     survivant: [1, 2, 3], // extra max health, healed once when taken
-    glaneur: [1, 2, 3], // blood back when a room is cleared
     fievre: [1, 2, 3], // Fièvre: the plague strikes this many times more, plagueMs apart
     grouillement: [2, 3, 4], // Grouillement: bites of each rat
   },

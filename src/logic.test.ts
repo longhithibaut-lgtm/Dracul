@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertness, biteTarget, carry, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, swarmUnlocked, wound } from './logic.ts';
+import { alertness, biteTarget, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, swarmUnlocked, wound } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, shelf, value } from './gifts.ts';
 import { T } from './tuning.ts';
 import { missing, width } from './font.ts';
@@ -217,6 +217,10 @@ describe('expedition', () => {
     expect(carry(0, 12, 400)).toEqual({ carried: 12, left: 0 });
     expect(carry(395, 12, 400)).toEqual({ carried: 400, left: 7 });
     expect(carry(400, 12, 400)).toEqual({ carried: 400, left: 12 });
+  });
+
+  it("the blood's scent calls a pack of the battue at each threshold crossed", () => {
+    expect([scent(0, 49, 50), scent(49, 50, 50), scent(40, 160, 50), scent(100, 120, 50)]).toEqual([0, 1, 3, 0]);
   });
 
   it('pays more blood the deeper the ring: x1, x3, x8, x20', () => {

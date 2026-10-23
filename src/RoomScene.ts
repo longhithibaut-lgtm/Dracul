@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { aimAt, alertness, biteTarget, burnsAfter, carry, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, onLine, pickSpot, placeGroups, rayDistance, stepsFrom, swarmUnlocked, wound } from './logic.ts';
+import { aimAt, alertness, biteTarget, burnsAfter, carry, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, onLine, pickSpot, placeGroups, rayDistance, scent, stepsFrom, swarmUnlocked, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -18,7 +18,7 @@ import * as Touch from './touch.ts';
 import * as Refuge from './refuge.ts';
 import * as Loot from './loot.ts';
 import * as Save from './save.ts';
-import { WORLD, go, parents, type Expedition, type Place } from './world.ts';
+import { WORLD, expedition, go, parents, type Expedition, type Place } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -306,7 +306,7 @@ export class RoomScene extends Phaser.Scene {
     const W = WORLD[this.here], E = T.expedition, ring = W.ring, r = this.room;
     if (W.ahead.length) Room.raiseGate(this, 1); // open: he goes deeper when he pleases
     const at = this.entry === undefined ? r.heroStart : this.entry < 0 ? { x: r.stairs.x, y: r.bounds.bottom } : r.exits[this.entry];
-    this.exp ??= { startedAt: Date.now(), deepest: ring, came: {}, rooms: {} }; // a room opened directly (scripts, tools): an expedition of its own
+    this.exp ??= expedition(ring); // a room opened directly (scripts, tools): an expedition of its own
     const st = (this.exp.rooms[this.here] ??= {
       foes: [
         ...placeGroups(E.pools[ring] as readonly (readonly string[])[], E.groups[ring], r.spawns, at, E.clear, E.gap, Math.random)
@@ -406,7 +406,7 @@ export class RoomScene extends Phaser.Scene {
       if (feet.top <= b.top + 1 && exit >= 0) this.leave(exit);
       else if (feet.bottom >= b.bottom - 1 && Math.abs(feet.center.x - this.room.stairs.x) < 24) this.leave(-1);
     }
-    for (const l of this.labels) l.l.near(near(l.at, 40));
+    for (const l of this.labels) l.l.near(near(l.at, 64)); // the basin's before he pours (T.blood.basin)
     for (const c of this.caches) c.label.near(near(c, T.blood.search + 8));
     for (const d of [...this.drops]) if (near(d, T.blood.pickup)) this.pickUp(d);
     // The refuge's basin takes the blood he carries: banked.
@@ -1264,6 +1264,7 @@ export class RoomScene extends Phaser.Scene {
     const { carried, left } = carry(this.carried, d.blood, T.blood.bag);
     if (carried === this.carried) return;
     if (carried === T.blood.bag) this.hud.title('Sac plein');
+    this.exp!.packs += scent(this.carried, carried, T.battue.every); // the hook of the battue (pass 2)
     this.carried = carried;
     d.blood = left;
     if (!left) {
@@ -1312,7 +1313,7 @@ export class RoomScene extends Phaser.Scene {
     this.cameras.main.fadeOut(T.expedition.fadeMs);
     let next: Run = { training: true, gifts: this.gifts, ranks: this.ranks, layout: 'hall' };
     if (!this.training) {
-      const exp = this.exp ?? { startedAt: Date.now(), deepest: 0, came: {}, rooms: {} }, live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
+      const exp = this.exp ?? expedition(0), live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
       const hounds = live.filter((e) => e.getData('kind') === 'hound' && e.getData('alert') && !e.getData('followed'));
       const st = exp.rooms[this.here];
       if (st) Object.assign(st, { // as he leaves it; an Amas' torn ghouls are its own, gone with it
@@ -1333,7 +1334,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private maxHealth() {
-    return T.hero.maxHealth + this.v('survivant') - (this.has('maigre') ? T.pacts.maigre.maxBlood : 0);
+    return T.hero.maxHealth + Save.data.unlocks.life + this.v('survivant') - (this.has('maigre') ? T.pacts.maigre.maxBlood : 0);
   }
 
   private dashCooldown() {

@@ -2,7 +2,7 @@
 // Usage: npm run shot [-- --out=shots --port=5199]
 // A fresh save. Expedition 1: the bot walks from the coffin down the refuge's stairs into the crypt, captures an enemy
 // group on its post (group.png, full frame), fights the crypt clear (kept from harm), picks up the blood of the dead
-// and searches a cache, captures the HUD with the blood carried (hud-blood.png, full frame; hud.png, the corner), goes
+// and searches a cache (cache.png: the cache before F), captures the HUD with the blood carried (hud-blood.png, full frame; hud.png, the corner), goes
 // deeper through the left portcullis into the nave, fights a little there, comes back down its stairs (the crypt's dead
 // must still be dead), up to the refuge and into the basin (basin.png, full frame: the blood poured, banked and saved).
 // Expedition 2: down again (the world new), blood picked up, then the bot lets the crypt's foes kill him: he re-forms
@@ -155,6 +155,8 @@ check(await gather(), 'crypt: the blood of the dead picked up');
   if (c) {
     const before = (await state()).carried;
     await walk(c.x, c.y, 15000, 10);
+    await page.waitForTimeout(500);
+    await shot('cache'); // its scent and « Fouiller (F) » over it
     await page.keyboard.press('f');
     await page.waitForTimeout(300);
     await gather(5000);
@@ -185,6 +187,7 @@ check(back.y < 120 && back.live === 0, `back in the crypt by its left portcullis
 await fight(20000); // the hounds that followed him, if any
 await gather(5000);
 carried = (await state()).carried;
+console.log(`the battue's packs his scent called with ${carried} blood (pass 2 sends them): ${await run(() => window.game.scene.getScene('room').exp.packs)}`);
 check(await exit(240, 616, 'ArrowDown', 'refuge'), 'down the crypt stairs, up into the refuge');
 check(await walk(840, 684, 20000, 8) && (await until(() => window.game.scene.getScene('room').carried === 0, null, 5000)), 'walked to the basin');
 await page.waitForTimeout(350);
