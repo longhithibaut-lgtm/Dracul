@@ -19,7 +19,7 @@ export type Room = {
   heroStart: P;
   spawns: P[]; // fixed, so screenshots are comparable run to run
   spots: P[]; // where the Order may plant its lanterns
-  medallion: P; // centre of the ritual medallion, on the floor: the gift rises there
+  medallion: P; // centre of the ritual medallion, on the floor: where a room's guard stands
   exits: P[]; // middle of each exit, on the back edge of the floor
   stairs: P; // where the hero climbs in from, below the front edge
   holy(x: number, y: number): boolean; // a floor point in holy light that never goes out (stained glass, the open sky)

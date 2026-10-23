@@ -1,8 +1,9 @@
 // The training room (key T): a DOM panel over the game to call enemies in, toggle the gifts and tune the hero live.
-// The knobs change T itself, so a tuned value holds for the whole session, normal runs included, until a reload.
+// The knobs change T itself, so a tuned value holds for the whole session, expeditions included, until a reload.
 import { T } from './tuning.ts';
 import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, type GiftId } from './gifts.ts';
 import type { LayoutId } from './room.ts';
+import * as Save from './save.ts';
 
 export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'priest' | 'hounds' | 'penitents' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau';
 /** Survive the scene restarts (a death in training starts the training room again). */
@@ -99,6 +100,7 @@ export function panel(api: {
     <label><input type="checkbox" data-opt="passive"> Ennemis passifs (mannequins)</label>
     <h3>Héros</h3>
     <label><input type="checkbox" data-opt="god"> Invincible</label>
+    <label><input type="checkbox" data-unlock="bite"${Save.data.unlocks.bite ? ' checked' : ''}> Morsure débloquée <small>· sauvegardé</small></label>
     <div class="row"><button type="button" data-act="heal">Soigner</button></div>
     <h3>Dons du Rat : emplacements</h3>${gifts((id) => !!GIFTS[id].slot)}
     <h3>Dons du Rat : talents</h3>${gifts((id) => kind(id) === 'talent')}
@@ -131,6 +133,7 @@ export function panel(api: {
   root.addEventListener('change', (ev) => {
     const i = ev.target as HTMLInputElement;
     if (i.dataset.opt) opts[i.dataset.opt as keyof typeof opts] = i.checked;
+    if (i.dataset.unlock) Save.data.unlocks.bite = i.checked, Save.store(); // the Rongé will sell it (docs/extraction.md)
     if (i.dataset.gift) api.toggle(i.dataset.gift as GiftId, i.checked, rank);
     if (i.dataset.rank !== undefined) api.rank((rank = Number(i.value)));
     release();

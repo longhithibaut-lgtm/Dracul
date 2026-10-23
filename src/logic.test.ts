@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { biteTarget, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, drawDoors, drawGifts, drawOffer, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, nextLayout, offerable, offers, pickSpot, rayDistance, replaced, rollRarity, stepsFrom, swarmUnlocked, take, wound, type Reward } from './logic.ts';
-import { GIFTS, GIFT_IDS, KINDS, RARITY, cost, kind, replacing, shelf, value } from './gifts.ts';
+import { alertness, biteTarget, carry, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, swarmUnlocked, wound } from './logic.ts';
+import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, shelf, value } from './gifts.ts';
 import { T } from './tuning.ts';
-import { missing, width, wrap } from './font.ts';
+import { missing, width } from './font.ts';
+import * as Crypt from './crypt.data.ts';
 
 describe('inArc', () => {
   const o = { x: 0, y: 0 };
@@ -137,151 +138,28 @@ describe('holy light', () => {
   });
 });
 
-describe('gifts', () => {
-  const seq = (...v: number[]) => () => v.shift() ?? 0;
-
-  it('draws distinct untaken gifts, as many as are left', () => {
-    const held = ['griffes', 'fuite'] as const;
-    const d = drawGifts(offerable(GIFTS, held), 3, Math.random);
-    expect(new Set(d).size).toBe(3);
-    expect(d.some((g) => (held as readonly string[]).includes(g))).toBe(false);
-    expect(drawGifts(offerable(GIFTS, GIFT_IDS.slice(0, -1)), 3, Math.random)).toEqual(GIFT_IDS.slice(-1));
-    expect(drawGifts(offerable(GIFTS, GIFT_IDS), 3, Math.random)).toEqual([]);
-  });
-
-  it('follows the injected random function', () => {
-    expect(drawGifts(['a', 'b', 'c'], 3, seq(0.99, 0.99))).toEqual(['a', 'b', 'c']); // every swap in place
-    expect(drawGifts(['a', 'b', 'c'], 3, seq(0, 0))).toEqual(['b', 'c', 'a']);
-  });
-
-  // A made-up second house sharing the claws slot, until one exists.
-  const defs = { a: { slot: 'griffes' }, b: { slot: 'tir' }, wolf: { slot: 'griffes' }, t: {}, u: {}, needs: { requires: ['a', 'b'] } };
-
-  it('one gift per slot: a slot gift replaces the one in its slot, talents stack', () => {
-    expect(replaced(defs, ['a', 't'], 'wolf')).toBe('a');
-    expect(take(defs, ['a', 'b', 't'], 'wolf')).toEqual(['b', 't', 'wolf']);
-    expect(take(defs, ['wolf', 't'], 'a')).toEqual(['t', 'a']);
-    expect(replaced(defs, ['a', 'b'], 't')).toBeUndefined();
-    expect(take(defs, ['a', 't'], 'u')).toEqual(['a', 't', 'u']);
-    expect(take(defs, ['t'], 'b')).toEqual(['t', 'b']); // an empty slot
-  });
-
-  it('offers a gift with a prerequisite only once one of them is held', () => {
-    expect(offerable(defs, ['t'])).not.toContain('needs');
-    expect(offerable(defs, ['b'])).toContain('needs');
-    expect(offerable(defs, ['a', 'needs'])).not.toContain('needs');
-    expect(offerable(GIFTS, [])).not.toContain('contagion');
-    expect(offerable(GIFTS, ['eclats'])).toContain('contagion');
-    for (const g of Object.values(GIFTS)) expect(GIFT_IDS).toEqual(expect.arrayContaining([...(g.requires ?? [])]));
-  });
-
-  it('shelves slot gifts in slot order, then talents as taken', () => {
+describe('gifts (training room)', () => {
+  it('shelves slot gifts in slot order, then talents as taken, then pacts', () => {
     expect(shelf(['fuite', 'nuee', 'rongeur', 'griffes', 'nid'])).toEqual(['griffes', 'nid', 'nuee', 'fuite', 'rongeur']);
+    expect(shelf(['maigre', 'rongeur', 'jet'])).toEqual(['jet', 'rongeur', 'maigre']);
+    expect(kind('maigre')).toBe('pacte');
   });
 
-  it('every gift text, at every rarity, is in the typeface and wraps to card width; names fit on one line', () => {
+  it('every gift text, at every rarity, is in the typeface; names fit on one line', () => {
     for (const id of GIFT_IDS) {
       const g = GIFTS[id], texts = [0, 1, 2].map(g.text);
-      for (const t of [...texts, replacing(id), cost(id)]) {
-        expect(missing(t)).toEqual([]);
-        expect(wrap(t, 112).every((l) => width(l) <= 112)).toBe(true);
-      }
+      for (const t of texts) expect(missing(t)).toEqual([]);
       expect(missing(g.name + KINDS[kind(id)].toUpperCase() + RARITY.join('').toUpperCase())).toEqual([]);
       expect(width(g.name)).toBeLessThanOrEqual(120);
-      if (g.ranked) expect(new Set(texts).size).toBe(3); // the card shows the rarity's numbers
+      if (g.ranked) expect(new Set(texts).size).toBe(3);
+      for (const r of g.requires ?? []) expect(GIFT_IDS).toContain(r);
     }
-    expect(missing('Don de la Maison du Rat · Vesna la Grise · Salle 9 · La Nuée répond : touche R · Amélioration : ')).toEqual(['·']);
   });
 
   it('a gift with a rarity is stronger at each rarity; the others have none', () => {
     for (const id of GIFT_IDS.filter((id) => GIFTS[id].ranked)) expect(value(id, 0) < value(id, 1) && value(id, 1) < value(id, 2)).toBe(true);
     expect(GIFTS.griffes.ranked && !GIFTS.perce.ranked && !GIFTS.contagion.ranked && !GIFTS.maigre.ranked).toBe(true);
     expect(value('perce', 2)).toBe(0);
-  });
-
-  const odds = { rare: [0.1, 0.03, 0.4], epic: [0.02, 0.015, 0.2] };
-  it('rolls rare and épique gifts, more often as the run goes on, never past the cap', () => {
-    expect(rollRarity(1, odds, () => 0.019)).toBe(2);
-    expect(rollRarity(1, odds, () => 0.02)).toBe(1);
-    expect(rollRarity(1, odds, () => 0.119)).toBe(1);
-    expect(rollRarity(1, odds, () => 0.121)).toBe(0);
-    expect(rollRarity(6, odds, () => 0.3)).toBe(1); // 9.5 % épique + 25 % rare
-    expect(rollRarity(6, odds, () => 0.35)).toBe(0);
-    expect(rollRarity(99, odds, () => 0.199)).toBe(2);
-    expect(rollRarity(99, odds, () => 0.599)).toBe(1);
-    expect(rollRarity(99, odds, () => 0.601)).toBe(0);
-  });
-
-  const O = { rarity: odds, pacts: { chance: 0.3, fromRoom: 2 } };
-  const pacts = (cards: { id: string }[]) => cards.filter((c) => GIFTS[c.id as keyof typeof GIFTS].pact).length;
-  it('a gift choice: three gifts, at most one pact and never in the first room', () => {
-    for (let i = 0; i < 200; i++) {
-      expect(pacts(drawOffer(GIFTS, [], {}, 'gift', 1, O, Math.random))).toBe(0);
-      const d = drawOffer(GIFTS, ['griffes'], {}, 'gift', 3, O, Math.random);
-      expect(d.length).toBe(3);
-      expect(pacts(d)).toBeLessThanOrEqual(1);
-      expect(d.some((c) => c.id === 'griffes')).toBe(false);
-      if (pacts(d)) expect(GIFTS[d[2].id].pact).toBeTruthy(); // the pact is the last card, the others normal gifts
-    }
-    // rnd 0: a pact whenever one may be offered, every gift épique.
-    expect(pacts(drawOffer(GIFTS, [], {}, 'gift', 2, O, () => 0))).toBe(1);
-    expect(drawOffer<keyof typeof GIFTS>(GIFTS, [], {}, 'gift', 2, O, () => 0).filter((c) => GIFTS[c.id].ranked).every((c) => c.rank === 2)).toBe(true);
-    // Nothing but pacts left: no gift choice.
-    expect(drawOffer(GIFTS, GIFT_IDS.filter((id) => !GIFTS[id].pact), {}, 'gift', 3, O, () => 0)).toEqual([]);
-  });
-
-  it('a pact choice: two pacts and a gift to refuse them with; an upgrade: held gifts a rarity up', () => {
-    const d = drawOffer(GIFTS, [], {}, 'pacte', 2, O, Math.random);
-    expect(pacts(d)).toBe(2);
-    expect(d.length).toBe(3);
-    expect(drawOffer(GIFTS, [], {}, 'pacte', 1, O, Math.random)).toEqual([]); // no pact in the first room
-    expect(drawOffer(GIFTS, ['maigre', 'noires', 'curee', 'vermine'], {}, 'pacte', 3, O, Math.random)).toEqual([]);
-    const up = drawOffer(GIFTS, ['griffes', 'perce', 'fuite', 'maigre'], { griffes: 2, fuite: 1 }, 'upgrade', 3, O, Math.random);
-    expect(up).toEqual([{ id: 'fuite', rank: 2, up: true }]); // perce and the pact have no rarity, griffes is épique
-  });
-
-  it('says which rewards a room can offer', () => {
-    const can = (kind: Reward, held: (keyof typeof GIFTS)[] = [], room = 2, hurt = true, ranks = {}) => offers(GIFTS, held, ranks, kind, room, O, hurt);
-    expect(can('gift')).toBe(true);
-    expect(can('gift', GIFT_IDS.filter((id) => !GIFTS[id].pact))).toBe(false); // every gift held
-    expect(can('upgrade')).toBe(false); // nothing to raise
-    expect(can('upgrade', ['perce', 'maigre'])).toBe(false); // no rarity
-    expect(can('upgrade', ['griffes'], 2, true, { griffes: 2 })).toBe(false); // already épique
-    expect(can('upgrade', ['griffes'])).toBe(true);
-    expect(can('pacte', [], 1)).toBe(false);
-    expect(can('pacte')).toBe(true);
-    expect(can('pacte', ['maigre', 'noires', 'curee', 'vermine'])).toBe(false);
-    expect(can('sang', [], 2, false)).toBe(false); // at his max
-    expect(can('sang')).toBe(true);
-    expect(drawOffer(GIFTS, [], {}, 'sang', 2, O, Math.random)).toEqual([]); // blood has no cards
-  });
-
-  it('draws two different rewards for the two exits when it can', () => {
-    const W = { gift: 4, upgrade: 2, sang: 2, pacte: 1 }, all: Reward[] = ['gift', 'pacte', 'upgrade', 'sang'], seen = new Set<string>();
-    for (let i = 0; i < 500; i++) {
-      const [a, b, ...rest] = drawDoors(all, W, 2, Math.random);
-      expect(a).not.toBe(b);
-      expect(rest).toEqual([]);
-      seen.add(a).add(b);
-    }
-    expect(seen.size).toBe(4);
-    for (let i = 0; i < 50; i++) expect(new Set(drawDoors(['gift', 'sang'], W, 2, Math.random)).size).toBe(2);
-    expect(drawDoors(['upgrade'], W, 2, Math.random)).toEqual(['upgrade', 'upgrade']); // one kind: behind both
-    expect(drawDoors([], W, 2, Math.random)).toEqual(['gift', 'gift']); // nothing: a gift choice (it opens at once)
-    expect(drawDoors(all, W, 1, () => 0)).toEqual(['gift']); // by weight: the low end of the draw is the first kind's
-    expect(drawDoors(all, W, 1, () => 0.999)).toEqual(['sang']);
-    expect(drawDoors(all, { ...W, sang: 0 }, 1, () => 0.999)).toEqual(['upgrade']);
-  });
-
-  it('a pact is taken like a talent; a combo is offered once a gift it builds on is held', () => {
-    expect(take(GIFTS, ['griffes', 'rongeur'], 'maigre')).toEqual(['griffes', 'rongeur', 'maigre']);
-    expect(take(GIFTS, ['griffes', 'maigre'], 'grouillantes')).toEqual(['maigre', 'grouillantes']);
-    expect(kind('maigre')).toBe('pacte');
-    expect(shelf(['maigre', 'rongeur', 'jet'])).toEqual(['jet', 'rongeur', 'maigre']);
-    expect(offerable(GIFTS, [])).not.toContain('fievre');
-    expect(offerable(GIFTS, ['miasme'])).toEqual(expect.arrayContaining(['fievre', 'contagion']));
-    expect(offerable(GIFTS, ['miasme'])).not.toContain('grouillement');
-    expect(offerable(GIFTS, ['jet'])).toContain('grouillement');
   });
 
   it('la Nuée answers a hero holding enough gifts', () => {
@@ -311,6 +189,11 @@ describe('wound', () => {
     expect(wound(1, 1, true, 1, false)).toEqual({ hp: 0, kneels: false }); // after the kneel: killable
   });
 
+  it('with the bite locked, a human is wounded like a ghoul (human false): weakened, it dies, never kneels', () => {
+    expect(wound(2, 1, false, 1, false)).toEqual({ hp: 1, kneels: false });
+    expect(wound(1, 1, false, 1, false)).toEqual({ hp: 0, kneels: false });
+  });
+
   it('kneeling, no blow takes hp away; overkill from above still kills', () => {
     expect(wound(1, 2, true, 1, true)).toEqual({ hp: 1, kneels: false });
     expect(wound(2, 2, true, 1, false)).toEqual({ hp: 1, kneels: true }); // a heavy blow on a fresh human: he kneels
@@ -318,23 +201,51 @@ describe('wound', () => {
   });
 });
 
-describe('nextLayout', () => {
-  const ids = ['hall', 'nave', 'ossuary'] as const;
-
-  it('room 1 is always the hall, whatever came before', () => {
-    expect(nextLayout(1, 'nave', ids, () => 0.99)).toBe('hall');
+describe('expedition', () => {
+  it('a foe sees the hero and hunts him; it gives up once it has not seen him for a while', () => {
+    const G = 4000;
+    let s = { alert: false, seenAt: -1e9 };
+    expect((s = alertness(s, false, 1000, G))).toEqual({ alert: false, seenAt: -1e9 }); // idle, nothing seen
+    expect((s = alertness(s, true, 2000, G))).toEqual({ alert: true, seenAt: 2000 });
+    expect((s = alertness(s, false, 5999, G)).alert).toBe(true); // lost him 3.999 s ago: still hunting
+    expect(alertness(s, true, 5999, G)).toEqual({ alert: true, seenAt: 5999 }); // seen again: the clock starts over
+    expect((s = alertness(s, false, 6000, G)).alert).toBe(false); // 4 s without seeing him: gives up
+    expect(alertness(s, false, 9000, G).alert).toBe(false); // and stays idle until it sees him again
   });
 
-  it('from room 2, any layout but the last one, each of them in turn', () => {
-    const seen = new Set<string>();
-    for (const prev of ids)
-      for (const r of [0, 0.3, 0.5, 0.7, 0.999]) {
-        const next = nextLayout(2, prev, ids, () => r);
-        expect(next).not.toBe(prev);
-        expect(ids).toContain(next);
-        seen.add(next);
+  it('carries blood up to the bag, leaving the rest behind', () => {
+    expect(carry(0, 12, 400)).toEqual({ carried: 12, left: 0 });
+    expect(carry(395, 12, 400)).toEqual({ carried: 400, left: 7 });
+    expect(carry(400, 12, 400)).toEqual({ carried: 400, left: 12 });
+  });
+
+  it('pays more blood the deeper the ring: x1, x3, x8, x20', () => {
+    expect(T.blood.ring.slice(1)).toEqual([1, 3, 8, 20]);
+    const ghoul = T.blood.drops.ghoul;
+    expect([1, 2, 3, 4].map((r) => ghoul * T.blood.ring[r])).toEqual([1, 3, 8, 20].map((k) => ghoul * k));
+    for (const k of Object.values(T.blood.drops)) expect(k).toBeGreaterThan(0);
+  });
+
+  it('places the groups of a ring from its pool, away from where the hero comes in, apart from each other', () => {
+    const stairs = { x: Crypt.STAIRS.x, y: Crypt.FY1 }, E = T.expedition;
+    for (const ring of [1, 2, 3, 4]) {
+      const pool = E.pools[ring] as readonly (readonly string[])[];
+      for (let i = 0; i < 50; i++) {
+        const groups = placeGroups(pool, E.groups[ring], Crypt.SPAWNS, stairs, E.clear, E.gap, Math.random);
+        expect(groups.length).toBe(E.groups[ring]);
+        for (const g of groups) {
+          expect(pool).toContain(g.kinds);
+          expect(Math.hypot(g.at.x - stairs.x, g.at.y - stairs.y)).toBeGreaterThanOrEqual(E.clear);
+          for (const o of groups) if (o !== g) expect(Math.hypot(g.at.x - o.at.x, g.at.y - o.at.y)).toBeGreaterThanOrEqual(E.gap);
+        }
       }
-    expect(seen.size).toBe(3);
+    }
+    expect(E.pools[1].flat().every((k) => k === 'ghoul' || k === 'crossbow')).toBe(true); // gentle first
+  });
+
+  it('places fewer groups when the room has few points clear of the hero', () => {
+    const near = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 500, y: 0 }];
+    expect(placeGroups([['a']], 3, near, { x: 0, y: 0 }, 100, 50, Math.random)).toEqual([{ at: { x: 500, y: 0 }, kinds: ['a'] }]);
   });
 });
 

@@ -38,7 +38,8 @@ export function dashStrikes(now: number, dashUntil: number, lastSlashAt: number,
 /**
  * A blow of `amount` on an enemy with `hp`. A human it leaves weakened (`weakAt` or less, but alive) drops to its knees;
  * while it kneels, blows can't take its hp below what it knelt with, so it is left for the bite. Only a human already
- * weakened, back on its feet, can be killed.
+ * weakened, back on its feet, can be killed. Until the bite is unlocked (save.ts) every blow is plain: callers pass
+ * `human` false, and a weakened human dies like any other.
  */
 export function wound(hp: number, amount: number, human: boolean, weakAt: number, kneeling: boolean): { hp: number; kneels: boolean } {
   if (kneeling) return { hp, kneels: false };
@@ -116,91 +117,30 @@ export function pickSpot(spots: P[], hero: P, taken: P[], rx: number, ry: number
     .sort((a, b) => d(a) - d(b))[0];
 }
 
-type Gifts<K extends string> = Record<K, { slot?: string; requires?: readonly string[]; pact?: string; ranked?: boolean }>;
-
-/** The gifts that may be offered: not held, and holding one of those they require, if any. */
-export function offerable<K extends string>(defs: Gifts<K>, held: readonly K[]): K[] {
-  return (Object.keys(defs) as K[]).filter((g) => !held.includes(g) && (defs[g].requires?.some((r) => held.includes(r as K)) ?? true));
-}
-
-/** The held gift that taking `id` would replace: the one in its slot. A talent (no slot) replaces nothing. */
-export function replaced<K extends string>(defs: Gifts<K>, held: readonly K[], id: K): K | undefined {
-  const slot = defs[id].slot;
-  return slot ? held.find((g) => g !== id && defs[g].slot === slot) : undefined;
-}
-
-/** The gifts held once `id` is taken: at most one per slot, so a slot gift replaces the one in its slot; talents stack. */
-export function take<K extends string>(defs: Gifts<K>, held: readonly K[], id: K): K[] {
-  const old = replaced(defs, held, id);
-  return [...held.filter((g) => g !== old), id];
-}
-
-/** Up to `n` items of `pool`, in random order (`rnd` in [0, 1), injected for tests). */
-export function drawGifts<K>(pool: readonly K[], n: number, rnd: () => number): K[] {
-  const left = [...pool];
-  for (let i = left.length - 1; i > 0; i--) { // Fisher-Yates
-    const j = Math.floor(rnd() * (i + 1));
-    [left[i], left[j]] = [left[j], left[i]];
-  }
-  return left.slice(0, n);
-}
-
-/** The rarity a gift is offered at in room `room`: 0 commun, 1 rare, 2 épique. `odds`: for rare and épique, [base, +
- *  per room after the first, cap]. */
-export function rollRarity(room: number, odds: { rare: readonly number[]; epic: readonly number[] }, rnd: () => number): number {
-  const p = ([base, per, cap]: readonly number[]) => Math.min(cap, base + per * (room - 1)), epic = p(odds.epic), r = rnd();
-  return r < epic ? 2 : r < epic + p(odds.rare) ? 1 : 0;
-}
-
-/** What a room can hand out (the gift on the medallion): a gift choice (now and then with a pact among it), a pact
- *  choice (pacts, and one gift to refuse them with), a gift upgrade (held gifts a rarity up), or blood (no cards). */
-export const REWARDS = ['gift', 'pacte', 'upgrade', 'sang'] as const;
-export type Reward = (typeof REWARDS)[number];
-/** One card of an offer: gift `id` at rarity `rank`; `up`: a held gift raised to it. */
-export type Card<K> = { id: K; rank: number; up?: boolean };
-type Odds = { rarity: { rare: readonly number[]; epic: readonly number[] }; pacts: { chance: number; fromRoom: number } };
-
-/** The cards of reward `kind` in room `room`, for a hero holding `held` at `ranks`; [] when there is nothing to offer.
- *  A gift choice is three gifts, the last a pact `chance` of the time from `fromRoom` on, and needs one gift that is not
- *  a pact. A pact choice is two pacts and a gift, from `fromRoom` on. An upgrade is up to three held gifts with a rarity
- *  below épique. Blood has no cards. */
-export function drawOffer<K extends string>(defs: Gifts<K>, held: readonly K[], ranks: Partial<Record<K, number>>, kind: Reward, room: number, odds: Odds, rnd: () => number): Card<K>[] {
-  if (kind === 'sang') return [];
-  if (kind === 'upgrade')
-    return drawGifts(held.filter((g) => defs[g].ranked && (ranks[g] ?? 0) < 2), 3, rnd).map((id) => ({ id, rank: (ranks[id] ?? 0) + 1, up: true }));
-  const open = offerable(defs, held), gifts = open.filter((g) => !defs[g].pact), pacts = open.filter((g) => defs[g].pact);
-  const card = (id: K): Card<K> => ({ id, rank: defs[id].ranked ? rollRarity(room, odds.rarity, rnd) : 0 });
-  if (kind === 'pacte') return pacts.length && room >= odds.pacts.fromRoom ? [...drawGifts(pacts, 2, rnd), ...drawGifts(gifts, 1, rnd)].map(card) : [];
-  if (!gifts.length) return [];
-  const pact = pacts.length && room >= odds.pacts.fromRoom && rnd() < odds.pacts.chance;
-  return [...drawGifts(gifts, pact ? 2 : 3, rnd), ...(pact ? drawGifts(pacts, 1, rnd) : [])].map(card);
-}
-
-/** True when reward `kind` has something to hand out in room `room`: blood to a `hurt` hero, cards otherwise. */
-export function offers<K extends string>(defs: Gifts<K>, held: readonly K[], ranks: Partial<Record<K, number>>, kind: Reward, room: number, odds: Odds, hurt: boolean) {
-  return kind === 'sang' ? hurt : drawOffer(defs, held, ranks, kind, room, odds, () => 0).length > 0; // how many cards never depends on the draw
-}
-
-/** The rewards behind a room's `n` exits, like Hades' doors: drawn from the `kinds` the next room can offer by their
- *  `weights`, all different while there are kinds enough; a gift choice behind each when there is nothing to offer. */
-export function drawDoors(kinds: readonly Reward[], weights: Readonly<Record<Reward, number>>, n: number, rnd: () => number): Reward[] {
-  if (!kinds.length) return Array<Reward>(n).fill('gift');
-  const out: Reward[] = [];
-  for (let left = [...kinds]; out.length < n; left = left.length > 1 ? left.filter((k) => k !== out.at(-1)) : [...kinds]) {
-    let r = rnd() * left.reduce((s, k) => s + weights[k], 0);
-    out.push(left.find((k) => (r -= weights[k]) < 0) ?? left[left.length - 1]);
-  }
-  return out;
-}
-
 /** La Nuée, the Rat house's form of the night, answers a hero holding `need` of its gifts. */
 export const swarmUnlocked = (held: readonly unknown[], need: number) => held.length >= need;
 
-/** The layout of room `room` of a run: the first of `ids` for room 1, then any but `prev` (the last room's). */
-export function nextLayout<K>(room: number, prev: K, ids: readonly K[], rnd: () => number): K {
-  if (room <= 1) return ids[0];
-  const left = ids.filter((id) => id !== prev);
-  return left[Math.floor(rnd() * left.length)];
+/** A placed foe on the watch: seeing the hero (`sees`) at `now` sets it hunting him; it gives up once it has not seen
+ *  him for `giveUpMs`. */
+export function alertness(s: { alert: boolean; seenAt: number }, sees: boolean, now: number, giveUpMs: number) {
+  return sees ? { alert: true, seenAt: now } : { alert: s.alert && now - s.seenAt < giveUpMs, seenAt: s.seenAt };
+}
+
+/** `amount` blood picked up, `carried` already in a bag holding `bag`: what is carried then, and what is left behind. */
+export function carry(carried: number, amount: number, bag: number) {
+  const took = Math.max(0, Math.min(amount, bag - carried));
+  return { carried: carried + took, left: amount - took };
+}
+
+/** The foes a room is first found with: `n` groups drawn from `pool`, each on a spawn point of its own at least `clear`
+ *  from where the hero comes in (`entry`), and `gap` apart where the room allows. Fewer groups when too few points are clear
+ *  of him. */
+export function placeGroups<K>(pool: readonly (readonly K[])[], n: number, spawns: readonly P[], entry: P, clear: number, gap: number, rnd: () => number) {
+  const d = (a: P, b: P) => Math.hypot(a.x - b.x, a.y - b.y), picked: P[] = [];
+  const ok = spawns.map((p) => ({ p, k: rnd() })).sort((a, b) => a.k - b.k).map((o) => o.p).filter((p) => d(p, entry) >= clear);
+  for (const p of ok) if (picked.length < n && picked.every((q) => d(p, q) >= gap)) picked.push(p);
+  for (const p of ok) if (picked.length < n && !picked.includes(p)) picked.push(p);
+  return picked.map((at) => ({ at, kinds: pool[Math.floor(rnd() * pool.length)] }));
 }
 
 /** Steps from cell `goal` to every cell of a grid `cols` wide, walking through `open` cells only, 8 ways but never

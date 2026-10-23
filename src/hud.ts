@@ -10,7 +10,9 @@ import { ZOOM } from './dark.ts';
 // the glyph's blood seal that fills back up over its cooldown, and a shelf with the icon of each gift taken (its slot,
 // talent or pact): slot gifts first, in slot order, a rare one underlined in blood, an épique one in glowing pink; at
 // its end, once the hero holds enough gifts, the rat of la Nuée, lit when it is ready.
-// Also the title card of a new room ("Salle 2"), centred, and a pip on the screen's edge pointing at each enemy off it.
+// Under them, the blood carried on an expedition and the bag's size (and, at the refuge, the blood in its basin).
+// Also the title card of a room (its name, or what just happened), centred, and a pip on the screen's edge pointing at
+// each enemy off it.
 // It sits in the screen's safe area (clear of a phone's notch or rounded corners) and follows the view's size.
 // Gameplay pushes values in; it never reads from here. Redrawn every frame into one Graphics, in native pixels.
 export type Hud = {
@@ -20,6 +22,7 @@ export type Hud = {
   gifts(held: readonly GiftId[], ranks?: Partial<Record<GiftId, number>>): void;
   swarm(state: 'locked' | 'spent' | 'ready'): void; // la Nuée
   title(text: string): void;
+  blood(carried: number, bag: number, banked?: number): void; // blood carried out of the bag; at the refuge, banked too
   threats(enemies: { x: number; y: number }[]): void; // on the screen's coordinates; off it, a pip points at each
 };
 
@@ -159,6 +162,7 @@ export function create(scene: Phaser.Scene): Hud {
   let gifts: GiftId[] | undefined, fresh: GiftId | undefined, giftAt = -1e9, title = '', titleAt = -1e9;
   let ranks: Partial<Record<GiftId, number>> = {}, swarm = 'locked', swarmAt = -1e9;
   let threats: { x: number; y: number }[] = [];
+  let carried = -1, bag = 0, banked: number | undefined, gotAt = -1e9; // carried -1: not shown (the training room)
   // The corner, in from the safe area (native px per CSS px: the scale manager's displayScale).
   const corner = () => {
     const css = getComputedStyle(probe), k = scene.scale.displayScale.x / Z;
@@ -268,9 +272,25 @@ export function create(scene: Phaser.Scene): Hud {
       if (swarm !== 'locked') grid(x0 + 22 + (n - 1) * 9, y + 2, SWARM_ICON, pop ? POP : swarm === 'ready' ? ICON : dim);
     }
 
+    // Blood carried: a drop, how much (popping bone as it grows, glowing once the bag is full), the bag's size dimmer;
+    // at the refuge, the basin's under it.
+    if (carried >= 0) {
+      const lines: [string, string][] = [[String(carried), ` / ${bag}`], ...(banked === undefined ? [] : [['Bassin\u00a0: ', String(banked)] as [string, string]])];
+      lines.forEach(([a, b], i) => {
+        const y = y0 + (n ? 36 : 22) + i * 12, w = 13 + Font.width(a + b) + 3;
+        g.fillStyle(C.night, 0.9).fillRect(x0 + 20, y, w, 12);
+        g.fillStyle(C.dusk).fillRect(x0 + 20, y, w, 1);
+        if (i === 0) grid(x0 + 22, y + 2, DROP, carried >= bag ? { ...blood, R: C.glow } : blood);
+        g.fillStyle(i ? C.boneDim : now - gotAt < 120 ? C.bone : carried >= bag ? C.glow : C.blood[2]);
+        Font.draw(a, x0 + 32, y, (px, py) => g.fillRect(px, py, 1, 1));
+        g.fillStyle(i ? C.bone : C.boneDim);
+        Font.draw(b, x0 + 32 + Font.width(a) + 1, y, (px, py) => g.fillRect(px, py, 1, 1));
+      });
+    }
+
     // Title card: bone letters between two red rules, then it steps out.
-    const tt = now - titleAt, out = T.run.titleMs - 200;
-    if (tt < T.run.titleMs) {
+    const tt = now - titleAt, out = T.expedition.titleMs - 200;
+    if (tt < T.expedition.titleMs) {
       const a = tt < out ? 1 : 1 - Math.ceil((tt - out) / 67) / 3, w = Font.width(title, 2);
       const x = Math.round((scene.scale.width / Z - w) / 2), y = Math.round(scene.scale.height / Z / 2) - 23;
       for (const side of [-1, 1]) {
@@ -351,6 +371,10 @@ export function create(scene: Phaser.Scene): Hud {
     swarm(state) {
       if (state === 'ready' && swarm !== 'ready') swarmAt = scene.time.now;
       swarm = state;
+    },
+    blood(c, b, k) {
+      if (c > carried && carried >= 0) gotAt = scene.time.now;
+      [carried, bag, banked] = [c, b, k];
     },
     title(t) {
       title = t;

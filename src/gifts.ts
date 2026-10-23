@@ -1,11 +1,11 @@
 import { T } from './tuning.ts';
 
-// The gifts (« Dons ») of the Rat house (Vesna la Grise), built like Hades' boons. A slot gift grafts the house's
-// effect onto one action: at most one per slot, and a new one replaces it (see take() in logic.ts). A talent has no
-// slot and stacks; some are only offered once one of the gifts they require is held. A pact (« Pacte de sang ») is a
-// talent with a cost for the rest of the run. A gift whose number in T.gifts is a triple has a rarity (commun, rare,
-// épique) that picks one of them. What they are called and say; effects live in RoomScene, numbers in tuning.ts, looks
-// in rats.ts.
+// The gifts (« Dons ») of the Rat house (Vesna la Grise), built like Hades' boons; since the expeditions replaced the
+// runs, none is offered: they are toggled in the training room (docs/extraction.md: they will be the refuge's powers).
+// A slot gift grafts the house's effect onto one action. A talent has no slot; some require one of the gifts listed. A
+// pact (« Pacte de sang ») is a talent with a cost. A gift whose number in T.gifts is a triple has a rarity (commun,
+// rare, épique) that picks one of them. What they are called and say; effects live in RoomScene, numbers in tuning.ts,
+// looks in rats.ts.
 
 export type Slot = 'griffes' | 'tir' | 'glyphe' | 'brume';
 /** What a card's band and the HUD show of a gift: its slot, talent or pact. In the HUD shelf's order. */
@@ -123,9 +123,5 @@ export const GIFT_IDS = Object.keys(GIFTS) as GiftId[];
 export const value = (id: GiftId, rank = 0) => (num[id] as readonly number[] | undefined)?.[rank] ?? 0;
 
 export const kind = (id: GiftId): Kind => (GIFTS[id].pact ? 'pacte' : GIFTS[id].slot ?? 'talent');
-/** The red line of a pact's card. */
-export const cost = (id: GiftId) => `Prix : ${GIFTS[id].pact}`;
 /** The gifts held as the HUD shelves them: slot gifts in slot order, then talents in the order taken, then pacts. */
 export const shelf = (held: readonly GiftId[]) => [...held].sort((a, b) => Object.keys(KINDS).indexOf(kind(a)) - Object.keys(KINDS).indexOf(kind(b)));
-/** The line of a card whose gift would replace `old`; the name never breaks across lines. */
-export const replacing = (old: GiftId) => `Remplace : ${GIFTS[old].name.replaceAll(' ', ' ')}`;

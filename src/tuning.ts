@@ -245,8 +245,6 @@ export const T = {
     burnEveryMs: 900,
     damage: 1,
     telegraphMs: 900,
-    fromWave: 2, // one lantern from this wave on, two from `twoFromWave`
-    twoFromWave: 4,
     clear: 1.3, // never planted with the hero inside this much of its pool
   },
 
@@ -254,31 +252,43 @@ export const T = {
   // on a steady beat until he is back in the shade.
   dawn: { graceMs: 2500, burnEveryMs: 1000, damage: 1 },
 
-  // A run is a string of rooms, each climbed in three parts with a wave each; the difficulty climbs room by room.
-  run: {
-    wavesPerRoom: 3,
-    // Each room's waves, room by room through the run (past the table, its last room again): who rises, melee first,
-    // supports last, as the first take the spawn points nearest the hero (a part has three: more than three share them).
-    // Gentle at first (ghouls, crossbowmen), then the Order's men come in, the hounds in packs of three, the pénitents
-    // in groups, the Inquisiteur with men to command, the Amas; from room 5 the Bourreau guards the last part, alone or
-    // nearly.
-    waves: [
-      [['ghoul', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'crossbow'], ['ghoul', 'crossbow', 'crossbow']],
-      [['ghoul', 'ghoul', 'penitent'], ['penitent', 'penitent', 'penitent'], ['ghoul', 'purifier', 'crossbow']],
-      [['hound', 'hound', 'hound'], ['penitent', 'penitent', 'priest'], ['ghoul', 'purifier', 'crossbow', 'crossbow']],
-      [['penitent', 'penitent', 'penitent', 'ringer'], ['hound', 'hound', 'hound', 'crossbow'], ['inquisitor', 'penitent', 'penitent', 'crossbow']],
-      [['amas', 'ghoul', 'ghoul'], ['purifier', 'inquisitor', 'penitent', 'priest'], ['bourreau']],
-      [['hound', 'hound', 'hound', 'crossbow', 'ringer'], ['amas', 'penitent', 'penitent', 'purifier', 'priest'], ['bourreau', 'penitent', 'penitent']],
+  // The expeditions (world.ts): out of the refuge, deeper ring by ring, back on foot. A room's foes are placed on its
+  // first entry in an expedition and stay dead until the hero is back at the refuge: `groups` groups by ring (the
+  // refuge's is 0), each drawn from the ring's `pools` (gentle in the crypt, the Order's men deeper, the Amas, packs of
+  // hounds), on spawn points at least `clear` from where he came in and `gap` apart; `guards`, a room's own, stand at
+  // its medallion (the Bourreau before the cloister's church). `caches`: the fewest and most blood caches a room hides.
+  expedition: {
+    groups: [0, 2, 3, 3, 2],
+    pools: [
+      [],
+      [['ghoul', 'ghoul'], ['ghoul', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'crossbow']],
+      [['ghoul', 'ghoul', 'penitent'], ['penitent', 'penitent', 'penitent'], ['ghoul', 'purifier', 'crossbow'], ['hound', 'hound', 'hound'], ['penitent', 'penitent', 'priest']],
+      [['ghoul', 'purifier', 'crossbow', 'crossbow'], ['penitent', 'penitent', 'penitent', 'ringer'], ['hound', 'hound', 'hound', 'crossbow'], ['inquisitor', 'penitent', 'penitent', 'crossbow'], ['amas', 'ghoul', 'ghoul']],
+      [['purifier', 'inquisitor', 'penitent', 'priest'], ['hound', 'hound', 'hound', 'crossbow', 'ringer'], ['amas', 'penitent', 'penitent', 'purifier', 'priest']],
     ],
-    slowMo: 0.3, // the last kill of a room plays at this speed...
-    slowMoMs: 450, // ...for this long (real time)
-    giftDelayMs: 500, // then the gift of the Rat house appears on the medallion
-    gateMs: 1100, // the portcullis rises
-    fadeMs: 450, // to black, leaving through the gate; the next room fades in as fast
-    titleMs: 1200, // "Salle N" stays up this long; the first wave comes when it is gone
+    guards: { cloister: ['bourreau'] },
+    clear: 170, gap: 90,
+    caches: [1, 2],
+    fadeMs: 450, // to black through an exit; the next room fades in as fast
+    titleMs: 1200, // a room's name, or what just happened, stays up this long
+  },
+  // How a placed foe notices the hero: within `range` (px) with no prop between them, or struck; then the others of
+  // its pack within `call` hunt with it. Hunting, it keeps him in sight within `keep`, gives up `giveUpMs` after it last
+  // saw him and walks back to its post at `homeSpeed` of its pace. None follows him through an exit but the hounds, once
+  // (`followMs` after him), never a second room.
+  sight: { range: 130, keep: 200, call: 90, giveUpMs: 4000, homeSpeed: 0.5, followMs: 1200 },
+  // Blood carried, apart from life: the dead drop `drops` of their kind (an Amas' torn ghouls none), a cache holds
+  // `cache`, both times the ring's multiplier `ring`. Picked up within `pickup` px of his feet, searched within
+  // `search`; at most `bag` carried (to be raised at the refuge). All of it lost at death; banked by walking up to the
+  // refuge's basin (within `basin`).
+  blood: {
+    ring: [0, 1, 3, 8, 20],
+    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15 },
+    cache: 5,
+    pickup: 16, search: 24, bag: 400, basin: 52,
   },
 
-  // Gifts of the Rat house (gifts.ts), each taken at most once per run. The number of a gift with a rarity is named
+  // Gifts of the Rat house (gifts.ts), toggled in the training room (none is offered on an expedition). The number of a gift with a rarity is named
   // after it, a triple [commun, rare, épique]: the rarity it is offered at picks one (T.rarity).
   gifts: {
     plagueMs: 2000, plagueDamage: 1, // la Peste: an infected enemy loses its gift's number (Contagion's: this) this long after
@@ -298,22 +308,13 @@ export const T = {
     fievre: [1, 2, 3], // Fièvre: the plague strikes this many times more, plagueMs apart
     grouillement: [2, 3, 4], // Grouillement: bites of each rat
   },
-  // The odds of a gift offered as rare or épique: [base, + per room after the first, cap]. Rising slowly: 10 % rare and
-  // 2 % épique in room 1, 25 % and 9.5 % in room 6.
-  rarity: { rare: [0.1, 0.03, 0.4], epic: [0.02, 0.015, 0.2] },
-  // Pactes de sang: Vesna's darker gifts, a strong gift with a cost that lasts the run. One card of a gift choice is a
-  // pact `chance` of the time, from room `fromRoom` on.
+  // Pactes de sang: Vesna's darker gifts, a strong gift with a cost (toggled in the training room for now).
   pacts: {
-    chance: 0.3, fromRoom: 2,
     maigre: { mult: 1.5, maxBlood: 2 }, // every blow of the hero does `mult` times as much; max blood -maxBlood
     noires: { mult: 2, burn: 2 }, // the claws do `mult` times as much; holy light burns `burn` times as fast
     curee: { every: 3, heal: 1, bite: 1 }, // every `every` kills heal `heal`; a bite costs `bite` blood instead of healing
     vermine: { rats: 2, toll: 1 }, // each kill releases `rats` rats; each new room costs `toll` blood (never the last)
   },
-  // A room's two exits, like Hades' doors: once its own reward is taken, each announces the next room's (logic.ts
-  // drawDoors), drawn by these weights among those that room could offer, different when possible. `sang`: the blood
-  // the « Sang » reward gives back on the medallion.
-  doors: { weights: { gift: 4, upgrade: 2, sang: 2, pacte: 1 }, sang: 3 },
   // La Nuée, the Rat house's form of the night: holding `gifts` gifts, R turns the hero into a swarm of rats for
   // `durationMs`: fast (`speed` times his walk), untouchable by blows, it bites every enemy within `radius` (floor),
   // each once every `tickMs`; no claws, shard, bite, glyph or dash. Holy light disperses it at once.
