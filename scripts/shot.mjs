@@ -6,7 +6,8 @@
 // deeper through the left portcullis into the nave, fights a little there, comes back down its stairs (the crypt's dead
 // must still be dead), up to the refuge and into the basin (basin.png, full frame: the blood poured, banked and saved).
 // Expedition 2: down again (the world new), blood picked up, then the bot lets the crypt's foes kill him: he re-forms
-// at his coffin with nothing carried and the bank untouched (death.png). Then the expedition log, the headless FPS of
+// at his coffin with nothing carried and the bank untouched (death.png). Then the expedition log, two hunting hounds
+// following him through one exit but not a second, the headless FPS of
 // every room, and the bite in the training room once unlocked from its panel (a weakened crossbowman bitten).
 // Exit code 1 if the page logged an error or a step failed.
 import { mkdir } from 'node:fs/promises';
@@ -218,6 +219,24 @@ await shot('death');
 const after = await run(() => ({ carried: window.game.scene.getScene('room').carried, save: JSON.parse(localStorage.getItem('dracul.save')), log: JSON.parse(localStorage.getItem('dracul.log')) }));
 check(after.carried === 0 && after.save?.banked === bank?.banked, `the blood carried is lost (${lost}), the bank untouched (${after.save?.banked})`);
 check(after.log?.length === 2 && after.log[0].end === 'retour' && after.log[1].end === 'mort' && after.log[1].blood >= lost, `expedition log: ${(after.log ?? []).map((e) => `${e.end} ring ${e.deepest}, ${e.blood} blood, ${e.life} life, ${e.s} s`).join(' | ')}`);
+
+// ---- Hounds hunting him follow him through one exit, never a second ----
+{
+  const hounds = () => run(() => window.game.scene.getScene('room').enemies.getChildren().filter((e) => e.body?.enable && e.getData('kind') === 'hound').map((e) => e.getData('followed')));
+  await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'hall' }));
+  await arrived('hall');
+  await keep(true);
+  await run(() => { const s = window.game.scene.getScene('room'); s.enemies.clear(true, true); for (const x of [200, 280]) s.place({ x, y: 300 }, 'hound', { alert: true }); s.leave(0); });
+  await arrived('nave');
+  await keep(true);
+  await page.waitForTimeout(2500);
+  const came = await hounds();
+  await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) if (e.getData('kind') !== 'hound') e.disableBody(true, true); s.leave(-1); });
+  await arrived('hall');
+  await page.waitForTimeout(2500);
+  const again = await hounds();
+  check(came.filter(Boolean).length === 2 && again.length === 0, `hounds: ${came.filter(Boolean).length} followed him into the nave, ${again.length} back into the crypt`);
+}
 
 // ---- Headless FPS, room by room (each opened directly, its foes on their posts, the hero kept from harm) ----
 const fps = [];

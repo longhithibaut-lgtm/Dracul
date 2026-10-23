@@ -47,7 +47,7 @@ for (const [shape, opts] of Object.entries(SHAPES).filter(([s]) => !arg('only', 
   // `layout` opened directly, its placed foes all hunting him at once, the hero out of harm's way; he walks a little first.
   const fight = async (layout, walk) => {
     await run((layout) => window.game.scene.getScene('room').scene.restart({ layout }), layout);
-    await page.waitForFunction((layout) => window.game.scene.getScene('room').layout === layout && window.game.scene.getScene('room').hero, layout);
+    await page.waitForFunction((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.sys.isActive() && s.hero?.body; }, layout);
     await page.waitForTimeout(200);
     await run(() => {
       const s = window.game.scene.getScene('room');

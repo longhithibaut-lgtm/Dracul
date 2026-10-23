@@ -53,7 +53,9 @@ for (const layout of Object.keys(WAITS).filter((l) => !only || l === only)) {
       const s = window.game.scene.getScene('room');
       s.hero.body.reset(x, y);
       s.health = 999; // the hero must survive the wait
-      // The room's placed foes, called back to their posts and all hunting him there.
+      // The room's placed foes, called back to their posts and all hunting him there, never giving up when he is out of
+      // sight: this checks their walk, not their eyes.
+      s.hunts = () => true;
       s.enemies.clear(true, true);
       for (const f of s.exp.rooms[s.layout].foes) s.place(f.home, f.kind, { alert: true });
     }, [x, y]);
