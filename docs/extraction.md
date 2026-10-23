@@ -1,6 +1,6 @@
 # Dracul : direction « extraction × ARPG » (document de travail)
 
-Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Rien n'est codé. Les points marqués *(à valider)* touchent au
+Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype, passe 1 codée (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde ; `docs/decisions.md` 2026-10-23), passe 2 à venir (battue, boutique du Rongé). Les points marqués *(à valider)* touchent au
 lore (`docs/lore.md`) ou sont des choix ouverts.
 
 ## 1. L'idée en une phrase

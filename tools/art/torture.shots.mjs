@@ -37,8 +37,8 @@ for (const [shape, opts] of Object.entries(SHAPES)) {
   await run(() => {
     const s = window.game.scene.getScene('room');
     s.hero.body.reset(240, 440); // the training room's hero is invincible
-    s.wave = 1;
-    s.spawnWave();
+    for (const [kind, i] of [['ghoul', 3], ['ghoul', 4], ['crossbow', 5]]) s.spawn(s.room.spawns[i], kind);
+    s.addLantern();
   });
   await page.waitForTimeout(2500);
   await shot('fight');

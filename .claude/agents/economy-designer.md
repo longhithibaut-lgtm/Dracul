@@ -33,5 +33,5 @@ upgrades. Answer in French; numbers, formulas and identifiers stay as in the cod
    in numbers, and how to check it (`npm test`, `npm run shot`, training room: key T, its panel sets hero values
    and ticks the Dons).
 
-Keep it short: tables over prose. State assumptions (run length, rooms per run, kills per room) explicitly and derive
-them from `T.run`, wave counts and enemy hp when possible. Out of scope: core mechanics (say so and stop), code.
+Keep it short: tables over prose. State assumptions (expedition length, rooms entered, kills per room) explicitly and derive
+them from `T.expedition` (groups and pools by ring), `T.blood` and enemy hp when possible. Out of scope: core mechanics (say so and stop), code.

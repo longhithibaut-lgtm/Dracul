@@ -53,12 +53,9 @@ for (const layout of Object.keys(WAITS).filter((l) => !only || l === only)) {
       const s = window.game.scene.getScene('room');
       s.hero.body.reset(x, y);
       s.health = 999; // the hero must survive the wait
-      // The first wave rises again with him there (a tall room's, in the part he waits in): a slow first frame may have
-      // let its timer beat this reset.
-      s.time.removeAllEvents();
+      // The room's placed foes, called back to their posts and all hunting him there.
       s.enemies.clear(true, true);
-      s.wave = 0;
-      s.spawnWave();
+      for (const f of s.exp.rooms[s.layout].foes) s.place(f.home, f.kind, { alert: true });
     }, [x, y]);
   };
   console.log(`--- ${layout}`);

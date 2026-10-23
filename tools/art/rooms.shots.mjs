@@ -1,9 +1,9 @@
 // The run rooms baked in the « grand pixel » style (tools/art/rooms.gen.mjs) in headless Chromium on a 1920x1080 PC
-// screen. For each: the whole room, stitched a screen at a time from the stairs to the gate, as a run's room 1 (the
-// hero at his start, no wave, no vignette); then in play: its first wave risen round the hero, the next part's, the
-// portcullis raised; in the cloister, the hero in the Dawn, the danger building until it burns him. Later in a run:
-// rooms 3 to 6's first waves (<room>-room<n>). Then the frame rate of each, the torture room's and the refuge's (light
-// shader on). Writes <out>/<room>-<what>.png.
+// screen. For each: the whole room, stitched a screen at a time from the stairs to the gate (the hero at his start, no
+// foe, no vignette); then in play: its foes placed for its ring (world.ts), the hero walking up into them, the next
+// part's, the top of the room by its open portcullises; in the cloister, the hero in the Dawn, the danger building
+// until it burns him. Then the frame rate of each, the torture room's and the refuge's (light shader on). The
+// expedition through them is scripts/shot.mjs's. Writes <out>/<room>-<what>.png.
 // Usage: node tools/art/rooms.shots.mjs [--out=shots/rooms --port=5210 --only=hall,nave,ossuary,chapel,cloister]   (exit code 1 on a page error)
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -77,7 +77,7 @@ for (const id of only) {
   }, { parts, h });
   await writeFile(`${out}/${id}-whole.png`, Buffer.from(png, 'base64'));
 
-  // ---- in play: a run's room 1, its waves ----
+  // ---- in play: its foes on their posts ----
   await enter(id);
   await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().length > 0, null, { timeout: 8000 }).catch(() => errors.push(`${id}: no wave`));
   await page.waitForTimeout(1500);
@@ -90,7 +90,7 @@ for (const id of only) {
   await shot(`${id}-walk`);
   await page.keyboard.up('z');
   const sections = await run(() => window.game.scene.getScene('room').room.sections);
-  if (sections.length) { // up into the middle part: its wave rises in front of him
+  if (sections.length) { // up into the middle part: its foes in front of him
     await put(240, sections[0] - 20);
     await page.waitForTimeout(2200);
     await run(() => { const s = window.game.scene.getScene('room'); s.cameras.main.centerOn(s.hero.x, s.hero.y); });
@@ -117,51 +117,14 @@ for (const id of only) {
       await shot('cloister-shade');
     }
   }
-  // The room cleared: the portcullis raised, the hero walking up to it.
-  await run(() => { const s = window.game.scene.getScene('room'); s.enemies.clear(true, true); s.time.removeAllEvents(); s.openGate(); });
+  // The room cleared, the hero walking up to its open portcullises.
+  await run(() => { const s = window.game.scene.getScene('room'); s.enemies.clear(true, true); s.time.removeAllEvents(); });
   await put(240, 150);
-  rates[id] = await fps(); // meanwhile the gate goes up
+  rates[id] = await fps();
   await run(() => { const s = window.game.scene.getScene('room'); s.cameras.main.centerOn(240, 135); });
   await shot(`${id}-gate`);
 }
-// Later in a run (T.run.waves): the Order's men in the waves, a room's first wave risen as the hero climbs in.
-for (const [id, room] of [['nave', 3], ['ossuary', 4], ['chapel', 5], ['cloister', 6]].filter(([id]) => only.includes(id))) {
-  await run(([layout, room]) => window.game.scene.getScene('room').scene.restart({ layout, room }), [id, room]);
-  await page.waitForFunction((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.sys.isActive() && s.enemies.getChildren().filter((e) => e.body?.enable).length > 0; }, id, { timeout: 20000 }).catch(() => errors.push(`${id} as room ${room}: no wave`));
-  await run(() => { window.game.scene.getScene('room').invulnUntil = Infinity; });
-  await page.waitForTimeout(2500);
-  await shot(`${id}-room${room}`);
-}
 for (const id of ['torture', 'refuge']) { await enter(id, id === 'torture'); rates[id] = await fps(); }
-// A run through them: out of the crypt (room 1) by its gate into the cloister, climbing in from its stairs, its first
-// wave, then out by the church door into room 3.
-if (only.includes('hall') && only.includes('cloister')) {
-  const through = async (from) => {
-    await run(() => {
-      const s = window.game.scene.getScene('room');
-      s.enemies.clear(true, true); s.time.removeAllEvents(); s.openGate();
-      // the next layout: the last one listed but this one (from the crypt, the cloister)
-      const leave = Object.getPrototypeOf(s).leave;
-      s.leave = function () { const r = Math.random; Math.random = () => 0.999; try { leave.call(this); } finally { Math.random = r; } };
-    });
-    await page.waitForTimeout(1600);
-    await put(240, 72);
-    await page.keyboard.down('z');
-    await page.waitForFunction((from) => { const s = window.game.scene.getScene('room'); return s.layout !== from && s.hero?.body; }, from, { timeout: 10000 }).catch(() => errors.push(`stuck in ${from}`));
-    await page.keyboard.up('z');
-    return run(() => window.game.scene.getScene('room').layout);
-  };
-  await enter('hall');
-  const second = await through('hall');
-  if (second !== 'cloister') errors.push(`the crypt's gate led to ${second}`);
-  await page.waitForTimeout(1200); // climbing in from the stairs
-  await shot('run-cloister-enter');
-  await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().length > 0, null, { timeout: 10000 }).catch(() => errors.push('cloister as room 2: no wave'));
-  await page.waitForTimeout(1200);
-  await shot('run-cloister-wave');
-  const third = await through('cloister');
-  console.log(`run: hall -> ${second} -> ${third}`);
-}
 console.log(`fps (headless, SwiftShader, 1920x1080): ${JSON.stringify(rates)}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
