@@ -6,9 +6,12 @@
 // deeper through the left portcullis into the nave, fights a little there, comes back down its stairs (the crypt's dead
 // must still be dead), up to the refuge and into the basin (basin.png, full frame: the blood poured, banked and saved).
 // Expedition 2: down again (the world new), blood picked up, then the bot lets the crypt's foes kill him: he re-forms
-// at his coffin with nothing carried and the bank untouched (death.png). Then the expedition log, two hunting hounds
-// following him through one exit but not a second, the headless FPS of
-// every room, and the bite in the training room once unlocked from its panel (a weakened crossbowman bitten).
+// at his coffin with nothing carried and the bank untouched (death.png). Expedition 3, the battue: blood picked up in the
+// nave looses packs (the horn and its line) into the crypt behind him, never the nave; going back down, the pack is
+// there, hunting him (battue.png, full frame); fought, the blood banked. Le Rongé by the basin (ronge.png), his wares
+// opened with F (shop.png): the bite bought with key 1, +1 max life with a click, left with Escape. Then the expedition
+// log, two hunting hounds following him through one exit but not a second, the headless FPS of every room, and in the
+// training room a crossbowman clawed to his knees, then bitten (the bite bought from le Rongé).
 // Exit code 1 if the page logged an error or a step failed.
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -189,7 +192,7 @@ check(back.y < 120 && back.live === 0, `back in the crypt by its left portcullis
 await fight(20000); // the hounds that followed him, if any
 await gather(5000);
 carried = (await state()).carried;
-console.log(`the battue's packs his scent called with ${carried} blood (pass 2 sends them): ${await run(() => window.game.scene.getScene('room').exp.packs)}`);
+console.log(`the battue with ${carried} blood: ${JSON.stringify(await run(() => { const e = window.game.scene.getScene('room').exp; return { loosed: e.loosed, waiting: e.packs, met: e.met }; }))}`);
 check(await exit(240, 616, 'ArrowDown', 'refuge'), 'down the crypt stairs, up into the refuge');
 check(await walk(840, 684, 20000, 8) && (await until(() => window.game.scene.getScene('room').carried === 0, null, 5000)), 'walked to the basin');
 await page.waitForTimeout(350);
@@ -219,6 +222,74 @@ await shot('death');
 const after = await run(() => ({ carried: window.game.scene.getScene('room').carried, save: JSON.parse(localStorage.getItem('dracul.save')), log: JSON.parse(localStorage.getItem('dracul.log')) }));
 check(after.carried === 0 && after.save?.banked === bank?.banked, `the blood carried is lost (${lost}), the bank untouched (${after.save?.banked})`);
 check(after.log?.length === 2 && after.log[0].end === 'retour' && after.log[1].end === 'mort' && after.log[1].blood >= lost, `expedition log: ${(after.log ?? []).map((e) => `${e.end} ring ${e.deepest}, ${e.blood} blood, ${e.life} life, ${e.s} s`).join(' | ')}`);
+
+// ---- Expedition 3: the battue, then le Rongé's wares ----
+check(await walk(840, 846) || (await state()).layout === 'hall', 'down the stairs a third time');
+check(await arrived('hall'), 'expedition 3: in the crypt');
+await keep(true);
+const cull = () => run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) s.kill(e); }); // the battue is what is checked here
+await cull();
+check(await exit(140, 72, 'ArrowUp', 'nave'), 'expedition 3: up into the nave');
+await keep(true);
+await cull();
+const scent = await run(async () => {
+  const s = window.game.scene.getScene('room'), f = s.hero.body.center, warn = s.warn.bind(s), warned = [];
+  s.warn = (inq) => (warned.push(inq), warn(inq));
+  s.addDrop({ x: f.x, y: f.y, blood: 160 }); // two thresholds of the scent crossed at once
+  await new Promise((r) => setTimeout(r, 400));
+  const e = s.exp;
+  return { carried: s.carried, loosed: e.loosed, waiting: e.packs, hall: e.rooms.hall.battue, nave: e.rooms.nave.battue ?? null, warned };
+});
+check(scent.loosed === 2 && scent.hall?.kinds.length === 3 && scent.nave === null && scent.warned.length === 1,
+  `scent: ${scent.carried} blood carried loosed ${scent.loosed} packs (horn and line: ${scent.warned.length}), lying in wait in the crypt behind him (${scent.hall?.kinds.join(' ')}, ${scent.hall?.stairs ? 'before the stairs' : 'by his way in'}), none in the nave`);
+check(await exit(240, 616, 'ArrowDown', 'hall'), 'expedition 3: back down into the crypt');
+await keep(true);
+const met = await run(() => {
+  const s = window.game.scene.getScene('room'), live = s.enemies.getChildren().filter((e) => e.body?.enable);
+  return { met: s.exp.met, waiting: !!s.exp.rooms.hall.battue, hunting: live.filter((e) => e.getData('kind') === 'hound' && e.getData('alert')).length };
+});
+check(met.met === 1 && !met.waiting && met.hunting === 3, `the battue met on the way back: ${met.hunting} hounds hunting him in the crypt`);
+// Down toward the stairs until the pack is upon him (a hound within 80 px); the hero shown (not blinking) for the capture.
+const upon = () => run(() => { const s = window.game.scene.getScene('room'), f = s.hero.body.center; return s.enemies.getChildren().some((e) => e.body?.enable && Math.hypot(e.x - f.x, e.y - f.y) < 80); });
+for (let end = Date.now() + 20000; Date.now() < end && !(await upon());) await step(240, 560, 6);
+await keep(false);
+await page.waitForTimeout(60);
+await shot('battue');
+await keep(true);
+check(await fight(60000), 'the battue fought off');
+await gather(8000);
+const bring = (await state()).carried;
+check(await exit(240, 616, 'ArrowDown', 'refuge'), 'expedition 3: back at the refuge');
+check(await walk(840, 684, 20000, 8) && (await until(() => window.game.scene.getScene('room').carried === 0, null, 5000)), 'poured at the basin');
+const banked = await run(() => JSON.parse(localStorage.getItem('dracul.save')).banked);
+check(banked === bank.banked + bring, `banked ${bring} more: ${banked}`);
+const log3 = await run(() => JSON.parse(localStorage.getItem('dracul.log')).at(-1));
+check(log3.loosed === 2 && log3.met === 1, `log: ${log3.loosed} packs loosed, ${log3.met} met`);
+// Le Rongé: up to him, he raises his head; F opens his wares.
+check(await walk(Math.round(896), 678, 15000, 6), 'walked up to le Rongé');
+await page.waitForTimeout(700);
+await shot('ronge');
+await page.keyboard.press('f');
+check(await until(() => !!window.game.scene.getScene('room').counter, null, 3000), 'F: his wares open');
+await page.waitForTimeout(300);
+await shot('shop');
+await page.keyboard.press('1');
+await page.waitForTimeout(200);
+const bit = await run(() => JSON.parse(localStorage.getItem('dracul.save')));
+check(bit.unlocks.bite && bit.banked === banked - 80, `key 1: the bite bought, ${banked} -> ${bit.banked} banked`);
+const card = await run(() => { // the second card's middle, on the page
+  const c = window.game.scene.getScene('room').counter;
+  for (let y = 0; y < 270; y += 2) for (let x = 0; x < 480; x += 2) if (c.at(x, y) === 1) return { x: (x + 20) * 4, y: (y + 30) * 4 };
+});
+await page.mouse.move(card.x, card.y);
+await page.waitForTimeout(150);
+await page.mouse.click(card.x, card.y);
+await page.waitForTimeout(200);
+const life = await run(() => { const s = window.game.scene.getScene('room'); return { save: JSON.parse(localStorage.getItem('dracul.save')), max: s.maxHealth(), health: s.health }; });
+check(life.save.unlocks.life === 1 && life.max === 6 && life.health === 6 && life.save.banked === bit.banked - 40, `click: +1 max life bought (${life.max} drops), ${life.save.banked} banked`);
+await shot('shop-bought');
+await page.keyboard.press('Escape');
+check(await until(() => !window.game.scene.getScene('room').counter, null, 2000), 'Escape: his wares closed');
 
 // ---- Hounds hunting him follow him through one exit, never a second ----
 {
@@ -250,25 +321,29 @@ for (const layout of ['refuge', 'hall', 'nave', 'ossuary', 'chapel', 'cloister']
 }
 console.log(`headless fps: ${fps.join(', ')}`);
 
-// ---- The bite, unlocked from the training panel: a weakened crossbowman bitten ----
+// ---- The bite, bought from le Rongé: a crossbowman clawed to his knees, then bitten ----
 await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'refuge' }));
 await arrived('refuge');
 await page.keyboard.press('t');
 if (check(!!(await page.waitForSelector('#training', { timeout: 5000 }).catch(() => null)), 'training room')) {
-  await page.click('#training [data-unlock="bite"]');
-  await page.click('#training [data-spawn="weak"]');
+  await page.click('#training [data-opt="passive"]'); // a dummy: it neither shoots nor flees
+  await page.click('#training [data-spawn="crossbow"]');
   await until(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable), null, 10000);
   const bit = await run(async () => {
-    const s = window.game.scene.getScene('room'), e = s.enemies.getChildren().find((e) => e.body?.enable);
-    s.health = 3; s.hud.health(3, 5);
+    const s = window.game.scene.getScene('room'), e = s.enemies.getChildren().find((e) => e.body?.enable), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    s.health = 3; s.hud.health(3, s.maxHealth());
     s.hero.body.reset(e.x - 18, e.y);
-    await new Promise((r) => setTimeout(r, 200));
+    await wait(200);
+    s.slash(Math.atan2(e.body.center.y - s.hero.body.center.y, e.body.center.x - s.hero.body.center.x));
+    await wait(100);
+    const knelt = s.time.now < e.getData('kneelUntil'), hp = e.getData('hp');
+    await wait(250);
     s.bite();
-    await new Promise((r) => setTimeout(r, 1500));
-    return { health: s.health, unlocked: JSON.parse(localStorage.getItem('dracul.save')).unlocks.bite };
+    await wait(1500);
+    return { knelt, hp, health: s.health, dead: !e.body?.enable };
   });
-  check(bit.health > 3 && bit.unlocked, `bite unlocked (saved) and drunk: 3 -> ${bit.health} blood`);
-  await page.click('#training [data-unlock="bite"]'); // locked again, as a new game has it
+  check(bit.knelt && bit.hp === 1 && bit.dead && bit.health > 3, `clawed to ${bit.hp} hp, he kneels; bitten: 3 -> ${bit.health} blood`);
+  await page.click('#training [data-opt="passive"]');
 }
 
 console.log(report.join('\n'));

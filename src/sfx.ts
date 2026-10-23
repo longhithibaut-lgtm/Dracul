@@ -277,12 +277,12 @@ export const recipes = {
   // The battue loosed: a hunting horn far off (two long brassy calls, muffled by the stone), then the hounds baying.
   horn(o: Play) {
     for (const [f, delay, dur] of [[196, 0, 0.75], [262, 0.8, 1.1]]) {
-      voice(o, { src: 'sawtooth', f, f2: f * 0.97, filter: 'lowpass', ff: 700, ff2: 450, q: 2, gain: 0.32, attack: 0.18, dur, delay });
+      voice(o, { src: 'sawtooth', f, f2: f * 0.97, filter: 'lowpass', ff: 700, ff2: 450, q: 2, gain: 0.5, attack: 0.18, dur, delay });
       voice(o, { src: 'square', f: f * 2, filter: 'lowpass', ff: 900, gain: 0.06, attack: 0.25, dur, delay });
     }
     for (const delay of [1.7, 2.15]) {
-      voice(o, { src: 'triangle', f: 420, f2: 640, filter: 'lowpass', ff: 1400, gain: 0.22, attack: 0.08, dur: 0.35, delay });
-      voice(o, { src: 'triangle', f: 640, f2: 330, filter: 'lowpass', ff: 1200, trem: 9, gain: 0.2, attack: 0.02, dur: 0.6, delay: delay + 0.33 });
+      voice(o, { src: 'triangle', f: 420, f2: 640, filter: 'lowpass', ff: 1400, gain: 0.35, attack: 0.08, dur: 0.35, delay });
+      voice(o, { src: 'triangle', f: 640, f2: 330, filter: 'lowpass', ff: 1200, trem: 9, gain: 0.32, attack: 0.02, dur: 0.6, delay: delay + 0.33 });
     }
   },
   // Le Rongé gone beast: a long wet growl in the throat.

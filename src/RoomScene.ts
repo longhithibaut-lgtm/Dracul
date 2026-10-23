@@ -377,7 +377,10 @@ export class RoomScene extends Phaser.Scene {
   update(time: number, delta: number) {
     if (this.dead) return;
     if (this.ronge) this.ronge.show(Shop.beast(Save.data) ? 'beast' : Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.notice ? 'look' : 'idle', time);
-    if (this.counter) return void this.hero.setVelocity(0); // he stands before the Rongé's wares
+    if (this.counter) { // he stands before the Rongé's wares, the words over the room gone
+      for (const l of this.labels) l.l.near(false);
+      return void this.hero.setVelocity(0);
+    }
     const k = this.keys;
     // Coming in or going out by an exit, the hero walks on his own.
     const auto = this.phase === 'enter' || this.phase === 'leave', dazed = time < this.dazedUntil;
