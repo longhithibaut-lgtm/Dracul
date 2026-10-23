@@ -126,6 +126,21 @@ Proposition de trois familles, lisibles et peu nombreuses :
 
 ## 7. Le refuge
 
+### Le marchand du refuge *(à valider : proposition d'histoire)*
+Il est là dès la première nuit, avant tout chef libéré. Proposition : **le Rongé** (nom provisoire), un vampire sans
+maison comme le héros, qui a trouvé la chapelle oubliée avant lui. Affamé depuis des années, il est **à moitié
+devenu goule** : le sang qu'on lui verse le garde lucide. Il fouille les catacombes la nuit, revend ce qu'il trouve
+contre du sang et se souvient, quand il a assez bu, de techniques oubliées (les améliorations du héros). S'il reste
+longtemps sans sang, il redevient bête un temps (boutique fermée, il grogne dans sa niche). Il explique le bassin :
+c'est lui qui boit ce qu'on y verse. Alternatives : un fossoyeur humain qui commerce par peur, ou une vieille
+servante de l'Ancêtre, trop faible pour sortir.
+
+### Les marchands des zones *(à valider)*
+Environ **un par zone**, chacun avec sa façon de commercer. Ils prennent le **sang porté** : le dépenser sur place
+le met à l'abri (il ne peut plus être perdu), mais il n'atteint jamais le bassin. Pistes : un **receleur** humain
+qui vend des reliques volées à l'Ordre, un **autel** où le Rongé a caché des réserves, un **colporteur** qui change de
+zone d'une nuit à l'autre.
+
 - **Le bassin de sang** : on y verse le sang rapporté. C'est la banque.
 - **Le coffre** : les objets rapportés.
 - **Les améliorations** payées en sang :
@@ -202,22 +217,23 @@ grands espaces ouverts à points d'intérêt** (ci-dessus). Maintenu contre l'av
 départ**. Prototype : **pas encore**.
 
 Points du juge encore ouverts, à trancher :
-1. **Farm de la zone 1** : rendement du sang croissant avec l'éloignement (×1, ×3, ×8, ×20), coûts d'amélioration
+1. **Farm de la zone 1** *(validé)* : rendement du sang croissant avec l'éloignement (×1, ×3, ×8, ×20), coûts d'amélioration
    géométriques, un seul raccourci par zone qui n'en court-circuite pas l'intérieur.
-2. **Variété entre expéditions** : composition des groupes et emplacements du butin tirés au hasard, un événement par
+2. **Variété entre expéditions** *(validé)* : composition des groupes et emplacements du butin tirés au hasard, un événement par
    nuit, un Inquisiteur qui rôde dès la zone 3 *(à valider)*.
-3. **Pouvoir fuir** : le chien (105 px/s) est plus rapide que le héros (66 px/s) ; les ennemis abandonnent après 4 s
+3. **Pouvoir fuir** *(validé)* : le chien (105 px/s) est plus rapide que le héros (66 px/s) ; les ennemis abandonnent après 4 s
    sans le voir, ne passent pas les portes (les chiens une salle au plus), l'ombre réduit leur détection.
-4. **Objets = les Dons** : les 17 Dons existants comme reliques trouvées, un doublon rapporté monte la rareté (raison
+4. ~~**Objets = les Dons**~~ *(refusé : les objets restent une famille à part)* : les 17 Dons existants comme reliques trouvées, un doublon rapporté monte la rareté (raison
    de faire la 50e expédition) ; pas d'armes ni de talismans au début.
-5. **Mourir loin** : le sang porté reste en cendres là où l'on meurt, une seule chance de le reprendre *(à valider)* ;
+5. ~~**Mourir loin** (les cendres)~~ *(refusé : à la mort, tout le butin porté est perdu, sans seconde chance)* : le sang porté reste en cendres là où l'on meurt, une seule chance de le reprendre *(à valider)* ;
    un raccourci tôt dans chaque zone.
 6. **Réduire le chantier** : pas de niveaux d'ennemis redessinés (une marque d'élite recolorée), pas d'écran
    d'inventaire (échange en une touche, sac en icônes dans le HUD), pas d'armes qui changent les animations, quêtes
    plus tard ; sauvegarde = un petit JSON versionné dans le navigateur.
-7. **Contradictions du lore** : Vesna est la marchande du refuge mais prisonnière en zone 2 (qui vend avant sa
+7. **Contradictions du lore** *(réponse : un marchand est là dès le départ, voir §7 ; puis environ un par zone)* : Vesna est la marchande du refuge mais prisonnière en zone 2 (qui vend avant sa
    libération ?) ; le lore dit que ses Dons aident dès le départ, en secret.
-8. **Questions** : durée visée d'une expédition (5 ou 20 min) ; que garde-t-on de la fuite façon Hades (Dons tirés,
+8. **Questions** *(réponses : la durée dépend des améliorations et des choix du joueur ; la fuite façon Hades est
+   abandonnée : Dons tirés en fin de salle, deux portes et vagues disparaîtront avec le prototype)* : durée visée d'une expédition (5 ou 20 min) ; que garde-t-on de la fuite façon Hades (Dons tirés,
    deux portes) ; que fait-on une fois tout libéré (doublons, nuits plus dures) ?
 
 Prototype proposé par le juge (zéro dessin neuf) : le refuge et les 5 salles peintes reliées en profondeur, sang porté
