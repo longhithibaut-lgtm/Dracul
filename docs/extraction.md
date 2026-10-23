@@ -126,14 +126,13 @@ Proposition de trois familles, lisibles et peu nombreuses :
 
 ## 7. Le refuge
 
-### Le marchand du refuge *(à valider : proposition d'histoire)*
+### Le marchand du refuge *(validé : le Rongé)*
 Il est là dès la première nuit, avant tout chef libéré. Proposition : **le Rongé** (nom provisoire), un vampire sans
 maison comme le héros, qui a trouvé la chapelle oubliée avant lui. Affamé depuis des années, il est **à moitié
 devenu goule** : le sang qu'on lui verse le garde lucide. Il fouille les catacombes la nuit, revend ce qu'il trouve
 contre du sang et se souvient, quand il a assez bu, de techniques oubliées (les améliorations du héros). S'il reste
 longtemps sans sang, il redevient bête un temps (boutique fermée, il grogne dans sa niche). Il explique le bassin :
-c'est lui qui boit ce qu'on y verse. Alternatives : un fossoyeur humain qui commerce par peur, ou une vieille
-servante de l'Ancêtre, trop faible pour sortir.
+c'est lui qui boit ce qu'on y verse.
 
 ### Les marchands des zones *(à valider)*
 Environ **un par zone**, chacun avec sa façon de commercer. Ils prennent le **sang porté** : le dépenser sur place

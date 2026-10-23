@@ -70,6 +70,12 @@ Plan validé avec l'utilisateur (maquettes dans `docs/maquettes/refuge-*.png`) :
   embrumé de Séverin (miroir fêlé, mannequin d'escrime), l'arène de Magda (la plus grande), la salle des cartes de
   Lucian (étroite et haute, des chauves-souris).
 
+**Le Rongé** (nom provisoire), le marchand du refuge, là dès la première nuit : un vampire sans maison comme le
+héros, qui a trouvé la chapelle oubliée avant lui. Affamé depuis des années, il est à moitié devenu goule ; le sang
+versé au bassin, c'est lui qui le boit, et il le garde lucide. Il fouille les catacombes la nuit et revend ce qu'il
+trouve contre du sang ; quand il a assez bu, il se souvient de techniques oubliées (les améliorations du héros). Trop
+longtemps sans sang, il redevient bête un temps : boutique fermée, il grogne dans sa niche.
+
 ## Les ennemis
 
 - **Les humains de l'Ordre** : arbalétriers, prêtres qui posent des zones de lumière sacrée, chiens de chasse,
