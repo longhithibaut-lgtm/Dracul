@@ -33,12 +33,17 @@ export function go(came: Came, from: Place, exit: number): { to: Place; entry: n
   return back && { to: back.from, entry: back.exit };
 }
 
-/** The rooms between `from` and the refuge on his way back, nearest first: where the battue (pass 2) lies in wait. */
+/** The rooms between `from` and the refuge on his way back, nearest first: where the battue lies in wait. */
 export function wayBack(came: Came, from: Place): Place[] {
   const rooms: Place[] = [];
   for (let at = go(came, from, -1)?.to; at && at !== 'refuge'; at = go(came, at, -1)?.to) rooms.push(at);
   return rooms;
 }
+
+/** Where the battue's next pack lies in wait, of the rooms on his way back (`way`, nearest first): the nearest with no
+ *  pack waiting yet (`waiting`), else the nearest (its pack replaced by this heavier one); undefined: no room between him
+ *  and the refuge. */
+export const lair = (way: Place[], waiting: (p: Place) => boolean): Place | undefined => way.find((p) => !waiting(p)) ?? way[0];
 
 /** The ways into `to` going deeper: each room and exit leading to it. */
 export function parents(to: Place) {
@@ -46,14 +51,32 @@ export function parents(to: Place) {
 }
 
 /** A room of an expedition as the hero left it: its foes alive (where they stood, their hp, their post; a hound that
- *  already followed him through an exit), its caches not yet searched, the blood left on its floor. Foes added here to
- *  a room on his way back (`came`) wait for him there: the hook for the battue (pass 2). */
+ *  already followed him through an exit), its caches not yet searched, the blood left on its floor; `battue`: a pack of
+ *  the battue lying in wait for him on his way back (its kinds; before the stairs, else near the exit he comes back by),
+ *  placed hunting as he comes in. */
 export type RoomState = {
   foes: { kind: string; x: number; y: number; hp: number; home: P; followed?: boolean }[];
   caches: (P & { blood: number })[];
   drops: (P & { blood: number })[];
+  battue?: { kinds: readonly string[]; stairs: boolean };
 };
 /** The expedition under way: when it started, the deepest ring reached, the way back, the rooms entered; `packs`: the
- *  battue's packs his scent has called (logic.ts scent()), for pass 2 to lay in wait in the rooms of wayBack(). */
-export type Expedition = { startedAt: number; deepest: number; came: Came; rooms: Partial<Record<Place, RoomState>>; packs: number };
-export const expedition = (deepest: number): Expedition => ({ startedAt: Date.now(), deepest, came: {}, rooms: {}, packs: 0 });
+ *  battue's packs his scent has called (logic.ts scent()) still waiting for a room on his way back; `loosed`: the packs
+ *  laid in wait so far, `met`: those he walked into. */
+export type Expedition = { startedAt: number; deepest: number; came: Came; rooms: Partial<Record<Place, RoomState>>; packs: number; loosed: number; met: number };
+export const expedition = (deepest: number): Expedition => ({ startedAt: Date.now(), deepest, came: {}, rooms: {}, packs: 0, loosed: 0, met: 0 });
+
+/** Lays the packs his scent has called (`exp.packs`) in wait on his way back from `here`, each in its lair() among the
+ *  rooms entered: the k-th of the expedition is `packs[k - 1]` (the last repeats), every other one before the stairs.
+ *  Those with no room to go wait (the crypt: the refuge is next). Returns the packs loosed now. */
+export function loose(exp: Expedition, here: Place, packs: readonly (readonly string[])[]) {
+  const way = wayBack(exp.came, here).filter((p) => exp.rooms[p]), now: { at: Place; kinds: readonly string[] }[] = [];
+  for (; exp.packs > 0; exp.packs--) {
+    const at = lair(way, (p) => !!exp.rooms[p]!.battue);
+    if (!at) break;
+    const kinds = packs[Math.min(++exp.loosed, packs.length) - 1];
+    exp.rooms[at]!.battue = { kinds, stairs: exp.loosed % 2 === 0 };
+    now.push({ at, kinds });
+  }
+  return now;
+}

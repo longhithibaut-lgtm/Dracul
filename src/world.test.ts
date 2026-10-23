@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { WORLD, go, parents, wayBack, type Came, type Place } from './world.ts';
-import { parse, VERSION } from './save.ts';
+import { WORLD, expedition, go, lair, loose, parents, wayBack, type Came, type Place } from './world.ts';
+import { parse, VERSION, type Save } from './save.ts';
+import { LINES, WARES, WARE_TEXT, bagSize, beast, buy, owned, price } from './shop.ts';
 import { T } from './tuning.ts';
 import { missing } from './font.ts';
 import * as Crypt from './crypt.data.ts';
@@ -46,9 +47,33 @@ describe('the world by depth', () => {
     expect(go({}, 'chapel', -1)).toEqual({ to: 'nave', entry: 0 }); // never came: the first way in
     expect(go(came, 'cloister', 0)).toBeUndefined(); // the deepest: its doors lead nowhere yet
     expect(go(came, 'refuge', -1)).toBeUndefined();
-    expect(wayBack(came, 'chapel')).toEqual(['ossuary', 'hall']); // where the battue will wait for him (pass 2)
+    expect(wayBack(came, 'chapel')).toEqual(['ossuary', 'hall']); // where the battue waits for him
     expect(wayBack(came, 'hall')).toEqual([]);
     expect(parents('chapel')).toEqual([{ from: 'nave', exit: 0 }, { from: 'nave', exit: 1 }, { from: 'ossuary', exit: 0 }, { from: 'ossuary', exit: 1 }]);
+  });
+
+  it("lays the battue's packs on his way back: the nearest room free, never the room he is in, the heaviest nearest", () => {
+    const P = T.battue.packs, exp = expedition(0), room = () => ({ foes: [], caches: [], drops: [] });
+    go(exp.came, 'refuge', 0);
+    exp.rooms.hall = room();
+    exp.packs = 1;
+    expect(loose(exp, 'hall', P)).toEqual([]); // in the crypt: nowhere between him and the refuge, it waits
+    expect([exp.packs, exp.loosed]).toEqual([1, 0]);
+    go(exp.came, 'hall', 0);
+    exp.rooms.nave = room();
+    expect(loose(exp, 'nave', P)).toEqual([{ at: 'hall', kinds: P[0] }]); // deeper: the crypt is behind him now
+    expect([exp.packs, exp.loosed, exp.rooms.nave.battue]).toEqual([0, 1, undefined]);
+    go(exp.came, 'nave', 1);
+    exp.rooms.chapel = room();
+    exp.packs = 3;
+    expect(loose(exp, 'chapel', P).map((p) => p.at)).toEqual(['nave', 'nave', 'nave']); // the crypt holds one: the nave's grows
+    expect(exp.rooms.nave.battue).toEqual({ kinds: P[2], stairs: true }); // the 4th: the last pack again, before the stairs
+    expect(exp.rooms.hall.battue).toEqual({ kinds: P[0], stairs: false });
+    expect(exp.rooms.chapel.battue).toBeUndefined();
+    expect([exp.packs, exp.loosed]).toEqual([0, 4]);
+    expect(P[0].every((k) => k === 'hound') && (P[P.length - 1] as readonly string[]).includes('inquisitor')).toBe(true); // hounds first, then an Inquisiteur
+    expect(lair(['nave', 'hall'], (p) => p === 'nave')).toBe('hall');
+    expect(lair([], () => false)).toBeUndefined();
   });
 
   it('hides its blood caches on open floor, enough of them', () => {
@@ -66,7 +91,7 @@ describe('the world by depth', () => {
 
 describe('save', () => {
   it('starts afresh without a save, or with a broken one', () => {
-    const fresh = { v: VERSION, banked: 0, unlocks: { bite: false, life: 0 } };
+    const fresh = { v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0 };
     expect(parse(null)).toEqual(fresh);
     expect(parse('{not json')).toEqual(fresh);
     expect(parse('42')).toEqual(fresh);
@@ -74,15 +99,55 @@ describe('save', () => {
   });
 
   it('reads back what it stored', () => {
-    const s = { v: VERSION, banked: 120, unlocks: { bite: true, life: 2 } };
+    const s = { v: VERSION, banked: 120, unlocks: { bite: true, life: 2, bag: 1 }, dry: 2 };
     expect(parse(JSON.stringify(s))).toEqual(s);
   });
 
   it('brings an older or damaged save up to date: missing fields to their start, bad values cleaned, unknown ones dropped', () => {
-    expect(parse('{"banked":37}')).toEqual({ v: VERSION, banked: 37, unlocks: { bite: false, life: 0 } }); // before versions
-    expect(parse('{"v":1,"banked":-5,"unlocks":{"bite":"yes"},"junk":1}')).toEqual({ v: VERSION, banked: 0, unlocks: { bite: false, life: 0 } });
+    expect(parse('{"banked":37}')).toEqual({ v: VERSION, banked: 37, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0 }); // before versions
+    expect(parse('{"v":1,"banked":-5,"unlocks":{"bite":"yes"},"junk":1}')).toEqual({ v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0 });
     expect(parse('{"v":1,"banked":12.7}').banked).toBe(12);
     expect(parse('{"v":1,"banked":"NaN"}').banked).toBe(0);
-    expect(parse('{"v":1,"unlocks":{"bite":true,"life":-1}}').unlocks).toEqual({ bite: true, life: 0 });
+    expect(parse('{"v":1,"unlocks":{"bite":true,"life":-1}}').unlocks).toEqual({ bite: true, life: 0, bag: 0 });
+  });
+});
+
+describe("the Rongé's wares", () => {
+  const save = (banked: number): Save => parse(JSON.stringify({ banked }));
+
+  it('prices: the bite once, life and the bag by ranks, each x1.8 the last, then sold out', () => {
+    expect(price('bite', 0)).toBe(T.ronge.bite);
+    expect(price('bite', 1)).toBeUndefined();
+    expect([0, 1, 2, 3, 4].map((n) => price('life', n))).toEqual([40, 72, 130, 233, undefined]);
+    expect([0, 1, 2, 3].map((n) => price('bag', n))).toEqual([60, 108, 194, undefined]);
+    for (let n = 1; n < 3; n++) expect(price('life', n)! / price('life', n - 1)!).toBeCloseTo(T.ronge.life.mult, 1);
+  });
+
+  it('buys from the bank: the price taken, the rank saved; too little banked changes nothing', () => {
+    const s = save(130);
+    expect(buy(s, 'bite')).toBe('sold');
+    expect([s.banked, s.unlocks.bite]).toEqual([50, true]);
+    expect(buy(s, 'bite')).toBe('none');
+    expect(buy(s, 'life')).toBe('sold'); // 40
+    expect(buy(s, 'life')).toBe('poor'); // 72 > 10
+    expect([s.banked, s.unlocks.life, owned(s, 'life')]).toEqual([10, 1, 1]);
+    expect(parse(JSON.stringify(s))).toEqual(s); // what is bought outlives the page
+    const b = save(1000);
+    while (buy(b, 'bag') === 'sold');
+    expect([b.unlocks.bag, bagSize(b), b.banked]).toEqual([3, T.blood.bag + 3 * T.ronge.bag.size, 1000 - 60 - 108 - 194]);
+  });
+
+  it('turns beast after too many returns without pouring', () => {
+    const s = save(0);
+    s.dry = T.ronge.hunger - 1;
+    expect(beast(s)).toBe(false);
+    s.dry++;
+    expect(beast(s)).toBe(true);
+  });
+
+  it('speaks and labels his wares in letters the font has', () => {
+    for (const w of WARES) expect(missing(WARE_TEXT[w].name + WARE_TEXT[w].text)).toEqual([]);
+    for (const l of Object.values(LINES).flat()) expect(missing(l)).toEqual([]);
+    expect(missing('Les chiens ont flairé ton sang. Un Inquisiteur lâche ses chiens. Le Rongé (F) Bassin : sang Échap pour partir')).toEqual([]);
   });
 });

@@ -20,11 +20,14 @@ export const LOOK: Look = {
 export const STAIRS = D.STAIRS;
 // The basin of the great hall (its box in refuge.data.ts; the mockup's basin at world 1800, 1560), floor point.
 export const BASIN = { x: 840, y: 644 };
+// Le Rongé's corner, right of the basin, his floor point (he faces it): his body stops walkers.
+export const RONGE = { x: 896, y: 650 };
 // Where the hero comes up the stairs from the crypt, his feet below STAIRS in its well (x 816-864).
 const STAIRWAY = { x: 840, y: 876 };
 
 export function build(scene: Phaser.Scene): Room {
   const obstacles = Baked.draw(scene, 'refuge', D.OVER, D.BOXES);
+  obstacles.add(scene.add.zone(RONGE.x, RONGE.y, 44, 16));
   return {
     bounds: new Phaser.Geom.Rectangle(0, 0, D.W, D.H),
     obstacles,

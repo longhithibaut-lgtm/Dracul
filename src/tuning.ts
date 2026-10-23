@@ -287,9 +287,30 @@ export const T = {
     cache: 5,
     pickup: 16, search: 24, bag: 400, basin: 52,
   },
-  // The blood's scent (docs/extraction.md §5): every `every` blood carried calls a pack of the battue (counted for now;
-  // pass 2 sends them between the hero and the refuge).
-  battue: { every: 50 },
+  // The blood's scent (docs/extraction.md §5): every `every` blood carried (picked up) looses a pack of the battue, with
+  // a distant horn and a line. It lies in wait in the nearest room on his way back that holds none yet (never the room he
+  // is in), else replaces the pack of the nearest one: one pack a room, the heaviest nearest him. The k-th pack loosed in
+  // an expedition is `packs[k - 1]` (the last repeats): hounds first, then an Inquisiteur with his. With no room between
+  // him and the refuge (the crypt), it waits until there is one. It comes in hunting him, near the exit he comes back by,
+  // or before the stairs (every other pack), on the nearest spawn point at least `clear` from where he enters.
+  battue: {
+    every: 80,
+    packs: [['hound', 'hound'], ['hound', 'hound', 'hound'], ['inquisitor', 'hound', 'hound']],
+    entry: 80, stairs: 40, clear: 60, // how far below his way in, above the stairs' edge
+  },
+
+  // Le Rongé, the refuge's merchant (docs/lore.md), crouched by the basin (refuge.ts RONGE): F within `talk` of him
+  // opens his wares, paid with the blood banked; he raises his head at the hero within `notice`. Prices: the bite once,
+  // max life and the bag by ranks at `cost` x `mult` to the rank bought (40, 72, 130, 233; 60, 108, 194), the bag `size`
+  // bigger a rank. Back `hunger` times (returns or deaths) without pouring into the basin, he turns beast: wares
+  // closed until blood is poured again.
+  ronge: {
+    talk: 40, notice: 90,
+    bite: 80,
+    life: { cost: 40, mult: 1.8, ranks: 4 },
+    bag: { cost: 60, mult: 1.8, ranks: 3, size: 100 },
+    hunger: 3,
+  },
 
   // Gifts of the Rat house (gifts.ts), toggled in the training room (none is offered on an expedition). The number of a gift with a rarity is named
   // after it, a triple [commun, rare, épique]: the rarity it is offered at picks one (T.rarity).

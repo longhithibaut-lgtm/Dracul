@@ -274,6 +274,22 @@ export const recipes = {
     bursts(o, [0.02, 0.04, 0.07, 0.09, 0.12, 0.16], { src: 'noise', filter: 'highpass', ff: 2200, gain: 0.45, attack: 0.001, dur: 0.03 });
     voice(o, { src: 'noise', filter: 'lowpass', ff: 200, trem: 12, gain: 0.5, attack: 0.05, dur: 0.8 });
   },
+  // The battue loosed: a hunting horn far off (two long brassy calls, muffled by the stone), then the hounds baying.
+  horn(o: Play) {
+    for (const [f, delay, dur] of [[196, 0, 0.75], [262, 0.8, 1.1]]) {
+      voice(o, { src: 'sawtooth', f, f2: f * 0.97, filter: 'lowpass', ff: 700, ff2: 450, q: 2, gain: 0.32, attack: 0.18, dur, delay });
+      voice(o, { src: 'square', f: f * 2, filter: 'lowpass', ff: 900, gain: 0.06, attack: 0.25, dur, delay });
+    }
+    for (const delay of [1.7, 2.15]) {
+      voice(o, { src: 'triangle', f: 420, f2: 640, filter: 'lowpass', ff: 1400, gain: 0.22, attack: 0.08, dur: 0.35, delay });
+      voice(o, { src: 'triangle', f: 640, f2: 330, filter: 'lowpass', ff: 1200, trem: 9, gain: 0.2, attack: 0.02, dur: 0.6, delay: delay + 0.33 });
+    }
+  },
+  // Le Rongé gone beast: a long wet growl in the throat.
+  growl(o: Play) {
+    voice(o, { src: 'sawtooth', f: 70, f2: 95, filter: 'lowpass', ff: 380, ff2: 600, q: 4, trem: 23, gain: 0.7, attack: 0.12, dur: 0.9 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 300, q: 3, trem: 17, gain: 0.35, attack: 0.15, dur: 0.8 });
+  },
   // A blow turned aside: steel on steel, a bright ring over a dry knock.
   parry(o: Play) {
     voice(o, { src: 'noise', filter: 'highpass', ff: 3000, gain: 0.8, attack: 0.001, dur: 0.05 });

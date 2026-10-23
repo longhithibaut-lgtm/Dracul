@@ -84,7 +84,7 @@ const CSS = `
 /** Opens the panel; returns what closes it. */
 export function panel(api: {
   gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean, rank: number): void; rank(rank: number): void;
-  swarm(): void; restart(layout?: LayoutId): void;
+  swarm(): void; restart(layout?: LayoutId): void; battue(): void; reset(): void;
 }) {
   // Every gift can be ticked, several in one slot too: the one-per-slot rule is the run's, not the training room's.
   const gifts = (k: (id: GiftId) => boolean) => GIFT_IDS.filter(k).map((id) =>
@@ -96,12 +96,12 @@ export function panel(api: {
     <h3>Salle</h3>
     <div class="row">${ROOMS.map(([id, l]) => `<button type="button" data-layout="${id}">${l}</button>`).join('')}</div>
     <h3>Ennemis</h3>
-    <div class="row">${SPAWNS.map(([s, l]) => `<button type="button" data-spawn="${s}">+ ${l}</button>`).join('')}<button type="button" data-act="clear">Vider la salle</button></div>
+    <div class="row">${SPAWNS.map(([s, l]) => `<button type="button" data-spawn="${s}">+ ${l}</button>`).join('')}<button type="button" data-act="clear">Vider la salle</button><button type="button" data-act="battue">Lâcher une battue</button></div>
     <label><input type="checkbox" data-opt="passive"> Ennemis passifs (mannequins)</label>
     <h3>Héros</h3>
     <label><input type="checkbox" data-opt="god"> Invincible</label>
     <label><input type="checkbox" data-unlock="bite"${Save.data.unlocks.bite ? ' checked' : ''}> Morsure débloquée <small>· sauvegardé</small></label>
-    <div class="row"><button type="button" data-act="heal">Soigner</button></div>
+    <div class="row"><button type="button" data-act="heal">Soigner</button><button type="button" data-act="reset-save">Effacer la sauvegarde</button></div>
     <h3>Dons du Rat : emplacements</h3>${gifts((id) => !!GIFTS[id].slot)}
     <h3>Dons du Rat : talents</h3>${gifts((id) => kind(id) === 'talent')}
     <h3>Pactes de sang</h3>${gifts((id) => kind(id) === 'pacte')}
@@ -133,7 +133,7 @@ export function panel(api: {
   root.addEventListener('change', (ev) => {
     const i = ev.target as HTMLInputElement;
     if (i.dataset.opt) opts[i.dataset.opt as keyof typeof opts] = i.checked;
-    if (i.dataset.unlock) Save.data.unlocks.bite = i.checked, Save.store(); // the Rongé will sell it (docs/extraction.md)
+    if (i.dataset.unlock) Save.data.unlocks.bite = i.checked, Save.store(); // le Rongé sells it (shop.ts); free here
     if (i.dataset.gift) api.toggle(i.dataset.gift as GiftId, i.checked, rank);
     if (i.dataset.rank !== undefined) api.rank((rank = Number(i.value)));
     release();
@@ -146,6 +146,8 @@ export function panel(api: {
     else if (b.dataset.act === 'clear') api.clear();
     else if (b.dataset.act === 'heal') api.heal();
     else if (b.dataset.act === 'swarm') api.swarm();
+    else if (b.dataset.act === 'battue') api.battue();
+    else if (b.dataset.act === 'reset-save' && confirm('Effacer la sauvegarde (sang au bassin, achats) ?')) api.reset();
     else if (b.dataset.act === 'reset') knobs().forEach((i) => set(i, defaults[i.dataset.knob!])), show();
     release();
   });
