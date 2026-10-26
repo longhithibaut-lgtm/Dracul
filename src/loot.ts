@@ -77,7 +77,7 @@ export function glint(scene: Phaser.Scene, x: number, y: number, key: string, co
   let moteAt = 0;
   const stop = loop(scene, (t) => {
     glow.clear();
-    pool(glow, x, y, 11, color, 0.9, t);
+    pool(glow, x, y, 15, color, 1.3, t);
     im.setY(y - 10 - Math.round(Math.sin(t * 2.5) + 1));
     const w = (t * 1000) % 1400; // the wink: a four-point star a moment, every 1.4 s
     star.clear();

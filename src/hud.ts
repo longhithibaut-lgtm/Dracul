@@ -311,7 +311,7 @@ export function create(scene: Phaser.Scene): Hud {
 
     // Title card: bone letters between two red rules, then it steps out.
     const tt = now - titleAt, out = T.expedition.titleMs - 200;
-    if (tt < T.expedition.titleMs) {
+    if (tt < T.expedition.titleMs && title) {
       const a = tt < out ? 1 : 1 - Math.ceil((tt - out) / 67) / 3, w = Font.width(title, 2);
       const x = Math.round((scene.scale.width / Z - w) / 2), y = Math.round(scene.scale.height / Z / 2) - 23;
       for (const side of [-1, 1]) {

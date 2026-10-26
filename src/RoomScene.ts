@@ -265,8 +265,8 @@ export class RoomScene extends Phaser.Scene {
     // Le Rongé's wares: hovered, bought by their key or a click, left with Escape (or F).
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.counter?.hover(this.counter.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM));
-      const i = this.satchel?.panel.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM) ?? -1;
-      if (i >= 0 && i !== this.satchel!.view.cursor) this.showSatchel({ cursor: i });
+      const i = this.satchel?.panel.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM) ?? -1, moved = p.x !== p.prevPosition.x || p.y !== p.prevPosition.y; // a still mouse leaves the keys' cursor be
+      if (i >= 0 && moved && i !== this.satchel!.view.cursor) this.showSatchel({ cursor: i });
     });
     ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN'].forEach((k, i) => this.input.keyboard!.on(`keydown-${k}`, () => (this.counter ? this.sell(i) : this.satchel && this.act(Items.SLOTS.length + i))));
     this.input.keyboard!.on('keydown-ESC', () => (this.satchel ? this.closeSatchel() : this.closeShop()));
@@ -1618,6 +1618,7 @@ export class RoomScene extends Phaser.Scene {
     this.time.paused = true;
     const view: Satchel.View = { title: mode === 'sac' ? 'LE SAC' : 'LE COFFRE', listName: '', worn: Save.data.worn, list: [], size: 0, cursor: ground ? Items.SLOTS.length : 0, line: '', hint: '', fresh: () => false };
     this.satchel = { panel: undefined!, view, mode, ground };
+    this.hud.title(''); // no title card over it
     this.satchel.panel = Satchel.panel(this, this.showSatchel({ line: ground ? `Sac plein : que laisser pour ${Items.ITEMS[ground.item.id].name} ?` : '' }));
     Sfx.play(this, 'snap');
     return true;
@@ -1628,7 +1629,7 @@ export class RoomScene extends Phaser.Scene {
     const s = this.satchel!, sac = s.mode === 'sac', list = this.list(s.mode), size = sac ? Shop.itemSlots(Save.data) : Math.max(12, Math.ceil(list.length / 12) * 12);
     s.view = { ...s.view, ...change, list, size, ground: s.ground?.item, listName: sac ? `Sac ${list.length} / ${size}` : `Coffre ${list.length}`,
       fresh: (it) => !Items.acquired(Save.data, it),
-      hint: s.ground ? 'Flèches et Entrée, ou clic\u00a0: laisser cet objet\u00a0; Échap\u00a0: rien' : `Flèches et Entrée, ou clic\u00a0: porter, ${sac ? 'ranger au sac' : 'rendre au coffre'}\u00a0; Échap ou ${sac ? 'I' : 'F'}\u00a0: fermer` };
+      hint: s.ground ? 'Entrée ou clic\u00a0: laisser cet objet\u00a0; Échap\u00a0: rien' : `Entrée ou clic\u00a0: porter, ${sac ? 'ranger au sac' : 'rendre au coffre'}\u00a0; Échap\u00a0: fermer` };
     s.panel?.draw(s.view);
     return s.view;
   }

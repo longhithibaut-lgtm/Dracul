@@ -2,14 +2,17 @@
 // Usage: npm run shot [-- --out=shots --port=5199]
 // A fresh save. Expedition 1: the bot walks from the coffin down the refuge's stairs into the zone (zone-refuge.png),
 // comes up unseen on a group at its post (group.png), fights the ghouls that hunt him, picks up their blood, goes into
-// the crypt by its door (zone-crypt-door.png), fights there, searches a cache, comes back out at the same door; crosses
+// the crypt by its door (zone-crypt-door.png), fights there, searches a cache that hides an item (item-glint.png: it lies
+// on the floor), takes it (F) into his bag, opens le sac (I, sac.png) and wears it (Enter); his bag full, F on another
+// item asks which to leave (swap.png); he comes back out at the same door (hud.png: the bag's shelf); crosses
 // the chasm by the bridge (zone-bridge.png), the middle (zone-middle.png), the breach where the Dawn falls (zone-breach.png,
 // he burns there), the far side (zone-far.png, the Order's camp), raises the sealed door of the gallery from its side
 // (shortcut-gallery-before.png, -after.png); his scent looses the battue across the zone on his way back; through the
 // gallery he comes out in the middle, walks on to the battue waiting at a narrow way (battue.png, once the gallery's fade is
-// over), raises the grille from its side (shortcut-grille-before.png, -after.png), goes back by the causeway to the refuge and pours his blood into the basin (basin.png).
-// Expedition 2: the zone new, the shortcuts still open (saved), blood picked up, then the bot lets the foes kill him: he
-// re-forms at his coffin with nothing carried. Le Rongé's wares (ronge.png, shop.png). Hounds follow him through one
+// over), raises the grille from its side (shortcut-grille-before.png, -after.png), goes back by the causeway to the refuge and pours his blood into the basin (basin.png);
+// his items are in le coffre (F by it, coffre.png), acquired.
+// Expedition 2: the zone new, the shortcuts still open (saved), blood picked up, a new item taken and worn, then the bot
+// lets the foes kill him: he re-forms at his coffin with nothing carried, the new item lost, the acquired one still worn. Le Rongé's wares (ronge.png, shop.png). Hounds follow him through one
 // door, never a second. Headless FPS of every place, and of the zone walked across chunk borders. In the training room
 // a crossbowman clawed to his knees, then bitten. The whole zone's map: shots/necropolis-overview.png (its bake).
 // Exit code 1 if the page logged an error or a step failed.
@@ -160,6 +163,17 @@ async function winch(id) {
   for (let k = 0; k < 6 && !(await save()).shortcuts.includes(id); k++) { await page.keyboard.press('f'); await page.waitForTimeout(400); }
   await page.waitForTimeout(1500);
 }
+/** The panel's cursor down onto the list (the bag's, the chest's first item). */
+async function cursorDown() {
+  for (let k = 0; k < 3; k++) {
+    await page.keyboard.press('ArrowDown');
+    await page.waitForTimeout(150);
+    const c = await run(() => { const s = window.game.scene.getScene('room'); return { cursor: s.satchel?.view.cursor, down: s.keys.DOWN.isDown, s: s.keys.S.isDown }; });
+    if (c.cursor >= 6) return true;
+    console.log(`ArrowDown not taken: ${JSON.stringify(c)}`);
+  }
+  return false;
+}
 const where = async () => { const h = (await state()).hero; return `${Math.round(h.x)},${Math.round(h.y)}`; };
 
 await mkdir(out, { recursive: true });
@@ -218,10 +232,54 @@ await gather(10000);
     await walk(c.x, c.y, 15000, 10);
     await page.waitForTimeout(500);
     await shot('cache'); // its scent and « Fouiller (F) » over it
+    const hid = await run(() => { const s = window.game.scene.getScene('room'), c = s.caches.find((c) => Math.hypot(c.x - s.hero.body.center.x, c.y - s.hero.body.center.y) < 24); c.item ??= s.found(1, true); return c.item; }); // this one hides an item
     await page.keyboard.press('f');
     await page.waitForTimeout(300);
     await gather(5000);
     check((await state()).carried > before, `cache searched (F): ${before} -> ${(await state()).carried} blood`);
+    // the item it hid, on the floor beside the blood: taken (F), into the bag
+    const lying = await run(() => window.game.scene.getScene('room').loot.map(({ x, y, item }) => ({ x, y, n: item.n })));
+    const it = lying.find((l) => l.n === hid.n);
+    if (check(!!it, `the cache hid an item: ${hid.id} (rarity ${hid.r}), lying on the floor`)) {
+      await walk(it.x - 26, it.y + 14, 8000, 6); // near enough for its words, the glint in sight
+      await page.waitForTimeout(600);
+      await shot('item-glint');
+      await walk(it.x - 8, it.y + 4, 6000, 4);
+      await page.keyboard.press('f');
+      await page.waitForTimeout(300);
+      const bag = await run(() => window.game.scene.getScene('room').bag.map((b) => b.n));
+      check(bag.includes(hid.n), `F: ${hid.id} taken into the bag (${bag.length} carried)`);
+      // le sac: I, the cursor down onto it, Enter wears it
+      await page.keyboard.press('i');
+      check(await until(() => window.game.scene.getScene('room').satchel?.mode === 'sac', null, 2000), 'I: le sac opens, the game paused');
+      await page.waitForTimeout(200);
+      check(await cursorDown(), 'ArrowDown: the cursor on the bag');
+      await shot('sac');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(200);
+      const worn = await run(() => { const s = window.game.scene.getScene('room'); return { worn: JSON.parse(localStorage.getItem('dracul.save')).worn.filter(Boolean).map((w) => w.n), bag: s.bag.length, paused: s.time.paused }; });
+      check(worn.worn.includes(hid.n) && worn.bag === 0 && worn.paused, `Enter: ${hid.id} worn in the field (bag ${worn.bag}), the game paused meanwhile`);
+      await page.keyboard.press('Escape');
+      check(await until(() => !window.game.scene.getScene('room').satchel && !window.game.scene.getScene('room').time.paused, null, 2000), 'Escape: le sac closed, the game goes on');
+      // the bag full, another item on the floor: F asks which to leave; Enter leaves the first, the new one in its place
+      const full = await run(() => {
+        const s = window.game.scene.getScene('room'), f = s.hero.body.center;
+        while (s.bag.length < 4) s.bag.push(s.found(1, true));
+        s.showBlood();
+        const it = s.found(2, true);
+        s.addLoot({ x: f.x + 6, y: f.y + 2, item: it });
+        return { first: s.bag[0].n, it: it.n };
+      });
+      await page.waitForTimeout(400);
+      await page.keyboard.press('f');
+      check(await until(() => !!window.game.scene.getScene('room').satchel?.ground, null, 2000), 'the bag full: F on an item opens le sac to choose what to leave');
+      await page.waitForTimeout(200);
+      await shot('swap');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(300);
+      const swapped = await run(() => { const s = window.game.scene.getScene('room'); return { bag: s.bag.map((b) => b.n), floor: s.loot.map((l) => l.item.n), open: !!s.satchel }; });
+      check(swapped.bag[0] === full.it && swapped.floor.includes(full.first) && swapped.bag.length === 4 && !swapped.open, `swapped: the new item in the bag, the one left on the floor (bag ${swapped.bag.join(' ')})`);
+    }
   }
 }
 check(await exit(240, 616, 'ArrowDown', 'necropolis'), 'out of the crypt by its stairs');
@@ -320,6 +378,16 @@ await page.waitForTimeout(350);
 await shot('basin');
 const bank = await save();
 check(bank?.banked === bring && bank.shortcuts.length === 2, `poured ${bring} blood into the basin: banked ${bank?.banked}, the shortcuts kept (${bank.shortcuts.join(', ')})`);
+// home: what he carried and wore is in le coffre, acquired for good
+const kept = bank.worn.filter(Boolean).map((w) => w.n);
+check(kept.length === 1 && bank.stash.length === 5 && kept.every((n) => bank.stash.some((s) => s.n === n)), `le coffre holds ${bank.stash.length} items (the bag's 4 and the one worn: ${bank.stash.map((s) => s.id).join(', ')})`);
+check(await walk(762, 678, 15000, 6), 'walked up to le coffre');
+await page.keyboard.press('f');
+check(await until(() => window.game.scene.getScene('room').satchel?.mode === 'coffre', null, 3000), 'F: le coffre opens');
+await page.waitForTimeout(200);
+await cursorDown();
+await shot('coffre');
+await page.keyboard.press('Escape');
 
 // ---- Expedition 2: the zone new, the shortcuts still open, blood picked up, death ----
 check(await walk(840, 846) || (await state()).layout === 'necropolis', 'down the stairs again');
@@ -330,6 +398,24 @@ await keep(true);
 for (let i = 0; i < 6 && (await state()).carried === 0; i++) { await fight(10000, 900); await stay(); await gather(5000, 600); await stay(); }
 const lost = (await state()).carried;
 check(lost > 0, `blood carried before dying: ${lost}`);
+// a new item, of another family than the one acquired: taken and worn, not yet brought back
+const fresh2 = await run(() => {
+  const s = window.game.scene.getScene('room'), f = s.hero.body.center, mine = JSON.parse(localStorage.getItem('dracul.save')).worn.find(Boolean);
+  const it = { n: 9000, id: ['acier', 'stylet', 'fer', 'faucille', 'saignee', 'goule'].includes(mine.id) ? 'linceul' : 'acier', r: 2 }; // a free slot of its own
+  s.addLoot({ x: f.x + 6, y: f.y + 2, item: it });
+  return { it, mine: mine.n };
+});
+await page.waitForTimeout(300);
+await page.keyboard.press('f');
+await page.waitForTimeout(300);
+await page.keyboard.press('i');
+await until(() => !!window.game.scene.getScene('room').satchel, null, 2000);
+await page.waitForTimeout(200);
+await cursorDown();
+await page.keyboard.press('Enter');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
+check((await save()).worn.some((w) => w?.n === 9000), `expedition 2: a new item (${fresh2.it.id}) taken and worn, not yet brought back`);
 await keep(false);
 await run(() => { const s = window.game.scene.getScene('room'); s.health = 1; s.hud.health(1, 5); });
 for (let end = Date.now() + 30000; Date.now() < end && (await state()).layout === 'necropolis';) {
@@ -342,6 +428,8 @@ await page.waitForTimeout(300);
 await shot('death');
 const after = await run(() => ({ carried: window.game.scene.getScene('room').carried, save: JSON.parse(localStorage.getItem('dracul.save')), log: JSON.parse(localStorage.getItem('dracul.log')) }));
 check(after.carried === 0 && after.save?.banked === bank?.banked, `the blood carried is lost (${lost}), the bank untouched (${after.save?.banked})`);
+check(!after.save.worn.some((w) => w?.n === 9000) && !after.save.stash.some((s) => s.n === 9000) && after.save.worn.some((w) => w?.n === fresh2.mine) && after.save.stash.length === 5,
+  `at death the new item is lost; the one brought back is still worn, le coffre still holds ${after.save.stash.length}`);
 check(after.log?.length === 2 && after.log[0].end === 'retour' && after.log[0].deepest === 3 && after.log[1].end === 'mort', `expedition log: ${(after.log ?? []).map((e) => `${e.end} ring ${e.deepest}, ${e.blood} blood, ${e.life} life, ${e.s} s, ${e.loosed}/${e.met} packs`).join(' | ')}`);
 
 // ---- Le Rongé's wares ----
@@ -427,11 +515,12 @@ if (check(!!(await page.waitForSelector('#training', { timeout: 5000 }).catch(()
     await wait(100);
     const knelt = s.time.now < e.getData('kneelUntil'), hp = e.getData('hp');
     await wait(250);
+    s.hero.body.reset(e.x - 18, e.y); // the claw's knockback may have carried it out of reach on a slow frame
     s.bite();
     await wait(1500);
     return { knelt, hp, health: s.health, dead: !e.body?.enable };
   });
-  check(bit.knelt && bit.hp === 1 && bit.dead && bit.health > 3, `clawed to ${bit.hp} hp, he kneels; bitten: 3 -> ${bit.health} blood`);
+  check(bit.knelt && bit.hp === 1 && bit.dead && bit.health > 3, `clawed to ${bit.hp} hp, he kneels (${bit.knelt}); bitten (${bit.dead ? 'dead' : 'alive'}): 3 -> ${bit.health} blood`);
   await page.click('#training [data-opt="passive"]');
 }
 if (existsSync('shots/necropolis-overview.png') && out !== 'shots') await copyFile('shots/necropolis-overview.png', `${out}/necropolis-overview.png`);

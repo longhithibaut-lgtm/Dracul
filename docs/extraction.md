@@ -1,6 +1,6 @@
 # Dracul : direction « extraction × ARPG » (document de travail)
 
-Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
+Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26) ; puis les objets et le sac (§6, 2026-10-26). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
 lore (`docs/lore.md`) ou sont des choix ouverts.
 
 ## 1. L'idée en une phrase
@@ -155,6 +155,10 @@ Proposition de trois familles, lisibles et peu nombreuses :
   pas rapporté ; **un objet rapporté au refuge est acquis pour toujours**, même équipé et même si l'on meurt ensuite
   avec *(validé ; pas d'emplacement « assuré »)*.
 - **Le sac est limité** : il faut choisir ce qu'on rapporte *(validé ; la taille s'améliore au refuge)*.
+- **Codé** (2026-10-26, `src/items.ts`, chiffres `T.items`) : 18 objets (6 armes, 7 reliques, 5 talismans) ; trouvés dans
+  les caches (chance par anneau), le coffre du camp et sur les élites (Inquisiteur, Amas, Bourreau) ; sac de 4, +1 par rang
+  de « + taille du sac » du Rongé ; « Le sac » (I) sur le terrain, jeu en pause ; « Le coffre » (F) au refuge. Détail
+  et chiffres : `docs/decisions.md`.
 
 ### Ce que deviennent les Dons et les Pactes
 - Les **Dons du Rat** deviennent des **pouvoirs débloqués au refuge** auprès de Vesna, une fois libérée (Peste, rats,
