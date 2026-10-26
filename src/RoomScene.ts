@@ -22,6 +22,8 @@ import * as Shop from './shop.ts';
 import * as Ronge from './ronge.ts';
 import * as Zone from './zone.ts';
 import * as Nec from './necropolis.data.ts';
+import * as Items from './items.ts';
+import * as Satchel from './satchel.ts';
 import { WORLD, expedition, galleryOpen, go, homeward, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
 
@@ -31,10 +33,12 @@ type Sprite = Phaser.Physics.Arcade.Sprite;
  *  exp: the expedition under way (its rooms as he left them, the way back), ended back at the refuge; carried: the
  *  blood in his bag; entry: where he comes in, -1 up a room's stairs (the zone: at the refuge's stairs), i down its exit i (the
  *  zone: out of its door i; the refuge: 0, up its stairs),
- *  none at the room's start; hounds: the hp of the hounds hunting him through the exit. In the training room: gifts and
+ *  none at the room's start; hounds: the hp of the hounds hunting him through the exit; bag: the items in his bag
+ *  (`lostItems`: those he died with, and those worn not yet brought back). In the training room: gifts and
  *  their ranks (0 commun, 1 rare, 2 épique; none: commun). */
 export type Run = {
   layout?: Room.LayoutId; health?: number; carried?: number; exp?: Expedition; entry?: number; hounds?: number[]; lost?: number;
+  bag?: Items.Item[]; lostItems?: number;
   gifts?: GiftId[]; ranks?: Ranks; training?: boolean;
 };
 type Ranks = Partial<Record<GiftId, number>>;
@@ -44,6 +48,7 @@ type Rat = { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until
 type Phase = 'enter' | 'play' | 'leave';
 type Placed = { hp?: number; home?: { x: number; y: number }; alert?: boolean; followed?: boolean; pack?: number };
 type Blood = { x: number; y: number; blood: number };
+type Lying = { x: number; y: number; item: Items.Item; fx: Loot.Glint; label: Loot.Label }; // an item on the floor
 const NAV = 8; // walk grid cell, px
 type Kind = 'ghoul' | 'crossbow' | Foes.Kind;
 /** A kind's hp and pace. */
@@ -101,7 +106,7 @@ export class RoomScene extends Phaser.Scene {
   private hounds: number[] = [];
   private lost = 0;
   private drops: (Blood & { fx: Loot.Drop })[] = [];
-  private caches: (Blood & { fx: Loot.Cache; label: Loot.Label })[] = [];
+  private caches: (Blood & { item?: Items.Item; fx: Loot.Cache; label: Loot.Label })[] = [];
   private labels: { at: { x: number; y: number }; l: Loot.Label }[] = []; // where the exits lead, the basin
   private gateWords = new Map<string, { at: { x: number; y: number }; l: Loot.Label }[]>(); // a shut shortcut's, by its id
   private propBoxes: Phaser.Physics.Arcade.StaticBody[] = []; // what stops bolts (and sight)
@@ -120,6 +125,13 @@ export class RoomScene extends Phaser.Scene {
   private nestAt = Infinity; // Glyphe du nid: when the glyph arms and lets its rats out
   private ronge?: ReturnType<typeof Ronge.create>; // at the refuge, by the basin
   private counter?: Ronge.Counter; // his wares, open: the hero waits
+  private bag: Items.Item[] = []; // the items carried (Save.data.worn: those worn)
+  private lostItems = 0;
+  private loot: Lying[] = []; // items on the floor
+  private gear = Items.stats([]); // the bonuses of the items worn (dress())
+  // The items' panel, open: le sac (an expedition: the game paused) or le coffre (the refuge); `ground`: the item on the
+  // floor he would take, his bag full.
+  private satchel?: { panel: Satchel.Panel; view: Satchel.View; mode: 'sac' | 'coffre'; ground?: Lying };
 
   constructor() {
     super('room');
@@ -147,6 +159,7 @@ export class RoomScene extends Phaser.Scene {
     this.swarmUntil = this.swarmReadyAt = 0;
     this.swarmFx = undefined;
     this.gnawAt = new Map();
+    this.gear = Items.stats(Save.data.worn); // before maxHealth()
     this.health = data.health ?? this.maxHealth();
     this.facing = Math.PI / 2; // start facing the camera
     this.dashUntil = this.dashReadyAt = this.slashReadyAt = this.slashUntil = this.shotReadyAt = this.shotUntil = this.invulnUntil = this.combo = this.shoveUntil = this.dazedUntil = 0;
@@ -166,13 +179,17 @@ export class RoomScene extends Phaser.Scene {
     this.glyphReadyAt = this.castUntil = 0;
     this.nestAt = Infinity;
     this.ronge = this.counter = undefined;
+    this.bag = [...(data.bag ?? [])];
+    this.lostItems = data.lostItems ?? 0;
+    this.loot = [];
+    this.satchel = undefined;
   }
 
   preload() {
     Hero.preload(this);
     Room.preload(this, this.layout, this.zoneDoor() ?? { x: 0, y: 0 });
     Foes.preload(this); // the training room calls them into any room
-    if (this.layout === 'refuge') Ronge.preload(this);
+    if (this.layout === 'refuge') { Ronge.preload(this); Satchel.preloadChest(this); }
   }
 
   create() {
@@ -234,19 +251,34 @@ export class RoomScene extends Phaser.Scene {
         const i = this.counter.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM);
         return void (i < 0 ? this.closeShop() : this.sell(i));
       }
+      if (this.satchel) { // a cell is worn or taken off, anywhere else closes
+        const i = this.satchel.panel.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM);
+        return void (i < 0 ? this.closeSatchel() : this.act(i));
+      }
       const w = world(p), a = Math.atan2(w.y - this.hero.y, w.x - this.hero.x);
       if (p.button === 0) this.press(() => this.slash(a));
       else if (p.button === 2) this.press(() => this.shoot(a));
     });
     this.keys.J.on('down', () => { const a = this.facing; this.press(() => this.slash(a)); });
     this.keys.K.on('down', () => { const a = this.facing; this.press(() => this.shoot(a)); });
-    this.keys.F.on('down', () => (this.counter ? this.closeShop() : this.press(() => this.bite())));
+    this.keys.F.on('down', () => (this.counter ? this.closeShop() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
     // Le Rongé's wares: hovered, bought by their key or a click, left with Escape (or F).
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.counter?.hover(this.counter.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM)));
-    ['ONE', 'TWO', 'THREE'].forEach((k, i) => this.input.keyboard!.on(`keydown-${k}`, () => this.counter && this.sell(i)));
-    this.input.keyboard!.on('keydown-ESC', () => this.closeShop());
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      this.counter?.hover(this.counter.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM));
+      const i = this.satchel?.panel.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM) ?? -1;
+      if (i >= 0 && i !== this.satchel!.view.cursor) this.showSatchel({ cursor: i });
+    });
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN'].forEach((k, i) => this.input.keyboard!.on(`keydown-${k}`, () => (this.counter ? this.sell(i) : this.satchel && this.act(Items.SLOTS.length + i))));
+    this.input.keyboard!.on('keydown-ESC', () => (this.satchel ? this.closeSatchel() : this.closeShop()));
+    // The items' panel: I (or Tab) opens le sac and closes it; the arrows (or ZQSD, WASD) move the cursor, Enter or
+    // Space wears or takes off what it is on.
+    this.input.keyboard!.addKeys('TAB,I,ENTER,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN'); // their Key objects: a key held, or a doubled keydown, acts once
+    for (const k of ['I', 'TAB']) this.input.keyboard!.on(`keydown-${k}`, () => (this.satchel ? this.closeSatchel() : this.openSatchel('sac')));
+    for (const [keys, dx, dy] of [[['LEFT', 'Q', 'A'], -1, 0], [['RIGHT', 'D'], 1, 0], [['UP', 'Z', 'W'], 0, -1], [['DOWN', 'S'], 0, 1]] as const)
+      for (const k of keys) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.showSatchel({ cursor: this.satchel.panel.next(this.satchel.view.cursor, dx, dy) }));
+    for (const k of ['ENTER', 'SPACE']) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.act(this.satchel.view.cursor));
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
-    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => (this.dashPressedAt = this.time.now));
+    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => !this.satchel && (this.dashPressedAt = this.time.now));
     // Le Glyphe: E casts it at the pointer, L ahead of the hero (keyboard only).
     this.input.keyboard!.on('keydown-E', () => {
       const to = world(this.input.activePointer);
@@ -327,19 +359,27 @@ export class RoomScene extends Phaser.Scene {
   }
 
   /** At the refuge: back from an expedition, it ends (logged; the world will be new) and he rests to his full blood;
-   *  re-formed after a death, the blood he lost is said. The basin takes what he carries (update()). */
+   *  what he carries and wears goes into le coffre, acquired for good. Re-formed after a death, what he lost is said.
+   *  The basin takes the blood he carries (update()). */
   private home() {
-    const B = Refuge.BASIN, S = this.room.exits[0], R = Refuge.RONGE;
+    const B = Refuge.BASIN, S = this.room.exits[0], R = Refuge.RONGE, C = Refuge.CHEST;
     this.labels.push({ at: B, l: Loot.label(this, B.x, B.y - 22, 'Bassin de sang') }, { at: { x: S.x, y: Refuge.STAIRS }, l: Loot.label(this, S.x, Refuge.STAIRS - 20, WORLD.necropolis.name) });
     this.ronge = Ronge.create(this, R.x, R.y);
+    Satchel.chest(this, C.x, C.y);
+    this.labels.push({ at: C, l: Loot.label(this, C.x, C.y - 24, 'Le coffre (F)') });
     if (this.exp) {
       Save.log({ end: 'retour', deepest: this.exp.deepest, blood: this.carried, life: this.health, s: Math.round((Date.now() - this.exp.startedAt) / 1000), loosed: this.exp.loosed, met: this.exp.met });
       Save.data.dry++; // back: le Rongé hungers until blood is poured
+      const kept = Items.bank(Save.data, this.bag);
       Save.store();
       this.exp = undefined;
       this.health = this.maxHealth();
       this.hud.health(this.health, this.health);
-    } else if (this.lost) this.hud.title(`${this.lost} sang perdu`);
+      if (kept) this.hud.title(`${kept} objet${kept > 1 ? 's' : ''} au coffre`);
+    } else if (this.lost || this.lostItems) {
+      const k = this.lostItems, things = k ? `${k} objet${k > 1 ? 's' : ''}` : '';
+      this.hud.title(this.lost && k ? `${this.lost} sang et ${things} perdus` : k ? `${things} perdu${k > 1 ? 's' : ''}` : `${this.lost} sang perdu`);
+    }
     this.labels.push({ at: R, l: Loot.label(this, R.x, R.y - 30, Shop.beast(Save.data) ? 'Il grogne' : 'Le Rongé (F)') });
   }
 
@@ -362,12 +402,14 @@ export class RoomScene extends Phaser.Scene {
       ).map((f) => ({ ...f, hp: stats(f.kind).hp, home: { x: f.x, y: f.y } })),
       // the zone's: one or two in each area
       caches: (zone ? Nec.AREAS.flatMap((a) => hide(W.caches.filter((c) => inArea(c, a.rect) && Nec.AREAS.find((b) => inArea(c, b.rect)) === a))) : hide(W.caches))
-        .map((c) => ({ ...c, blood: T.blood.cache * T.blood.ring[this.ring(c)] })),
+        .map((c) => ({ ...c, blood: T.blood.cache * T.blood.ring[this.ring(c)], item: this.found(this.ring(c), !!zone && (T.items.sure as readonly string[]).includes(Nec.AREAS.find((a) => inArea(c, a.rect))?.id ?? '')) })),
       drops: [],
+      items: [],
     });
     for (const f of st.foes) this.place(f, f.kind as Kind, f);
     for (const c of st.caches) this.caches.push({ ...c, fx: Loot.cache(this, c.x, c.y), label: Loot.label(this, c.x, c.y - 26, 'Fouiller (F)') });
     for (const d of st.drops) this.addDrop(d);
+    for (const l of st.items) this.addLoot(l);
     this.loose(T.expedition.titleMs); // packs his scent called with nowhere to go, now that he is farther from the refuge
     r.exits.forEach((g, i) => W.ahead[i] && this.labels.push({ at: g, l: Loot.label(this, g.x, g.y - (zone ? 40 : 4), WORLD[W.ahead[i]].name) }));
     const back = this.exp.came[this.here]?.from ?? parents(this.here)[0].from;
@@ -452,7 +494,7 @@ export class RoomScene extends Phaser.Scene {
   update(time: number, delta: number) {
     if (this.dead) return;
     if (this.ronge) this.ronge.show(Shop.beast(Save.data) ? 'beast' : Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.notice ? 'look' : 'idle', time);
-    if (this.counter) { // he stands before the Rongé's wares, the words over the room gone
+    if (this.counter || this.satchel) { // he stands before the Rongé's wares, or his items, the words over the room gone
       for (const l of this.labels) l.l.near(false);
       return void this.hero.setVelocity(0);
     }
@@ -468,7 +510,7 @@ export class RoomScene extends Phaser.Scene {
     if (wantsDash && time >= this.dashReadyAt && !this.prey && time >= this.swarmUntil) {
       this.dashPressedAt = -1e9;
       if (x || y) this.facing = Math.atan2(y, x); // the way he walks, even mid-swing; else the way he faces
-      this.dashUntil = time + T.dash.durationMs;
+      this.dashUntil = time + T.dash.durationMs * (1 + this.gear.mist);
       this.dashReadyAt = this.dashUntil + this.dashCooldown();
       Fx.dash(this, this.hero, this.facing);
       Sfx.play(this, 'dash');
@@ -495,7 +537,7 @@ export class RoomScene extends Phaser.Scene {
     if (time < this.shoveUntil && time >= this.dashUntil && !this.prey) this.hero.setVelocity(this.shove.x, this.shove.y);
     else if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      this.hero.body!.velocity.normalize().scale(T.hero.speed * (time < this.swarmUntil ? T.swarm.speed : posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
+      this.hero.body!.velocity.normalize().scale(T.hero.speed * (1 + this.gear.speed) * (time < this.swarmUntil ? T.swarm.speed : posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
     }
 
     if (this.queued && (time > this.queued.until || (!dazed && this.queued.act()))) this.queued = undefined;
@@ -538,6 +580,7 @@ export class RoomScene extends Phaser.Scene {
     }
     for (const l of this.labels) l.l.near(near(l.at, 64)); // the basin's before he pours (T.blood.basin)
     for (const c of this.caches) c.label.near(near(c, T.blood.search + 8));
+    for (const l of this.loot) l.label.near(near(l, T.items.pickup + 8));
     for (const d of [...this.drops]) if (near(d, T.blood.pickup)) this.pickUp(d);
     // The refuge's basin takes the blood he carries: banked.
     if (this.layout === 'refuge' && this.carried && near(Refuge.BASIN, T.blood.basin)) this.pour();
@@ -552,16 +595,16 @@ export class RoomScene extends Phaser.Scene {
     let dawn = false;
     if (lamp || this.room.holy(c.x, c.y)) {
       if (this.swarmFx) this.unswarm();
-      const L = lamp ? T.lantern : this.room.burn, before = burnsAfter(this.litMs, L.graceMs, L.burnEveryMs);
-      this.litMs += delta * (this.has('noires') ? T.pacts.noires.burn : 1);
+      const L = lamp ? T.lantern : this.room.burn, grace = L.graceMs + this.gear.grace, before = burnsAfter(this.litMs, grace, L.burnEveryMs);
+      this.litMs += delta * (this.has('noires') ? T.pacts.noires.burn : 1) * Math.max(0, 1 + this.gear.burn);
       dawn = L === T.dawn;
       if (!dawn) Lantern.sizzle(this, this.hero);
-      if (burnsAfter(this.litMs, L.graceMs, L.burnEveryMs) > before && this.damageHero(L.damage)) {
+      if (burnsAfter(this.litMs, grace, L.burnEveryMs) > before && this.damageHero(L.damage)) {
         Lantern.sizzle(this, this.hero, true);
         Sfx.play(this, 'burn');
       }
     } else this.litMs = 0;
-    Lantern.exposure(this, this.hero, dawn ? this.litMs : 0, T.dawn.graceMs, T.dawn.burnEveryMs);
+    Lantern.exposure(this, this.hero, dawn ? this.litMs : 0, T.dawn.graceMs + this.gear.grace, T.dawn.burnEveryMs);
 
     const held: Sprite[] = []; // bound by the glyph this frame
     // The inquisiteurs standing (not on their knees) command the Order's men round them.
@@ -578,6 +621,12 @@ export class RoomScene extends Phaser.Scene {
         const left = e.getData('plagueLeft');
         this.hurtEnemy(e, e.getData('plagueDmg')); // still sick if it dies of it, for Contagion
         e.setData({ plagueAt: left > 0 ? time + T.gifts.plagueMs : 0, plagueLeft: left - 1 });
+        if (!e.body?.enable) continue;
+      }
+      if (e.getData('bleedLeft') > 0 && time >= e.getData('bleedAt')) { // a weapon's bleed (Crocs de saignée): a blow at a time
+        e.setData({ bleedLeft: e.getData('bleedLeft') - 1, bleedAt: time + T.items.bleedMs / T.items.bleedTicks });
+        Enemy.bleed(this, e.x, e.y, -Math.PI / 2, 3, 0.8, 0.5);
+        this.hurtEnemy(e, e.getData('bleedDmg'));
         if (!e.body?.enable) continue;
       }
       const kind = e.getData('kind'), bow = kind === 'crossbow';
@@ -618,9 +667,10 @@ export class RoomScene extends Phaser.Scene {
       e.setDepth(e.y);
     }
     // Enemies hunting him off the screen (an upright phone, the tall cloister) are pointed at from its edge, all alike:
-    // where they are, never what they are about to do; on screen, they are not marked, nor those that have not seen him.
-    const view = this.cameras.main.worldView;
-    this.hud.threats((this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && e.getData('alert')).map((e) => ({ x: e.x - view.x, y: e.y - view.y })));
+    // where they are, never what they are about to do; on screen, they are not marked, nor those that have not seen him
+    // (but the battue's packs in wait near him, with the Cor de chasse volé).
+    const view = this.cameras.main.worldView, horn = (e: Sprite) => !!e.getData('pack') && Phaser.Math.Distance.BetweenPoints(e, feet.center) < this.gear.horn;
+    this.hud.threats((this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (e.getData('alert') || horn(e))).map((e) => ({ x: e.x - view.x, y: e.y - view.y })));
     if (this.glyph) {
       if (held.length && this.glyph.caughtAt < 0) Sfx.play(this, 'bind'); // once per glyph
       // Glyphe du nid: as it arms, rats burst out of its centre. On the clock the glyph keeps, not a timer's.
@@ -1125,7 +1175,7 @@ export class RoomScene extends Phaser.Scene {
     // Pressed mid-dash, it is kept until the dash is over: a slash then becomes the dash strike.
     // Dazed by a bell, it waits for him to come to.
     const now = this.time.now;
-    if (this.counter) return;
+    if (this.counter || this.satchel) return;
     if (now < this.dazedUntil || !act()) this.queued = { act, until: Math.max(now, this.dashUntil, this.dazedUntil) + T.hero.bufferMs };
   }
 
@@ -1138,22 +1188,25 @@ export class RoomScene extends Phaser.Scene {
     this.combo = dash ? 0 : nextCombo(this.combo, now - this.lastSlashAt, S.comboWindowMs);
     const fin = !dash && this.combo === 2, kind = dash ? 3 : this.combo; // kind 3: the dash strike, for effects and sounds
     this.lastSlashAt = now;
-    this.slashReadyAt = now + S.cooldownMs + (fin ? S.finisherRecoveryMs : 0);
-    this.slashUntil = now + S.cooldownMs;
+    const g = this.gear, pace = 1 + g.pace; // the weapon worn (items.ts): its pace, reach, arc, blows
+    this.slashReadyAt = now + (S.cooldownMs + (fin ? S.finisherRecoveryMs : 0)) * pace;
+    this.slashUntil = now + S.cooldownMs * pace;
     this.facing = angle;
     Fx.slash(this, this.hero.x, this.hero.y, angle, kind);
     Sfx.play(this, 'slash', kind);
 
-    const range = fin ? S.finisherRange : S.range, arc = dash ? D.strikeArcDeg : fin ? S.finisherArcDeg : S.arcDeg;
-    const damage = (dash ? S.damage + D.strikeBonus : fin ? S.damage * S.finisherMult + this.v('rongeur') : S.damage) * (this.has('noires') ? T.pacts.noires.mult : 1);
-    const knock = S.knockback * (dash ? D.strikeKnock : fin ? S.finisherKnock : 1);
+    const range = (fin ? S.finisherRange : S.range) + g.reach, arc = (dash ? D.strikeArcDeg : fin ? S.finisherArcDeg : S.arcDeg) + g.arc;
+    const damage = (dash ? S.damage + D.strikeBonus : fin ? S.damage * (S.finisherMult + g.finisher) + this.v('rongeur') : S.damage) * (this.has('noires') ? T.pacts.noires.mult : 1) * (1 + g.claw);
+    const knock = S.knockback * (dash ? D.strikeKnock : fin ? S.finisherKnock * (1 + g.knock) : 1);
     if (fin && this.has('grouillantes')) this.releaseRats(this.hero.body!.center, this.v('grouillantes'));
-    let hits = 0;
+    let hits = 0, killed = false;
     for (const e of [...this.enemies.getChildren()] as Sprite[]) { // not the ghouls this blow tears off an Amas
       if (!e.body?.enable || !inArc(this.hero, angle, e, range, arc)) continue;
       hits++;
       this.hitEnemy(e, angle, damage, knock, kind);
+      killed ||= !e.body?.enable;
     }
+    if (fin && killed && Math.random() < g.leech) this.heal(1); // Main de goule
     for (const l of [...this.lanterns]) { // aimed at its glass, about the hero's chest height
       if (!l.lit || !inArc(this.hero, angle, { x: l.x, y: l.y - 5 }, range, arc)) continue;
       hits++;
@@ -1232,6 +1285,7 @@ export class RoomScene extends Phaser.Scene {
     Fx.hit(this, e.x, e.y, angle);
     Sfx.play(this, 'hit', kind);
     if (this.has('griffes')) this.infect(e, this.v('griffes'));
+    if (this.gear.bleed) e.setData({ bleedLeft: T.items.bleedTicks, bleedAt: now + T.items.bleedMs / T.items.bleedTicks, bleedDmg: this.gear.bleed / T.items.bleedTicks });
     this.hurtEnemy(e, damage);
   }
 
@@ -1258,7 +1312,7 @@ export class RoomScene extends Phaser.Scene {
    *  it was doing; nothing but the bite kills it meanwhile, so it is never killed by accident before the hero can drink. */
   private hurtEnemy(e: Sprite, amount: number) {
     if (!e.body?.enable) return;
-    amount *= this.has('maigre') ? T.pacts.maigre.mult : 1;
+    amount *= (this.has('maigre') ? T.pacts.maigre.mult : 1) * (1 + this.gear.dmg);
     // Until the bite is unlocked, a human is wounded like any foe: weakened, it dies (it kneels only for the bite).
     const now = this.time.now, { hp, kneels } = wound(e.getData('hp'), amount, !!e.getData('human') && Save.data.unlocks.bite, T.bite.weakAt, this.kneeling(e));
     if (!e.getData('alert')) this.rouse(e);
@@ -1284,7 +1338,8 @@ export class RoomScene extends Phaser.Scene {
     if (this.has('vermine')) this.releaseRats(e, T.pacts.vermine.rats);
     if (this.has('curee') && ++this.kills % T.pacts.curee.every === 0) this.heal(T.pacts.curee.heal);
     if (!this.exp || e.getData('torn')) return;
-    this.addDrop({ x: c.x, y: c.y, blood: T.blood.drops[(kind ?? 'ghoul') as Kind] * T.blood.ring[this.ring(c)] });
+    this.addDrop({ x: c.x, y: c.y, blood: Math.round(T.blood.drops[(kind ?? 'ghoul') as Kind] * T.blood.ring[this.ring(c)] * (1 + this.gear.spoils)) });
+    if ((T.items.elites as readonly string[]).includes(kind)) this.addLoot({ x: c.x + 12, y: c.y + 4, item: this.found(this.ring(c), true)! }); // an elite's
   }
 
   /**
@@ -1299,7 +1354,8 @@ export class RoomScene extends Phaser.Scene {
     const prey = fangs ? biteTarget(this.hero, this.facing, live.map((e) => ({ x: e.x, y: e.y, hp: e.getData('hp'), human: !!e.getData('human'), e })),
       B.range, B.arcDeg, B.weakAt)?.e : undefined;
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.talk) return this.talk();
-    if (!prey && (this.search() || this.lever())) return true;
+    if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.CHEST) < T.ronge.talk) return this.openSatchel('coffre');
+    if (!prey && (this.search() || this.lever() || this.take())) return true;
     if (!fangs) return true; // the bite is not his yet (the Rongé will teach it)
     this.biteAt = now;
     if (!prey) {
@@ -1391,10 +1447,10 @@ export class RoomScene extends Phaser.Scene {
 
   /** He walks over blood: as much as his bag takes (the rest stays on the floor). */
   private pickUp(d: (typeof this.drops)[number]) {
-    const bag = Shop.bagSize(Save.data), { carried, left } = carry(this.carried, d.blood, bag);
+    const bag = this.bloodBag(), { carried, left } = carry(this.carried, d.blood, bag);
     if (carried === this.carried) return;
     if (carried === bag) this.hud.title('Sac plein');
-    this.exp!.packs += scent(this.carried, carried, T.battue.every);
+    this.exp!.packs += scent(this.carried, carried, T.battue.every * (1 + this.gear.scent));
     this.carried = carried;
     this.loose();
     d.blood = left;
@@ -1415,6 +1471,7 @@ export class RoomScene extends Phaser.Scene {
     c.label.destroy();
     this.castUntil = this.time.now + T.glyph.castMs;
     this.addDrop({ x: f.x, y: f.y, blood: c.blood });
+    if (c.item) this.addLoot({ x: f.x + 14, y: f.y + 2, item: c.item }); // what it hid, beside the blood
     Sfx.play(this, 'splat', 1);
     return true;
   }
@@ -1432,7 +1489,14 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private showBlood() {
-    if (!this.training) this.hud.blood(this.carried, Shop.bagSize(Save.data), this.layout === 'refuge' ? Save.data.banked : undefined);
+    if (this.training) return;
+    this.hud.blood(this.carried, this.bloodBag(), this.layout === 'refuge' ? Save.data.banked : undefined);
+    this.hud.bag(this.layout === 'refuge' ? undefined : this.bag, Shop.itemSlots(Save.data));
+  }
+
+  /** How much blood he carries at most: the bag's, and an Outre de peau's. */
+  private bloodBag() {
+    return Shop.bagSize(Save.data) + this.gear.purse;
   }
 
   // ---- The battue (the blood's scent) and le Rongé's wares. ----
@@ -1506,6 +1570,113 @@ export class RoomScene extends Phaser.Scene {
     this.counter = undefined;
   }
 
+  // ---- The items: found in caches and on elites, carried in the bag, worn, kept in le coffre at the refuge. ----
+
+  /** An item found in ring `ring` (`sure`: always one; else by its chance, T.items.cache), numbered; or none. */
+  private found(ring: number, sure: boolean): Items.Item | undefined {
+    const f = Items.find(ring, Math.random, sure);
+    return f && { n: Save.data.next++, ...f };
+  }
+
+  /** An item lying at floor point (x, y): its glint, its name and « Ramasser (F) » as he comes near. */
+  private addLoot(l: { x: number; y: number; item: Items.Item }) {
+    const it = l.item;
+    this.loot.push({ ...l, fx: Loot.glint(this, l.x, l.y, Satchel.icon(this, it.id), Satchel.RARE[it.r]), label: Loot.label(this, l.x, l.y - 18, [Items.ITEMS[it.id].name, 'Ramasser (F)']) });
+  }
+
+  private dropLoot(l: Lying) {
+    l.fx.take();
+    l.label.destroy();
+    this.loot.splice(this.loot.indexOf(l), 1);
+  }
+
+  /** F by an item on the floor: into the bag; the bag full, le sac opens to choose what he leaves in its place. */
+  private take() {
+    const f = this.hero.body!.center, l = this.loot.find((l) => Phaser.Math.Distance.BetweenPoints(f, l) < T.items.pickup);
+    if (!l) return false;
+    if (!Items.stow(this.bag, Shop.itemSlots(Save.data), l.item)) return this.openSatchel('sac', l);
+    this.dropLoot(l);
+    this.castUntil = this.time.now + T.glyph.castMs;
+    Sfx.play(this, 'gift', 1);
+    this.hud.title(`${Items.ITEMS[l.item.id].name} : dans le sac (I)`);
+    this.showBlood();
+    return true;
+  }
+
+  /** The list under the worn slots: the bag, or the chest's items (the newest first). */
+  private list(mode: 'sac' | 'coffre') {
+    return mode === 'sac' ? this.bag : Items.chest(Save.data).reverse();
+  }
+
+  /** Opens the items' panel: le sac (on an expedition the game pauses meanwhile), `ground` the item on the floor to take
+   *  in place of one of the bag's; or le coffre at the refuge. */
+  private openSatchel(mode: 'sac' | 'coffre', ground?: Lying) {
+    if (this.satchel || this.counter || this.training || this.dead || this.prey || this.phase !== 'play') return false;
+    this.hero.setVelocity(0);
+    this.physics.pause();
+    this.tweens.pauseAll();
+    this.time.paused = true;
+    const view: Satchel.View = { title: mode === 'sac' ? 'LE SAC' : 'LE COFFRE', listName: '', worn: Save.data.worn, list: [], size: 0, cursor: ground ? Items.SLOTS.length : 0, line: '', hint: '', fresh: () => false };
+    this.satchel = { panel: undefined!, view, mode, ground };
+    this.satchel.panel = Satchel.panel(this, this.showSatchel({ line: ground ? `Sac plein : que laisser pour ${Items.ITEMS[ground.item.id].name} ?` : '' }));
+    Sfx.play(this, 'snap');
+    return true;
+  }
+
+  /** The panel redrawn, `change` made to what it shows; returns what it shows. */
+  private showSatchel(change: Partial<Satchel.View> = {}) {
+    const s = this.satchel!, sac = s.mode === 'sac', list = this.list(s.mode), size = sac ? Shop.itemSlots(Save.data) : Math.max(12, Math.ceil(list.length / 12) * 12);
+    s.view = { ...s.view, ...change, list, size, ground: s.ground?.item, listName: sac ? `Sac ${list.length} / ${size}` : `Coffre ${list.length}`,
+      fresh: (it) => !Items.acquired(Save.data, it),
+      hint: s.ground ? 'Flèches et Entrée, ou clic\u00a0: laisser cet objet\u00a0; Échap\u00a0: rien' : `Flèches et Entrée, ou clic\u00a0: porter, ${sac ? 'ranger au sac' : 'rendre au coffre'}\u00a0; Échap ou ${sac ? 'I' : 'F'}\u00a0: fermer` };
+    s.panel?.draw(s.view);
+    return s.view;
+  }
+
+  /** Enter or a click on cell `i` of the panel: a worn slot is taken off (into the bag, or the chest); an item of the
+   *  list is worn (in its family's free slot, else the slot chosen next: Remplacer lequel ?); the bag full and an item
+   *  on the floor, the item chosen is left there in its place. */
+  private act(i: number) {
+    const s = this.satchel!, worn = Save.data.worn, list = this.list(s.mode), k = i - Items.SLOTS.length, held = s.view.held;
+    let line = '';
+    if (s.ground) {
+      if (k < 0 || !list[k]) return;
+      const left = Items.swap(this.bag, k, s.ground.item), at = { x: s.ground.x, y: s.ground.y };
+      this.dropLoot(s.ground);
+      this.addLoot({ ...at, item: left });
+      this.closeSatchel();
+      Sfx.play(this, 'gift', 1);
+      this.hud.title(`${Items.ITEMS[this.bag[k].id].name} : dans le sac`);
+      return this.showBlood();
+    }
+    if (held !== undefined) { // a relic or a talisman waiting for its slot
+      if (k < 0 && !Items.equip(worn, list, held, i)) line = `Pas un emplacement de ${Items.FAMILY[Items.family(list[held])].toLowerCase()}.`;
+    } else if (k < 0) {
+      if (worn[i] && !Items.unequip(worn, i, list, s.mode === 'sac' ? Shop.itemSlots(Save.data) : Infinity)) line = 'Sac plein.';
+    } else if (list[k] && !Items.equip(worn, list, k)) return void this.showSatchel({ held: k, line: 'Remplacer lequel ?' });
+    this.dress();
+    this.showSatchel({ held: undefined, line });
+  }
+
+  private closeSatchel() {
+    if (!this.satchel) return;
+    this.satchel.panel.close();
+    this.satchel = undefined;
+    this.physics.resume();
+    this.tweens.resumeAll();
+    this.time.paused = false;
+  }
+
+  /** What he wears changed: its bonuses taken up (at the refuge he rests to his full life; out there a lower max life
+   *  caps it, a higher one is not blood regained), and kept (save.ts drops on reading what was not brought back). */
+  private dress() {
+    this.gear = Items.stats(Save.data.worn);
+    this.health = this.layout === 'refuge' ? this.maxHealth() : Math.min(this.health, this.maxHealth());
+    this.hud.health(this.health, this.maxHealth());
+    Save.store();
+    this.showBlood();
+  }
+
   /** Out by exit `exit` (a forward one, or -1 down a room's stairs; the refuge's 0, its stairs): fade to black, then the
    *  room it leads to (world.ts), this one kept as he leaves it, the hounds hunting him at his heels. Leaving the refuge
    *  starts an expedition. In the training room, the refuge's stairs lead to the training crypt. */
@@ -1521,12 +1692,13 @@ export class RoomScene extends Phaser.Scene {
       const st = exp.rooms[this.here];
       if (st) Object.assign(st, { // as he leaves it; an Amas' torn ghouls are its own, gone with it
         foes: live.filter((e) => !hounds.includes(e) && !e.getData('torn')).map((e) => ({ kind: e.getData('kind') ?? 'ghoul', x: e.x, y: e.y, hp: e.getData('hp'), home: e.getData('home'), followed: e.getData('followed'), pack: e.getData('pack') })),
-        caches: this.caches.map(({ x, y, blood }) => ({ x, y, blood })),
+        caches: this.caches.map(({ x, y, blood, item }) => ({ x, y, blood, item })),
         drops: this.drops.map(({ x, y, blood }) => ({ x, y, blood })),
+        items: this.loot.map(({ x, y, item }) => ({ x, y, item })),
       });
       const way = go(exp.came, this.here, exit)!;
       exp.deepest = Math.max(exp.deepest, WORLD[way.to].ring);
-      next = { layout: way.to, entry: way.entry, exp, health: this.health, carried: this.carried, hounds: hounds.map((e) => e.getData('hp')) };
+      next = { layout: way.to, entry: way.entry, exp, health: this.health, carried: this.carried, hounds: hounds.map((e) => e.getData('hp')), bag: this.bag };
     }
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(next));
   }
@@ -1537,11 +1709,11 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private maxHealth() {
-    return T.hero.maxHealth + Save.data.unlocks.life + this.v('survivant') - (this.has('maigre') ? T.pacts.maigre.maxBlood : 0);
+    return T.hero.maxHealth + Save.data.unlocks.life + this.gear.life + this.v('survivant') - (this.has('maigre') ? T.pacts.maigre.maxBlood : 0);
   }
 
   private dashCooldown() {
-    return T.dash.cooldownMs / (this.v('fuite') || 1);
+    return (T.dash.cooldownMs / (this.v('fuite') || 1)) * (1 + this.gear.dash);
   }
 
   /** `n` rats let loose at floor point `at`, by any gift: `from` the mist (Brume aux rats, which keeps count of
@@ -1669,12 +1841,14 @@ export class RoomScene extends Phaser.Scene {
     this.hero.disableBody(false, false);
     // Back to the refuge, re-formed at his coffin, all the blood he carried lost and the world reset; or back to the
     // training room.
+    let lostItems = 0;
     if (this.exp) {
       Save.log({ end: 'mort', deepest: this.exp.deepest, blood: this.carried, life: 0, s: Math.round((Date.now() - this.exp.startedAt) / 1000), loosed: this.exp.loosed, met: this.exp.met });
       Save.data.dry++; // re-formed empty-handed: le Rongé hungers
+      lostItems = this.bag.filter((it) => !Items.acquired(Save.data, it)).length + Items.die(Save.data); // the bag, and what he wore not yet brought back
       Save.store();
     }
-    this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, ranks: this.ranks, layout: this.layout } : { lost: this.carried }) satisfies Run));
+    this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, ranks: this.ranks, layout: this.layout } : { lost: this.carried, lostItems }) satisfies Run));
     return true;
   }
 
@@ -1684,7 +1858,8 @@ export class RoomScene extends Phaser.Scene {
   private hunts(e: Sprite, time: number) {
     if (this.training) return true;
     const from = e.body!.center, to = this.hero.body!.center, d = Phaser.Math.Distance.BetweenPoints(from, to), was = !!e.getData('alert');
-    const sees = d <= sightRange(T.sight, was, this.inLight) && this.boltReach(from, Phaser.Math.Angle.BetweenPoints(from, to)) >= d;
+    const S = this.gear.shade ? { ...T.sight, shade: T.sight.shade * (1 + this.gear.shade) } : T.sight; // a Linceul noir
+    const sees = d <= sightRange(S, was, this.inLight) && this.boltReach(from, Phaser.Math.Angle.BetweenPoints(from, to)) >= d;
     const s = alertness({ alert: was, seenAt: e.getData('seenAt') }, sees, time, T.sight.giveUpMs);
     e.setData(s);
     if (s.alert && !was) this.rouse(e);

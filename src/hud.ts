@@ -4,13 +4,16 @@ import * as Font from './font.ts';
 import { ICONS, SWARM_ICON, kind, shelf, type GiftId } from './gifts.ts';
 import { edgePip } from './logic.ts';
 import { ZOOM } from './dark.ts';
+import { ITEMS, type Item } from './items.ts';
+import { PAL as ITEM_PAL } from './satchel.ts';
 
 // Heads-up display, top-left and wordless like Hyper Light Drifter's: a banner with a bat that dims while the dash
 // recharges, one blood drop per health point, under them three dash pips that refill over the cooldown, beside them
 // the glyph's blood seal that fills back up over its cooldown, and a shelf with the icon of each gift taken (its slot,
 // talent or pact): slot gifts first, in slot order, a rare one underlined in blood, an épique one in glowing pink; at
 // its end, once the hero holds enough gifts, the rat of la Nuée, lit when it is ready.
-// Under them, the blood carried on an expedition and the bag's size (and, at the refuge, the blood in its basin).
+// Under them, the blood carried on an expedition and the bag's size (and, at the refuge, the blood in its basin), then
+// the bag's items, a shelf of their icons and its empty slots.
 // Also the title card of a room (its name, or what just happened), centred, and a pip on the screen's edge pointing at
 // each enemy off it.
 // It sits in the screen's safe area (clear of a phone's notch or rounded corners) and follows the view's size.
@@ -23,6 +26,7 @@ export type Hud = {
   swarm(state: 'locked' | 'spent' | 'ready'): void; // la Nuée
   title(text: string): void;
   blood(carried: number, bag: number, banked?: number): void; // blood carried out of the bag; at the refuge, banked too
+  bag(items: readonly Item[] | undefined, size: number): void; // the items carried, in a bag of `size`; undefined: not shown
   threats(enemies: { x: number; y: number }[]): void; // on the screen's coordinates; off it, a pip points at each
 };
 
@@ -33,6 +37,7 @@ const C = {
   silver: 0xd4cdd2, grey: 0x948a91,
 };
 const ICON = { S: C.silver, s: C.grey, r: C.blood[2], d: C.blood[1] }, POP = { S: C.bone, s: C.bone, r: C.bone, d: C.bone };
+const ITEM_POP = Object.fromEntries(Object.keys(ITEM_PAL).map((k) => [k, C.bone]));
 
 // Swallowtail banner hanging from the lintel. B cloth, L lit edge, r shaded edge, d shadow under the rod.
 const BANNER = [
@@ -163,6 +168,7 @@ export function create(scene: Phaser.Scene): Hud {
   let ranks: Partial<Record<GiftId, number>> = {}, swarm = 'locked', swarmAt = -1e9;
   let threats: { x: number; y: number }[] = [];
   let carried = -1, bag = 0, banked: number | undefined, gotAt = -1e9; // carried -1: not shown (the training room)
+  let items: readonly Item[] | undefined, slots = 0, itemAt = -1e9;
   // The corner, in from the safe area (native px per CSS px: the scale manager's displayScale).
   const corner = () => {
     const css = getComputedStyle(probe), k = scene.scale.displayScale.x / Z;
@@ -288,6 +294,21 @@ export function create(scene: Phaser.Scene): Hud {
       });
     }
 
+    // The bag: a shelf of its slots, each item's icon (the newest popping bone), a rare one underlined in blood, an
+    // épique one in glowing pink; an empty slot a dim square.
+    if (items && carried >= 0) {
+      const y = y0 + (n ? 36 : 22) + (banked === undefined ? 1 : 2) * 12;
+      g.fillStyle(C.night, 0.9).fillRect(x0 + 20, y, slots * 9 + 3, 12);
+      g.fillStyle(C.dusk).fillRect(x0 + 20, y, slots * 9 + 3, 1);
+      for (let i = 0; i < slots; i++) {
+        const it = items[i], x = x0 + 22 + i * 9;
+        if (!it) { g.fillStyle(C.dusk).fillRect(x + 1, y + 3, 5, 5).fillStyle(C.night).fillRect(x + 2, y + 4, 3, 3); continue; }
+        const pop = i === items.length - 1 && now - itemAt < 160;
+        grid(x, y + 2, ITEMS[it.id].icon, pop ? ITEM_POP : ITEM_PAL);
+        if (it.r) g.fillStyle(it.r === 2 ? C.glow : C.blood[2]).fillRect(x + 1, y + 10, 5, 1);
+      }
+    }
+
     // Title card: bone letters between two red rules, then it steps out.
     const tt = now - titleAt, out = T.expedition.titleMs - 200;
     if (tt < T.expedition.titleMs) {
@@ -375,6 +396,10 @@ export function create(scene: Phaser.Scene): Hud {
     blood(c, b, k) {
       if (c > carried && carried >= 0) gotAt = scene.time.now;
       [carried, bag, banked] = [c, b, k];
+    },
+    bag(list, size) {
+      if (list && items && list.length > items.length) itemAt = scene.time.now;
+      [items, slots] = [list && [...list], size];
     },
     title(t) {
       title = t;

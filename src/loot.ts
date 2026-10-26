@@ -66,11 +66,38 @@ export function cache(scene: Phaser.Scene, x: number, y: number): Cache {
   return { take() { stop(); motes(scene, x, y - 6, 20, [...BLOOD, GLOW], UNLIT + 1, 12, 18); } };
 }
 
+export type Glint = { take(): void };
+
+/** An item lying at floor point (x, y) (its icon, `key`, satchel.ts): a pool of its rarity's `color` breathing on the
+ *  floor, the icon bobbing over it, a white glint winking at its corner now and then. take(): picked up, it bursts. */
+export function glint(scene: Phaser.Scene, x: number, y: number, key: string, color: number): Glint {
+  const glow = scene.add.graphics().setDepth(UNLIT).setBlendMode(Phaser.BlendModes.ADD);
+  const star = scene.add.graphics().setDepth(UNLIT + 2);
+  const im = scene.add.image(x, y - 10, key).setDepth(UNLIT + 1);
+  let moteAt = 0;
+  const stop = loop(scene, (t) => {
+    glow.clear();
+    pool(glow, x, y, 11, color, 0.9, t);
+    im.setY(y - 10 - Math.round(Math.sin(t * 2.5) + 1));
+    const w = (t * 1000) % 1400; // the wink: a four-point star a moment, every 1.4 s
+    star.clear();
+    if (w < 160) {
+      const r = w < 80 ? 2 : 1, sx = x + 4, sy = im.y - 4;
+      star.fillStyle(BONE).fillRect(sx - r, sy, 2 * r + 1, 1).fillRect(sx, sy - r, 1, 2 * r + 1);
+    }
+    if (t > moteAt) {
+      moteAt = t + 0.6;
+      motes(scene, x + Phaser.Math.Between(-6, 6), y - 2, 1, [color, BONE], UNLIT, 2, 12);
+    }
+  }, [glow, star, im]);
+  return { take() { stop(); motes(scene, x, y - 10, 16, [color, BONE, GLOW], UNLIT + 1, 10, 16); } };
+}
+
 export type Label = { near(on: boolean): void; destroy(): void };
 
-/** Words over floor point (x, y), shown while the hero is near (near(true)), fading in and out. */
-export function label(scene: Phaser.Scene, x: number, y: number, text: string): Label {
-  const im = scene.add.image(x, y, Font.bake(scene, [text], BONE, VOID)).setOrigin(0.5, 1).setDepth(7985).setAlpha(0);
+/** Words over floor point (x, y) (a line, or several), shown while the hero is near (near(true)), fading in and out. */
+export function label(scene: Phaser.Scene, x: number, y: number, text: string | string[]): Label {
+  const im = scene.add.image(x, y, Font.bake(scene, [text].flat(), BONE, VOID)).setOrigin(0.5, 1).setDepth(7985).setAlpha(0);
   let close = false;
   const stop = loop(scene, () => im.setAlpha(Phaser.Math.Clamp(im.alpha + (close ? 0.1 : -0.1), 0, 1)), [im]);
   return { near: (on) => (close = on), destroy: stop };

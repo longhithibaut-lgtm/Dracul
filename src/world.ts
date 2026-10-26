@@ -4,6 +4,7 @@
 // stairs, or the zone's way up to the refuge, lead back where he came from. Pure, so it can be unit tested.
 import * as Zone from './necropolis.data.ts';
 import { stepsFrom, walkCells } from './logic.ts';
+import type { Item } from './items.ts';
 
 export type Place = 'refuge' | 'necropolis' | 'hall' | 'nave' | 'ossuary' | 'chapel' | 'cloister';
 type P = { x: number; y: number };
@@ -125,11 +126,13 @@ export function lair(way: readonly P[], hero: P, far: number, stairs: boolean, d
 }
 
 /** A place of an expedition as the hero left it: its foes alive (where they stood, their hp, their post; a hound that
- *  already followed him through an exit; `pack`: the battue's pack it belongs to, until it found him), its caches not yet searched, the blood left on its floor. */
+ *  already followed him through an exit; `pack`: the battue's pack it belongs to, until it found him), its caches not
+ *  yet searched (their blood, the item some hide), the blood and the items left on its floor. */
 export type RoomState = {
   foes: { kind: string; x: number; y: number; hp: number; home: P; followed?: boolean; pack?: number }[];
-  caches: (P & { blood: number })[];
+  caches: (P & { blood: number; item?: Item })[];
   drops: (P & { blood: number })[];
+  items: (P & { item: Item })[];
 };
 /** The expedition under way: when it started, the deepest ring reached, the way back, the places entered; `packs`: the
  *  battue's packs his scent has called (logic.ts scent()) still waiting for a lair; `loosed`: the packs laid in wait so

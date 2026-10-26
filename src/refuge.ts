@@ -22,12 +22,15 @@ export const STAIRS = D.STAIRS;
 export const BASIN = { x: 840, y: 644 };
 // Le Rongé's corner, right of the basin, his floor point (he faces it): his body stops walkers.
 export const RONGE = { x: 896, y: 650 };
+// Le coffre, left of the basin as le Rongé is right of it (floor point): the items brought back. Its body stops walkers.
+export const CHEST = { x: 762, y: 652 };
 // Where the hero comes up the stairs from the crypt, his feet below STAIRS in its well (x 816-864).
 const STAIRWAY = { x: 840, y: 876 };
 
 export function build(scene: Phaser.Scene): Room {
   const obstacles = Baked.draw(scene, 'refuge', D.OVER, D.BOXES);
   obstacles.add(scene.add.zone(RONGE.x, RONGE.y, 44, 16));
+  obstacles.add(scene.add.zone(CHEST.x, CHEST.y - 2, 28, 12));
   return {
     bounds: new Phaser.Geom.Rectangle(0, 0, D.W, D.H),
     obstacles,
