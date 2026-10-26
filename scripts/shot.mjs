@@ -6,8 +6,8 @@
 // the chasm by the bridge (zone-bridge.png), the middle (zone-middle.png), the breach where the Dawn falls (zone-breach.png,
 // he burns there), the far side (zone-far.png, the Order's camp), raises the sealed door of the gallery from its side
 // (shortcut-gallery-before.png, -after.png); his scent looses the battue across the zone on his way back; through the
-// gallery he comes out in the middle, raises the grille from its side (shortcut-grille-before.png, -after.png), meets the
-// battue (battue.png), goes back by the causeway to the refuge and pours his blood into the basin (basin.png).
+// gallery he comes out in the middle, walks on to the battue waiting at a narrow way (battue.png, once the gallery's fade is
+// over), raises the grille from its side (shortcut-grille-before.png, -after.png), goes back by the causeway to the refuge and pours his blood into the basin (basin.png).
 // Expedition 2: the zone new, the shortcuts still open (saved), blood picked up, then the bot lets the foes kill him: he
 // re-forms at his coffin with nothing carried. Le Rongé's wares (ronge.png, shop.png). Hounds follow him through one
 // door, never a second. Headless FPS of every place, and of the zone walked across chunk borders. In the training room
