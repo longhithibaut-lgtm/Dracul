@@ -71,6 +71,48 @@ sont des intérieurs faits à la main, dans le style des salles actuelles. **On 
 Portes verrouillées d'un seul côté, échelles à descendre, grilles à lever, puits. Ouvert une fois, ouvert pour
 toujours (sauvegardé). C'est ce qui rend les zones lointaines accessibles sans tout retraverser.
 
+### La nécropole, première zone ouverte *(demande de l'utilisateur, 2026-10-26)*
+« Un monde plus ouvert, des cartes clairement agrandies, avec des raccourcis. » La nécropole est **une seule grande
+caverne d'environ 8 × 5 écrans** (3840 × 1350 px de salle) autour du refuge, où l'on marche librement dans toutes les
+directions ; les salles déjà peintes deviennent des **intérieurs** dont on passe la porte. Plan (x vers l'est) :
+
+```
+ N  roche ─────────────────────────────────────────────────────────────────────────────────────
+    [R]escalier du refuge   ║causée║[A]grille   nef▣      fosses      ░brèche de░  chapelle▣
+    parvis     tombes        ║gouffre║   cour       ossements          ░ l'Aube  ░      reliquaire
+    tombes  crypte▣  tombes  ║      ║ ═══ mur d'os ═══════════════════╗ ║   camp de l'Ordre
+    tombes   reliquaire      ║      ║  ossuaire▣   éboulis      fosses ║ ║  (tentes, braseros,
+    tombes    tombes         ║ pont ═══  fosses     éboulis           ║ ╚═[B]porte scellée══
+    tombes  tombes  tombes   ║      ║   tombes                  ┄┄┄┄┄┄┄║   poche  │ tombes
+ S  roche ─────────────────────────────────────────────────────────────────────────────────────
+      proche (anneau 1)              milieu (anneau 2)                   loin (anneau 3)
+```
+
+- **Le proche** (ouest, goules) : l'escalier du refuge débouche au nord-ouest sur un parvis dallé entre deux braseros ;
+  au sud, le **champ des tombes** (croix, stèles, buttes, sarcophages, petits mausolées) traversé d'allées de gravier,
+  la **porte de la crypte**, un reliquaire à fouiller, deux puits de lune.
+- **Le gouffre** coupe la caverne du nord au sud. On le passe par **le pont** (tout au sud) ; au nord, une **causée**
+  en ruine mène à une petite cour fermée par **la grille (raccourci A)**, qui ne se lève que du côté du milieu.
+- **Le milieu** (pénitents, chiens, prêtres) : un long **mur d'ossements** le coupe en deux bandes, ouvert seulement à
+  l'est ; au sud, la **porte de l'ossuaire** (dans le mur), un éboulis de galerie effondrée, des tombes ouvertes ; au
+  nord, la **porte de la nef**, un champ de fosses, un puits de lune.
+- **La brèche de l'Aube** : le mur d'os entre le milieu et le loin s'est effondré sous un trou de la voûte qui donne
+  sur la surface ; l'Aube y tombe et **brûle** ; on la traverse par l'ombre des piliers brisés.
+- **Le loin** (est, l'Ordre) : le **camp de l'Ordre** (tentes, palissade, braseros, lanternes, coffre à fouiller), la
+  **porte de la chapelle** (au fond de la chapelle, ses herses mènent au cloître, la surface sous l'Aube, comme
+  avant), un reliquaire ; au sud-ouest, une poche reliée au milieu par **la porte scellée (raccourci B)**, qui ne s'ouvre
+  que du côté du loin.
+- **Chemins** : la première fois, refuge → champ des tombes → pont → bande sud du milieu → ouverture à l'est du mur
+  d'os → bande nord → brèche de l'Aube → loin (≈ 3500 px, une minute de marche). **A** ouvert, le nord se fait d'une
+  traite (refuge → causée → bande nord : environ un tiers de chemin en moins vers la brèche et la chapelle). **B**
+  ouvert, le camp rejoint la bande sud et le pont sans la brèche ni l'Aube.
+- **Ennemis** : des groupes placés par secteur (proche nord et sud, milieu nord et sud, loin ouest, camp, est, poche),
+  tirés dans la réserve de l'anneau du secteur ; les intérieurs gardent leur anneau (crypte 1, nef et ossuaire 2,
+  chapelle 3, cloître 4). **La battue** se poste sur le chemin du retour à travers la caverne, entre le héros et
+  l'escalier du refuge, hors de vue ; une meute sur deux tient l'escalier.
+- **Technique** : la caverne est cuite hors ligne comme les salles, en **morceaux d'un écran** (480 × 270) chargés
+  autour de la caméra et déchargés derrière elle ; murs, fosses et accessoires sont des données.
+
 ## 5. Ennemis et niveaux cachés
 
 ### L'odeur du sang *(validé)*
