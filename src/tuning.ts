@@ -288,15 +288,14 @@ export const T = {
     pickup: 16, search: 24, bag: 400, basin: 52,
   },
   // The blood's scent (docs/extraction.md §5): every `every` blood carried (picked up) looses a pack of the battue, with
-  // a distant horn and a line. It lies in wait in the nearest room on his way back that holds none yet (never the room he
-  // is in), else replaces the pack of the nearest one: one pack a room, the heaviest nearest him. The k-th pack loosed in
-  // an expedition is `packs[k - 1]` (the last repeats): hounds first, then an Inquisiteur with his. With no room between
-  // him and the refuge (the crypt), it waits until there is one. It comes in hunting him, near the exit he comes back by,
-  // or before the stairs (every other pack), on the nearest spawn point at least `clear` from where he enters.
+  // a distant horn and a line. It lies in wait across the zone on his way back to the refuge (world.ts loose()), the
+  // first point of it at least `far` px from him (out of sight; from a room, from its door), every other pack before the
+  // refuge's stairs (`door` walk cells short of them). The k-th pack loosed in an expedition is `packs[k - 1]` (the last
+  // repeats): hounds first, then an Inquisiteur with his. Too near the refuge for that, it waits until he is farther.
   battue: {
     every: 80,
     packs: [['hound', 'hound'], ['hound', 'hound', 'hound'], ['inquisitor', 'hound', 'hound']],
-    entry: 80, stairs: 40, clear: 60, // how far below his way in, above the stairs' edge
+    far: 300, door: 8,
   },
 
   // Le Rongé, the refuge's merchant (docs/lore.md), crouched by the basin (refuge.ts RONGE): F within `talk` of him

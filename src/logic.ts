@@ -146,13 +146,27 @@ export function placeGroups<K>(pool: readonly (readonly K[])[], n: number, spawn
   return picked.map((at) => ({ at, kinds: pool[Math.floor(rnd() * pool.length)] }));
 }
 
+/** A walk grid over `b`, cells `nav` px: open where a ghoul's feet (12 x 6) fit at its centre, clear of every box. */
+export function walkCells(b: Box, boxes: readonly Box[], nav: number): boolean[] {
+  const cols = Math.ceil(b.width / nav), rows = Math.ceil(b.height / nav), h = nav / 2;
+  const open = Array.from({ length: cols * rows }, (_, c) => b.y + Math.floor(c / cols) * nav + h + 3 <= b.y + b.height && b.x + (c % cols) * nav + h + 6 <= b.x + b.width);
+  for (const o of boxes) { // closed: the cells whose feet would overlap it
+    const x0 = Math.max(0, Math.floor((o.x - 6 - b.x - h) / nav) + 1), x1 = Math.min(cols - 1, Math.ceil((o.x + o.width + 6 - b.x - h) / nav) - 1);
+    const y0 = Math.max(0, Math.floor((o.y - 3 - b.y - h) / nav) + 1), y1 = Math.min(rows - 1, Math.ceil((o.y + o.height + 3 - b.y - h) / nav) - 1);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) open[y * cols + x] = false;
+  }
+  return open;
+}
+
 /** Steps from cell `goal` to every cell of a grid `cols` wide, walking through `open` cells only, 8 ways but never
- *  cutting a corner; Infinity where it can't get. The goal itself may be closed (someone standing on a brink). */
-export function stepsFrom(open: readonly boolean[], cols: number, goal: number): number[] {
+ *  cutting a corner; Infinity where it can't get. The goal itself may be closed (someone standing on a brink). `links`:
+ *  cells a step apart however far (a gallery's two mouths). */
+export function stepsFrom(open: readonly boolean[], cols: number, goal: number, links: Map<number, number> = new Map()): number[] {
   const rows = open.length / cols, d = open.map(() => Infinity), queue = [goal];
   d[goal] = 0;
   for (let i = 0; i < queue.length; i++) {
-    const c = queue[i], x = c % cols, y = (c - x) / cols;
+    const c = queue[i], x = c % cols, y = (c - x) / cols, l = links.get(c);
+    if (l !== undefined && d[l] === Infinity) { d[l] = d[c] + 1; queue.push(l); }
     for (let dy = -1; dy <= 1; dy++)
       for (let dx = -1; dx <= 1; dx++) {
         const nx = x + dx, ny = y + dy, n = nx + ny * cols;

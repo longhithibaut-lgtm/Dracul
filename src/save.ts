@@ -5,7 +5,8 @@
 export const VERSION = 1;
 // unlocks: what the Rongé sold for banked blood (shop.ts): the bite, the ranks of max life (`life`) and of the bag (`bag`)
 // bought. dry: how many times in a row the hero came back (or re-formed) without pouring blood: the Rongé's hunger.
-export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number };
+// shortcuts: the zone's gates raised for good (necropolis.data.ts GATES ids).
+export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number; shortcuts: string[] };
 const KEY = 'dracul.save', LOG = 'dracul.log';
 
 /** A save read back from `json`, whatever it holds: brought up to this version, missing or broken fields to their
@@ -15,7 +16,8 @@ export function parse(json: string | null): Save {
   try { o = JSON.parse(json ?? 'null'); } catch { /* broken: start afresh */ }
   if (typeof o !== 'object' || !o) o = {};
   const count = (n: unknown) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.floor(Number(n)) : 0);
-  return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry) };
+  const shortcuts = Array.isArray(o.shortcuts) ? [...new Set(o.shortcuts.filter((s): s is string => typeof s === 'string'))] : [];
+  return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry), shortcuts };
 }
 
 const storage = () => { try { return localStorage; } catch { return undefined; } }; // a sandboxed frame throws on access

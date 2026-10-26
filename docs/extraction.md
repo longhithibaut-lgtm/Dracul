@@ -78,7 +78,7 @@ directions ; les salles déjà peintes deviennent des **intérieurs** dont on pa
 
 ```
  N  roche ─────────────────────────────────────────────────────────────────────────────────────
-    [R]escalier du refuge   ║causée║[A]grille   nef▣      fosses      ░brèche de░  chapelle▣
+    [R]escalier du refuge   ║chaussée[A]grille   nef▣      fosses      ░brèche de░  chapelle▣
     parvis     tombes        ║gouffre║   cour       ossements          ░ l'Aube  ░      reliquaire
     tombes  crypte▣  tombes  ║      ║ ═══ mur d'os ═══════════════════╗ ║   camp de l'Ordre
     tombes   reliquaire      ║      ║  ossuaire▣   éboulis      fosses ║ ║  (tentes, braseros,
@@ -91,7 +91,7 @@ directions ; les salles déjà peintes deviennent des **intérieurs** dont on pa
 - **Le proche** (ouest, goules) : l'escalier du refuge débouche au nord-ouest sur un parvis dallé entre deux braseros ;
   au sud, le **champ des tombes** (croix, stèles, buttes, sarcophages, petits mausolées) traversé d'allées de gravier,
   la **porte de la crypte**, un reliquaire à fouiller, deux puits de lune.
-- **Le gouffre** coupe la caverne du nord au sud. On le passe par **le pont** (tout au sud) ; au nord, une **causée**
+- **Le gouffre** coupe la caverne du nord au sud. On le passe par **le pont** (tout au sud) ; au nord, une **chaussée**
   en ruine mène à une petite cour fermée par **la grille (raccourci A)**, qui ne se lève que du côté du milieu.
 - **Le milieu** (pénitents, chiens, prêtres) : un long **mur d'ossements** le coupe en deux bandes, ouvert seulement à
   l'est ; au sud, la **porte de l'ossuaire** (dans le mur), un éboulis de galerie effondrée, des tombes ouvertes ; au
@@ -104,7 +104,7 @@ directions ; les salles déjà peintes deviennent des **intérieurs** dont on pa
   que du côté du loin.
 - **Chemins** : la première fois, refuge → champ des tombes → pont → bande sud du milieu → ouverture à l'est du mur
   d'os → bande nord → brèche de l'Aube → loin (≈ 3500 px, une minute de marche). **A** ouvert, le nord se fait d'une
-  traite (refuge → causée → bande nord : environ un tiers de chemin en moins vers la brèche et la chapelle). **B**
+  traite (refuge → chaussée → bande nord : environ un tiers de chemin en moins vers la brèche et la chapelle). **B**
   ouvert, le camp rejoint la bande sud et le pont sans la brèche ni l'Aube.
 - **Ennemis** : des groupes placés par secteur (proche nord et sud, milieu nord et sud, loin ouest, camp, est, poche),
   tirés dans la réserve de l'anneau du secteur ; les intérieurs gardent leur anneau (crypte 1, nef et ossuaire 2,

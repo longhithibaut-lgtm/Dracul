@@ -9,6 +9,8 @@ import * as Ossuary from './ossuary.data.ts';
 import * as Chapel from './chapel.data.ts';
 import * as Cloister from './cloister.data.ts';
 import { TORTURE, type Look } from './dark.ts';
+import * as Zone from './zone.ts';
+import * as Save from './save.ts';
 
 type P = { x: number; y: number };
 // Where the arena's solid parts are, and how it is lit.
@@ -27,6 +29,7 @@ export type Room = {
   width: number; height: number; // of the whole room (the camera follows the hero)
   look: Look; // in the dark (dark.ts): how it is lit
   sections: number[]; // feet lines the hero climbs past into the room's next part, bottom first (none: one part)
+  zone?: { chunks: Zone.Chunks; gates: Zone.Gate[] }; // an open zone (zone.ts): its chunks round the camera, its shortcuts
 };
 
 // The run's rooms, in the « grand pixel » style (docs/art.md), baked offline by tools/art/rooms.gen.mjs from their 3D
@@ -36,7 +39,7 @@ export type Room = {
 export const LAYOUTS = ['hall', 'nave', 'ossuary', 'chapel', 'cloister'] as const;
 // The torture room (torture.ts, painted at its first build) is a training room, reached from the training room only. The
 // refuge (refuge.ts) is where the game starts and where the hero re-forms after a death.
-export type LayoutId = (typeof LAYOUTS)[number] | 'torture' | 'refuge';
+export type LayoutId = (typeof LAYOUTS)[number] | 'torture' | 'refuge' | 'necropolis';
 
 // The crypts' look (their mockups' post): their moonlit dark, the braziers and torches guttering (its light, torches and
 // palette: the room's own, baked.ts).
@@ -51,9 +54,10 @@ const BAKED: Record<(typeof LAYOUTS)[number], { key: string; D: Baked.Plan; look
   cloister: { key: 'cloister', D: Cloister, dawn: true, look: { ...CRYPT, flicker: false, night: 0,
     lamp: [1.6, 13, 70], post: [3, 0.4, 0.2, 0.01], vig: [1.12, 0.22, 0.022, 0.004], sprites: 0.4, warm: 0.25 } },
 };
-/** What a room's build needs loaded: a baked room's images. */
-export function preload(scene: Phaser.Scene, id: LayoutId) {
-  if (id !== 'torture') Baked.preload(scene, id === 'refuge' ? 'refuge' : BAKED[id].key);
+/** What a room's build needs loaded: a baked room's images; the zone's round where the hero comes in (`at`). */
+export function preload(scene: Phaser.Scene, id: LayoutId, at: { x: number; y: number }) {
+  if (id === 'necropolis') Zone.preload(scene, at);
+  else if (id !== 'torture') Baked.preload(scene, id === 'refuge' ? 'refuge' : BAKED[id].key);
 }
 
 /** Winches the portcullises up over `ms`, letting the moonlight in. */
@@ -68,6 +72,7 @@ export function raiseGate(scene: Phaser.Scene, ms: number) {
 
 export function build(scene: Phaser.Scene, id: LayoutId): Room {
   if (id === 'refuge') return Refuge.build(scene);
+  if (id === 'necropolis') return Zone.build(scene, Save.data.shortcuts);
   if (id === 'torture') return torture(scene);
   const b = BAKED[id];
   return Baked.room(scene, b.key, b.D, b.look, b.dawn ? T.dawn : T.lantern);

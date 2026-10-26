@@ -68,8 +68,9 @@ export function bands(img, W, H, SN, CS, OFF, extra) {
 /** What stands in front of a floor the hero walks on (`floor`: 1 per walked room px, RW x RH), cut out per texel by
  *  its floor row into sprites, sorted at that row like props: a texel covers the hero when its surface stands on a floor
  *  row south of his feet; kept only where some walked floor lies within his sprite's reach below it (40 px up, 12 to the
- *  sides), north of that row. `skip(i)`: texels left out. Returns the groups { depth, x0, y0, x1, y1, px }. */
-export function cut(floor, RW, RH, W, H, Yrow, Z, skip = () => false) {
+ *  sides), north of that row. `skip(i)`: texels left out; `OX`, `OY`: the image's first texel in the floor's (a zone's chunk).
+ *  Returns the groups { depth, x0, y0, x1, y1, px } (in the image). */
+export function cut(floor, RW, RH, W, H, Yrow, Z, skip = () => false, OX = 0, OY = 0) {
   const reach = new Uint16Array((RH + 1) * RW); // per column: walkable rows above, a column's dilated count
   for (let ry = 0; ry < RH; ry++) for (let rx = 0; rx < RW; rx++) {
     let any = 0;
@@ -80,7 +81,7 @@ export function cut(floor, RW, RH, W, H, Yrow, Z, skip = () => false) {
   const groups = new Map();
   for (let i = 0; i < W * H; i++) {
     if (Z[i] < 1.5 || Yrow[i] < 0 || skip(i)) continue;
-    const px = i % W, py = (i / W) | 0, rx = px >> 1, ry = py >> 1, Y = Yrow[i];
+    const px = i % W, py = (i / W) | 0, rx = (px + OX) >> 1, ry = (py + OY) >> 1, Y = Yrow[i];
     if (!walkedIn(rx, ry - 4, Math.min(ry + 42, Math.floor(Y) - 1))) continue;
     const key = `${Math.floor(Y / 2)},${rx >> 6}`;
     let g = groups.get(key);

@@ -61,12 +61,16 @@ const FRAG = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
 uniform sampler2D uMainSampler;
-uniform sampler2D uLight;
+uniform sampler2D uLight0;
+uniform sampler2D uLight1;
+uniform sampler2D uLight2;
+uniform sampler2D uLight3;
 uniform sampler2D uLut;
 uniform sampler2D uAlbedo;
 uniform vec2 uKeep;
 uniform vec4 uView;
 uniform vec2 uRoom;
+uniform vec4 uQuad;
 uniform vec4 uLamp;
 uniform vec3 uGlass;
 uniform vec4 uNight;
@@ -114,6 +118,12 @@ vec3 orderHaze(vec2 w, vec4 o) {
   if (o.w > 0.0) return haze(w, o.xy - vec2(0.0, o.w), o.z * 0.02, 7.0, HOLY);
   return haze(w, o.xy - vec2(0.0, 16.0), o.z * 0.012, 16.0, ORDER);
 }
+// The baked light comes in up to four textures, a 2 x 2 block of a zone's chunks (uQuad: its first room px, a chunk's
+// size); a room's is one, the first.
+vec3 baked(vec2 qd, vec2 uv) {
+  if (qd.y < 0.5) return qd.x < 0.5 ? texture2D(uLight0, uv).rgb : texture2D(uLight1, uv).rgb;
+  return qd.x < 0.5 ? texture2D(uLight2, uv).rgb : texture2D(uLight3, uv).rgb;
+}
 float bayer(vec2 p) {
   vec2 a = mod(p, 2.0), b = mod(floor(p * 0.5), 2.0);
   float m1 = 2.0 * a.x + 3.0 * a.y - 4.0 * a.x * a.y, m2 = 2.0 * b.x + 3.0 * b.y - 4.0 * b.x * b.y;
@@ -129,11 +139,12 @@ void main() {
   vec4 src = texture2D(uMainSampler, outTexCoord);
   vec3 alb = pow(src.rgb, vec3(2.2));
   vec3 Lt = vec3(0.0), E = vec3(0.0), T = vec3(0.0);
-  vec2 uv = (tx + 0.5) / (uRoom * uTexel);
-  if (uv.x >= 0.0 && uv.x < 1.0 && uv.y >= 0.0 && uv.y < 1.0) {
-    vec3 s = texture2D(uLight, vec2(uv.x, 1.0 - uv.y / 3.0)).rgb;
-    vec3 e = texture2D(uLight, vec2(uv.x, 1.0 - (uv.y + 1.0) / 3.0)).rgb;
-    vec3 g = floor(texture2D(uLight, vec2(uv.x, 1.0 - (uv.y + 2.0) / 3.0)).rgb * 255.0 + 0.5);
+  vec2 cs = uQuad.zw * uTexel, qt = tx - uQuad.xy * uTexel;
+  if (qt.x >= 0.0 && qt.y >= 0.0 && qt.x < uRoom.x * uTexel && qt.y < uRoom.y * uTexel) {
+    vec2 qd = step(cs, qt), uv = (qt - qd * cs + 0.5) / cs;
+    vec3 s = baked(qd, vec2(uv.x, 1.0 - uv.y / 3.0));
+    vec3 e = baked(qd, vec2(uv.x, 1.0 - (uv.y + 1.0) / 3.0));
+    vec3 g = floor(baked(qd, vec2(uv.x, 1.0 - (uv.y + 2.0) / 3.0)) * 255.0 + 0.5);
     float ny = (g.b - 128.0) / 127.0;
     vec3 P = vec3(w.x, w.y + g.g - 64.0, g.r - 64.0), n = vec3(0.0, ny, sqrt(max(0.0, 1.0 - ny * ny)));
     T = s * s * s * 4.0 * uTorch;
@@ -175,8 +186,15 @@ void main() {
 function vec(c: number[]) { return `vec3(${c.map((v) => v.toFixed(5)).join(', ')})`; }
 
 /** The light's inputs, updated every frame (see light()). */
+type Tex = Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
+/** A zone's light round the view: the first room px of the 2 x 2 chunks it shows, a chunk's size, their light
+ *  textures (src/zone.ts). */
+export type Quads = (view: Phaser.Geom.Rectangle) => { quad: [number, number, number, number]; keys: string[] };
 class Dark extends Phaser.Filters.Controller {
-  light!: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
+  lights!: Tex[];
+  quad: [number, number, number, number] = [0, 0, 1, 1];
+  quads?: Quads;
+  tex!: (key: string) => Tex;
   lut!: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
   albedo!: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
   room: [number, number] = [0, 0];
@@ -193,15 +211,17 @@ class Dark extends Phaser.Filters.Controller {
 class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
   constructor(manager: Phaser.Renderer.WebGL.RenderNodes.RenderNodeManager) { super('FilterDark', manager, undefined, FRAG); }
   setupTextures(c: Dark, textures: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper[]) {
-    textures[1] = c.light;
-    textures[2] = c.lut;
-    textures[3] = c.albedo;
+    if (c.quads) { const q = c.quads(c.camera.worldView); c.quad = q.quad; c.lights = q.keys.map(c.tex); }
+    c.lights.forEach((t, i) => (textures[1 + i] = t));
+    textures[5] = c.lut;
+    textures[6] = c.albedo;
   }
   setupUniforms(c: Dark) {
     const pm = this.programManager, v = c.camera.worldView;
-    pm.setUniform('uLight', 1);
-    pm.setUniform('uLut', 2);
-    pm.setUniform('uAlbedo', 3);
+    for (let i = 0; i < 4; i++) pm.setUniform(`uLight${i}`, 1 + i);
+    pm.setUniform('uLut', 5);
+    pm.setUniform('uAlbedo', 6);
+    pm.setUniform('uQuad', c.quad);
     // Where the camera really draws the room: it rounds each image to whole screen pixels (roundPixels), so must the
     // light, or a half-pixel scroll lays each texel's light on its neighbour.
     const z = c.camera.zoom, snap = (a: number) => -Math.round(-a * z) / z;
@@ -291,17 +311,18 @@ export const TORTURE: Look = {
   lamp: [5, 46, 200], ys: 1, post: [3.2, 0.45, 0.24, 0.03], vig: [1.15, 0.55, 0.04, 0], pal: PAL, wY: 1.4,
 };
 
-/** Lights the room (`size`, room px) around `hero`; `lanterns()`: the Order's lanterns standing. The world camera's
- *  light is its filter 'dark' (set it inactive to see the room unlit: albedo only). */
-export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics.Arcade.Group, lanterns: () => Spot[], size: [number, number], look = TORTURE) {
+/** Lights the room (`size`, room px) around `hero`; `lanterns()`: the Order's lanterns standing; `quads`: an open
+ *  zone's light, chunk by chunk (its look has none of its own). The world camera's light is its filter 'dark' (set it
+ *  inactive to see the room unlit: albedo only). */
+export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics.Arcade.Group, lanterns: () => Spot[], size: [number, number], look = TORTURE, quads?: Quads) {
   const renderer = scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   if (!registered) renderer.renderNodes.addNodeConstructor('FilterDark', DarkNode);
   registered = true;
   const main = scene.cameras.main, f = main.filters.internal.add(new Dark(main, look)) as Dark;
-  f.light = scene.textures.get(look.light).source[0].glTexture!;
-  f.lut = scene.textures.get(lut(scene, look)).source[0].glTexture!;
-  f.albedo = scene.textures.get(look.albedo ?? look.light).source[0].glTexture!;
-  f.room = size;
+  f.tex = (key) => scene.textures.get(key).source[0].glTexture!;
+  f.lut = f.tex(lut(scene, look));
+  if (quads) { f.quads = quads; f.room = [2 * size[0], 2 * size[1]]; f.albedo = f.lut; }
+  else { f.lights = [0, 1, 2, 3].map(() => f.tex(look.light)); f.quad = [0, 0, ...size]; f.room = size; f.albedo = f.tex(look.albedo ?? look.light); }
 
   // The unlit layer: its own camera, scrolled with the world's once that one has followed the hero this frame.
   const over = scene.cameras.add(0, 0, scene.scale.width, scene.scale.height).setName('dark-over');
