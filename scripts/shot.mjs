@@ -66,7 +66,8 @@ let last;
 async function step(x, y, r = 6) {
   const d = await run(([x, y, r]) => {
     const s = window.game.scene.getScene('room'), f = s.hero?.body?.center, b = s.room.bounds, cols = s.navCols;
-    if (!f || s.phase !== 'play' || Math.hypot(x - f.x, y - f.y) < r) return null; // there, or gone through an exit
+    if (!f || s.phase !== 'play') return { wait: true }; // going through an exit, or coming in
+    if (Math.hypot(x - f.x, y - f.y) < r) return null; // there
     const key = `${s.layout}:${x}:${y}:${s.navOpen.length}:${s.navOpen.filter(Boolean).length}`;
     if (window.walkTo?.key !== key) window.walkTo = { key, steps: s.stepsTo({ x, y }) };
     const steps = window.walkTo.steps;
@@ -81,6 +82,7 @@ async function step(x, y, r = 6) {
     return { dx: to.x - f.x, dy: to.y - f.y, far: Math.hypot(x - f.x, y - f.y), at: [f.x, f.y] };
   }, [x, y, r]);
   if (!d) return false;
+  if (d.wait) { await page.waitForTimeout(200); return true; }
   // Snagged on a prop's corner (the grid is cut for a ghoul's feet, his are wider): a sidestep, either way.
   if (last && Math.hypot(d.at[0] - last[0], d.at[1] - last[1]) < 0.5) await hold([['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'][Math.floor(Math.random() * 4)]], 250);
   last = d.at;
@@ -92,8 +94,18 @@ async function step(x, y, r = 6) {
   return true;
 }
 async function walk(x, y, ms = 40000, r = 6) {
-  for (const end = Date.now() + ms; Date.now() < end;) if (!(await step(x, y, r))) return true;
+  const from = (await state()).layout;
+  for (const end = Date.now() + ms; Date.now() < end;) if (!(await step(x, y, r)) || (await state()).layout !== from) return true;
   return false;
+}
+/** Chasing foes in the zone, the bot may walk into a door: back out by the place's stairs. */
+async function stay() {
+  const l = (await state()).layout;
+  if (l === 'necropolis') return;
+  console.log(`(walked into ${l} by mistake: back out)`);
+  await until(() => window.game.scene.getScene('room').phase === 'play', null, 5000);
+  await run(() => window.game.scene.getScene('room').leave(-1));
+  await arrived('necropolis');
 }
 /** A walk by way of `points` ([x, y]...), each within 24 px; logs where it was cut short. */
 async function route(points, ms = 60000) {
@@ -275,7 +287,9 @@ if (met) {
   await shot('battue');
   await keep(true);
   check(await fight(60000, 260), 'the battue met on the way back (by the gallery), fought off');
+  await stay();
   await gather(8000, 200);
+  await stay();
 } else check(false, `the battue met on the way back (${await where()})`);
 await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) if (e.body?.enable && !e.getData('pack') && Math.hypot(e.x - 1525, e.y - 316) < 260) s.kill(e); }); // the middle's, by the grille
 check(await route([[1560, 340], [1525, 316]]), 'to the grille, on its side');
@@ -287,7 +301,9 @@ check((await save()).shortcuts.includes('grille'), `the grille raised, saved (${
 // back through it, by the court, the causeway and the field's north path; the other pack holds the refuge's stairs
 check(await route([[1525, 250], [1400, 233], [1100, 232], [700, 196], [330, 175]]), 'through the grille, over the causeway, along the north path');
 check(await fight(40000, 260), 'the other pack, holding the refuge stairs, fought off'); // its hounds would shove him off the stairs
+await stay();
 await gather(8000, 200);
+await stay();
 const back = await run(() => window.game.scene.getScene('room').exp);
 console.log(`the battue: ${back.loosed} packs loosed, ${back.met} found him`);
 const bring = (await state()).carried;
@@ -306,7 +322,7 @@ check(await arrived('necropolis'), 'expedition 2: in the zone, the world new');
 const fresh = await run(() => { const s = window.game.scene.getScene('room'); return { live: s.enemies.getChildren().filter((e) => e.body?.enable).length, open: s.room.zone.gates.filter((g) => g.open).map((g) => g.id) }; });
 check(fresh.live > 30 && fresh.open.length === 3, `zone repopulated: ${fresh.live} foes; open for good: ${fresh.open.join(', ')}`);
 await keep(true);
-for (let i = 0; i < 6 && (await state()).carried === 0; i++) { await fight(8000, 400); await gather(4000, 400); }
+for (let i = 0; i < 6 && (await state()).carried === 0; i++) { await fight(10000, 900); await stay(); await gather(5000, 600); await stay(); }
 const lost = (await state()).carried;
 check(lost > 0, `blood carried before dying: ${lost}`);
 await keep(false);
@@ -375,12 +391,11 @@ for (const layout of ['refuge', 'necropolis', 'hall', 'nave', 'ossuary', 'chapel
   await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'necropolis' }));
   await arrived('necropolis');
   await keep(true);
-  await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) e.disableBody(true, true); s.hero.body.reset(380, 172); }); // the north path, out of the way
+  await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) e.disableBody(true, true); s.hero.body.reset(330, 176); }); // the north path, out of the way
   await page.waitForTimeout(800);
   const chunks = [], measure = rate(9000);
-  for (let end = Date.now() + 9000; Date.now() < end;) { // east along the path, through x 480 and 960: chunk borders
-    page.keyboard.press('Space');
-    await hold(['ArrowRight'], 400);
+  for (let end = Date.now() + 9000; Date.now() < end;) { // east along the north path, through x 480 and 960: chunk borders
+    await step(1300, 233, 8);
     chunks.push(await run(() => { const s = window.game.scene.getScene('room'); return s.room.zone?.chunks.shown.size ?? -1; }));
   }
   const n = await measure, x = (await state()).hero.x;

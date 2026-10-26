@@ -524,7 +524,7 @@ export class RoomScene extends Phaser.Scene {
     // through a room's open portcullises, or down its stairs.
     if (this.phase === 'play' && this.layout === 'refuge' && feet.bottom > Refuge.STAIRS) this.leave(0);
     else if (this.phase === 'play' && !this.training && zone) { // into a door of the zone: up into its dark
-      const into = (d: { x: number; y: number; w: number }) => Math.abs(feet.center.x - d.x) < d.w / 2 - 4 && feet.bottom < d.y - 3;
+      const into = (d: { x: number; y: number; w: number }) => Math.abs(feet.center.x - d.x) < d.w / 2 - 4 && feet.bottom < d.y - 3 && feet.bottom > d.y - 40; // in its recess
       const exit = Zone.DOORS.findIndex(into), mouth = galleryOpen(Save.data.shortcuts) ? Nec.TUNNEL.findIndex(into) : -1;
       if (into(Nec.DOORS.refuge)) this.leave(-1);
       else if (exit >= 0) this.leave(exit);
