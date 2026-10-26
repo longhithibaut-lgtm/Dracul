@@ -74,12 +74,12 @@ await run(() => { for (const f of window.game.scene.getScene('room').cameras.mai
 const off = await fps();
 await shot('unlit');
 console.log(`view ${await run(() => `${window.game.scale.width}x${window.game.scale.height}`)}, ${on} fps lit, ${off} fps unlit`);
-// Down the stairs: room 1 of a run.
+// Down the stairs: into la nécropole.
 await run(() => { const s = window.game.scene.getScene('room'); for (const f of s.cameras.main.filters.internal.list) f.setActive(true); s.hero.body.reset(840, 820); });
 await page.keyboard.down('s');
-await page.waitForFunction(() => window.game.scene.getScene('room').layout === 'hall' && window.game.scene.getScene('room').hero?.body, null, { timeout: 15000 }).catch(() => {});
+await page.waitForFunction(() => window.game.scene.getScene('room').layout === 'necropolis' && window.game.scene.getScene('room').hero?.body, null, { timeout: 15000 }).catch(() => {});
 await page.keyboard.up('s');
-if ((await layout()) !== 'hall') errors.push(`the stairs lead to ${await layout()}, not the crypt`);
+if ((await layout()) !== 'necropolis') errors.push(`the stairs lead to ${await layout()}, not the necropolis`);
 await page.waitForTimeout(600);
 await shot('run');
 // Killed there: back in the refuge, by the coffin.

@@ -179,7 +179,7 @@ describe('la nécropole', () => {
     const P = T.battue.packs, hero = below(D.chapel), way = wayBack(shut.steps, cols, hero), dist = (p: { x: number; y: number }) => Math.hypot(p.x - hero.x, p.y - hero.y);
     const first = lair(way, hero, T.battue.far, false, T.battue.door)!;
     expect(dist(first)).toBeGreaterThanOrEqual(T.battue.far);
-    expect(dist(lair(way, hero, T.battue.far, false, T.battue.door, 1)!)).toBeGreaterThanOrEqual(T.battue.far + 90);
+    expect(way.indexOf(lair(way, hero, T.battue.far, false, T.battue.door, 1)!) - way.indexOf(first)).toBe(11); // the next one 90 px on
     expect(lair(way, hero, T.battue.far, true, T.battue.door)).toEqual(way[way.length - 1 - T.battue.door]);
     const exp = expedition(0);
     exp.packs = 4;

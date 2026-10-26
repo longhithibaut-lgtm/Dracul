@@ -77,39 +77,38 @@ caverne d'environ 8 × 5 écrans** (3840 × 1350 px de salle) autour du refuge, 
 directions ; les salles déjà peintes deviennent des **intérieurs** dont on passe la porte. Plan (x vers l'est) :
 
 ```
- N  roche ─────────────────────────────────────────────────────────────────────────────────────
-    [R]escalier du refuge   ║chaussée[A]grille   nef▣      fosses      ░brèche de░  chapelle▣
-    parvis     tombes        ║gouffre║   cour       ossements          ░ l'Aube  ░      reliquaire
-    tombes  crypte▣  tombes  ║      ║ ═══ mur d'os ═══════════════════╗ ║   camp de l'Ordre
-    tombes   reliquaire      ║      ║  ossuaire▣   éboulis      fosses ║ ║  (tentes, braseros,
-    tombes    tombes         ║ pont ═══  fosses     éboulis           ║ ╚═[B]porte scellée══
-    tombes  tombes  tombes   ║      ║   tombes                  ┄┄┄┄┄┄┄║   poche  │ tombes
- S  roche ─────────────────────────────────────────────────────────────────────────────────────
-      proche (anneau 1)              milieu (anneau 2)                   loin (anneau 3)
+ N  roche ══[R]═══════════════════════╗chaussée╔═══(b)═══════════════════════════════════(B)═════════════
+    escalier du refuge      ║  gouffre ║[A]grille  nef▣   fosses   ░brèche de░  galerie    chapelle▣
+    parvis      tombes      ║          ║  cour   ossements         ░ l'Aube  ░  camp de l'Ordre
+    tombes crypte▣ tombes   ║          ║ ═══ mur d'os ══════════  ║        ║ (tentes, bûcher,
+    tombes  reliquaire      ║          ║  ossuaire▣  éboulis      ║        ║  braseros, lanternes)
+    tombes   tombes         ║   pont ══╬═ fosses  tombes          ║        ║        tombes
+ S  roche ════════════════════════════════════════════════════════════════════════════════════════════
+      proche (anneau 1)                milieu (anneau 2)                     loin (anneau 3)
 ```
 
 - **Le proche** (ouest, goules) : l'escalier du refuge débouche au nord-ouest sur un parvis dallé entre deux braseros ;
   au sud, le **champ des tombes** (croix, stèles, buttes, sarcophages, petits mausolées) traversé d'allées de gravier,
-  la **porte de la crypte**, un reliquaire à fouiller, deux puits de lune.
+  la **porte de la crypte**, un reliquaire à fouiller, des puits de lune.
 - **Le gouffre** coupe la caverne du nord au sud. On le passe par **le pont** (tout au sud) ; au nord, une **chaussée**
   en ruine mène à une petite cour fermée par **la grille (raccourci A)**, qui ne se lève que du côté du milieu.
 - **Le milieu** (pénitents, chiens, prêtres) : un long **mur d'ossements** le coupe en deux bandes, ouvert seulement à
   l'est ; au sud, la **porte de l'ossuaire** (dans le mur), un éboulis de galerie effondrée, des tombes ouvertes ; au
-  nord, la **porte de la nef**, un champ de fosses, un puits de lune.
+  nord, la **porte de la nef**, un champ de fosses, un puits de lune, et une **bouche murée** de la galerie (b).
 - **La brèche de l'Aube** : le mur d'os entre le milieu et le loin s'est effondré sous un trou de la voûte qui donne
-  sur la surface ; l'Aube y tombe et **brûle** ; on la traverse par l'ombre des piliers brisés.
-- **Le loin** (est, l'Ordre) : le **camp de l'Ordre** (tentes, palissade, braseros, lanternes, coffre à fouiller), la
-  **porte de la chapelle** (au fond de la chapelle, ses herses mènent au cloître, la surface sous l'Aube, comme
-  avant), un reliquaire ; au sud-ouest, une poche reliée au milieu par **la porte scellée (raccourci B)**, qui ne s'ouvre
-  que du côté du loin.
-- **Chemins** : la première fois, refuge → champ des tombes → pont → bande sud du milieu → ouverture à l'est du mur
-  d'os → bande nord → brèche de l'Aube → loin (≈ 3500 px, une minute de marche). **A** ouvert, le nord se fait d'une
-  traite (refuge → chaussée → bande nord : environ un tiers de chemin en moins vers la brèche et la chapelle). **B**
-  ouvert, le camp rejoint la bande sud et le pont sans la brèche ni l'Aube.
-- **Ennemis** : des groupes placés par secteur (proche nord et sud, milieu nord et sud, loin ouest, camp, est, poche),
+  sur la surface ; l'Aube y tombe et **brûle** ; on la traverse vite, ou par l'ombre des piliers brisés.
+- **Le loin** (est, l'Ordre) : le **camp de l'Ordre** (tentes, palissade, bûcher, braseros, lanternes, coffre à
+  fouiller), la **porte de la chapelle** (au fond de la chapelle, ses herses mènent au cloître, la surface sous l'Aube,
+  comme avant), un reliquaire ; sous la falaise nord, **la porte scellée (raccourci B)** : l'autre bouche de la galerie
+  qui court sous la falaise jusqu'au milieu, levée seulement de ce côté-ci ; ses deux bouches s'ouvrent ensemble.
+- **Chemins** (mesurés sur la grille de marche, de la porte de la chapelle à l'escalier du refuge) : sans raccourci,
+  pont et brèche, environ 4 100 px (une minute de marche) ; **A** ouvert, 3 400 px ; **A et B**, 2 000 px (la galerie se
+  passe d'un fondu au noir, d'une bouche à l'autre). B seul ne sert qu'à qui vient déjà de la bande nord du milieu.
+- **Ennemis** : des groupes placés par secteur (proche nord et sud, milieu nord et sud, loin ouest, camp, est),
   tirés dans la réserve de l'anneau du secteur ; les intérieurs gardent leur anneau (crypte 1, nef et ossuaire 2,
-  chapelle 3, cloître 4). **La battue** se poste sur le chemin du retour à travers la caverne, entre le héros et
-  l'escalier du refuge, hors de vue ; une meute sur deux tient l'escalier.
+  chapelle 3, cloître 4). **La battue** se poste sur le chemin du retour à travers la caverne (par la galerie si elle
+  est ouverte), entre le héros et l'escalier du refuge, hors de vue (à 300 px au moins) ; une meute sur deux tient
+  l'escalier.
 - **Technique** : la caverne est cuite hors ligne comme les salles, en **morceaux d'un écran** (480 × 270) chargés
   autour de la caméra et déchargés derrière elle ; murs, fosses et accessoires sont des données.
 

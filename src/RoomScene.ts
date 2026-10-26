@@ -27,9 +27,10 @@ import { value, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 /** What an expedition carries from room to room, through scene.restart(data); {} is the refuge, where the game starts
- *  and the hero re-forms after a death (`lost`: the blood he died with); its stairs start an expedition in the crypt.
+ *  and the hero re-forms after a death (`lost`: the blood he died with); its stairs start an expedition in la nécropole.
  *  exp: the expedition under way (its rooms as he left them, the way back), ended back at the refuge; carried: the
- *  blood in his bag; entry: where he comes in, -1 up a room's stairs, i down its exit i (the refuge: 0, up its stairs),
+ *  blood in his bag; entry: where he comes in, -1 up a room's stairs (the zone: at the refuge's stairs), i down its exit i (the
+ *  zone: out of its door i; the refuge: 0, up its stairs),
  *  none at the room's start; hounds: the hp of the hounds hunting him through the exit. In the training room: gifts and
  *  their ranks (0 commun, 1 rare, 2 épique; none: commun). */
 export type Run = {
@@ -104,6 +105,7 @@ export class RoomScene extends Phaser.Scene {
   private gateWords = new Map<string, { at: { x: number; y: number }; l: Loot.Label }[]>(); // a shut shortcut's, by its id
   private propBoxes: Phaser.Physics.Arcade.StaticBody[] = []; // what stops bolts (and sight)
   private passage?: { x: number; y: number }; // out of the zone's gallery: the mouth he comes out of
+  private passedAt = -1e9; // when he last came out of it: its mouths take him again a while later only
   private rats: Rat[] = [];
   // La Nuée: the hero a swarm until swarmUntil; when each enemy may be bitten again.
   private swarmUntil = 0;
@@ -135,6 +137,7 @@ export class RoomScene extends Phaser.Scene {
     this.labels = [];
     this.gateWords = new Map();
     this.passage = undefined;
+    this.passedAt = -1e9;
     this.navFrom = -1;
     this.training = !!data.training;
     this.gifts = [...(data.gifts ?? [])];
@@ -412,7 +415,7 @@ export class RoomScene extends Phaser.Scene {
       if (this.dead) return;
       this.hero.body!.reset(to.x, to.y - 8);
       this.cameras.main.centerOn(to.x, to.y);
-      [this.phase, this.walk, this.passage] = ['enter', 1, to];
+      [this.phase, this.walk, this.passage, this.passedAt] = ['enter', 1, to, Infinity];
       this.time.delayedCall(350, () => this.cameras.main.fadeIn(T.expedition.fadeMs)); // its chunks load meanwhile
     });
   }
@@ -513,17 +516,19 @@ export class RoomScene extends Phaser.Scene {
     zone?.chunks.stream(this.cameras.main.worldView);
     if (this.phase === 'enter' && (door ? feet.bottom > door.y + 6 : this.layout === 'refuge' ? feet.bottom < Refuge.STAIRS - 10 : this.walk < 0 ? feet.bottom < b.bottom - 16 : feet.top > b.top + 8)) {
       this.phase = 'play';
+      if (this.passage) this.passedAt = time;
       this.passage = undefined;
       this.hero.setCollideWorldBounds(true);
     }
-    // Out by any exit, when he pleases: down the refuge's stairs; up through a room's open portcullises, or down its stairs.
+    // Out by any exit, when he pleases: down the refuge's stairs; into a door of the zone (its stairs up to the refuge); up
+    // through a room's open portcullises, or down its stairs.
     if (this.phase === 'play' && this.layout === 'refuge' && feet.bottom > Refuge.STAIRS) this.leave(0);
     else if (this.phase === 'play' && !this.training && zone) { // into a door of the zone: up into its dark
       const into = (d: { x: number; y: number; w: number }) => Math.abs(feet.center.x - d.x) < d.w / 2 - 4 && feet.bottom < d.y - 3;
       const exit = Zone.DOORS.findIndex(into), mouth = galleryOpen(Save.data.shortcuts) ? Nec.TUNNEL.findIndex(into) : -1;
       if (into(Nec.DOORS.refuge)) this.leave(-1);
       else if (exit >= 0) this.leave(exit);
-      else if (mouth >= 0) this.through(Nec.TUNNEL[1 - mouth]);
+      else if (mouth >= 0 && time > this.passedAt + T.expedition.fadeMs * 4) this.through(Nec.TUNNEL[1 - mouth]);
       if (this.exp) this.exp.deepest = Math.max(this.exp.deepest, ringAt(feet.center.x, feet.center.y));
     } else if (this.phase === 'play' && !this.training && this.layout !== 'refuge') {
       const exit = this.room.exits.findIndex((g, i) => Math.abs(feet.center.x - g.x) < 14 && WORLD[this.here].ahead[i]);

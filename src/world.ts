@@ -108,13 +108,14 @@ export function wayBack(steps: readonly number[], cols: number, from: P, links: 
 }
 
 /** Where a pack of the battue lies in wait on his way back (`way`, from him to the stairs): the first point at least
- *  `far` from him (out of his sight), `k` packs already there pushing it `gap` further each; before the stairs
+ *  `far` from him (out of his sight), `k` packs already laid pushing it `gap` px further along the way each; before the stairs
  *  (`door` points short of them), every other pack, if that is far enough from him. Undefined: no room between him and
  *  the refuge for it. */
 export function lair(way: readonly P[], hero: P, far: number, stairs: boolean, door: number, k = 0, gap = 90): P | undefined {
   const d = (p: P) => Math.hypot(p.x - hero.x, p.y - hero.y);
   if (stairs) { const p = way[Math.max(0, way.length - 1 - door)]; return p && d(p) >= far ? p : undefined; }
-  return way.find((p) => d(p) >= far + k * gap);
+  const i = way.findIndex((p) => d(p) >= far);
+  return i < 0 ? undefined : way[Math.min(way.length - 1, i + Math.round((k * gap) / NAV))];
 }
 
 /** A place of an expedition as the hero left it: its foes alive (where they stood, their hp, their post; a hound that
