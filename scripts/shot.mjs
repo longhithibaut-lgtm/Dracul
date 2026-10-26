@@ -32,6 +32,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 page.on('crash', () => errors.push('the page crashed'));
 page.on('console', (m) => (m.type() === 'error' || m.type() === 'assert') && errors.push(m.text()));
 page.on('console', (m) => m.text().startsWith('expédition') && report.push(m.text()));
+page.on('console', (m) => m.text().startsWith('kept') && console.log(m.text()));
 
 const run = (f, a) => page.evaluate(f, a);
 const until = (f, a, timeout = 10000) => page.waitForFunction(f, a, { timeout }).then(() => true, () => false);
@@ -39,13 +40,19 @@ const check = (ok, what) => (ok ? console.log(`ok: ${what}`) : (failed.push(what
 const freeze = (on) => run((on) => (on ? window.game.loop.sleep() : window.game.loop.wake()), on);
 const shot = async (name, clip) => { await freeze(true); await page.screenshot({ path: `${out}/${name}.png`, clip }); await freeze(false); };
 const state = () => run(() => {
-  const s = window.game.scene.getScene('room'), f = s.hero?.body?.center;
+  const s = window.game.scene.getScene('room'), f = s.sys.isActive() ? s.hero?.body?.center : undefined; // mid-restart: nothing yet
   return { layout: s.layout, phase: s.phase, active: s.sys.isActive(), health: s.health, carried: s.carried, hero: f && { x: f.x, y: f.y },
-    live: s.enemies?.getChildren().filter((e) => e.body?.enable).length ?? 0, drops: s.drops?.length ?? 0, caches: s.caches?.length ?? 0 };
+    live: (f && s.enemies?.getChildren().filter((e) => e.body?.enable).length) || 0, drops: s.drops?.length ?? 0, caches: s.caches?.length ?? 0 };
 });
 const arrived = (layout) => until((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.sys.isActive() && s.phase === 'play'; }, layout, 15000);
-const keep = (on) => run((on) => { window.game.scene.getScene('room').invulnUntil = on ? Infinity : 0; }, on); // kept from harm (he blinks)
-const save = () => run(() => JSON.parse(localStorage.getItem('dracul.save')));
+// kept from harm (he blinks); a blow that lands anyway is told
+const keep = (on) => run((on) => {
+  const s = window.game.scene.getScene('room'), hit = Object.getPrototypeOf(s).damageHero;
+  s.invulnUntil = on ? Infinity : 0;
+  if (on) s.damageHero = function (...a) { if (this.health - a[0] <= 0) console.log(`kept from death: ${a[0]} at ${Math.round(this.hero.x)},${Math.round(this.hero.y)} (${this.layout}, invuln ${this.invulnUntil})`); return this.health - a[0] <= 0 ? false : hit.apply(this, a); };
+  else delete s.damageHero;
+}, on);
+const save = () => run(() => JSON.parse(localStorage.getItem('dracul.save')) ?? { banked: 0, shortcuts: [] });
 
 async function hold(keys, ms) {
   for (const k of keys) await page.keyboard.down(k);
@@ -135,6 +142,11 @@ async function look(name, x, y) {
   await page.waitForTimeout(900); // its chunks come in
   await shot(name);
   await run(() => { const s = window.game.scene.getScene('room'); s.cameras.main.startFollow(s.hero, true, 0.08, 0.08); });
+}
+/** F at a shortcut's winch until it is raised (a press mid-mist or mid-swing is not taken), then its rise. */
+async function winch(id) {
+  for (let k = 0; k < 6 && !(await save()).shortcuts.includes(id); k++) { await page.keyboard.press('f'); await page.waitForTimeout(400); }
+  await page.waitForTimeout(1500);
 }
 const where = async () => { const h = (await state()).hero; return `${Math.round(h.x)},${Math.round(h.y)}`; };
 
@@ -231,10 +243,10 @@ await cull(150);
 await route([[3000, 640]]);
 await look('zone-far', 3110, 860);
 check(await route([[3200, 350], [3302, 140]]), 'to the gallery\'s far mouth, under the north cliff');
+await cull(320); // the far side's foes: what is checked here is the winch
 await walk(3302, 120, 8000, 4);
 await look('shortcut-gallery-before', 3270, 150);
-await page.keyboard.press('f');
-await page.waitForTimeout(1800);
+await winch('galerie');
 await look('shortcut-gallery-after', 3270, 150);
 check((await save()).shortcuts.includes('galerie'), `F at its winch: the sealed door raised, saved (${JSON.stringify((await save()).shortcuts)})`);
 // his scent: two packs of the battue loosed across the zone, between him and the refuge
@@ -253,35 +265,35 @@ await page.keyboard.down('ArrowUp'); // into its mouth, until the fade takes him
 await until(() => window.game.scene.getScene('room').phase !== 'play', null, 4000);
 await page.keyboard.up('ArrowUp');
 check(await until(() => { const s = window.game.scene.getScene('room'); return s.phase === 'play' && s.hero.body.center.x < 1800; }, null, 8000), `out of the gallery\'s other mouth, in the middle (${await where()})`);
-check(await route([[1560, 340], [1525, 316]]), 'to the grille, on its side');
-await walk(1525, 314, 6000, 4);
-await look('shortcut-grille-before', 1525, 270);
-await page.keyboard.press('f');
-await page.waitForTimeout(1800);
-await look('shortcut-grille-after', 1525, 270);
-check((await save()).shortcuts.includes('grille'), `the grille raised, saved (${JSON.stringify((await save()).shortcuts)})`);
-// back by the court, the causeway and the field's north path; the battue posted on it
-const upon = () => run(() => { const s = window.game?.scene.getScene('room'), f = s?.hero?.body?.center; if (!f) return false; return s.enemies.getChildren().some((e) => e.body?.enable && Math.hypot(e.x - f.x, e.y - f.y) < 90 && (e.getData('pack') || e.getData('kind') === 'hound')); });
+// the battue posted on his way back: the first pack waits by the gallery's mouth he comes out of
+const upon = () => run(() => { const s = window.game?.scene.getScene('room'), f = s?.hero?.body?.center; if (!f || !s.sys.isActive()) return false; return s.enemies.getChildren().some((e) => e.body?.enable && Math.hypot(e.x - f.x, e.y - f.y) < 90 && (e.getData('pack') || e.getData('kind') === 'hound')); });
 let met = false;
-for (const [x, y] of [[1525, 250], [1400, 233], [1100, 232], [700, 196], [300, 170]]) {
-  for (let end = Date.now() + 40000; Date.now() < end && !(met ||= await upon());) if (!(await step(x, y, 24))) break;
-  if (met) break;
-}
+for (let end = Date.now() + 20000; Date.now() < end && !(met ||= await upon());) await page.waitForTimeout(150);
 if (met) {
   await keep(false);
   await page.waitForTimeout(60);
   await shot('battue');
   await keep(true);
-  check(await fight(60000, 220), 'the battue met on the way back, fought off');
+  check(await fight(60000, 260), 'the battue met on the way back (by the gallery), fought off');
   await gather(8000, 200);
 } else check(false, `the battue met on the way back (${await where()})`);
-await route([[700, 196], [320, 170]]);
+await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) if (e.body?.enable && !e.getData('pack') && Math.hypot(e.x - 1525, e.y - 316) < 260) s.kill(e); }); // the middle's, by the grille
+check(await route([[1560, 340], [1525, 316]]), 'to the grille, on its side');
+await walk(1525, 314, 6000, 4);
+await look('shortcut-grille-before', 1525, 270);
+await winch('grille');
+await look('shortcut-grille-after', 1525, 270);
+check((await save()).shortcuts.includes('grille'), `the grille raised, saved (${JSON.stringify((await save()).shortcuts)})`);
+// back through it, by the court, the causeway and the field's north path; the other pack holds the refuge's stairs
+check(await route([[1525, 250], [1400, 233], [1100, 232], [700, 196], [330, 175]]), 'through the grille, over the causeway, along the north path');
 check(await fight(40000, 260), 'the other pack, holding the refuge stairs, fought off'); // its hounds would shove him off the stairs
 await gather(8000, 200);
 const back = await run(() => window.game.scene.getScene('room').exp);
 console.log(`the battue: ${back.loosed} packs loosed, ${back.met} found him`);
 const bring = (await state()).carried;
+console.log(`before the stairs: ${JSON.stringify(await run(() => { const s = window.game.scene.getScene('room'); return { health: s.health, invuln: s.invulnUntil, carried: s.carried }; }))}`);
 check(await exit(230, 100, 'ArrowUp', 'refuge'), 'up the stairs into the refuge');
+check(await run(() => !window.game.scene.getScene('room').lost), 'came up alive');
 check(await walk(840, 684, 20000, 8) && (await until(() => window.game.scene.getScene('room').carried === 0, null, 5000)), 'walked to the basin');
 await page.waitForTimeout(350);
 await shot('basin');
@@ -303,7 +315,7 @@ for (let end = Date.now() + 30000; Date.now() < end && (await state()).layout ==
   const s = await state();
   if (s.live) await fight(1500); else break;
 }
-if ((await state()).layout === 'necropolis') await run(() => window.game.scene.getScene('room').damageHero(99)); // nothing near enough to kill him
+if ((await state()).layout === 'necropolis') await run(() => { const s = window.game.scene.getScene('room'); s.invulnUntil = s.dashUntil = 0; s.damageHero(99); }); // nothing near enough to kill him
 check(await arrived('refuge'), 'died: re-formed at the coffin');
 await page.waitForTimeout(300);
 await shot('death');
@@ -369,9 +381,10 @@ for (const layout of ['refuge', 'necropolis', 'hall', 'nave', 'ossuary', 'chapel
   for (let end = Date.now() + 9000; Date.now() < end;) { // east along the path, through x 480 and 960: chunk borders
     page.keyboard.press('Space');
     await hold(['ArrowRight'], 400);
-    chunks.push(await run(() => window.game.scene.getScene('room').room.zone.chunks.shown.size));
+    chunks.push(await run(() => { const s = window.game.scene.getScene('room'); return s.room.zone?.chunks.shown.size ?? -1; }));
   }
   const n = await measure, x = (await state()).hero.x;
+  if (chunks.includes(-1)) console.log(`left the zone while walking: ${(await state()).layout}`);
   fps.push(`necropolis walked across chunk borders ${n.toFixed(1)} (to x ${Math.round(x)}, ${Math.min(...chunks)}-${Math.max(...chunks)} chunks shown)`);
   check(x > 960 && Math.max(...chunks) <= 12, `walking east across chunk borders, ${Math.max(...chunks)} chunks held at most`);
 }

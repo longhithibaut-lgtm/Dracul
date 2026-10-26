@@ -1,6 +1,6 @@
 # Dracul : direction « extraction × ARPG » (document de travail)
 
-Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23. À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
+Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
 lore (`docs/lore.md`) ou sont des choix ouverts.
 
 ## 1. L'idée en une phrase

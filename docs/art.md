@@ -38,7 +38,12 @@ ombres froides nettes, plus clair que les cryptes ; le soleil y est le danger, l
 (`tools/art/rooms/nave.mjs`) : tapis rouge pourri entre deux rangées de piliers brisés, rosaces sous la lune ;
 l'ossuaire effondré (`ossuary.mjs`) : sol tombé dans le noir (parois à pic), tas d'os et de crânes ; la chapelle aux
 vitraux (`chapel.mjs`) : l'Aube entre basse par les vitraux du mur ouest, rais dorés dans la poussière et vitraux
-plombés posés au sol, qui brûlent ; bancs, autel à soleil doré, bénitier.
+plombés posés au sol, qui brûlent ; bancs, autel à soleil doré, bénitier. La nécropole (`tools/art/rooms/necropolis.mjs`,
+première zone ouverte, cuite par morceaux d'un écran) : caverne sous une voûte jamais vue, falaise nord, gouffre, terre
+sombre semée d'os, allées de gravier, champs de croix et de stèles sur leurs buttes, mausolées, murs d'ossements au
+sommet de crânes entassés, moignons de colonnes de roche, flaques de lune par les fissures de la voûte (froides, qui
+ne brûlent pas) et la brèche où tombe l'Aube (dorée, qui brûle, liseré jaune) ; le camp de l'Ordre (tentes coniques,
+bûcher, braseros, lanternes vert sale) ; mêmes lumière, palette et post-production que les cryptes.
 
 **Maquettes** (`docs/maquettes/`, générateurs dans `tools/art/maquettes/`)
 
