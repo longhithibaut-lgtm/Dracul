@@ -311,6 +311,19 @@ export const TORTURE: Look = {
   lamp: [5, 46, 200], ys: 1, post: [3.2, 0.45, 0.24, 0.03], vig: [1.15, 0.55, 0.04, 0], pal: PAL, wY: 1.4,
 };
 
+/** The baked light of `src` (its first band, `texel` texels a room px), w x h room px, read back once: at each room px the
+ *  floor's light as dark.ts draws it (its T, 4 at full, without the flicker), for the foes' sight (RoomScene hunts()). */
+export function lightMap(src: CanvasImageSource, w: number, h: number, texel: number) {
+  const c = document.createElement('canvas');
+  [c.width, c.height] = [w, h];
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(src, 0, 0, w * texel, h * texel, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h);
+  for (let i = 0; i < m.length; i++) m[i] = Math.max(d[4 * i], d[4 * i + 1], d[4 * i + 2]);
+  return (x: number, y: number) => { x = Math.floor(x); y = Math.floor(y); return x >= 0 && y >= 0 && x < w && y < h ? 4 * (m[y * w + x] / 255) ** 3 : 0; };
+}
+
 /** Lights the room (`size`, room px) around `hero`; `lanterns()`: the Order's lanterns standing; `quads`: an open
  *  zone's light, chunk by chunk (its look has none of its own). The world camera's light is its filter 'dark' (set it
  *  inactive to see the room unlit: albedo only). */

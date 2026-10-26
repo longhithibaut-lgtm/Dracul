@@ -267,16 +267,18 @@ export const T = {
       [['purifier', 'inquisitor', 'penitent', 'priest'], ['hound', 'hound', 'hound', 'crossbow', 'ringer'], ['amas', 'penitent', 'penitent', 'purifier', 'priest']],
     ],
     guards: { cloister: ['bourreau'] },
-    clear: 170, gap: 90,
+    clear: 170, gap: 90, zoneGap: 180, // the zone's groups farther apart (twice T.sight.call): one roused does not wake its neighbours
     caches: [1, 2],
     fadeMs: 450, // to black through an exit; the next room fades in as fast
     titleMs: 1200, // a room's name, or what just happened, stays up this long
   },
-  // How a placed foe notices the hero: within `range` (px) with no prop between them, or struck; then the others of
+  // How a placed foe notices the hero: within `range` (px) with no prop between them, or struck, but only within `shade`
+  // while he keeps out of the light (docs/extraction.md §12.3: the baked light at his feet under `lit`, dark.ts's T, 4 at
+  // full; no Order lantern's pool; his own lantern does not count); then the others of
   // its pack within `call` hunt with it. Hunting, it keeps him in sight within `keep`, gives up `giveUpMs` after it last
   // saw him and walks back to its post at `homeSpeed` of its pace. None follows him through an exit but the hounds, once
   // (`followMs` after him), never a second room.
-  sight: { range: 130, keep: 200, call: 90, giveUpMs: 4000, homeSpeed: 0.5, followMs: 1200 },
+  sight: { range: 130, shade: 80, lit: 0.6, keep: 200, call: 90, giveUpMs: 4000, homeSpeed: 0.5, followMs: 1200 },
   // Blood carried, apart from life: the dead drop `drops` of their kind (an Amas' torn ghouls none), a cache holds
   // `cache`, both times the ring's multiplier `ring`. Picked up within `pickup` px of his feet, searched within
   // `search`; at most `bag` carried (to be raised at the refuge). All of it lost at death; banked by walking up to the

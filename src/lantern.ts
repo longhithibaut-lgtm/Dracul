@@ -138,6 +138,9 @@ function sign([a]: Lamp, x: number, y: number, k: number) {
   }));
 }
 
+/** The glaze and burning edge of a pool that never goes out (the zone's lanterns on their poles, their light baked). */
+export const still = (scene: Scene, x: number, y: number) => pool(lamp(scene), x, y, 1, 1);
+
 /** Telegraphs the lantern for `ms`, then plants it: solid, lit, and added to `obstacles`. */
 export function create(scene: Scene, obstacles: Phaser.Physics.Arcade.StaticGroup, x: number, y: number, ms: number): Lantern {
   if (!scene.textures.exists('lantern')) bake(scene);

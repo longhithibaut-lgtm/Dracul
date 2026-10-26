@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import type { Room } from './room.ts';
-import type { Look, Quads } from './dark.ts';
+import { lightMap, type Look, type Quads } from './dark.ts';
 import { T } from './tuning.ts';
 import { runMask } from './logic.ts';
+import * as Lantern from './lantern.ts';
 import { WORLD, around, quadOf } from './world.ts';
 import * as D from './necropolis.data.ts';
 
@@ -14,9 +15,10 @@ const URLS = import.meta.glob('./necropolis/*.webp', { eager: true, import: 'def
 const { SW, SH, COLS } = D, CW = 2 * SW, CH = 2 * SH;
 type P = { x: number; y: number };
 
-/** The crypts' look (room.ts CRYPT): their moonlit dark, the braziers guttering; the light is the chunks'. */
+/** The crypts' look (room.ts CRYPT): their moonlit dark, the braziers guttering; the light is the chunks'. Its baked
+ *  light warms what is drawn already lit only a little (`warm`: the Dawn is in it, the men would go flat beige by it). */
 export const LOOK: Look = { light: 'necropolis', texel: 2, torches: D.TORCHES, flicker: true, amb: '#000000', night: 0.2,
-  lamp: [5, 40, 180], ys: 1 / 0.616, post: [3.3, 0.42, 0.18, 0.02], vig: [1.15, 0.4, 0.02, 0.004], pal: D.PALETTE, wY: 1.6 };
+  lamp: [5, 40, 180], ys: 1 / 0.616, post: [3.3, 0.42, 0.18, 0.02], vig: [1.15, 0.4, 0.02, 0.004], pal: D.PALETTE, wY: 1.6, warm: 0.3 };
 
 const at = (i: number, j: number) => j * COLS + i;
 const key = (i: number, j: number) => `nec-${i}-${j}`;
@@ -31,6 +33,7 @@ export function preload(scene: Phaser.Scene, p: P) {
 /** The chunks shown: loaded as the camera comes near (`near` px round the view), dropped once `far` behind it. */
 export class Chunks {
   shown = new Map<number, Phaser.GameObjects.Image[]>();
+  private lights = new Map<number, (x: number, y: number) => number>(); // each shown chunk's baked light, read back (dark.ts lightMap())
   private asked = new Set<number>();
   private scene: Phaser.Scene;
   private near: number;
@@ -67,6 +70,12 @@ export class Chunks {
     return { quad: [i * SW, j * SH, SW, SH], keys: [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]].map(([a, b]) => (this.shown.has(at(a, b)) ? `${key(a, b)}-L` : 'nec-black')) };
   };
 
+  /** The baked light at floor point (x, y), 0 where its chunk is not shown. */
+  light(x: number, y: number) {
+    const i = Math.floor(x / SW), j = Math.floor(y / SH);
+    return this.lights.get(at(i, j))?.(x - i * SW, y - j * SH) ?? 0;
+  }
+
   private show(i: number, j: number) {
     const s = this.scene, k = key(i, j), n = at(i, j);
     // its light: the two images in one texture, the three bands dark.ts reads
@@ -74,6 +83,7 @@ export class Chunks {
     c.context.drawImage(s.textures.get(`${k}-l`).getSourceImage() as CanvasImageSource, 0, 0);
     c.context.drawImage(s.textures.get(`${k}-g`).getSourceImage() as CanvasImageSource, 0, 2 * CH);
     c.refresh();
+    this.lights.set(n, lightMap(c.canvas, SW, SH, 2));
     s.textures.remove(`${k}-l`);
     s.textures.remove(`${k}-g`);
     const imgs = [s.add.image(i * SW, j * SH, `${k}-a`).setOrigin(0).setScale(0.5).setDepth(-1000)], tex = s.textures.get(`${k}-o`);
@@ -89,6 +99,7 @@ export class Chunks {
     const k = key(n % COLS, Math.floor(n / COLS));
     for (const im of this.shown.get(n)!) im.destroy();
     this.shown.delete(n);
+    this.lights.delete(n);
     for (const t of ['a', 'o', 'L']) this.scene.textures.remove(`${k}-${t}`);
   }
 }
@@ -125,7 +136,9 @@ export function build(scene: Phaser.Scene, opened: readonly string[]): Room {
   const obstacles = scene.physics.add.staticGroup(), pits = scene.physics.add.staticGroup();
   for (const [x, y, w, h] of D.BOXES) obstacles.add(scene.add.zone(x + w / 2, y + h / 2, w, h));
   for (const [x, y, w, h] of D.PITS) pits.add(scene.add.zone(x + w / 2, y + h / 2, w, h));
-  const lit = runMask(D.HOLY, D.W, D.H), r = D.DOORS.refuge, spawns = D.SPAWNS.map(([x, y]) => ({ x, y }));
+  const lit = runMask(D.HOLY, D.W, D.H), r = D.DOORS.refuge, spawns = D.SPAWNS.map(([x, y]) => ({ x, y })), chunks = new Chunks(scene);
+  const lamps = D.LANTERNS.map(([x, y]) => ({ x, y }));
+  for (const l of lamps) Lantern.still(scene, l.x, l.y); // their pools burn like a planted lantern's (RoomScene)
   return {
     bounds: new Phaser.Geom.Rectangle(0, 0, D.W, D.H),
     obstacles,
@@ -138,10 +151,11 @@ export function build(scene: Phaser.Scene, opened: readonly string[]): Room {
     stairs: { x: r.x, y: r.y },
     holy: (x, y) => { x = Math.floor(x); y = Math.floor(y); return x >= 0 && y >= 0 && x < D.W && y < D.H && lit[y * D.W + x] === 1; },
     burn: T.dawn,
+    light: (x, y) => chunks.light(x, y),
     width: D.W,
     height: D.H,
     sections: [],
     look: LOOK,
-    zone: { chunks: new Chunks(scene), gates: gates(scene, obstacles, opened) },
+    zone: { chunks, gates: gates(scene, obstacles, opened), lamps },
   };
 }

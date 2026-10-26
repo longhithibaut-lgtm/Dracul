@@ -26,10 +26,11 @@ export type Room = {
   stairs: P; // where the hero climbs in from, below the front edge
   holy(x: number, y: number): boolean; // a floor point in holy light that never goes out (stained glass, the open sky)
   burn: { graceMs: number; burnEveryMs: number; damage: number }; // how that light burns: like a lantern, or the Dawn's
+  light?(x: number, y: number): number; // its baked light at a floor point (dark.ts lightMap()): in the light, he is seen from farther
   width: number; height: number; // of the whole room (the camera follows the hero)
   look: Look; // in the dark (dark.ts): how it is lit
   sections: number[]; // feet lines the hero climbs past into the room's next part, bottom first (none: one part)
-  zone?: { chunks: Zone.Chunks; gates: Zone.Gate[] }; // an open zone (zone.ts): its chunks round the camera, its shortcuts
+  zone?: { chunks: Zone.Chunks; gates: Zone.Gate[]; lamps: P[] }; // an open zone (zone.ts): its chunks round the camera, its shortcuts, its lanterns' pools
 };
 
 // The run's rooms, in the « grand pixel » style (docs/art.md), baked offline by tools/art/rooms.gen.mjs from their 3D

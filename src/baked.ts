@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { Room } from './room.ts';
-import type { Look } from './dark.ts';
+import { lightMap, type Look } from './dark.ts';
 import { runMask } from './logic.ts';
 
 // The rooms baked offline in the « grand pixel » style (tools/art/bake.mjs): src/<key>-albedo.png, what the world camera
@@ -60,6 +60,7 @@ export function room(scene: Phaser.Scene, key: string, D: Plan, look: Look, burn
     stairs: D.STAIRS,
     holy,
     burn,
+    light: lightMap(scene.textures.get(`${key}-light`).getSourceImage() as CanvasImageSource, D.W, D.H, 2),
     width: D.W,
     height: D.H,
     sections: D.SECTIONS,

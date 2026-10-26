@@ -96,19 +96,23 @@ directions ; les salles déjà peintes deviennent des **intérieurs** dont on pa
   l'est ; au sud, la **porte de l'ossuaire** (dans le mur), un éboulis de galerie effondrée, des tombes ouvertes ; au
   nord, la **porte de la nef**, un champ de fosses, un puits de lune, et une **bouche murée** de la galerie (b).
 - **La brèche de l'Aube** : le mur d'os entre le milieu et le loin s'est effondré sous un trou de la voûte qui donne
-  sur la surface ; l'Aube y tombe et **brûle** ; on la traverse vite, ou par l'ombre des piliers brisés.
-- **Le loin** (est, l'Ordre) : le **camp de l'Ordre** (tentes, palissade, bûcher, braseros, lanternes, coffre à
-  fouiller), la **porte de la chapelle** (au fond de la chapelle, ses herses mènent au cloître, la surface sous l'Aube,
+  sur la surface ; l'Aube y tombe et **brûle** sur toute la largeur de la brèche : la traverser à découvert brûle (au
+  moins une fois) ; l'ombre de deux piliers brisés permet de passer sans brûler, en faisant un petit détour.
+- **Le loin** (est, l'Ordre) : le **camp de l'Ordre** (tentes, palissade fermée sauf trois entrées, bûcher, braseros,
+  lanternes dont la flaque verte brûle comme celle d'une lanterne plantée, coffre à fouiller), la **porte de la chapelle** (au fond de la chapelle, ses herses mènent au cloître, la surface sous l'Aube,
   comme avant), un reliquaire ; sous la falaise nord, **la porte scellée (raccourci B)** : l'autre bouche de la galerie
   qui court sous la falaise jusqu'au milieu, levée seulement de ce côté-ci ; ses deux bouches s'ouvrent ensemble.
 - **Chemins** (mesurés sur la grille de marche, de la porte de la chapelle à l'escalier du refuge) : sans raccourci,
   pont et brèche, environ 4 100 px (une minute de marche) ; **A** ouvert, 3 400 px ; **A et B**, 2 000 px (la galerie se
   passe d'un fondu au noir, d'une bouche à l'autre). B seul ne sert qu'à qui vient déjà de la bande nord du milieu.
-- **Ennemis** : des groupes placés par secteur (proche nord et sud, milieu nord et sud, loin ouest, camp, est),
+- **Ennemis** : des groupes placés par secteur (proche nord et sud, milieu nord et sud, loin ouest, camp, loin sud,
+  est ; le parvis de l'escalier et la cour derrière la grille n'en ont aucun), à 180 px au moins les uns des autres,
   tirés dans la réserve de l'anneau du secteur ; les intérieurs gardent leur anneau (crypte 1, nef et ossuaire 2,
-  chapelle 3, cloître 4). **La battue** se poste sur le chemin du retour à travers la caverne (par la galerie si elle
-  est ouverte), entre le héros et l'escalier du refuge, hors de vue (à 300 px au moins) ; une meute sur deux tient
-  l'escalier.
+  chapelle 3, cloître 4). Dans l'ombre (hors de la lumière cuite, des braseros, des lanternes), ils le remarquent de
+  plus près (§12.3). **La battue** se poste sur le chemin du retour à travers la caverne (par la galerie si elle
+  est ouverte), entre le héros et l'escalier du refuge, hors de vue (à 300 px au moins), **aux passages obligés** qu'il
+  doit franchir (pont, chaussée, grille, sorties de la brèche, sortie de la galerie), sinon au premier point hors de
+  vue ; une meute sur deux tient l'escalier.
 - **Technique** : la caverne est cuite hors ligne comme les salles, en **morceaux d'un écran** (480 × 270) chargés
   autour de la caméra et déchargés derrière elle ; murs, fosses et accessoires sont des données.
 
@@ -262,7 +266,8 @@ Points du juge encore ouverts, à trancher :
 2. **Variété entre expéditions** *(validé)* : composition des groupes et emplacements du butin tirés au hasard, un événement par
    nuit, un Inquisiteur qui rôde dès la zone 3 *(à valider)*.
 3. **Pouvoir fuir** *(validé)* : le chien (105 px/s) est plus rapide que le héros (66 px/s) ; les ennemis abandonnent après 4 s
-   sans le voir, ne passent pas les portes (les chiens une salle au plus), l'ombre réduit leur détection.
+   sans le voir, ne passent pas les portes (les chiens une salle au plus), l'ombre réduit leur détection (codé : 80 px
+   au lieu de 130 hors de la lumière, `T.sight`).
 4. ~~**Objets = les Dons**~~ *(refusé : les objets restent une famille à part)* : les 17 Dons existants comme reliques trouvées, un doublon rapporté monte la rareté (raison
    de faire la 50e expédition) ; pas d'armes ni de talismans au début.
 5. ~~**Mourir loin** (les cendres)~~ *(refusé : à la mort, tout le butin porté est perdu, sans seconde chance)* : le sang porté reste en cendres là où l'on meurt, une seule chance de le reprendre *(à valider)* ;

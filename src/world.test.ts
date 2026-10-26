@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WORLD, around, cellAt, expedition, go, homeward, lair, loose, parents, quadOf, ringAt, wayBack, type Came, type Place } from './world.ts';
+import { CHOKES, NAV, WORLD, around, cellAt, expedition, go, homeward, lair, loose, parents, quadOf, ringAt, wayBack, type Came, type Place } from './world.ts';
 import { parse, VERSION, type Save } from './save.ts';
 import { LINES, WARES, WARE_TEXT, bagSize, beast, buy, owned, price } from './shop.ts';
 import { T } from './tuning.ts';
@@ -141,6 +141,13 @@ describe('la nécropole', () => {
   });
 
   it('places its foes by area and ring: ghouls near the refuge, the Order far from it', () => {
+    const area = (x: number, y: number) => Zone.AREAS.find(({ rect: [x0, y0, x1, y1] }) => x >= x0 && x < x1 && y >= y0 && y < y1)!;
+    expect(area(D.refuge.x, D.refuge.y + 60).groups).toBe(0); // the forecourt at the refuge's stairs: a sure pause
+    expect(area(1525, 200).groups).toBe(0); // the court behind the grille: none waits by the shortcut
+    expect(area(1525, 200).ring).toBe(2);
+    expect([area(1380, 800).id, area(1430, 800).id]).toEqual(['proche-sud', 'milieu-sud']); // the sectors part in the chasm
+    expect([area(3120, 880).id, area(2800, 1200).id, area(3500, 600).id]).toEqual(['camp', 'loin-sud', 'loin-est']);
+    expect(area(3500, 600).groups).toBeGreaterThanOrEqual(3); // the far end not the emptiest
     expect(ringAt(D.refuge.x, D.refuge.y + 40)).toBe(1);
     expect(ringAt(D.hall.x, D.hall.y + 20)).toBe(1);
     expect(ringAt(D.nave.x, D.nave.y + 20)).toBe(2);
@@ -158,12 +165,41 @@ describe('la nécropole', () => {
     }
   });
 
-  it('burns under the breach only, never at a door, a lever or a cache', () => {
+  it('burns under the breach: crossing it in the open burns him; the stumps\' shade takes him across unburnt', () => {
+    const grace = (T.hero.speed * T.dawn.graceMs) / 1000; // px he walks before the Dawn first burns him
+    let run = 0, longest = 0;
+    for (let x = 2440; x < 2800; x++) { run = burns(x, 360) ? run + 1 : 0; longest = Math.max(longest, run); }
+    expect(longest).toBeGreaterThan(grace * 1.25); // straight across, by the path: burnt once at least
+    // no row of shade across the gap in the wall (x 2598-2642, y 292-428)
+    for (let y = 296; y < 428; y += NAV) expect([2604, 2612, 2620, 2628, 2636].some((x) => burns(x, y)), `y ${y}`).toBe(true);
+    // the safest way across (cells of the walk grid): its longest stretch in the Dawn shorter than the grace
+    const best = new Map<number, number>(), q: [number, number][] = [];
+    for (let y = 296; y < 432; y += NAV) { const c = cellAt(cols, 2470, y); if (shut.open[c]) q.push([c, 0]); }
+    let safe = Infinity;
+    while (q.length) {
+      const [c, r] = q.shift()!;
+      if ((c % cols) * NAV >= 2770) { safe = Math.min(safe, r); continue; }
+      for (const n of [c + 1, c - 1, c + cols, c - cols]) {
+        const x = (n % cols) * NAV + 4, y = Math.floor(n / cols) * NAV + 4;
+        if (!shut.open[n] || x < 2440 || x > 2790 || y < 240 || y > 500) continue;
+        const nr = burns(x, y) ? r + NAV : 0;
+        if (nr > grace || (best.get(n) ?? Infinity) <= nr) continue;
+        best.set(n, nr);
+        q.push([n, nr]);
+      }
+    }
+    expect(safe).toBeLessThan(grace);
+  });
+
+  it('burns under the breach only, never at a door, a lever or a cache; the camp\'s lanterns neither', () => {
     let n = 0;
     for (let i = 0; i < holy.length; i++) n += holy[i];
     expect(n).toBeGreaterThan(1000);
     for (let i = 0; i < holy.length; i += 97) if (holy[i]) expect(Math.abs((i % Zone.W) - 2620), 'by the breach').toBeLessThan(260);
-    for (const p of [...Object.values(D).map(below), ...Zone.GATES.flatMap((g) => (g.lever ? [g.lever] : [])), ...Zone.CACHES.map(([x, y]) => ({ x, y }))]) expect(burns(p.x, p.y), `${p.x},${p.y}`).toBe(false);
+    for (const p of [...Object.values(D).map(below), ...Zone.GATES.flatMap((g) => (g.lever ? [g.lever] : [])), ...Zone.CACHES.map(([x, y]) => ({ x, y }))]) {
+      expect(burns(p.x, p.y), `${p.x},${p.y}`).toBe(false);
+      for (const [lx, ly] of Zone.LANTERNS) expect(Math.hypot((p.x - lx) / T.lantern.radius, (p.y - ly) / (T.lantern.radius * T.lantern.squash)), `${p.x},${p.y} in a lantern's pool`).toBeGreaterThan(1.2);
+    }
   });
 
   it("walks back to the refuge's stairs downhill", () => {
@@ -177,9 +213,22 @@ describe('la nécropole', () => {
 
   it("lays the battue's packs on his way back, out of his sight, every other one before the refuge's stairs", () => {
     const P = T.battue.packs, hero = below(D.chapel), way = wayBack(shut.steps, cols, hero), dist = (p: { x: number; y: number }) => Math.hypot(p.x - hero.x, p.y - hero.y);
-    const first = lair(way, hero, T.battue.far, false, T.battue.door)!;
+    // at the narrow ways he must pass, out of his sight, the first he meets first: from the chapel, the breach then the bridge
+    const first = lair(way, hero, T.battue.far, false, T.battue.door)!, next = lair(way, hero, T.battue.far, false, T.battue.door, 1)!;
     expect(dist(first)).toBeGreaterThanOrEqual(T.battue.far);
-    expect(way.indexOf(lair(way, hero, T.battue.far, false, T.battue.door, 1)!) - way.indexOf(first)).toBe(11); // the next one 90 px on
+    const at = (p: { x: number; y: number }) => CHOKES.findIndex((c) => c.x === p.x && c.y === p.y);
+    expect([at(first), at(next)].map((k) => k >= 0)).toEqual([true, true]);
+    expect(first.x).toBeGreaterThan(2400); // the breach
+    expect(Math.hypot(next.x - 1320, next.y - 1168)).toBeLessThan(40); // the bridge
+    for (const c of CHOKES) { // each on the walk grid, out of the Dawn, away from the doors and the gallery's mouths
+      expect(steps(shut, c) < Infinity || steps(open, c) < Infinity, `${c.x},${c.y}`).toBe(true);
+      expect(burns(c.x, c.y), `${c.x},${c.y} in the Dawn`).toBe(false);
+      for (const d of [...Object.values(D), ...Zone.TUNNEL]) expect(Math.hypot(c.x - d.x, c.y - d.y), `${c.x},${c.y}`).toBeGreaterThanOrEqual(100);
+    }
+    // no narrow way on his way back (from the crypt's door): the first point out of his sight, the next 90 px on
+    const h2 = below(D.hall), w2 = wayBack(shut.steps, cols, h2), a = lair(w2, h2, T.battue.far, false, T.battue.door)!;
+    expect(CHOKES.some((c) => c.x === a.x && c.y === a.y)).toBe(false);
+    expect(w2.indexOf(lair(w2, h2, T.battue.far, false, T.battue.door, 1)!) - w2.indexOf(a)).toBe(Math.round(90 / NAV));
     expect(lair(way, hero, T.battue.far, true, T.battue.door)).toEqual(way[way.length - 1 - T.battue.door]);
     const exp = expedition(0);
     exp.packs = 4;

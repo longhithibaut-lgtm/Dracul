@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertness, biteTarget, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, swarmUnlocked, wound } from './logic.ts';
+import { alertness, sightRange, biteTarget, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, swarmUnlocked, wound } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, shelf, value } from './gifts.ts';
 import { T } from './tuning.ts';
 import { missing, width } from './font.ts';
@@ -211,6 +211,14 @@ describe('expedition', () => {
     expect(alertness(s, true, 5999, G)).toEqual({ alert: true, seenAt: 5999 }); // seen again: the clock starts over
     expect((s = alertness(s, false, 6000, G)).alert).toBe(false); // 4 s without seeing him: gives up
     expect(alertness(s, false, 9000, G).alert).toBe(false); // and stays idle until it sees him again
+  });
+
+  it('the shade hides him: a foe on the watch notices him nearer out of the light; hunting, it keeps him in sight as far', () => {
+    const S = T.sight;
+    expect(sightRange(S, false, false)).toBeLessThan(sightRange(S, false, true) * 0.7); // in the shade (docs/extraction.md §12.3)
+    expect(sightRange(S, false, true)).toBe(S.range); // in the light: as before
+    expect(sightRange(S, false, false)).toBeGreaterThan(T.lantern.radius); // not blind: he cannot walk up to them unseen
+    expect([sightRange(S, true, false), sightRange(S, true, true)]).toEqual([S.keep, S.keep]);
   });
 
   it('carries blood up to the bag, leaving the rest behind', () => {

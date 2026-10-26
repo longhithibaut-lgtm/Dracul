@@ -126,6 +126,10 @@ export function alertness(s: { alert: boolean; seenAt: number }, sees: boolean, 
   return sees ? { alert: true, seenAt: now } : { alert: s.alert && now - s.seenAt < giveUpMs, seenAt: s.seenAt };
 }
 
+/** How far a foe sees the hero (`s`: T.sight): on the watch, within `range` while he stands in light (`lit`), `shade`
+ *  while he keeps out of it; hunting, within `keep`. */
+export const sightRange = (s: { range: number; shade: number; keep: number }, hunting: boolean, lit: boolean) => (hunting ? s.keep : lit ? s.range : s.shade);
+
 /** `amount` blood picked up, `carried` already in a bag holding `bag`: what is carried then, and what is left behind. */
 export function carry(carried: number, amount: number, bag: number) {
   const took = Math.max(0, Math.min(amount, bag - carried));

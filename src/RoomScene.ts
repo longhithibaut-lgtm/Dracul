@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { aimAt, alertness, biteTarget, burnsAfter, carry, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, onLine, pickSpot, placeGroups, rayDistance, scent, stepsFrom, swarmUnlocked, walkCells, wound } from './logic.ts';
+import { aimAt, alertness, biteTarget, burnsAfter, carry, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, onLine, pickSpot, placeGroups, rayDistance, scent, sightRange, stepsFrom, swarmUnlocked, walkCells, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -86,6 +86,7 @@ export class RoomScene extends Phaser.Scene {
   private dead = false;
   private lanterns: Lantern.Lantern[] = [];
   private litMs = 0; // time the hero has stood in holy light, back to 0 when he steps out
+  private inLight = true; // he stands in light (baked, a lantern's pool): the foes notice him from farther (hunts())
   private biteAt = -1e9;
   private biteReadyAt = 0;
   private prey?: Sprite; // the human the hero is latched onto, from the snap until it dies
@@ -350,7 +351,7 @@ export class RoomScene extends Phaser.Scene {
     if (W.ahead.length && !zone) Room.raiseGate(this, 1); // open: he goes deeper when he pleases
     const at = d ?? (this.entry === undefined ? r.heroStart : this.entry < 0 ? { x: r.stairs.x, y: r.bounds.bottom } : r.exits[this.entry]);
     this.exp ??= expedition(ring); // a room opened directly (scripts, tools): an expedition of its own
-    const groups = (pool: number, n: number, spawns: { x: number; y: number }[]) => placeGroups(E.pools[pool] as readonly (readonly string[])[], n, spawns, at, E.clear, E.gap, Math.random)
+    const groups = (pool: number, n: number, spawns: { x: number; y: number }[]) => placeGroups(E.pools[pool] as readonly (readonly string[])[], n, spawns, at, E.clear, zone ? E.zoneGap : E.gap, Math.random)
       .flatMap((g) => g.kinds.map((kind, i) => ({ x: g.at.x + (i % 2 ? 12 : -12) * Math.ceil(i / 2), y: g.at.y, kind }))); // side by side: they push each other off
     const hide = (list: { x: number; y: number }[]) => Phaser.Utils.Array.Shuffle([...list]).slice(0, Phaser.Math.Between(E.caches[0], E.caches[1]));
     const inArea = (p: { x: number; y: number }, [x0, y0, x1, y1]: readonly number[]) => p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1;
@@ -545,7 +546,9 @@ export class RoomScene extends Phaser.Scene {
     // on a steady beat until he steps out (or mists through); the room's own light at its own pace. The Dawn's grace is
     // long, so the danger is shown building up all through it. It disperses la Nuée at once, and with Griffes noires
     // it burns twice as fast.
-    const c = this.hero.body!.center, lamp = this.lanterns.some((l) => Lantern.lights(l, c));
+    const c = this.hero.body!.center, R = T.lantern.radius; // the planted lanterns' pools, the zone's on their poles
+    const lamp = this.lanterns.some((l) => Lantern.lights(l, c)) || !!this.room.zone?.lamps.some((l) => ellipseDist(l, c, R, R * T.lantern.squash) <= 1);
+    this.inLight = lamp || (this.room.light?.(c.x, c.y) ?? Infinity) >= T.sight.lit;
     let dawn = false;
     if (lamp || this.room.holy(c.x, c.y)) {
       if (this.swarmFx) this.unswarm();
@@ -1675,13 +1678,13 @@ export class RoomScene extends Phaser.Scene {
     return true;
   }
 
-  /** A placed foe on the watch (alertness()): it notices the hero in reach with no prop between them, and hunts him
-   *  with its pack; it keeps him in sight farther, and gives up a while after it lost him. True while it hunts. The
-   *  training room's hunt from the start. */
+  /** A placed foe on the watch (alertness()): it notices the hero in reach (nearer when he keeps out of the light, see
+   *  sightRange()) with no prop between them, and hunts him with its pack; it keeps him in sight farther, and gives up
+   *  a while after it lost him. True while it hunts. The training room's hunt from the start. */
   private hunts(e: Sprite, time: number) {
     if (this.training) return true;
     const from = e.body!.center, to = this.hero.body!.center, d = Phaser.Math.Distance.BetweenPoints(from, to), was = !!e.getData('alert');
-    const sees = d <= (was ? T.sight.keep : T.sight.range) && this.boltReach(from, Phaser.Math.Angle.BetweenPoints(from, to)) >= d;
+    const sees = d <= sightRange(T.sight, was, this.inLight) && this.boltReach(from, Phaser.Math.Angle.BetweenPoints(from, to)) >= d;
     const s = alertness({ alert: was, seenAt: e.getData('seenAt') }, sees, time, T.sight.giveUpMs);
     e.setData(s);
     if (s.alert && !was) this.rouse(e);

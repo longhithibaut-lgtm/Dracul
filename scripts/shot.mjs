@@ -180,6 +180,9 @@ const placed = await run(() => {
   return { n: live.length, idle: live.filter((e) => !e.getData('alert')).length, kinds, caches: s.caches.length, chunks: s.room.zone.chunks.shown.size,
     near: Math.min(...live.map((e) => Math.hypot(e.x - f.x, e.y - f.y))), at: live.map((e) => ({ x: e.body.center.x, y: e.body.center.y, kind: e.getData('kind') })) };
 });
+// the shade: by the braziers of the refuge's forecourt he stands in light, in the field's dark not (RoomScene hunts())
+const light = await run(() => { const s = window.game.scene.getScene('room'); return { forecourt: s.room.light(190, 142), field: s.room.light(900, 330), lit: s.inLight }; });
+check(light.forecourt >= 0.6 && light.field < 0.6, `the baked light read back: ${light.forecourt.toFixed(2)} by the forecourt's braziers, ${light.field.toFixed(2)} in the field (he is ${light.lit ? 'in light' : 'in the shade'})`);
 check(placed.n > 30 && placed.idle === placed.n && placed.near > 150, `zone: ${placed.n} foes on their posts by area, none hunting him (${JSON.stringify(placed.kinds)}), the nearest ${Math.round(placed.near)} px away; ${placed.caches} caches; ${placed.chunks} chunks shown of 40`);
 const byRing = await run(() => { const s = window.game.scene.getScene('room'), r = {}; for (const e of s.enemies.getChildren()) { const k = e.x < 1350 ? 'proche' : e.x < 2612 ? 'milieu' : 'loin'; (r[k] ??= new Set()).add(e.getData('kind')); } return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, [...v].join(' ')])); });
 check(!/inquisitor|ringer|purifier|priest/.test(byRing.proche ?? ''), `foes by distance: near ${byRing.proche} | middle ${byRing.milieu} | far ${byRing.loin}`);
@@ -277,13 +280,15 @@ await page.keyboard.down('ArrowUp'); // into its mouth, until the fade takes him
 await until(() => window.game.scene.getScene('room').phase !== 'play', null, 4000);
 await page.keyboard.up('ArrowUp');
 check(await until(() => { const s = window.game.scene.getScene('room'); return s.phase === 'play' && s.hero.body.center.x < 1800; }, null, 8000), `out of the gallery\'s other mouth, in the middle (${await where()})`);
-// the battue posted on his way back: the first pack waits by the gallery's mouth he comes out of
+// the battue posted on his way back, at a narrow way out of the gallery: he walks on toward it until they are upon him
 const upon = () => run(() => { const s = window.game?.scene.getScene('room'), f = s?.hero?.body?.center; if (!f || !s.sys.isActive()) return false; return s.enemies.getChildren().some((e) => e.body?.enable && Math.hypot(e.x - f.x, e.y - f.y) < 90 && (e.getData('pack') || e.getData('kind') === 'hound')); });
+const pack = () => run(() => { const s = window.game.scene.getScene('room'), f = s.hero.body.center; return s.enemies.getChildren().filter((e) => e.body?.enable && (e.getData('pack') || e.getData('kind') === 'hound')).map((e) => ({ x: e.body.center.x, y: e.body.center.y, d: Math.hypot(e.x - f.x, e.y - f.y) })).sort((a, b) => a.d - b.d)[0]; });
 let met = false;
-for (let end = Date.now() + 20000; Date.now() < end && !(met ||= await upon());) await page.waitForTimeout(150);
+for (let end = Date.now() + 30000; Date.now() < end && !(met ||= await upon());) { const p = await pack(); if (p) await step(p.x, p.y, 40); else await page.waitForTimeout(150); }
 if (met) {
   await keep(false);
-  await page.waitForTimeout(60);
+  await until(() => { const s = window.game.scene.getScene('room'); return s.phase === 'play' && !s.cameras.main.fadeEffect.isRunning; }, null, 5000); // out of the gallery's fade: the pack seen
+  await page.waitForTimeout(200);
   await shot('battue');
   await keep(true);
   check(await fight(60000, 260), 'the battue met on the way back (by the gallery), fought off');

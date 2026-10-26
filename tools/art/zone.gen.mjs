@@ -171,8 +171,9 @@ async function main() {
 // over their opening (box) until raised from their side (+1: the south) at their lever (none: raised with the other of
 // its id); their frames in src/necropolis/gates.webp (shut to raised). TUNNEL: the gallery's two mouths, linked once its
 // gates are raised. DOORS: the refuge's stairs and the rooms' doors (x, threshold y, width).
-// AREAS: where foes stand by ring (first match); SPAWNS: x, y, area; CACHES: blood to search. TORCHES: flames over the
-// dark; HOLY: the floor the Dawn burns (rows of run lengths, base 36). PALETTE: for dark.ts.
+// AREAS: where foes stand by ring (first match); SPAWNS: x, y, area; CACHES: blood to search; CHOKES: where the battue
+// lies in wait (world.ts lair(): x, y, how near his way passes). TORCHES: flames over the dark; HOLY: the floor the Dawn
+// burns (rows of run lengths, base 36); LANTERNS: the Order's lanterns on their poles, whose pools burn. PALETTE: for dark.ts.
 export const W = ${RW}, H = ${RH}, SW = ${SW}, SH = ${SH}, COLS = ${COLS}, ROWS = ${ROWS};
 export const OVER: [number, number, number, number, number, number, number][][] = ${J(OVER)};
 export const BOXES: [number, number, number, number][] = ${J(BOXES)};
@@ -183,8 +184,10 @@ export const DOORS = ${J(Object.fromEntries(Object.entries(Z.DOORS).map(([k, d])
 export const AREAS = ${J(Z.AREAS)} as { id: string; ring: number; rect: [number, number, number, number]; groups: number }[];
 export const SPAWNS: [number, number, number][] = ${J(SPAWNS)};
 export const CACHES: [number, number][] = ${J(caches)};
+export const CHOKES: [number, number, number][] = ${J(Z.CHOKES)};
 export const TORCHES: [number, number, number][] = ${J(Z.TORCH_ROWS())};
 export const HOLY = '${holy.join(';')}';
+export const LANTERNS: [number, number][] = ${J(Z.LANTERNS)};
 export const PALETTE = ${J(Z.PAL.map((c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')))};
 `);
 
@@ -202,15 +205,14 @@ export const PALETTE = ${J(Z.PAL.map((c) => '#' + c.map((v) => Math.round(v).toS
   console.log(`baked in ${((Date.now() - t0) / 1000).toFixed(0)} s; this run wrote ${(bytes / 1e6).toFixed(2)} MB of webp; ${SPAWNS.length} spawn points`);
   for (const w of pool) w.terminate();
 
-  /** Its yellow rim, as the cloister has it: lit texels of a burning room px that touch the shade (rooms.gen.mjs dawn()). */
+  /** Its yellow rim, as the cloister has it: the burning room px that touch the shade (rooms.gen.mjs dawn()). */
   function rim(img, x0, y0) {
     const at = (x, y) => (x >= 0 && y >= 0 && x < RW && y < RH ? lit[y * RW + x] : 1);
     for (let p = 0; p < CW * CH; p++) {
       const tx = x0 + (p % CW), ty = y0 + ((p / CW) | 0), x = tx >> 1, y = ty >> 1;
       if (!lit[y * RW + x] || img.depth[p] > 1e8) continue;
-      const nx = tx & 1 ? x + 1 : x - 1, ny = ty & 1 ? y + 1 : y - 1;
-      if (at(nx, y) && at(x, ny)) continue;
-      img.out[p * 3] *= 1.2; img.out[p * 3 + 1] *= 0.95; img.out[p * 3 + 2] *= 0.35;
+      if (at(x - 1, y) && at(x + 1, y) && at(x, y - 1) && at(x, y + 1)) continue; // a room px wide: it reads at a glance
+      img.out[p * 3] *= 1.35; img.out[p * 3 + 1] *= 1.0; img.out[p * 3 + 2] *= 0.3;
     }
   }
 }

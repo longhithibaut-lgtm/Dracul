@@ -107,15 +107,21 @@ export function wayBack(steps: readonly number[], cols: number, from: P, links: 
   return way;
 }
 
-/** Where a pack of the battue lies in wait on his way back (`way`, from him to the stairs): the first point at least
- *  `far` from him (out of his sight), `k` packs already laid pushing it `gap` px further along the way each; before the stairs
- *  (`door` points short of them), every other pack, if that is far enough from him. Undefined: no room between him and
- *  the refuge for it. */
-export function lair(way: readonly P[], hero: P, far: number, stairs: boolean, door: number, k = 0, gap = 90): P | undefined {
+/** The zone's narrow ways (the bridge, the causeway, the grille, the breach, the gallery's mouth), where packs wait. */
+export const CHOKES: readonly (P & { r: number })[] = Zone.CHOKES.map(([x, y, r]) => ({ x, y, r }));
+/** Where a pack of the battue lies in wait on his way back (`way`, from him to the stairs): at the narrow ways he must
+ *  pass (`chokes`) at least `far` from him (out of his sight), the k-th he meets for the k-th pack already laid; past them,
+ *  the first point of the way that far from him, `k` packs already laid pushing it `gap` px further along each; before
+ *  the stairs (`door` points short of them), every other pack, if that is far enough from him. Undefined: no room
+ *  between him and the refuge for it. */
+export function lair(way: readonly P[], hero: P, far: number, stairs: boolean, door: number, k = 0, gap = 90, chokes = CHOKES): P | undefined {
   const d = (p: P) => Math.hypot(p.x - hero.x, p.y - hero.y);
   if (stairs) { const p = way[Math.max(0, way.length - 1 - door)]; return p && d(p) >= far ? p : undefined; }
   const i = way.findIndex((p) => d(p) >= far);
-  return i < 0 ? undefined : way[Math.min(way.length - 1, i + Math.round((k * gap) / NAV))];
+  if (i < 0) return undefined;
+  const met = chokes.filter((c) => d(c) >= far).map((c) => ({ c, at: way.findIndex((p, j) => j >= i && Math.hypot(p.x - c.x, p.y - c.y) <= c.r) }))
+    .filter((m) => m.at >= 0).sort((a, b) => a.at - b.at);
+  return (met[k] && { x: met[k].c.x, y: met[k].c.y }) ?? way[Math.min(way.length - 1, i + Math.round((k * gap) / NAV))];
 }
 
 /** A place of an expedition as the hero left it: its foes alive (where they stood, their hp, their post; a hound that

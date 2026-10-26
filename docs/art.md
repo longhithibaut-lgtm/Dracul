@@ -43,7 +43,7 @@ première zone ouverte, cuite par morceaux d'un écran) : caverne sous une voût
 sombre semée d'os, allées de gravier, champs de croix et de stèles sur leurs buttes, mausolées, murs d'ossements au
 sommet de crânes entassés, moignons de colonnes de roche, flaques de lune par les fissures de la voûte (froides, qui
 ne brûlent pas) et la brèche où tombe l'Aube (dorée, qui brûle, liseré jaune) ; le camp de l'Ordre (tentes coniques,
-bûcher, braseros, lanternes vert sale) ; mêmes lumière, palette et post-production que les cryptes.
+bûcher, braseros, lanternes vert sale dont la flaque brûle) ; mêmes lumière, palette et post-production que les cryptes.
 
 **Maquettes** (`docs/maquettes/`, générateurs dans `tools/art/maquettes/`)
 

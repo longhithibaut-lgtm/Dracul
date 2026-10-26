@@ -11,7 +11,7 @@ import { oldCoffin } from '../maquettes/hub3/props2.mjs';
 import { candles2, brazier2, rubble, statue, chest, trophyPike, weaponRack } from '../maquettes/hub3/props3.mjs';
 import { pitBones } from '../maquettes/hub/props.mjs';
 import { cross, stele } from '../maquettes/cloitre/props.mjs';
-import { cam, SN, CS, wx, wy, wz, rx, ry, C, broken, block, stage, flags, grime, ashlar, ossuary, stain, segDist, stone3, ironMat } from './common.mjs';
+import { cam, SN, CS, wx, wy, wz, rx, ry, C, broken, scaled, block, stage, flags, grime, ashlar, ossuary, stain, segDist, stone3, ironMat } from './common.mjs';
 import { ground, pitShadow, PAL as CRYPT_PAL } from './crypts.mjs';
 
 export const RW = 3840, RH = 1350, SW = 480, SH = 270; // the zone; a screen, the chunk the game loads
@@ -46,7 +46,8 @@ export const rock = (X, Y) => X < XW || X > XE || (Y < north(X) && !ARCHES.some(
 // the court of the causeway. h: world height.
 export const WALLS = [
   { x0: 1440, y0: 698, x1: 2380, y1: 716, h: 76 },
-  { x0: 2604, y0: 60, x1: 2636, y1: 292, h: 84, end: 1 }, { x0: 2604, y0: 428, x1: 2636, y1: 1340, h: 84, end: -1 },
+  // north-south: thick, battered both sides so the camera (looking north) sees their skulls
+  { x0: 2598, y0: 60, x1: 2642, y1: 292, h: 70, end: 1 }, { x0: 2598, y0: 428, x1: 2642, y1: 1340, h: 70, end: -1 },
   { x0: 1450, y0: 278, x1: 1505, y1: 292, h: 80 }, { x0: 1545, y0: 278, x1: 1600, y1: 292, h: 80 }, { x0: 1576, y0: 60, x1: 1600, y1: 292, h: 80 },
 ];
 // The shortcuts: a portcullis raised only from its side (+1: the south), forever once raised (save.ts); x0..x1 the opening
@@ -79,12 +80,19 @@ const FACADES = [
 const RECESS = 14; // how deep a doorway goes into its facade (room px)
 // Mausoleums (decor): front feet line x, y; w x d room px.
 const MAUS = [[520, 660, 60, 34], [1060, 390, 56, 30], [300, 870, 64, 34], [1010, 1010, 60, 32], [150, 1180, 56, 30],
-  [1700, 600, 60, 32], [2470, 300, 56, 30], [1610, 1268, 60, 30], [2300, 864, 56, 30], [3700, 700, 60, 32], [3420, 1190, 64, 34], [3020, 266, 56, 30]];
+  [1700, 600, 60, 32], [2470, 300, 56, 30], [1610, 1268, 60, 30], [2300, 864, 56, 30], [3700, 700, 60, 32], [3420, 1190, 64, 34], [3020, 266, 56, 30],
+  [1890, 1022, 56, 30], [2010, 995, 56, 30], [1930, 1120, 60, 30], [2060, 1092, 56, 30], // the middle's south band: an alley along the path
+  [2800, 580, 56, 30]]; // cover from the camp's crossbows past the breach
 // Stumps of rock columns, broken: x, y (their foot's middle), r.
-const COLS = [[1180, 1250, 22], [660, 300, 20], [2010, 196, 24], [3300, 560, 22], [3772, 420, 18], [2930, 1240, 20], [80, 520, 20]];
+const COLS = [[1180, 1250, 22], [660, 300, 20], [2010, 196, 24], [3300, 560, 22], [3772, 420, 18], [2930, 1240, 20], [80, 520, 20],
+  [2330, 1130, 22], [1700, 880, 20], [2960, 330, 20]];
 // The Order's camp: tents (x, y front middle), its palisade (stakes along these runs), crates, racks, trophies, a cage.
 const TENTS = [[3010, 800], [3250, 790], [3110, 990]];
-const PALISADE = [[[2940, 680], [3080, 680]], [[3150, 680], [3370, 680]], [[3384, 700], [3384, 900]], [[3384, 960], [3384, 1040]]];
+// closed but three ways in: north (x 3080-3150), east (y 900-960), south-west where the path runs (x 2930, y 900-1062)
+const PALISADE = [[[2940, 680], [3080, 680]], [[3150, 680], [3370, 680]], [[3384, 700], [3384, 900]], [[3384, 960], [3384, 1062]],
+  [[2930, 690], [2930, 900]], [[3000, 1062], [3384, 1062]]];
+// Stakes where the Order burns what it catches, charred (the far side).
+const STAKES = [[2852, 770], [2874, 806], [3480, 1012], [3504, 1040], [2780, 1172]];
 const CRATES = [[3184, 900], [3206, 930], [2972, 900]];
 // Graves of the fields: generated in blocks (x0, y0, x1, y1, step x, step y) clear of paths, doors and the rest.
 const BLOCKS = [[60, 520, 600, 1290, 44, 56], [600, 600, 1310, 1290, 48, 58], [380, 130, 1320, 430, 46, 54],
@@ -103,30 +111,45 @@ const PAVED = [[150, 92, 320, 232], [715, 478, 805, 526], [1846, 330, 1914, 384]
 const DECKS = [[BRIDGE.x0, BRIDGE.y0, BRIDGE.x1, BRIDGE.y1], [CAUSEWAY.x0, CAUSEWAY.y0, CAUSEWAY.x1, CAUSEWAY.y1]]; // paved, edge to edge
 const CAMP = [2930, 690, 3380, 1060]; // trampled mud
 // Where the Dawn falls through the vault (the breach), and the moon through its cracks: floor patches x, y, r (room px).
-const SUNHOLES = [[2622, 362, 62, 50], [2694, 300, 24, 18], [2552, 444, 22, 16]];
+// The breach: one wide patch over the whole gap in the wall, so crossing it in the open burns (docs/decisions.md).
+const SUNHOLES = [[2620, 360, 130, 100]];
 const MOONHOLES = [[560, 980, 40], [1130, 330, 34], [2150, 600, 40], [1700, 1000, 36], [3100, 440, 40], [3560, 1040, 40], [900, 760, 30], [3000, 1180, 30]];
-// Lit braziers and candles at graves (room px floor points).
+// Lit braziers (then one at each fork of the paths, landmarks in the dark; then one by each narrow way where the battue
+// waits, CHOKES) and candles at graves (room px floor points); more candles at the near field's graves (GRAVE_CANDLES)
+// and at each mausoleum's door.
 const BRAZIERS = [[180, 132], [282, 132], [1340, 1138], [1490, 1200], [1488, 304], [1562, 304], [3520, 314], [3600, 314],
-  [3060, 880], [3236, 872], [3150, 724], [2470, 650], [1928, 760], [1662, 114], [1718, 114], [3232, 114], [3288, 114], [2700, 1170]];
+  [3060, 880], [3236, 872], [3150, 724], [2470, 650], [1928, 760], [1662, 114], [1718, 114], [3232, 114], [3288, 114], [2700, 1170],
+  [500, 400], [820, 792], [1800, 1108], [2900, 450], [3200, 380],
+  [1318, 1192], [1300, 210], [1556, 234], [2465, 392], [2562, 486], [1714, 228], [2084, 262]];
 const CANDLES = [[742, 486, 3], [780, 488, 2], [1124, 664, 3], [430, 1094, 2], [1870, 344, 2], [1898, 346, 3], [3380, 448, 3], [3548, 316, 2], [3578, 318, 2],
-  [560, 676, 2], [312, 886, 3], [2270, 196, 2], [1620, 1284, 2], [3610, 1114, 2], [2730, 1244, 2], [1714, 616, 2], [3712, 716, 2], [1960, 754, 2]];
-// The Order's lanterns on their poles round the camp (their dirty green light).
-const LANTERNS = [[2996, 716], [3320, 716], [2996, 1036], [3320, 1036], [3560, 360]];
+  [560, 676, 2], [312, 886, 3], [2270, 196, 2], [1620, 1284, 2], [3610, 1114, 2], [2730, 1244, 2], [1714, 616, 2], [3712, 716, 2], [1960, 754, 2],
+  [1000, 1024, 3], [1158, 136, 2]]; // the way back's landmarks: the sarcophagus mid-trunk, the rubble on the north path
+// The Order's lanterns on their poles round the camp: their dirty green pool burns like a planted lantern's (zone.ts).
+export const LANTERNS = [[2996, 716], [3320, 716], [2996, 1036], [3320, 1036], [3560, 360]];
 const PYRE = [3120, 846]; // the camp's fire: a pyre of coffin boards and bones
 
 // ---------- the gameplay plan, read by zone.gen.mjs ----------
 // Areas where the foes stand (docs/extraction.md: rings by distance from the refuge), first match; groups: how many.
+// The forecourt by the refuge's stairs and the court behind the grille hold none (a sure pause); x 1400 lies in the chasm.
 export const AREAS = [
-  { id: 'proche-nord', ring: 1, rect: [0, 0, 1350, 520], groups: 2 },
-  { id: 'proche-sud', ring: 1, rect: [0, 520, 1350, 1350], groups: 3 },
-  { id: 'milieu-nord', ring: 2, rect: [1350, 0, 2612, 707], groups: 3 },
-  { id: 'milieu-sud', ring: 2, rect: [1350, 707, 2612, 1350], groups: 3 },
-  { id: 'camp', ring: 3, rect: [2612, 640, 3300, 1350], groups: 4 },
+  { id: 'parvis', ring: 1, rect: [100, 60, 460, 360], groups: 0 },
+  { id: 'cour', ring: 2, rect: [1440, 60, 1610, 292], groups: 0 },
+  { id: 'proche-nord', ring: 1, rect: [0, 0, 1400, 520], groups: 2 },
+  { id: 'proche-sud', ring: 1, rect: [0, 520, 1400, 1350], groups: 3 },
+  { id: 'milieu-nord', ring: 2, rect: [1400, 0, 2612, 707], groups: 3 },
+  { id: 'milieu-sud', ring: 2, rect: [1400, 707, 2612, 1350], groups: 3 },
+  { id: 'camp', ring: 3, rect: [2920, 680, 3390, 1065], groups: 3 },
+  { id: 'loin-sud', ring: 3, rect: [2612, 640, 3300, 1350], groups: 1 },
   { id: 'loin-ouest', ring: 3, rect: [2612, 0, 3200, 640], groups: 2 },
-  { id: 'loin-est', ring: 3, rect: [3200, 0, 3840, 1350], groups: 2 },
+  { id: 'loin-est', ring: 3, rect: [3200, 0, 3840, 1350], groups: 3 },
 ];
 // Blood caches: floor points in front of what is worth searching, by area.
-export const CACHES = [[1124, 676], [432, 1102], [1020, 1028], [2270, 206], [1724, 1030], [2190, 960], [3168, 912], [3384, 460], [2730, 1250], [3612, 1124], [3030, 286]];
+export const CACHES = [[1124, 676], [432, 1102], [1020, 1028], [2270, 206], [1724, 1030], [2190, 960], [3168, 912], [3384, 460], [2730, 1250], [3612, 1124], [3030, 286],
+  [1060, 404], [1180, 142], [2470, 314], [1700, 614], [2880, 572]];
+// Where the battue lies in wait on his way back (world.ts lair()): on the refuge's side of each narrow way (the bridge, the
+// causeway, the grille, the breach's two ways out, west and south under the wall, out of the Dawn; out of the gallery's
+// mouth, south to the grille or east past the nave, where its roof no longer hides them): x, y, how near his way must pass.
+export const CHOKES = [[1320, 1168, 32], [1318, 233, 32], [1525, 240, 32], [2470, 360, 64], [2585, 476, 32], [1690, 220, 32], [2060, 280, 40]];
 export const TORCH_ROWS = () => [...BRAZIERS.map(([x, y]) => [x, Math.round(y - 4 - 36 * CS / 2), 1]), ...[-8, 0, 7].map((d) => [PYRE[0] + d, Math.round(PYRE[1] - 6 - 22 * CS / 2), 1])]; // flames over the dark (dark.ts)
 
 // ---------- solid footprints (room px x, y, w, h): what stops walkers ----------
@@ -150,6 +173,7 @@ export function solids() {
   for (const o of PROPS) out.push(rect(o.x - o.w / 2, o.y - o.h, o.x + o.w / 2, o.y));
   for (const [x, y] of BRAZIERS) out.push(rect(x - 6, y - 8, x + 6, y));
   for (const [x, y] of LANTERNS) out.push(rect(x - 2, y - 3, x + 2, y));
+  for (const [x, y] of STAKES) out.push(rect(x - 3, y - 3, x + 3, y));
   out.push(rect(PYRE[0] - 18, PYRE[1] - 12, PYRE[0] + 18, PYRE[1]));
   return out;
 }
@@ -158,17 +182,22 @@ export const gateBoxes = () => GATES.map((g) => rect(g.x0, g.y0, g.x1, g.y1));
 
 // ---------- the floor's rasters, one byte per room px ----------
 // kind: 0 earth, 1 gravel, 2 paving, 3 the camp's mud; mound: turned earth over a grave; blood: old blood.
-const N = RW * RH, kind = new Uint8Array(N), mound = new Uint8Array(N), blood = new Uint8Array(N);
+// edge: within 8 px of a path's gravel (floorAt() works its border out per texel, and scatters gravel past it)
+const N = RW * RH, kind = new Uint8Array(N), mound = new Uint8Array(N), blood = new Uint8Array(N), edge = new Uint8Array(N);
 function paint(x0, y0, x1, y1, f) {
   for (let y = Math.max(0, Math.floor(y0)); y < Math.min(RH, Math.ceil(y1)); y++) for (let x = Math.max(0, Math.floor(x0)); x < Math.min(RW, Math.ceil(x1)); x++) f(y * RW + x, x, y);
 }
-for (const [w, pts] of PATHS) for (let k = 0; k < pts.length - 1; k++) {
-  const a = pts[k], b = pts[k + 1];
-  paint(Math.min(a[0], b[0]) - w, Math.min(a[1], b[1]) - w, Math.max(a[0], b[0]) + w, Math.max(a[1], b[1]) + w, (i, x, y) => {
-    if (segDist(x + 0.5, y + 0.5, a, b) < w / 2 + 2.5 * (vn(x / 7, y / 7, 3) - 0.5) && kind[i] !== 2) kind[i] = 1;
-  });
-}
-paint(...CAMP, (i) => { if (kind[i] === 0) kind[i] = 3; });
+const SEGS = PATHS.flatMap(([w, pts]) => pts.slice(1).map((b, k) => [w, pts[k], b]));
+/** How far room px (X, Y) lies outside the gravel of the paths (< 0: on it), its border ragged. */
+const gravel = (X, Y) => { let d = 1e9; for (const [w, a, b] of SEGS) if (X > Math.min(a[0], b[0]) - w - 12 && X < Math.max(a[0], b[0]) + w + 12 && Y > Math.min(a[1], b[1]) - w - 12 && Y < Math.max(a[1], b[1]) + w + 12) d = Math.min(d, segDist(X, Y, a, b) - w / 2); return d - 5 * (vn(X / 3.5, Y / 3.5, 3) - 0.5); };
+for (const [w, a, b] of SEGS) paint(Math.min(a[0], b[0]) - w - 12, Math.min(a[1], b[1]) - w - 12, Math.max(a[0], b[0]) + w + 12, Math.max(a[1], b[1]) + w + 12, (i, x, y) => {
+  const d = gravel(x + 0.5, y + 0.5);
+  if (d < 0 && kind[i] !== 2) kind[i] = 1;
+  if (d < 8) edge[i] = 1;
+});
+/** How far room px (X, Y) lies inside the camp's trodden mud (< 0: out), its edge ragged by 40 px. */
+const inCamp = (X, Y) => Math.min(X - CAMP[0], CAMP[2] - X, Y - CAMP[1], CAMP[3] - Y) + 80 * (fbm(X / 40, Y / 40, 3, 37) - 0.5);
+paint(CAMP[0] - 45, CAMP[1] - 45, CAMP[2] + 45, CAMP[3] + 45, (i, x, y) => { if (kind[i] === 0 && inCamp(x + 0.5, y + 0.5) > 0) kind[i] = 3; });
 for (const [x0, y0, x1, y1] of PAVED) paint(x0, y0, x1, y1, (i, x, y) => { const e = Math.min(x - x0, x1 - x, y - y0, y1 - y); if (e > 7 * vn(x / 5, y / 5, 13) - 1 || y < y0 + 2) kind[i] = 2; }); // broken at its edges
 for (const p of DECKS) paint(...p, (i) => (kind[i] = 2));
 /** Room px (x, y) clear of paths and paving by `m`. */
@@ -181,7 +210,11 @@ const PROPS = [
   { kind: 'sarc', x: 432, y: 1090, w: 40, h: 14 }, { kind: 'sarc', x: 2270, y: 194, w: 40, h: 14 }, { kind: 'sarc', x: 3612, y: 1112, w: 40, h: 14 },
   { kind: 'sarc', x: 1020, y: 1016, w: 40, h: 14 }, { kind: 'coffin', x: 2730, y: 1238, w: 46, h: 12 }, { kind: 'coffin', x: 1724, y: 1018, w: 46, h: 12 },
   { kind: 'chest', x: 3168, y: 900, w: 26, h: 12 }, { kind: 'chest', x: 2190, y: 948, w: 26, h: 12 }, { kind: 'sarc', x: 3030, y: 274, w: 40, h: 14 },
-  { kind: 'stump', x: 2582, y: 360, w: 20, h: 10, tall: 34 }, { kind: 'stump', x: 2660, y: 410, w: 20, h: 10, tall: 22 }, { kind: 'stump', x: 2640, y: 300, w: 20, h: 10, tall: 44 },
+  { kind: 'sarc', x: 2880, y: 560, w: 40, h: 14 },
+  // the breach: two tall stumps whose shade (thrown north-west) is the way across without burning, a cross in the Dawn
+  { kind: 'stump', x: 2600, y: 412, w: 20, h: 10, tall: 70 }, { kind: 'stump', x: 2690, y: 340, w: 20, h: 10, tall: 70 }, { kind: 'stump', x: 2640, y: 300, w: 20, h: 10, tall: 44 },
+  { kind: 'cross', x: 2560, y: 332, w: 12, h: 5 },
+  { kind: 'banner', x: 2756, y: 330, w: 6, h: 4 }, { kind: 'banner', x: 2756, y: 430, w: 6, h: 4 }, // here begins the Order
   { kind: 'stump', x: 2050, y: 820, w: 22, h: 11, tall: 40 }, { kind: 'stump', x: 2150, y: 1100, w: 22, h: 11, tall: 28 }, { kind: 'pillar', x: 2240, y: 960, w: 22, h: 11 },
   { kind: 'stump', x: 1900, y: 520, w: 22, h: 11, tall: 50 }, { kind: 'pillar', x: 1360, y: 1120, w: 20, h: 10 }, { kind: 'pillar', x: 1470, y: 1120, w: 20, h: 10 },
   { kind: 'trophy', x: 2960, y: 760, w: 6, h: 4 }, { kind: 'trophy', x: 3334, y: 760, w: 6, h: 4 }, { kind: 'rack', x: 3280, y: 962, w: 30, h: 8 },
@@ -189,8 +222,16 @@ const PROPS = [
   { kind: 'lever', x: 1556, y: 312, w: 10, h: 6 }, { kind: 'lever', x: 3316, y: 112, w: 10, h: 6 },
 ];
 // Rubble heaps where galleries fell (walkable round, solid in the middle).
-const RUBBLE = [[2080, 880, 26], [2200, 1040, 30], [1980, 1130, 22], [2600, 280, 20], [2610, 444, 22], [1180, 120, 24], [600, 1270, 22], [3420, 620, 24], [2300, 640, 20]];
+const RUBBLE = [[2080, 880, 26], [2200, 1040, 30], [1980, 1130, 22], [2600, 280, 20], [2610, 444, 22], [1180, 120, 24], [600, 1270, 22], [3420, 620, 24], [2300, 640, 20],
+  [1760, 1180, 20], [2380, 1050, 24]];
 for (const [x, y, r] of RUBBLE) PROPS.push({ kind: 'rubble', x, y: y + r * 0.3, w: r * 1.2, h: r * 0.5, r });
+// The north cliff's talus: rock fallen at its foot every 60-90 px, but at the arches, doors, the court and the walls;
+// decor only (a solid heap against the rock would squeeze a walker into it).
+const TALUS = [];
+for (let x = 70; x < RW - 60; x += 60 + 30 * h2(x, 0, 91)) {
+  if (ARCHES.some((a) => Math.abs(x - a.x) < 100) || [[1330, 1620], [1780, 1980], [2570, 2670], [3470, 3650]].some(([a, b]) => x > a && x < b)) continue;
+  TALUS.push([Math.round(x), Math.round(north(x)), Math.round(14 + 10 * h2(x, 1, 91))]);
+}
 const taken = (x, y, m) => {
   const near = (x0, y0, x1, y1) => x > x0 - m && x < x1 + m && y > y0 - m && y < y1 + m;
   return pit(x, y) || pit(x, y + 8) || pit(x, y - 8) || rock(x, y - 20) || rock(x, y + 12) || WALLS.some((w) => near(w.x0, w.y0 - 30, w.x1, w.y1 + 10))
@@ -198,19 +239,26 @@ const taken = (x, y, m) => {
     || COLS.some(([cx, cy, r]) => near(cx - r, cy - r, cx + r, cy + 6)) || TENTS.some(([tx, ty]) => near(tx - 36, ty - 50, tx + 36, ty + 6)) || near(...CAMP)
     || PROPS.some((o) => near(o.x - o.w / 2, o.y - o.h - 16, o.x + o.w / 2, o.y + 6)) || Object.values(DOORS).some((d) => Math.hypot(d.x - x, d.y - y) < 70)
     || GATES.some((g) => near(g.x0 - 40, g.y0 - 40, g.x1 + 40, g.y1 + 50)) || BRAZIERS.some(([bx, by]) => Math.hypot(bx - x, by - y) < 18)
-    || SUNHOLES.some(([sx, sy, a]) => Math.hypot(sx - x, sy - y) < a + 30) || CACHES.some(([cx, cy]) => Math.hypot(cx - x, cy - y) < 24);
+    || SUNHOLES.some(([sx, sy, a]) => Math.hypot(sx - x, sy - y) < a + 30) || STAKES.some(([sx, sy]) => Math.hypot(sx - x, sy - y) < 16) || CACHES.some(([cx, cy]) => Math.hypot(cx - x, cy - y) < 24);
 };
 // Each grave: x, y (its feet line), kind, footprint w x h, seed.
+// Clearings and clusters (a slow noise over the blocks), jittered, sized +-25 %, some sunk or broken.
 const GRAVES = [];
 for (const [x0, y0, x1, y1, sx, sy] of BLOCKS) for (let y = y0; y < y1; y += sy) for (let x = x0; x < x1; x += sx) {
-  const gx = Math.round(x + (R() - 0.5) * sx * 0.35), gy = Math.round(y + (R() - 0.5) * sy * 0.25), r = R();
-  if (r < 0.18 || taken(gx, gy, 10) || !clear(gx, gy + 10, 8) || !clear(gx, gy - 6, 6)) continue;
-  const k = r < 0.5 ? 'cross' : r < 0.78 ? 'stele' : r < 0.9 ? 'tomb' : 'lying';
-  GRAVES.push({ x: gx, y: gy, kind: k, w: k === 'tomb' ? 30 : k === 'lying' ? 14 : 12, h: k === 'tomb' ? 12 : k === 'lying' ? 4 : 5, seed: (R() * 1e4) | 0 });
+  const m = fbm(x / 170, y / 140, 3, 404);
+  for (const [ox, oy] of m > 0.6 ? [[0, 0], [sx / 2, sy / 2]] : [[0, 0]]) {
+    const gx = Math.round(x + ox + (R() - 0.5) * sx * 0.6), gy = Math.round(y + oy + (R() - 0.5) * sy * 0.45), r = R(), s = 0.75 + 0.5 * R();
+    if (r < 0.18 || m < 0.4 || taken(gx, gy, 10) || !clear(gx, gy + 10, 8) || !clear(gx, gy - 6, 6) || GRAVES.some((g) => Math.abs(g.x - gx) < 24 && Math.abs(g.y - gy) < 16)) continue;
+    const k = r < 0.5 ? 'cross' : r < 0.78 ? 'stele' : r < 0.9 ? 'tomb' : 'lying', q = k === 'tomb' ? 1 : s;
+    GRAVES.push({ x: gx, y: gy, kind: k, s: q, w: Math.round((k === 'tomb' ? 30 : k === 'lying' ? 14 : 12) * q), h: Math.max(3, Math.round((k === 'tomb' ? 12 : k === 'lying' ? 4 : 5) * q)), seed: (R() * 1e4) | 0 });
+  }
 }
-for (const g of GRAVES) if (g.kind !== 'tomb') paint(g.x - 12, g.y, g.x + 12, g.y + 20, (i, x, y) => {
-  const dx = (x - g.x) / 8, dy = (y - g.y - 9) / 7, v = 1 - dx * dx - dy * dy + (vn(x / 3, y / 3, g.seed) - 0.5) * 0.5;
-  if (v > 0 && kind[i] === 0) mound[i] = Math.max(mound[i], Math.min(255, v * 600));
+// Candles at the near field's graves, two or three to a screen (the near side is where they still come to mourn).
+const GRAVE_CANDLES = [];
+for (const g of GRAVES) if (g.x < 1380 && g.kind !== 'tomb' && h2(g.seed, 7, 3) < 0.2 && [...CANDLES, ...GRAVE_CANDLES].every(([x, y]) => Math.hypot(x - g.x, y - g.y) > 110)) GRAVE_CANDLES.push([g.x + 8, g.y + 5, 2 + (g.seed % 2)]);
+for (const g of GRAVES) if (g.kind !== 'tomb') paint(g.x - 14, g.y, g.x + 14, g.y + 24, (i, x, y) => {
+  const dx = (x - g.x) / (8 * g.s), dy = (y - g.y - 9 * g.s) / (7 * g.s), v = 1 - dx * dx - dy * dy + (vn(x / 3, y / 3, g.seed) - 0.5) * 0.5;
+  if (v > 0 && kind[i] === 0) mound[i] = Math.max(mound[i], Math.min(255, v * 300)); // a low dome
 });
 // Old blood: pools and drags (room px x, y, rx, ry; polylines).
 const POOLS = [[3150, 860, 14, 6], [3040, 960, 10, 5], [2960, 780, 8, 4], [760, 500, 9, 4], [1124, 680, 8, 4], [1952, 760, 9, 4], [3560, 330, 10, 4], [2700, 380, 8, 4],
@@ -221,34 +269,61 @@ for (const d of DRAGS) for (let k = 0; k < d.length - 1; k++) { const a = d[k], 
   paint(Math.min(a[0], b[0]) - 4, Math.min(a[1], b[1]) - 4, Math.max(a[0], b[0]) + 4, Math.max(a[1], b[1]) + 4, (i, x, y) => { const t = segDist(x, y, a, b); if (t < 2.4 && vn(x / 1.2, y / 1.2, 36 + k) > 0.3 + t / 6) blood[i] = Math.max(blood[i], 200); }); }
 
 // ---------- the floor ----------
-const E = { earth: L('#3a3128'), earthD: L('#1d1814'), dust: L('#6a6250'), moss: L('#344024'), mossL: L('#4e5a2c'), grav: L('#6c6556'), gravD: L('#3c372e'),
-  mud: L('#2a221a'), mudD: L('#15110d'), straw: L('#6a5a34'), turned: L('#2e241a'), turnedL: L('#4a3a28'), ash: L('#4a4640') };
+const E = { earth: L('#3a3128'), earthD: L('#2a231c'), dust: L('#6a6250'), moss: L('#344024'), mossL: L('#4e5a2c'), grav: L('#5a5446'), gravD: L('#3c372e'),
+  mud: L('#2a221a'), mudD: L('#15110d'), straw: L('#6a5a34'), turned: L('#2e241a'), turnedL: L('#352a1f'), ash: L('#4a4640') };
+const moundAt = (X, Y) => { const x = Math.floor(X), y = Math.floor(Y); return x < 0 || y < 0 || x >= RW || y >= RH ? 0 : mound[y * RW + x] / 255; };
+/** The bare earth at world (x, y) (room px X, Y): its noise drawn at (x, y * SN), round on screen; dark, mossy near the
+ *  refuge, bone dust in the middle (paler north of the wall), ash on the far side; half-buried old flags, clods, puddles,
+ *  pebbles; turned earth over the graves, in relief. */
+function earthAt(x, y, X, Y, i) {
+  const ys = y * SN, mid = clamp(1 - Math.abs(X - 2000) / 700), pale = mid * clamp((760 - Y) / 200), far = clamp((X - 2600) / 500), near = clamp((1500 - X) / 400);
+  let c = mix(E.earth, E.earthD, clamp(fbm(x / 26, ys / 26, 4, 101) * 1.2 - 0.1)), spec = 0.03, gloss = 12;
+  c = mix(c, E.dust, clamp((fbm(x / 60, ys / 60, 3, 102) - 0.55 + mid * 0.25 + pale * 0.25) * 2.5) * (0.5 + 0.2 * mid + 0.25 * pale)); // bone dust, the middle's ossuaries
+  c = mix(c, E.ash, far * clamp((fbm(x / 40, ys / 40, 3, 103) - 0.4) * 2)); // ash where the Order burns
+  const m = fbm(x / 30, ys / 30, 4, 33), m0 = 0.66 - 0.1 * near; if (m > m0) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? E.mossL : E.moss, clamp((m - m0) * 4) * 0.6 * (1 - far));
+  const f = (u, v) => vn(u / 14, v / 14, 21), gx = f(x + 1, ys) - f(x - 1, ys), gy = f(x, ys + 1) - f(x, ys - 1);
+  let N = [-gx * 0.4, -gy * 0.4, 1];
+  // half-buried old flags where a slow noise says so, the earth over their edges
+  const fl = fbm(x / 140, ys / 140, 3, 110);
+  if (fl > 0.67 && fbm(x / 12, ys / 12, 3, 111) < 0.25 + (fl - 0.67) * 3) { const g = flags(x, y, 46, 34, 17); c = mix(c, mul(g.c, 0.7), 0.85); N = g.N; }
+  else {
+    const cx = Math.floor(x / 9), cy = Math.floor(ys / 9);
+    if (h2(cx, cy, 120) < 0.04) { // a clod
+      const ox = (cx + 0.2 + 0.6 * h2(cx, cy, 121)) * 9, oy = (cy + 0.2 + 0.6 * h2(cx, cy, 122)) * 9, r = 2 + 2.5 * h2(cx, cy, 123), d = Math.hypot(x - ox, ys - oy) / r;
+      if (d < 1) { N = [(x - ox) / r * 0.5, (ys - oy) / r * 0.5, 1]; c = mul(c, 0.85 + 0.25 * (1 - d)); }
+    }
+    const p = fbm(x / 36, ys / 36, 3, 121); if (p > 0.77) { c = mul(c, 0.6); spec = 0.25 * clamp((p - 0.77) * 12); gloss = 60; N = [0, 0, 1]; } // a puddle
+  }
+  const q = h2(x / 4 | 0, ys / 4 | 0, 17); if (q < 0.012) c = mul(c, 0.7); else if (q > 0.996) c = mix(c, E.dust, 0.4); // pebbles
+  const a = moundAt(X, Y);
+  if (a) {
+    c = mix(c, mix(E.turned, E.turnedL, vn(x / 3, ys / 3, 23)), clamp(a * 1.5) * 0.55);
+    N = [N[0] - (moundAt(X + 1, Y) - moundAt(X - 1, Y)) * 0.6, N[1] - (moundAt(X, Y + 1) - moundAt(X, Y - 1)) * 0.6, 1]; // its relief
+  }
+  return { c, N, spec, gloss };
+}
 function floorAt(x, y) {
   const X = rx(x), Y = ry(y), xi = Math.floor(X), yi = Math.floor(Y);
   if (xi < 0 || yi < 0 || xi >= RW || yi >= RH) return { alb: C.void, N: [0, 0, 1], noAO: true };
-  const i = yi * RW + xi, k = kind[i];
-  let c, Nn = [0, 0, 1], spec = 0.03, gloss = 12;
+  const i = yi * RW + xi, camp = kind[i] === 3 || (edge[i] && inCamp(X, Y) > 0);
+  let k = kind[i], c, Nn = [0, 0, 1], spec = 0.03, gloss = 12, scatter = 0;
+  if (edge[i] && k !== 2) { const d = gravel(X, Y); k = d < 0 ? 1 : camp ? 3 : 0; scatter = clamp(1 - d / 4); } // the gravel's border per texel
   if (k === 2) { const f = flags(x, y, 46, 34, 11); c = grime(f.c, x, y, 0.8); Nn = f.N; }
   else if (k === 1) {
     c = mix(E.grav, E.gravD, clamp(fbm(x / 9, y / 9, 3, 11) * 1.5 - 0.4));
     const p = h2(x * 0.5 | 0, y * 0.6 | 0, 12); if (p < 0.14) c = mul(c, 0.6); else if (p > 0.92) c = mul(c, 1.18);
     c = mix(c, E.earthD, clamp((fbm(x / 30, y / 24, 3, 13) - 0.5) * 2) * 0.6);
     Nn = [(h2(x | 0, y | 0, 14) - 0.5) * 0.5, (h2(x | 0, y | 0, 15) - 0.5) * 0.5, 1];
-  } else if (k === 3) {
-    c = mix(mix(E.mud, E.mudD, clamp(fbm(x / 14, y / 12, 3, 31) * 1.6 - 0.4)), E.earth, Math.max(clamp((0.45 - fbm(x / 60, y / 50, 3, 9)) * 4) * 0.7, clamp(1 - Math.min(X - CAMP[0], CAMP[2] - X, Y - CAMP[1], CAMP[3] - Y) / 70 + 0.3 * (fbm(x / 20, y / 20, 3, 8) - 0.5)))); // trodden, fading out at its edges
-    if (h2(x | 0, y | 0, 32) > 0.985) c = mix(c, E.straw, 0.5); // straw trodden in
-    const w = fbm(x / 24, y / 18, 3, 33); if (w > 0.62) { c = mul(c, 0.7); spec = 0.5 * clamp((w - 0.62) * 8); gloss = 70; } // puddles
   } else {
-    const n = fbm(x / 26, y / 22, 4, 101);
-    c = mix(E.earth, E.earthD, clamp(n * 1.7 - 0.35));
-    const mid = clamp(1 - Math.abs(X - 2000) / 700), far = clamp((X - 2600) / 500);
-    c = mix(c, E.dust, clamp((fbm(x / 60, y / 50, 3, 102) - 0.55 + mid * 0.25) * 2.5) * (0.5 + 0.2 * mid)); // bone dust, the middle's ossuaries
-    c = mix(c, E.ash, far * clamp((fbm(x / 40, y / 34, 3, 103) - 0.4) * 2) * 0.6); // ash where the Order burns
-    const m = fbm(x / 30, y / 26, 4, 33); if (m > 0.66) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? E.mossL : E.moss, clamp((m - 0.66) * 4) * 0.6);
-    const e = 1, gx = vn((x + e) / 7, y / 7, 21) - vn((x - e) / 7, y / 7, 21), gy = vn(x / 7, (y + e) / 7, 21) - vn(x / 7, (y - e) / 7, 21);
-    Nn = [-gx * 1.2, -gy * 1.2, 1];
-    const p = h2(x * 0.4 | 0, y * 0.4 | 0, 17); if (p < 0.03) c = mul(c, 0.75); else if (p > 0.995) c = mix(c, E.dust, 0.4); // pebbles
-    if (mound[i]) { const a = mound[i] / 255; c = mix(c, mix(E.turned, E.turnedL, vn(x / 3, y / 3, 23)), clamp(a * 1.5)); }
+    const e = earthAt(x, y, X, Y, i);
+    c = e.c; Nn = e.N; spec = e.spec; gloss = e.gloss;
+    if (k === 3) { // the camp's mud, trodden, fading out into the earth at its ragged edge
+      let u = mix(E.mud, E.mudD, clamp(fbm(x / 14, y / 12, 3, 31) * 1.6 - 0.4));
+      if (h2(x | 0, y | 0, 32) > 0.985) u = mix(u, E.straw, 0.5); // straw trodden in
+      const t = clamp(inCamp(X, Y) / 50) * (1 - clamp((0.45 - fbm(x / 60, y / 50, 3, 9)) * 4) * 0.7);
+      c = mix(c, u, t);
+      const w = fbm(x / 24, y / 18, 3, 33); if (w > 0.62 && t > 0.5) { c = mul(c, 0.7); spec = 0.5 * clamp((w - 0.62) * 8); gloss = 70; Nn = [0, 0, 1]; } // puddles
+    } else if (scatter > 0 && h2(x | 0, y * 1.6 | 0, 19) < 0.5 * scatter) c = mix(E.grav, E.gravD, h2(x | 0, y | 0, 18)); // gravel kicked into the earth
   }
   // a doorway's floor: steps going down into the dark
   for (const d of [...Object.values(DOORS), ...TUNNEL]) if (Math.abs(X - d.x) < d.w / 2 + 1 && Y < d.y + 1 && Y > d.y - RECESS - 40) {
@@ -262,33 +337,72 @@ function floorAt(x, y) {
   if (blood[i]) { const a = blood[i] / 255; c = mix(c, mix(C.bloodD, C.blood, vn(x / 4, y / 4, 8) * 0.6), a); if (a > 0.3) { spec = 0.4 * a; gloss = 70; Nn = [0, 0, 1]; } }
   // bone splinters and teeth, more in the fields
   { const cx = Math.floor(x / 7), cy = Math.floor(y / 7);
-    if (h2(cx, cy, 300) < (k === 0 ? 0.003 : 0.0015)) { const an = h2(cx, cy, 301) * 3.14, lx = x - (cx * 7 + 3.5), ly = y - (cy * 7 + 3.5), u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an);
+    if (h2(cx, cy, 300) < (k === 0 ? 0.004 + 0.008 * clamp(1 - Math.abs(X - 2000) / 700) : 0.0015)) { const an = h2(cx, cy, 301) * 3.14, lx = x - (cx * 7 + 3.5), ly = y - (cy * 7 + 3.5), u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an);
       if (Math.abs(v) < 0.6 && Math.abs(u) < 3) { c = mix(c, C.bone, 0.6); Nn = [0, 0, 1]; } } }
   return { alb: c, N: Nn, spec, gloss };
 }
 
 // ---------- models ----------
 const BONE_TOP = L('#2a251e');
-/** A wall of bones (room px rect), its top ragged; `end`: broken down toward its north (1) or south (-1) end, the breach. */
+/** Skulls heaped, seen from above (a wall's crest, its collapsed end): the nearest of jittered domes in cells of `s`
+ *  world units at (x, y): how far from its middle (< 1: on it, its radius 1), its id, where on it (du, dv). */
+function heap(x, y, s, seed) {
+  const gx = Math.floor(x / s), gy = Math.floor(y / s);
+  let d = 9, id = 0, du = 0, dv = 0;
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const a = gx + i, b = gy + j, cx = (a + 0.25 + 0.5 * h2(a, b, seed)) * s, cy = (b + 0.25 + 0.5 * h2(a, b, seed + 1)) * s, r = s * (0.45 + 0.15 * h2(a, b, seed + 2));
+    const e = Math.hypot(x - cx, y - cy) / r;
+    if (e < d) { d = e; id = a * 7919 + b; du = (x - cx) / r; dv = (y - cy) / r; }
+  }
+  return { d, id, du, dv };
+}
+/** A skull dome's look: bone (darker, ×0.6, under the faces' pale), two dark orbits toward the camera; dark between. */
+function heapMat(x, y, seed = 81) {
+  const k = heap(x, y, 10, seed);
+  if (k.d >= 1) return { alb: mul(C.mortar, 0.5), N: [0, 0, 1], ao: 0.5 };
+  const skull = h2(k.id, 0, 82) < 0.75, orbit = skull && k.dv > 0.05 && Math.hypot(Math.abs(k.du) - 0.38, k.dv - 0.38) < 0.22;
+  const c = orbit ? mul(C.mortar, 0.4) : mul(mix(C.boneD, C.bone, clamp(0.3 + 0.5 * h2(k.id, 1, 83) + 0.4 * (vn(x / 2, y / 2, 7) - 0.5))), 0.6);
+  return { alb: c, N: [k.du * 0.9, k.dv * 0.9, Math.sqrt(Math.max(0.05, 1 - k.d * k.d))], spec: 0.08, gloss: 20, ao: orbit ? 0.5 : 1 };
+}
+/** A face of bones (u along it, z up): the ossuary's skulls half as big again, each row slid at random, 15 % missing. */
+function boneFace(u, z) {
+  const U = u / 1.5, Z = z / 1.5, row = Math.floor(Z / 13), Ux = U + 15 * h2(row, 0, 84);
+  if (Z - row * 13 >= 4 && h2(Math.floor((Ux + row * 4.5) / 9), row, 85) < 0.15) return { c: mul(C.mortar, 0.4), N: [0, 1, 0], ao: 0.4 };
+  return ossuary(Ux, Z);
+}
+/** A wall of bones (room px rect), its crest a heap of skulls; east-west, its line wobbling a little; north-south, battered
+ *  both sides; `end`: collapsed toward its north (1) or south (-1) end, the breach. */
 function boneWall(w) {
-  const X0 = wx(w.x0), X1 = wx(w.x1), Y0 = wy(w.y0), Y1 = wy(w.y1), alongX = X1 - X0 > Y1 - Y0;
+  const X0 = wx(w.x0), X1 = wx(w.x1), Y0 = wy(w.y0), Y1 = wy(w.y1), alongX = X1 - X0 > Y1 - Y0, XC = (X0 + X1) / 2, HX = (X1 - X0) / 2;
+  const K = alongX ? 0 : Math.min(0.53, (0.8 * HX) / w.h); // the flanks' batter (run over rise: about 62° on the thick walls)
   const top = (x, y) => {
     let h = w.h - 7 * vn(x / 9 + y / 9, 0, 4);
-    if (w.end) { const t = w.end > 0 ? (Y1 - y) / 120 : (y - Y0) / 120; h *= clamp(0.25 + t * 0.75 + 0.2 * (vn(y / 7, 0, 5) - 0.5)); }
+    const k = heap(x, y, 10, 81); h += k.d < 1 ? 4 * Math.sqrt(1 - k.d * k.d) : 0; // the skulls of its crest
+    if (w.end) { const t = w.end > 0 ? (Y1 - y) / 140 : (y - Y0) / 140; h *= clamp(0.2 + t * 0.8 + 0.3 * (vn(x / 14, y / 14, 5) - 0.5)); } // fallen in a heap
     return h;
   };
+  const bump = (y, z) => { const k = heap(y, z * 1.4, 10, 89); return k.d < 1 ? 3 * Math.sqrt(1 - k.d * k.d) : 0; }; // the flanks' skulls
+  const yS = (x) => Y1 - wy(4) * vn(x / 40, 0, 87), yN = (x) => Y0 + wy(4) * 2 * (vn(x / 40, 0, 88) - 0.5); // its line: the south face only ever in
   return {
-    sdf: (x, y, z) => Math.max(sdBox(x, y, z, (X0 + X1) / 2, (Y0 + Y1) / 2, 100, (X1 - X0) / 2, (Y1 - Y0) / 2, 100, 1), (z - top(x, y)) * 0.6),
-    mat: (m, x, y, z, nx, ny, nz) => {
-      if (nz > 0.6) { // its top: skulls and long bones heaped, pale against the dark floor
-        const v = vn(x / 2.2, y / 2.2, 7), gap = h2(x / 3 | 0, y / 3 | 0, 8) < 0.22;
-        return { alb: gap ? mul(C.mortar, 0.6) : mix(C.boneD, C.bone, clamp(v * 1.4 - 0.2)), N: [(vn(x / 2, y / 2, 9) - 0.5) * 0.8, (vn(x / 2, y / 2, 10) - 0.5) * 0.8, 1], spec: 0.1, gloss: 20 };
-      }
-      const r = ossuary(alongX ? x : y * 0.6, z), c = mix(r.c, C.grime, clamp((vn(x / 9 + y / 9, z / 40, 2) - 0.4) * 2) * 0.5);
-      return { alb: mul(z < 18 ? mix(c, C.moss, clamp(fbm(x / 14 + y / 14, z / 10, 3, 5) - 0.45) * 2 * (1 - z / 18)) : c, 0.9), N: alongX ? [0, Math.sign(ny) || 1, r.N[2]] : [Math.sign(nx) || 1, 0, r.N[2]], ao: r.ao, spec: 0.04 };
+    sdf: (x, y, z) => {
+      const side = alongX ? Math.max(Math.abs(x - XC) - HX, (yN(x) - y) * 0.9, (y - yS(x)) * 0.9) : Math.max((Math.abs(x - XC) - HX + K * z) / Math.hypot(1, K) - bump(y, z) * 0.8, Y0 - y, y - Y1);
+      return Math.max(side, -z, (z - top(x, y)) * 0.6);
     },
-    bounds: [X0 - 2, Y0 - 2, 0, X1 + 2, Y1 + 2, w.h + 4], step: 0.7,
+    mat: (m, x, y, z, nx, ny, nz) => {
+      if (nz > 0.75 || (w.end && !alongX && Math.abs(ny) > Math.abs(nx))) return heapMat(x, y); // its crest, its collapsed end
+      if (!alongX && Math.abs(nx) > Math.abs(ny)) return heapMat(y, z * 1.4, 89); // its battered flanks: skulls heaped
+      const r = boneFace(alongX || Math.abs(ny) > Math.abs(nx) ? x : y * SN, z), c = mix(r.c, C.grime, clamp((vn(x / 9 + y / 9, z / 40, 2) - 0.4) * 2) * 0.5);
+      return { alb: mul(z < 18 ? mix(c, C.moss, clamp(fbm(x / 14 + y / 14, z / 10, 3, 5) - 0.45) * 2 * (1 - z / 18)) : c, 0.9),
+        N: alongX ? [0, Math.sign(ny) || 1, r.N[2]] : [nx, ny + r.N[0] * 0.3, nz + r.N[2] * 0.3], ao: r.ao, spec: 0.04 };
+    },
+    bounds: [X0 - 2, Y0 - 2 - wy(4), 0, X1 + 2, Y1 + 2, w.h + 8], step: 0.6,
   };
+}
+/** Stone slates in rows 7 deep along `v`, 9 wide along `u`, each row half a slate on from the last; mossy. */
+function slate(u, v, seed) {
+  const r = Math.floor(v / 7), su = u + 400 + (r & 1) * 4.5, t = Math.floor(su / 9);
+  const c = mix(mix(C.stC, C.wallD, h2(t, r, seed)), C.moss, clamp(vn(u / 20, v / 20, seed) - 0.5) * 1.4);
+  return su % 9 < 1 || v - r * 7 < 1.6 ? C.mortar : c;
 }
 const inPointed = (u, z, hw, z0, r) => Math.abs(u) < hw && (z < z0 || Math.hypot(Math.abs(u) + (r - hw), z - z0) < r);
 const archTop = (u, hw, z0, r) => z0 + Math.sqrt(Math.max(0, r * r - (Math.abs(u) + r - hw) ** 2));
@@ -342,10 +456,8 @@ function facade(f) {
       }
       if (nz > 0.25 && z > Hh - 2 && ny < 0.9) { // the roof: stone slates, mossy (the wall of bones: its ragged top)
         if (f.kind === 'bones') return { alb: mix(BONE_TOP, C.bone, clamp(vn(x / 3, y / 3, 7) - 0.62) * 1.5), spec: 0.03 };
-        const t = Math.floor((x + 400) / 9), r = Math.floor((y * 0.6 + z) / 7);
-        let c = mix(mix(C.stC, C.wallD, h2(t, r, f.x0)), C.moss, clamp(vn(x / 20, y / 20, f.x0) - 0.5) * 1.4);
-        if (((x + 400) % 9) < 1 || ((y * 0.6 + z) % 7) < 0.8) c = C.mortar;
-        return { alb: mul(c, 0.9), spec: 0.04 };
+        const s = slate(x, y * 0.6 + z, f.x0);
+        return { alb: mul(s, 0.9 * (z < Hh + 6 ? 0.55 + 0.45 * clamp((z - Hh) / 6) : 1)), spec: 0.04 }; // its eave in shade
       }
       let r = f.kind === 'bones' ? ossuary(x, z) : ashlar(x, z, f.kind === 'church' ? 24 : 20, f.kind === 'church' ? 46 : 38, 5 + f.x0 % 7);
       // voussoirs round the door
@@ -374,9 +486,9 @@ function mausoleum(w, d, seed) {
       return s - 0.5 * (vn3(x * 0.3, y * 0.3, z * 0.3, seed) - 0.5);
     },
     mat: (m, x, y, z, nx, ny, nz) => {
-      if (z > Hb + 1 && nz > 0.3) { const t = Math.floor((x + 400) / 9); let c = mix(mix(C.stC, C.wallD, h2(t, Math.floor(z / 7), seed)), C.moss, clamp(vn(x / 20, y / 20, seed) - 0.5) * 1.4); if (((x + 400) % 9) < 1) c = C.mortar; return { alb: c, spec: 0.03 }; } // stone slates
+      if (z > Hb + 1 && nz > 0.3) return { alb: mul(slate(x, z, seed),z < Hb + 6 ? 0.55 + 0.45 * clamp((z - Hb) / 6) : 1), spec: 0.03 }; // stone slates, the eave in shade
       if (Math.abs(x) < 14 && y > hd - 7 && z < 64) return { alb: mix(C.iron, C.rust, vn3(x * 0.3, y, z * 0.3, seed)), spec: 0.3, gloss: 30 }; // the iron door, shut
-      return { alb: mix(stone3(x, y, z, C.stB, seed), C.grime, clamp((vn(x / 9 + y / 7, z / 40, 2) - 0.4) * 2) * 0.6), spec: 0.04 };
+      return { alb: mix(stone3(x, y, z, z > Hb ? mul(C.stB, 1.2) : C.stB, seed), C.grime, clamp((vn(x / 9 + y / 7, z / 40, 2) - 0.4) * 2) * 0.6), spec: 0.04 }; // its pediment paler
     },
     bounds: [-hw - 4, -hd - 4, 0, hw + 4, hd + 4, Hb + Hr + 6], step: 0.75,
   };
@@ -416,16 +528,19 @@ function cliff() {
         if (a.kind === 'gallery' && z > 112 && z < 128 && Math.abs(u) < 26) r = { c: mix(C.bone, C.boneD, vn(x / 2, z / 2, 5)), N: [0, 1, 0] }; // skulls set over the gallery's mouths
         return { alb: mix(r.c, C.grime, 0.3), N: r.N, spec: 0.03 };
       }
-      const n = fbm3(x * 0.04, y * 0.04, z * 0.05, 4, 51);
-      let c = mix(L('#3c352c'), L('#14110d'), clamp(n * 1.7 - 0.35));
+      const n = fbm3(x * 0.04, y * 0.04, z * 0.05, 4, 51), zs = z + 9 * (vn(x / 60, 0, 54) - 0.5); // strata, dipping a little
+      let c = mix(L('#3c352c'), L('#14110d'), clamp(n * 1.7 - 0.35)), Nn;
+      c = mul(c, 0.8 + 0.35 * h2(Math.floor(zs / 11), 0, 55)); // the beds of rock, each its own shade
+      if (zs % 11 < 1.4) { c = mul(c, 0.45); Nn = [0, 0.6, -0.8]; } // and the seams between them
+      if (Math.abs(vn(x / 7, z / 60, 56) - 0.5) < 0.03) { c = mul(c, 0.35); Nn = [0, 1, 0]; } // cracks down the face
       c = mix(c, L('#1a2014'), clamp((vn3(x * 0.02, 0, z * 0.08, 52) - 0.5) * 3) * 0.6); // seeping damp
       if (z < 30) c = mix(c, C.moss, clamp(fbm(x / 14, z / 10, 3, 53) - 0.45) * 2 * (1 - z / 30));
-      return { alb: mul(c, clamp(1.1 - z / 500)), spec: 0.06, gloss: 16 };
+      return { alb: mul(c, clamp(1.1 - z / 220)), N: Nn, spec: 0.06, gloss: 16 };
     },
     bounds: [0, -40, 0, W, wy(110), VAULT + 20], step: 0.7,
   };
 }
-const rimMat = (m, x, y, z, nx, ny, nz) => { const n = fbm3(x * 0.05, y * 0.05, z * 0.05, 3, 61); return { alb: mul(mix(L('#2a251f'), L('#0e0c0a'), clamp(n * 1.6 - 0.3)), z > 26 ? 0.15 : 0.7), spec: 0.02 }; }; // its top fades into the dark
+const rimMat = (m, x, y, z, nx, ny, nz) => { const n = fbm3(x * 0.05, y * 0.05, z * 0.05, 3, 61); return { alb: mul(mix(L('#2a251f'), L('#0e0c0a'), clamp(n * 1.6 - 0.3)), z > 26 ? 0.15 : 0.35), spec: 0.02, rim: 0 }; }; // its top fades into the dark (no sheen of the lights grazing it)
 /** The rock round the cavern but the north cliff: west, east and south rims, rising low past the floor's edge. */
 function rim(x0, x1, y0, y1, out) {
   return { sdf: (x, y, z) => (z - Math.min(30, Math.max(-4, out(rx(x), ry(y)) * 3))) * 0.3, mat: rimMat, bounds: [wx(x0), wy(y0), -2, wx(x1), wy(y1), 34], step: 0.9 };
@@ -458,7 +573,8 @@ function pyre() {
     bounds: [-40, -40, 0, 40, 40, 36], step: 0.6,
   };
 }
-const stake = (h, seed) => ({ sdf: (x, y, z) => Math.max(Math.hypot(x, y) - 3.2 * clamp((h - z) / 10, 0.2, 1), -z, z - h), mat: (m, x, y, z) => ({ alb: mix(C.wood, C.woodD, vn3(x, y, z * 0.2, seed)) }), bounds: [-4, -4, 0, 4, 4, h + 1], step: 0.7 });
+const charred = (m) => ({ ...m, mat: (...a) => { const r = m.mat(...a); return { ...r, alb: mul(r.alb, 0.3) }; } });
+const stake = (h, seed) =>({ sdf: (x, y, z) => Math.max(Math.hypot(x, y) - 3.2 * clamp((h - z) / 10, 0.2, 1), -z, z - h), mat: (m, x, y, z) => ({ alb: mix(C.wood, C.woodD, vn3(x, y, z * 0.2, seed)) }), bounds: [-4, -4, 0, 4, 4, h + 1], step: 0.7 });
 /** The Order's banner on a pole: a dull sun on red, torn at the foot. */
 function banner(seed) {
   return {
@@ -493,12 +609,17 @@ for (const [x, y, r] of COLS) add('column', rockColumn(r, x % 13), [wx(x), wy(y 
 for (const [x, y] of TENTS) add('tent', tent(x % 11), [wx(x), wy(y - 14), 0]);
 for (const run of PALISADE) { const [[a, b], [c, d]] = run, n = Math.round(Math.hypot(c - a, d - b) / 7); for (let k = 0; k <= n; k++) add('stake', stake(46 + 10 * h2(a + k, b, 3), k), [wx(a + (c - a) * k / n), wy(b + (d - b) * k / n), 0]); }
 for (const [x, y] of CRATES) add('crate', chest(x % 7), [wx(x), wy(y - 4), 0], 0.1);
+/** A grave's stone: dirty as cut, mossy, or dark granite; on the far side blackened by the Order's fires, no moss. */
+const weathered = (m, g) => {
+  const t = g.x > 2640 ? 3 : Math.floor(h2(g.seed, 2, 3) * 3);
+  return t === 0 ? m : { ...m, mat: (...a) => { const r = m.mat(...a); return { ...r, alb: t === 1 ? mix(r.alb, C.moss, 0.35) : t === 2 ? mul(r.alb, 0.55) : mul(mix(r.alb, C.grime, 0.5), 0.45) }; } };
+};
 for (const g of GRAVES) {
-  const P = [wx(g.x), wy(g.y - g.h / 2), 0], a = (h2(g.seed, 0, 3) - 0.5) * 0.3;
-  if (g.kind === 'cross') add('grave', cross(38 + (g.seed % 5) * 2), P, a);
-  else if (g.kind === 'stele') add('grave', stele(30 + (g.seed % 4) * 2), P, a);
-  else if (g.kind === 'lying') add('grave', cross(36, true), P, Math.PI / 2 + a);
-  else add('grave', sarcophagus(g.seed), P, a * 0.3);
+  const P = [wx(g.x), wy(g.y - g.h / 2), h2(g.seed, 3, 3) < 0.2 ? -2 - 6 * h2(g.seed, 4, 3) : 0], a = (h2(g.seed, 0, 3) - 0.5) * 0.3; // some sunk
+  let m = g.kind === 'cross' ? cross(38 + (g.seed % 5) * 2) : g.kind === 'stele' ? stele(30 + (g.seed % 4) * 2) : g.kind === 'lying' ? cross(36, true) : sarcophagus(g.seed);
+  if (g.s !== 1) m = scaled(m, g.s);
+  if ((g.kind === 'cross' || g.kind === 'stele') && h2(g.seed, 5, 3) < 0.15) m = broken(m, (x, y) => (14 + 8 * h2(g.seed, 6, 3)) * g.s + 3 * vn(x / 3, y / 3, g.seed)); // broken off
+  add('grave', weathered(m, g), P, g.kind === 'lying' ? Math.PI / 2 + a : g.kind === 'tomb' ? a * 0.3 : a);
 }
 for (const o of PROPS) {
   const P = [wx(o.x), wy(o.y - o.h / 2), 0];
@@ -512,40 +633,56 @@ for (const o of PROPS) {
   else if (o.kind === 'rack') add('rack', weaponRack(), P, 0);
   else if (o.kind === 'banner') add('banner', banner(o.x % 9), P, 0);
   else if (o.kind === 'lever') add('lever', lever(), P, 0);
+  else if (o.kind === 'cross') add('cross', cross(46), P, 0.15);
   else if (o.kind === 'rubble') add('rubble', rubble(o.x % 31, wx(o.r) * 0.8, 18), [wx(o.x), wy(o.y - o.h), 0], h2(o.x, 0, 3) * 6);
 }
+for (const [x, y, r] of TALUS) add('rubble', rubble(x % 31, wx(r) * 0.8, 18), [wx(x), wy(y), 0], h2(x, 0, 3) * 6);
 for (const [x, y] of BRAZIERS) add('brazier', brazier2(true), [wx(x), wy(y - 4), 0]);
 add('pyre', pyre(), [wx(PYRE[0]), wy(PYRE[1] - 6), 0]);
 for (const [x, y] of LANTERNS) add('lantern', pole(120), [wx(x), wy(y), 0]);
-{ const out = [];
-  for (const [x, y, n] of CANDLES) for (let k = 0; k < n; k++) out.push([wx(x + k * 3 + 1), wy(y) + (k % 2) * 4, 0, 4 + h2(x, k, 3) * 9, 1.2 + h2(x, k, 4) * 0.3, (h2(x, k, 5) - 0.5) * 0.8, 0]);
-  add('candles', candles2(out), [0, 0, 0]); }
-for (let k = 0; k < 60; k++) { const x = 60 + R() * (RW - 120), y = 120 + R() * (RH - 200); if (!taken(x, y, 4) && clear(x | 0, y | 0, 2)) add('skull', skull(), [wx(x), wy(y), 0], R() * 6); }
+for (const [x, y] of STAKES) { add('stake', charred(stake(78, x % 7)), [wx(x), wy(y), 0]); add('skull', skull(), [wx(x + 4), wy(y + 3), 0], 2); }
+/** A group of `n` candles at room px (x, y), as an object of its own (culled with the chunks). */
+const candles = (x, y, n) => add('candles', candles2([...Array(n)].map((_, k) => [wx(k * 3 + 1), (k % 2) * 4, 0, 4 + h2(x, k, 3) * 9, 1.2 + h2(x, k, 4) * 0.3, (h2(x, k, 5) - 0.5) * 0.8, 0])), [wx(x), wy(y), 0]);
+for (const [x, y, n] of [...CANDLES, ...GRAVE_CANDLES]) candles(x, y, n);
+for (const [x, y] of MAUS) { candles(x - 18, y + 3, 2); candles(x + 12, y + 3, 1); } // a pair at each mausoleum's door
+// Skulls on the floor, most of them in the middle's north band; bones; skulls and bones fallen at the walls' feet.
+for (let k = 0; k < 250; k++) {
+  const mid = k >= 60, x = mid ? 1450 + R() * 1140 : 60 + R() * (RW - 120), y = mid ? 100 + R() * 590 : 120 + R() * (RH - 200);
+  if (!taken(x, y, 4) && clear(x | 0, y | 0, 2)) add('skull', skull(), [wx(x), wy(y), 0], R() * 6);
+}
 for (let k = 0; k < 24; k++) { const x = 60 + R() * (RW - 120), y = 120 + R() * (RH - 200); if (!taken(x, y, 12) && clear(x | 0, y | 0, 6)) add('bones', pitBones(k + 3), [wx(x), wy(y), 0], R() * 6); }
+add('bones', pitBones(9), [wx(2655), wy(342), 0], 0.4); // in the Dawn, their shadows long
+const fallen = (x, y, n) => { if (!pit(x, y) && !rock(x, y) && Object.values(DOORS).every((d) => Math.hypot(d.x - x, d.y - y) > 50)) for (let k = 0; k < n; k++) add('skull', skull(), [wx(x + (R() - 0.5) * 10), wy(y + (R() - 0.5) * 4), 0], R() * 6); };
+for (const w of WALLS.filter((w) => w.h > 70 || w.end)) {
+  if (w.x1 - w.x0 > w.y1 - w.y0) for (let x = w.x0 + 15; x < w.x1 - 10; x += 30 + 10 * R()) { fallen(x, w.y1 + 3 + R() * 3, 2 + (R() * 3 | 0)); if (R() < 0.3) fallen(x + 12, w.y0 - 3, 1); }
+  else for (let y = w.y0 + 20; y < w.y1 - 10; y += 30 + 10 * R()) { fallen(w.x0 - 3 - R() * 3, y, 1 + (R() * 2 | 0)); fallen(w.x1 + 3 + R() * 3, y, 1 + (R() * 2 | 0)); }
+}
 // The vault, never seen: it keeps the moon and the Dawn out but through its cracks.
-const MOON = (() => { const d = [-0.42, -0.3, 0.86], l = Math.hypot(...d); return d.map((v) => v / l); })();
+const MOON = (() => { const d = [-0.5, -0.35, 0.6], l = Math.hypot(...d); return d.map((v) => v / l); })();
 const SUN = (() => { const d = [0.2, 0.36, 0.91], l = Math.hypot(...d); return d.map((v) => v / l); })();
 const hole = (dir, [x, y, a, b = a]) => { const t = VAULT / dir[2]; return [wx(x) + dir[0] * t, wy(y) + dir[1] * t, wx(a), wy(b)]; }; // a floor patch's crack in the vault
 const MOONH = MOONHOLES.map((m) => hole(MOON, m)), SUNH = SUNHOLES.map((s) => hole(SUN, s));
-const crack = (x, y, ox, oy, a, b) => { const dx = (x - ox) / a, dy = (y - oy) / b, an = Math.atan2(dy, dx); return 1 - Math.hypot(dx, dy) / (0.7 + 0.6 * vn(Math.cos(an) * 1.6 + ox / 50, Math.sin(an) * 1.6 + oy / 50, 77)); }; // ragged
+const crack = (x, y, ox, oy, a, b, rag) => { const dx = (x - ox) / a, dy = (y - oy) / b, an = Math.atan2(dy, dx); return 1 - Math.hypot(dx, dy) / (1 - rag / 2 + rag * vn(Math.cos(an) * 2.4 + ox / 50, Math.sin(an) * 2.4 + oy / 50, 77)); }; // ragged by `rag`
 // Two vaults, never seen, one each light from the sky sees: the moon's cracks for the moon, the breach for the Dawn.
-const vault = (holes) => ({ sdf: (x, y, z) => Math.max(Math.abs(z - VAULT - 10) - 10, Math.max(...holes.map(([ox, oy, a, b = a]) => crack(x, y, ox, oy, a, b))) * 60 + 6 * (vn(x / 9, y / 9, 71) - 0.5)),
+const vault = (holes, rag) => ({ sdf: (x, y, z) => Math.max(Math.abs(z - VAULT - 10) - 10, Math.max(...holes.map(([ox, oy, a, b = a]) => crack(x, y, ox, oy, a, b, rag))) * 60 + 6 * (vn(x / 9, y / 9, 71) - 0.5)),
   mat: () => ({ alb: C.void }), bounds: [-400, -400, VAULT - 2, W + 400, wy(RH) + 400, VAULT + 22], step: 0.8 });
-add('vault-moon', vault(MOONH), [0, 0, 0], 0, { ghost: true });
-add('vault-sun', vault(SUNH), [0, 0, 0], 0, { ghost: true });
+add('vault-moon', vault(MOONH, 0.8), [0, 0, 0], 0, { ghost: true });
+add('vault-sun', vault(SUNH, 0.2), [0, 0, 0], 0, { ghost: true }); // the breach less ragged: its Dawn fills the gap in the wall
 
 // ---------- lights ----------
 const MOONC = L('#9ab0be'), FIRE = L('#e07a30'), CANDLE = L('#d8b070'), SUNC = L('#fbf4bc'), ORDER = L('#a8ac5c'), FAR = 1e5;
-light({ name: 'moon', p: [W / 2 + MOON[0] * FAR, wy(RH / 2) + MOON[1] * FAR, MOON[2] * FAR], c: MOONC, I: 0.75, r0: 1e9, R: 1e12, soft: 90, pad: 10, skip: ['vault-sun'] });
-light({ name: 'sun', mask: true, p: [W / 2 + SUN[0] * FAR, wy(RH / 2) + SUN[1] * FAR, SUN[2] * FAR], c: SUNC, I: 4.6, r0: 1e9, R: 1e12, soft: 120, pad: 10, skip: ['vault-moon'] });
+light({ name: 'moon', p: [W / 2 + MOON[0] * FAR, wy(RH / 2) + MOON[1] * FAR, MOON[2] * FAR], c: MOONC, I: 0.38, r0: 1e9, R: 1e12, soft: 90, pad: 10, skip: ['vault-sun'] });
+light({ name: 'sun', mask: true, p: [W / 2 + SUN[0] * FAR, wy(RH / 2) + SUN[1] * FAR, SUN[2] * FAR], c: SUNC, I: 1.8, r0: 1e9, R: 1e12, soft: 25, pad: 10, skip: ['vault-moon'] });
 // the cold that the cracks let in: a faint fill from above and from the south, so shapes read in the dark
 light({ p: [W / 2 + 0.2 * FAR, wy(RH / 2) + 0.5 * FAR, 0.85 * FAR], c: MOONC, I: 0.3, r0: 1e9, R: 1e12, noShadow: true });
 for (const [x, y] of BRAZIERS) light({ p: [wx(x), wy(y - 4), 48], c: FIRE, I: 4, r0: 40, R: 420, soft: 6, pad: 8, haze: 0.02, hazeR: 7, skip: ['brazier'] });
 light({ p: [wx(PYRE[0]), wy(PYRE[1] - 6), 40], c: FIRE, I: 9, r0: 60, R: 700, soft: 10, pad: 14, haze: 0.03, hazeR: 14, skip: ['pyre'] });
 for (const [x, y, n] of CANDLES) light({ p: [wx(x + n * 1.5), wy(y) + 2, 16], c: CANDLE, I: 0.8 + 0.4 * n, r0: 20, R: 220, soft: 4, pad: 3, haze: 0.012, hazeR: 3, skip: ['candles'] });
-for (const [x, y] of LANTERNS) light({ p: [wx(x), wy(y), 124], c: ORDER, I: 2.2, r0: 30, R: 300, soft: 6, pad: 6, haze: 0.012, hazeR: 5, skip: ['lantern'] });
+for (const [x, y, n] of GRAVE_CANDLES) light({ p: [wx(x + n * 1.5), wy(y) + 2, 16], c: CANDLE, I: 0.6 + 0.4 * n, r0: 18, R: 160, soft: 4, pad: 3, haze: 0.01, hazeR: 3, skip: ['candles'] });
+for (const [x, y] of MAUS) light({ p: [wx(x), wy(y + 3) + 2, 16], c: CANDLE, I: 1.4, r0: 18, R: 180, soft: 4, pad: 3, haze: 0.01, hazeR: 3, skip: ['candles'] });
+for (const [x, y] of LANTERNS) light({ p: [wx(x), wy(y), 124], c: ORDER, I: 6, r0: 30, R: 300, soft: 6, pad: 6, haze: 0.012, hazeR: 5, skip: ['lantern'] });
 for (const d of Object.values(DOORS)) light({ p: [wx(d.x), wy(d.y - RECESS - 6), 26], c: CANDLE, I: 1.4, r0: 16, R: 160, soft: 4, pad: 4 }); // a glow deep in each doorway
-for (const [x, y] of MOONHOLES) light({ p: [wx(x), wy(y), 30], c: MOONC, I: 0.6, r0: 60, R: 260, noShadow: true, noEnv: true }); // what a moonlit patch throws back
+for (const [x, y] of MOONHOLES) light({ p: [wx(x), wy(y), 30], c: MOONC, I: 0.3, r0: 60, R: 260, noShadow: true, noEnv: true }); // what a moonlit patch throws back
 
 const env = ground(floorAt, (X, Y) => pit(X, Y, 1));
 const SC = { W, H, cam, off: 0, offX: 0, objects: S.objects, lights: S.lights, env, envShadow: pitShadow((X, Y) => pit(X, Y, 1)), ambient: L('#3a4450').map((v) => v * 0.07) };
@@ -559,7 +696,7 @@ export const GATE_RISE = 44; // room px: a gate's travel up into its gatehouse, 
 export function finish(img, x0, y0) {
   const { W: w, H: h } = img, T0 = 4000;
   // each crack: its middle on the vault, radii, the light's way, colour, strength; and where its shaft lies on screen
-  const shafts = [...MOONH.map((o) => [o[0], o[1], o[2], o[2], MOON, MOONC, 0.0012]), ...SUNH.map((o) => [...o, SUN, SUNC, 0.004])].map((s) => {
+  const shafts = [...MOONH.map((o) => [o[0], o[1], o[2], o[2], MOON, MOONC, 0.004]), ...SUNH.map((o) => [...o, SUN, SUNC, 0.02])].map((s) => {
     const [ox, oy, a, b, dir] = s, t = VAULT / dir[2];
     return [...s, [ox, oy * SN - VAULT * CS], [ox - dir[0] * t, (oy - dir[1] * t) * SN], Math.max(a, b * SN) + 24];
   });
@@ -573,7 +710,7 @@ export function finish(img, x0, y0) {
       for (let s = 0; P[2] + s * SN < VAULT; s += 3) {
         const qx = P[0], qy = P[1] + s * CS, qz = P[2] + s * SN, u = (VAULT - qz) / dir[2];
         const e = 1 - Math.hypot((qx + dir[0] * u - ox) / a, (qy + dir[1] * u - oy) / b);
-        if (e > 0) k += Math.min(1, e * 6) * (0.4 + 0.6 * (1 - qz / VAULT)) * clamp(fbm(qx / 26, qz / 18 + qy / 40, 3, 7) * 2.4 - 0.7);
+        if (e > 0) k += Math.min(1, e * 6) * (0.4 + 0.6 * (1 - qz / VAULT)) * clamp(fbm(qx / 26, qz / 18 + qy / 40, 3, 7) * 2.4 - 0.4);
       }
       if (k > 0) for (let c = 0; c < 3; c++) img.out[i * 3 + c] += col[c] * k * k0;
     }
