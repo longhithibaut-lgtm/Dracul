@@ -1,12 +1,15 @@
 // What outlives the page: the blood banked in the refuge's basin and what is unlocked, a small versioned JSON in
 // localStorage; plus a log of the expeditions for the playtests (docs/extraction.md §12: returns, deaths, depth). The
 // game runs without storage (a private window, a framed preview): it then starts afresh each time.
+import { ITEMS, SLOTS, type Item, type Worn } from './items.ts';
 
-export const VERSION = 1;
+export const VERSION = 2; // 2: the items (stash, worn, next); a version 1 save comes up with none
 // unlocks: what the Rongé sold for banked blood (shop.ts): the bite, the ranks of max life (`life`) and of the bag (`bag`)
 // bought. dry: how many times in a row the hero came back (or re-formed) without pouring blood: the Rongé's hunger.
-// shortcuts: the zone's gates raised for good (necropolis.data.ts GATES ids).
-export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number; shortcuts: string[] };
+// shortcuts: the zone's gates raised for good (necropolis.data.ts GATES ids). stash: the items brought back (the
+// refuge's chest, acquired for good); worn: what he wears, by slot (items.ts SLOTS; on an expedition it may hold items
+// not yet brought back: those are dropped when read back, as at death); next: the number the next item found takes.
+export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number; shortcuts: string[]; stash: Item[]; worn: Worn; next: number };
 const KEY = 'dracul.save', LOG = 'dracul.log';
 
 /** A save read back from `json`, whatever it holds: brought up to this version, missing or broken fields to their
@@ -17,7 +20,16 @@ export function parse(json: string | null): Save {
   if (typeof o !== 'object' || !o) o = {};
   const count = (n: unknown) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.floor(Number(n)) : 0);
   const shortcuts = Array.isArray(o.shortcuts) ? [...new Set(o.shortcuts.filter((s): s is string => typeof s === 'string'))] : [];
-  return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry), shortcuts };
+  const item = (i: Partial<Item> | null | undefined): Item | undefined =>
+    i && Number.isInteger(i.n) && i.n! >= 0 && typeof i.id === 'string' && Object.hasOwn(ITEMS, i.id) && [0, 1, 2].includes(i.r!) ? { n: i.n!, id: i.id, r: i.r! } : undefined;
+  const stash = (Array.isArray(o.stash) ? o.stash.map(item) : []).filter((i, k, all): i is Item => !!i && all.findIndex((j) => j?.n === i.n) === k);
+  const worn: Worn = [];
+  SLOTS.forEach((f, s) => { // only what is in the chest, in a slot of its family, worn once
+    const w = stash.find((i) => i.n === o.worn?.[s]?.n); // the chest's own
+    worn.push(w && ITEMS[w.id].fam === f && !worn.includes(w) ? w : null);
+  });
+  const next = Math.max(count(o.next), ...stash.map((i) => i.n + 1));
+  return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry), shortcuts, stash, worn, next };
 }
 
 const storage = () => { try { return localStorage; } catch { return undefined; } }; // a sandboxed frame throws on access

@@ -303,7 +303,7 @@ export const T = {
   // Le Rongé, the refuge's merchant (docs/lore.md), crouched by the basin (refuge.ts RONGE): F within `talk` of him
   // opens his wares, paid with the blood banked; he raises his head at the hero within `notice`. Prices: the bite once,
   // max life and the bag by ranks at `cost` x `mult` to the rank bought (40, 72, 130, 233; 60, 108, 194), the bag `size`
-  // bigger a rank. Back `hunger` times (returns or deaths) without pouring into the basin, he turns beast: wares
+  // blood and one item (T.items.bag) bigger a rank. Back `hunger` times (returns or deaths) without pouring into the basin, he turns beast: wares
   // closed until blood is poured again.
   ronge: {
     talk: 40, notice: 90,
@@ -311,6 +311,53 @@ export const T = {
     life: { cost: 40, mult: 1.8, ranks: 4 },
     bag: { cost: 60, mult: 1.8, ranks: 3, size: 100 },
     hunger: 3,
+  },
+
+  // Items (items.ts, docs/extraction.md §6): found on an expedition, lost at death until brought back to the refuge,
+  // where they are acquired for good (its chest). Worn in `slots` by family; carried in a bag of `bag` items, one more
+  // a rank of le Rongé's bag. Found: in a cache, by its ring's `cache` chance (every cache of the zone's `sure` areas:
+  // the Order's camp chest), on the body of an `elite`; of a rarity drawn by the ring's `odds` [commun, rare, épique];
+  // picked up (F) within `pickup`. A weapon's bleed: its number of hp over `bleedMs`, in `bleedTicks` blows. Each item's
+  // numbers below are triples [commun, rare, épique], bonuses summed over the items worn (items.ts stats()): a fraction
+  // (+0.2: 20 % more, -0.2: 20 % less) unless said.
+  items: {
+    bag: 4,
+    slots: { arme: 1, relique: 2, talisman: 3 },
+    cache: [0, 0.3, 0.4, 0.5, 0.6],
+    odds: [[1, 0, 0], [0.9, 0.1, 0], [0.6, 0.33, 0.07], [0.35, 0.45, 0.2], [0.2, 0.45, 0.35]],
+    sure: ['camp'],
+    elites: ['inquisitor', 'amas', 'bourreau'],
+    pickup: 22,
+    bleedMs: 2000, bleedTicks: 4,
+    defs: {
+      // Armes: the claws. claw: their damage; pace: their cooldown; finisher: added to the finisher's x2; knock: its
+      // knockback; reach: px added to their range; arc: degrees added; bleed: hp bled (see bleedMs); leech: the chance a
+      // killing finisher gives back one life.
+      acier: { claw: [0.25, 0.4, 0.6] },
+      stylet: { pace: [-0.15, -0.22, -0.3] },
+      fer: { finisher: [0.5, 1, 1.5], knock: [0.3, 0.5, 0.8], pace: [0.08, 0.08, 0.08] },
+      faucille: { reach: [4, 6, 9], arc: [20, 30, 40] },
+      saignee: { bleed: [1, 1.5, 2] },
+      goule: { leech: [0.08, 0.12, 0.2] },
+      // Reliques. shade: how near a foe notices him out of the light (T.sight.shade); burn: how fast holy light burns
+      // him; scent: blood carried for each pack of the battue (T.battue.every); spoils: blood the dead drop; purse: blood
+      // carried (added to the bag's); horn: px within which the battue's packs in wait are shown on the screen's edge;
+      // mist: the dash's length.
+      linceul: { shade: [-0.15, -0.25, -0.35] },
+      voile: { burn: [-0.25, -0.4, -0.55] },
+      flacon: { scent: [0.25, 0.5, 0.8] },
+      calice: { spoils: [0.25, 0.5, 0.75] },
+      outre: { purse: [60, 120, 200] },
+      cor: { horn: [400, 600, 900] },
+      fiole: { mist: [0.2, 0.35, 0.5] },
+      // Talismans. life: max life (drops); speed: his walk; dash: the dash's recharge; dmg: all his damage; grace: ms of
+      // holy light before it burns.
+      chapelet: { life: [1, 1, 2] },
+      eperon: { speed: [0.06, 0.1, 0.15] },
+      sablier: { dash: [-0.15, -0.25, -0.35] },
+      croc: { dmg: [0.1, 0.15, 0.25] },
+      cendre: { grace: [200, 350, 500] },
+    },
   },
 
   // Gifts of the Rat house (gifts.ts), toggled in the training room (none is offered on an expedition). The number of a gift with a rarity is named

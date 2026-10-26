@@ -11,7 +11,7 @@ export const WARES: Ware[] = ['bite', 'life', 'bag'];
 export const WARE_TEXT: Record<Ware, { name: string; text: string }> = {
   bite: { name: 'La morsure', text: 'Mordre un humain affaibli, à genoux : boire son sang rend la vie.' },
   life: { name: '+1 vie max', text: 'Une goutte de sang de plus, pour toujours.' },
-  bag: { name: '+ taille du sac', text: `Porter ${T.ronge.bag.size} sang de plus.` },
+  bag: { name: '+ taille du sac', text: `Porter ${T.ronge.bag.size} sang et un objet de plus.` },
 };
 
 /** His lines, half-lucid: greeting, a sale, too little banked, nothing left to sell, gone beast. */
@@ -51,3 +51,5 @@ export const beast = (s: Save) => s.dry >= T.ronge.hunger;
 
 /** How much blood the bag holds, with its ranks bought. */
 export const bagSize = (s: Save) => T.blood.bag + s.unlocks.bag * T.ronge.bag.size;
+/** How many items the bag holds, with its ranks bought. */
+export const itemSlots = (s: Save) => T.items.bag + s.unlocks.bag;
