@@ -255,7 +255,7 @@ export const T = {
     reloadMs: 1100,
     // Phase 2, at half her blood: the Order's chains snap off her (`snapMs`, the tell: she rears, links fly), she
     // leaps onto the walls (`climbMs`) and crawls along the arena's edge `wallZ` px up (`wallSpeed`), out of reach.
-    snapMs: 1400, climbMs: 600, wallZ: 70, wallSpeed: 80,
+    snapMs: 1400, climbMs: 600, wallZ: 34, wallSpeed: 80,
     // From the wall she hurls (`hurlMs`, the tell: a limb raised back with a lump of bones) debris, or one of her
     // goules, at where he stands as it leaves her claws; it lands `flightMs` later, striking within `hurlRadius`.
     // `hurls` throws `hurlGapMs` apart; then she crosses the vault over him (`vaultZ` up, `vaultSpeed`, at most

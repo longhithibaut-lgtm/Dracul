@@ -68,9 +68,10 @@ export function slate(u, v, seed) {
 }
 export const inPointed = (u, z, hw, z0, r) => Math.abs(u) < hw && (z < z0 || Math.hypot(Math.abs(u) + (r - hw), z - z0) < r);
 export const archTop = (u, hw, z0, r) => z0 + Math.sqrt(Math.max(0, r * r - (Math.abs(u) + r - hw) ** 2));
-/** A gatehouse round a shortcut's opening: two piers and a pointed arch over it, in ashlar, taller than the bone wall. */
-export function gatehouse(g) {
-  const cx = wx((g.x0 + g.x1) / 2), cy = wy((g.y0 + g.y1) / 2), hw = wx(g.x1 - g.x0) / 2, dy = (wy(g.y1) - wy(g.y0)) / 2 + 3, Z = 236; // tall: the raised gate hides in it
+/** A gatehouse round a shortcut's opening: two piers and a pointed arch over it, in ashlar, taller than the bone wall
+ *  (`Z` tall: the raised gate hides in it). */
+export function gatehouse(g, Z = 236) {
+  const cx = wx((g.x0 + g.x1) / 2), cy = wy((g.y0 + g.y1) / 2), hw = wx(g.x1 - g.x0) / 2, dy = (wy(g.y1) - wy(g.y0)) / 2 + 3;
   return {
     sdf: (x, y, z) => {
       const u = x - cx;

@@ -87,9 +87,9 @@ function paint(put: Put, o: Offer, key: number, hot: boolean, W: number) {
   for (let y = 4; y < 15; y++) for (let x = 4; x < 13; x++) put(x, y, x === 4 || x === 12 || y === 4 || y === 14 ? shade : VOID);
   Font.draw(String(key), 4 + Math.floor((9 - Font.width(String(key))) / 2), 4, (x, y) => put(x, y, BONE));
   const icon = o.id === 'swarm' ? SWARM_ICON : ICONS[slotOf(o.id)!], ip: Record<string, number> = { S: SILVER, s: GREY, r: BLOOD[2], d: BLOOD[1] };
-  icon.forEach((row, y) => [...row].forEach((c, x) => ip[c] !== undefined && put(W - 11 + x, 6 + y, ip[c])));
+  icon.forEach((row, y) => [...row].forEach((c, x) => ip[c] !== undefined && put(5 + x, 22 + y, ip[c]))); // its slot's, under the key
   const name = nameOf(o.id);
-  Font.draw(name, 15 + Math.floor((W - 28 - Font.width(name)) / 2), 3, (x, y) => put(x, y, BONE));
+  Font.draw(name, 15 + Math.floor((W - 17 - Font.width(name)) / 2), 3, (x, y) => put(x, y, BONE));
   const f = foot(o);
   Font.draw(f, Math.floor((W - Font.width(f)) / 2), 20, (x, y) => put(x, y, o.worn ? GLOW : o.bought ? BONE : o.afford ? BLOOD[2] : BLOOD[0]));
 }
@@ -116,7 +116,7 @@ export function stall(scene: Scene, offers: Offer[], banked: number, line: strin
   const width = (i: number) => (now[i].id === 'swarm' ? NUEE_W : CARD.w);
   const all = () => [dim, head, said, ...slots, about, bank, hint, ...cards];
   const place = () => {
-    const W = scene.scale.width / ZOOM, H = scene.scale.height / ZOOM, x0 = Math.round((W - NUEE_W) / 2), top = Math.max(2, Math.round((H - 214) / 2));
+    const W = scene.scale.width / ZOOM, H = scene.scale.height / ZOOM, x0 = Math.round((W - NUEE_W) / 2), top = Math.max(2, Math.round((H - 214) / 2) + 12); // (clear of the HUD's corner)
     xs = now.map((o, i) => (o.id === 'swarm' ? x0 : x0 + Math.floor(i / 2) * (CARD.w + CARD.gap)));
     ys = now.map((o, i) => (o.id === 'swarm' ? top + 44 + 2 * (CARD.h + 4) + 4 : top + 44 + (i % 2) * (CARD.h + 4)));
     dim.setSize(W, H);

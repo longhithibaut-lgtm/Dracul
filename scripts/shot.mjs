@@ -17,7 +17,8 @@
 // a crossbowman clawed to his knees, then bitten. The whole zone's map: shots/necropolis-overview.png (its bake).
 // Expedition 3, les catacombes: across the necropolis by its shortcuts, down the well (well-top, cata-well-bottom), a gallery,
 // a crossroads, la grille du caveau raised from below (cata-shortcut-before, -after; caveau-before from above), le nid, the
-// prison and its sealed reliquary (cata-prison), the battue down there and up in the necropolis, back up le caveau (caveau-after), home.
+// prison: its grille drops behind him, La Nourrice (cata-nourrice), put down (her fight: tools/art/nourrice.shots.mjs), the grille rises,
+// F at the reliquary frees Vesna (cata-prison), the battue down there and up in the necropolis, back up le caveau (caveau-after), home: Vesna there.
 // Exit code 1 if the page logged an error or a step failed.
 import { mkdir, copyFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -249,10 +250,18 @@ async function catacombs() {
   check((await save()).shortcuts.includes('caveau'), `F at its winch: la grille du caveau raised from below, saved (${(await save()).shortcuts.join(', ')})`);
   await trek([[262, 215], [218, 320], [262, 420], [360, 470], [520, 560]], 'down the rat-run into le nid');
   await look('cata-nid', 610, 630);
-  await trek([[800, 720], [880, 770], [1080, 880], [1380, 930], [1450, 950], [1700, 1004], [1950, 1014], [2180, 1012], [2350, 1000], [2350, 940], [2360, 760], [2360, 728]], 'the low gallery to the prison, through its gate');
-  await run(() => { const s = window.game.scene.getScene('room'), t = s.hud.title.bind(s.hud), seen = []; s.hud.title = (m) => (seen.push(m), t(m)); window.seen = seen; });
-  for (let k = 0; k < 4 && !(await run(() => window.seen.includes('Le reliquaire est scellé.'))); k++) { await page.keyboard.press('f'); await page.waitForTimeout(400); }
-  check(await run(() => window.seen.includes('Le reliquaire est scellé.')), "F at Vesna's reliquary: « Le reliquaire est scellé. »");
+  await trek([[800, 720], [880, 770], [1080, 880], [1380, 930], [1450, 950], [1700, 1004], [1950, 1014], [2180, 1012], [2350, 1000]], 'the low gallery to the prison');
+  // into the arena: its grille drops behind him, La Nourrice comes down (her fight is tools/art/nourrice.shots.mjs's: here she is put down)
+  await walk(2350, 900, 8000, 6);
+  check(await until(() => !!window.game.scene.getScene('room').fight, null, 8000), 'into the prison: its grille shut behind him, La Nourrice comes down');
+  await page.waitForTimeout(2500);
+  await shot('cata-nourrice');
+  await run(() => { const s = window.game.scene.getScene('room'), e = s.fight.boss; s.hurtEnemy(e, e.getData('hp')); });
+  check(await until(() => { const s = window.game.scene.getScene('room'); return !s.fight && s.room.zone.gates.find((g) => g.arena).open; }, null, 8000) && (await save()).nourrice.dead, 'she dead: the grille rises, her death saved');
+  await trek([[2360, 760], [2360, 728]], 'to her reliquary');
+  for (let k = 0; k < 4 && !(await run(() => window.game.scene.getScene('room').cut)); k++) { await page.keyboard.press('f'); await page.waitForTimeout(400); }
+  check(await run(() => window.game.scene.getScene('room').cut), "F at Vesna's reliquary: its seals break");
+  check(await until(() => !window.game.scene.getScene('room').cut, null, 60000) && (await save()).vesna, 'Vesna freed, saved for good; the scene over');
   await look('cata-prison', 2360, 740);
   // his scent, down here: packs at the catacombs' narrow ways, and every other one up in the necropolis on his way home
   const scent = await run(async () => {
@@ -275,7 +284,8 @@ async function catacombs() {
   await trek([[700, 196], [500, 185], [330, 175]], 'home from le caveau');
   check(await exit(230, 100, 'ArrowUp', 'refuge'), 'up the stairs into the refuge');
   const log = await run(() => JSON.parse(localStorage.getItem('dracul.log')).at(-1));
-  check(log.end === 'retour' && log.deepest === 4, `expedition 3 logged: ${log.end}, ring ${log.deepest}, ${log.blood} blood, ${log.loosed}/${log.met} packs`);
+  check(log.end === 'retour' && log.deepest === 4 && log.boss === 'tuée', `expedition 3 logged: ${log.end}, ring ${log.deepest}, ${log.blood} blood, ${log.loosed}/${log.met} packs, the Nourrice ${log.boss}`);
+  check(await until(() => !!window.game.scene.getScene('room').vesna, null, 8000), 'Vesna at the refuge, behind her stall');
 }
 const rate = (ms) => run((ms) => new Promise((done) => { const f0 = window.game.loop.frame, t0 = performance.now(); setTimeout(() => done(((window.game.loop.frame - f0) * 1000) / (performance.now() - t0)), ms); }), ms);
 /** Headless FPS in the catacombs: opened directly, then walked west along the ossuary gallery across chunk borders. */

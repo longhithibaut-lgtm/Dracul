@@ -69,7 +69,7 @@ export function show(s: Sprite, now: number, flash: boolean) {
   const x = s.x + shake, y = s.y - z + (wall ? WALL_DY : 0), over = ['creep', 'hold', 'fall'].includes(st); // under the vault: over everyone
   if (flip !== undefined) s.setData('flip', flip);
   const fl = s.getData('flip') ?? false, hurt = now - (s.getData('hitAt') ?? -1e9) < 110 && flash;
-  look.setFrame(f).setPosition(x, y).setFlipX(fl).setDepth(s.y + (over ? 400 : 0));
+  look.setFrame(f).setPosition(x, y).setFlipX(fl).setDepth(s.y + (over ? 400 : z > 0 ? 100 : 0)); // up the wall: before what stands at its foot (the reliquary)
   if (hurt) look.setTint(STRUCK); else look.clearTint();
   (s.getData('goules') as Phaser.GameObjects.Image[]).forEach((g, k) => {
     const on = s.getData('clinging')[k] && look.texture.has(`${f}-g${k}`);

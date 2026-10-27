@@ -344,7 +344,7 @@ export function create(scene: Phaser.Scene): Hud {
     // A line spoken: who in silver, what in bone, wrapped under the middle of the screen; it fades out at its end.
     if (line && now - line.at < line.ms) {
       const W = scene.scale.width / Z, H = scene.scale.height / Z, a = Math.min(1, (line.ms - (now - line.at)) / 300), rows = Font.wrap(line.text, Math.min(320, W - 40));
-      const y = Math.round(H * 0.68);
+      const y = Math.round(H * 0.74);
       g.fillStyle(C.void, 0.6 * a).fillRect(0, y - 4, W, (rows.length + 1) * Font.LINE + 8);
       g.fillStyle(C.silver, a);
       Font.draw(line.who, Math.round((W - Font.width(line.who)) / 2), y, (px, py) => g.fillRect(px, py, 1, 1));

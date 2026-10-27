@@ -656,13 +656,12 @@ function reliquary() {
   };
   const doors = (x, y, z) => Math.min(...[-1, 1].map((s) => { const [u, v] = turn(x, y, s * 20, 12, -s * 1.5 * REL.o); return sdBox(u, v, z, s * 10, 11, 72, 10, 1, 54, 0.6); }));
   const chestF = (x, y, z) => (!REL.o ? sdBox(x, y, z, 0, 0, 72, 20, 12, 54, 2) : Math.min(Math.max(sdBox(x, y, z, 0, 0, 72, 20, 12, 54, 2), -sdBox(x, y, z, 0, 3, 72, 18, 11, 52, 0)), doors(x, y, z)));
-  const fall = 120 * REL.o;
   const parts = [
     { f: (x, y, z) => Math.min(sdBox(x, y, z, 0, 0, 5, 58, 36, 5, 1), sdBox(x, y, z, 0, 0, 13, 48, 28, 3.5, 1)), m: 'dais' },
     { f: ironF, m: 'iron' },
     { f: (x, y, z) => { const q = Math.max(Math.abs(x) / 34, Math.abs(y) / 22); return Math.max(q * 34 - 34 * clamp(1 - (z - 136) / 44), 136 - z, z - 182); }, m: 'roof' }, // its pointed roof
     { f: chestF, m: 'chest' },
-    { f: (x, y, z) => { z += fall; const d = Math.min(...[-1, 1].map((s) => Math.max(Math.abs((x - s * 0) * 0.62 + s * (z - 80) * 0.78) - 1.6, Math.abs(y - 21) - 1.6, Math.abs(x) - 34, Math.abs(z - 80) - 46))); return fall ? Math.max(d, 17 - (z - fall)) : d; }, m: 'chain' }, // chained across, an X
+    { f: (x, y, z) => { const fall = 120 * REL.o; z += fall; const d = Math.min(...[-1, 1].map((s) => Math.max(Math.abs((x - s * 0) * 0.62 + s * (z - 80) * 0.78) - 1.6, Math.abs(y - 21) - 1.6, Math.abs(x) - 34, Math.abs(z - 80) - 46))); return fall ? Math.max(d, 17 - (z - fall)) : d; }, m: 'chain' }, // chained across, an X
     { f: (x, y, z) => sdBox(x, y, z, 0, 37, 9, 13, 1.5, 7, 0.5), m: 'plaque' },
   ];
   const sdf = (x, y, z) => Math.min(...parts.map((p) => p.f(x, y, z)));
@@ -768,7 +767,8 @@ add('rock', rockField(), [0, 0, 0]);
 add('doorway', doorway(DOORS.puits, 'well'), [0, 0, 0]);
 add('doorway', doorway(DOORS.caveau, 'stairs'), [0, 0, 0]);
 for (const w of WALLS) add('bones', boneWall(w), [0, 0, 0]);
-const ports = GATES.map((g) => { if (!g.arch) add('gatehouse', gatehouse(g), [0, 0, 0]); return add('portcullis', portcullis(wx(g.x1 - g.x0) + 6, 110), [wx((g.x0 + g.x1) / 2), wy((g.y0 + g.y1) / 2), -400]); });
+// the arena's gatehouse is low: a tall one would wall off its floor from the fight
+const ports = GATES.map((g) => { if (!g.arch) add('gatehouse', gatehouse(g, g.arena ? 130 : undefined), [0, 0, 0]); return add('portcullis', portcullis(wx(g.x1 - g.x0) + 6, 110), [wx((g.x0 + g.x1) / 2), wy((g.y0 + g.y1) / 2), -400]); });
 for (const o of PROPS) {
   const P = [wx(o.x), wy(o.y - o.h / 2), 0];
   if (o.kind === 'reliquary') add('reliquary', scaled(reliquary(), 1.35), P, 0);

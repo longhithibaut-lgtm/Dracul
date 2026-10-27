@@ -606,7 +606,7 @@ export class RoomScene extends Phaser.Scene {
     this.scurry(time, delta);
     if (zone?.id === 'catacombs' && !this.fight && !this.training && this.phase === 'play' && Boss.fightStarts(Save.data, feet.center, Cat.ARENA)) this.startFight();
     if (this.fight) { // the camera between them both (her body as drawn, up the walls), him kept well inside the view
-      const { boss: e, eye } = this.fight, v = this.cameras.main.worldView, mx = v.width / 2 - 50, my = v.height / 2 - 40;
+      const { boss: e, eye } = this.fight, v = this.cameras.main.worldView, mx = v.width / 2 - 40, my = v.height / 2 - 30; // (his feet clear of her blood bar)
       const tx = (this.hero.x + e.x) / 2, ty = (this.hero.y + e.y - (e.getData('z') ?? 0) - 50) / 2;
       eye.setPosition(Phaser.Math.Clamp(tx, this.hero.x - mx, this.hero.x + mx), Phaser.Math.Clamp(ty, this.hero.y - my, this.hero.y + my));
       this.hud.boss('La Nourrice', e.getData('hp'), T.nourrice.hp);
@@ -1281,7 +1281,8 @@ export class RoomScene extends Phaser.Scene {
       });
       Sfx.play(this, 'gift');
     });
-    const v = Vesna.create(this, R.x, R.y - 6), pose = { now: 'idle' as Vesna.Pose };
+    const v = Vesna.create(this, R.x, R.y - 27), pose = { now: 'idle' as Vesna.Pose }; // on the chest's floor, up on its dais
+    v.s.setDepth(o.depth + 1); // in it: before its dark inside
     v.rise(0);
     const look = () => v.s.active && v.show(pose.now, this.time.now);
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, look);
