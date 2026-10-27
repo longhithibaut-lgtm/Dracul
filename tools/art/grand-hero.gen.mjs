@@ -1,4 +1,4 @@
-// The torture room's hero at full detail (« grand pixel » trial, docs/decisions.md): the validated mockup's 3D vampire
+// The hero at full detail (« grand pixel », docs/decisions.md): the validated mockup's 3D vampire
 // (tools/art/grand/hero.mjs) posed per frame, lit by his lantern, a cold back rim and a faint warm fill with real
 // shadows and ambient occlusion (tools/art/grand/lib.mjs), then the mockup's post (filmic, desaturated, light dither,
 // snapped onto its 67 colours). One model unit is one pixel at 960x540: he stands ~80 px tall; the game draws the

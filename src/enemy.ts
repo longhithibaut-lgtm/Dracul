@@ -28,7 +28,7 @@ const NAMES = ['idle', 'walk0', 'walk1', 'walk2', 'walk3', 'wind0', 'wind1', 'wi
 // Frames sunk into the floor and cut at the feet: climbing out of the spawn pool, and the emptied body collapsing.
 const SUNK: Record<string, [frame: string, depth: number]> = { rise0: ['idle', 18], rise1: ['idle', 11], rise2: ['idle', 5], slump: ['robe', 7] };
 
-// The ghoul (the torture room's, « Crasse et faim »): the mockup's emaciated pale crawler on all fours, facing right,
+// The ghoul (« Crasse et faim »): the mockup's emaciated pale crawler on all fours, facing right,
 // its eyes glowing. Its frames are posed by moving its body and limbs: its legs are the rows from 9
 // down (the hind ones left of column 9, the fore ones under the head); its sheet also holds the eyes alone ('*' frames).
 const GHOUL = [

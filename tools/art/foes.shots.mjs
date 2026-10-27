@@ -1,5 +1,5 @@
 // The foes of the « grand pixel » rooms (src/foes.ts: Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur,
-// Inquisiteur, Amas, Bourreau; the arbalétrier, crossbow.ts) in the torture room, in headless Chromium at 1920x1080 (the PC target), called in from the training room: each idle, giving
+// Inquisiteur, Amas, Bourreau; the arbalétrier, crossbow.ts) in the training room (the necropolis), in headless Chromium at 1920x1080 (the PC target), called in from the training room: each idle, giving
 // its tell and attacking (crops round them, x2 of the screen's pixels kept), walking and struck, weakened, killed, full
 // frames of them; the bot playing each attack (the crossbowman's too), standing still (it must land) and stepping out
 // REACT ms after the tell starts, at the hero's speed (it must miss): nothing on the floor tells it, the bot only knows
@@ -7,13 +7,13 @@
 // dodged by slipping into his back, whose claws land where his front parries them; the Amas sprawled and the Bourreau
 // wrenching his axe free are struck without being cut short, the Amas losing a ghoul to each blow); and the frame rate
 // empty, with the hound pack, six pénitents, a Sonneur, an Inquisiteur, an Amas and a Bourreau fighting.
-// Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=torture]
+// Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=necropolis]
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
-const out = arg('out', 'shots'), port = Number(arg('port', 5209)), layout = arg('layout', 'torture');
+const out = arg('out', 'shots'), port = Number(arg('port', 5209)), layout = arg('layout', 'necropolis');
 const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
 await server.listen();
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });

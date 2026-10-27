@@ -11,7 +11,7 @@ import * as Save from './save.ts';
 // coffins where the hero re-forms (his coffin, the four chiefs' shut on their catafalques), the great hall round the dry
 // blood basin, the wardrobe off the crypt, the stairs down to the runs; the house rooms walled up. Baked offline from
 // the mockup's own scene by tools/art/refuge.gen.mjs (src/refuge.data.ts and three images, one texel per screen px of
-// the x2 view, two per room px), lit by dark.ts like the torture room. Bigger than the view both ways: the camera
+// the x2 view, two per room px), lit by dark.ts. Bigger than the view both ways: the camera
 // follows the hero. No enemy: the stairs start an expedition, the basin banks its blood (RoomScene).
 // Once Vesna is freed (save.ts), the mockup's state « rat » (tools/art/refuge.gen.mjs --vesna): her coffin open, her shop
 // open and walkable; its images are laid over the first's where they differ, its sprites and boxes its own.

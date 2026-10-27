@@ -313,7 +313,7 @@ export class RoomScene extends Phaser.Scene {
     // P: full screen in and out (the whole page, so the training panel comes along); refused: nothing happens.
     this.input.keyboard!.on('keydown-P', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}));
 
-    const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true, layout: 'hall' }) satisfies Run); // its panel picks a room
+    const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true, layout: 'necropolis' }) satisfies Run); // at the necropolis' stairs up, spawn points all round; its panel picks another room
     this.input.keyboard!.on('keydown-T', toggleTraining);
     if (this.training) {
       this.hud.title('Entraînement');
@@ -2084,7 +2084,7 @@ export class RoomScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(next));
   }
 
-  /** The room as a place of the world (the training's torture room is none). */
+  /** The room as a place of the world. */
   private get here() {
     return this.layout as Place;
   }

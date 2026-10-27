@@ -9,7 +9,7 @@ export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'pr
 /** Survive the scene restarts (a death in training starts the training room again). */
 export const opts = { god: true, passive: false };
 
-const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître'], ['torture', 'La salle de torture (essai)'], ['refuge', 'Le refuge'], ['necropolis', 'La nécropole']];
+const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître'], ['refuge', 'Le refuge'], ['necropolis', 'La nécropole']];
 const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne'], ['purifier', 'Purificateur'], ['priest', 'Prêtre'], ['hounds', 'Chiens (3)'], ['penitents', 'Pénitents (6)'], ['ringer', 'Sonneur'], ['inquisitor', 'Inquisiteur'], ['amas', 'Amas'], ['bourreau', 'Bourreau']];
 // [label, group, key, min, max, step]
 const KNOBS = [

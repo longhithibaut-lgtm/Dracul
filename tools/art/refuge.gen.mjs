@@ -1,7 +1,7 @@
 // The refuge (« grand pixel », docs/lore.md « Le refuge ») for the game, baked from the validated mockup's own scene
 // (tools/art/maquettes/hub3/complex.mjs, state « début »: no chief freed, every house's door walled up) without its
 // hero, whom the game draws. Its 3D render (~70 s on 4 cores, cached in shots/refuge.cache) is split into what dark.ts
-// lights the way it lights the torture room: the albedo (src/refuge-albedo.png, what the world camera draws), and three
+// lights: the albedo (src/refuge-albedo.png, what the world camera draws), and three
 // bands of light (src/refuge-light.png): the static light (cbrt(L / 4): the whole render divided by the albedo), what is
 // left over once that clips (sqrt), the surface's height z + 64, its floor row's offset Y - y + 64 and its normal's y
 // (128 + 127 ny), in room px. One texel is one mockup px, half a room px: the game shows it at the mockup's density.

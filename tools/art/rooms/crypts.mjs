@@ -221,7 +221,7 @@ export function shell(holes) {
   return { S, ports, R: mulberry32(7) };
 }
 
-// The torture room's paler pillars, so they stand out of the dark floor.
+// Paler pillars, so they stand out of the dark floor.
 const pale = (m, k = 1.7) => ({ ...m, mat: (...a) => { const r = m.mat(...a); return { ...r, alb: mix(mul(r.alb, k), C.grime, clamp(0.3 - a[3] / 400)) }; } });
 /** Pillars (with their dying torch), broken stumps (their rubble strewn on the side they broke), braziers, coffins
  *  (shut, or open on their bones) on stone biers with candles burnt down, each on its footprint. */

@@ -1,17 +1,16 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { TORCHES, L } from './torture.ts';
 import { viewSize } from './logic.ts';
 
-// The trial room's light (« Crasse et faim », docs/decisions.md), as the mockup's engine lights it. The world camera
-// draws what everything reflects (its albedo, in sRGB); one screen shader (FilterDark) lights it: the static lights
-// baked by torture.ts with their shadows, haze and rims ('torture-light'), the faint ambient, and the lights that move:
+// The rooms' light, as the mockup's engine lights it. The world camera draws what everything reflects (its albedo, in
+// sRGB); one screen shader (FilterDark) lights it: the static lights baked offline with their shadows, haze and rims
+// ('<key>-light'), the faint ambient, and the lights that move:
 // the hero's lantern (green-yellow, from the glass drawn in his hand, a gentle flicker), his night sight (so shapes
 // read in the dark) and the Order's lanterns (small, dirty green). Then the mockup's post: vignette, filmic tone,
 // desaturated grade with green-brown shadows, grain, ordered dither snapped onto its palette.
-// The refuge (refuge.ts) and the run rooms baked in the same style (baked.ts: the crypt, the cloister) are lit the same
-// way from their own bake and mockup (their Look): their '<key>-light' holds the whole static render, two texels per
-// room pixel; under the cloister's sun, what is drawn over the room's own pixels gets a capped share of that light.
+// The refuge (refuge.ts), the rooms (baked.ts: the crypt, the cloister) and the zones are lit from their own bake and
+// mockup (their Look): their '<key>-light' holds the whole static render, two texels per room pixel; under the
+// cloister's sun, what is drawn over the room's own pixels gets a capped share of that light.
 // What glows or warns is drawn unlit over it, by a second camera that sees only what stands at DEPTH and above: the
 // eyes, the torch flames, the effects.
 
@@ -251,7 +250,9 @@ const PAL = ['#1c140e', '#281c13', '#362619', '#463220', '#5a4228', '#745632', '
   '#5a2a0e', '#8a4516', '#c06a20', '#e8a040', '#ffd890',
   '#1e1222', '#2e1a36', '#46265a', '#643882', '#8a52a8',
   '#1a1e20', '#262c2e', '#384042', '#58605e', '#8a908a', '#c4c8bc', '#f2f4e4'];
-const rgb = (s: string) => [1, 3, 5].map((k) => parseInt(s.slice(k, k + 2), 16));
+function rgb(s: string) { return [1, 3, 5].map((k) => parseInt(s.slice(k, k + 2), 16)); }
+/** A '#rrggbb' colour in linear light (hoisted: the shader's source uses it). */
+function L(s: string) { return rgb(s).map((v) => (v / 255) ** 2.2); }
 /** The nearest colour of `pal` (rgb) to r, g, b; `wY`: the weight of brightness against hue. */
 export function nearest(r: number, g: number, b: number, pal = PAL.map(rgb), wY = 1.4) {
   let best = pal[0], bd = Infinity;
@@ -305,11 +306,6 @@ export type Look = {
   lamp: [number, number, number]; ys: number; post: [number, number, number, number]; vig: [number, number, number, number]; pal: string[]; wY: number;
   albedo?: string; sprites?: number; warm?: number;
 };
-/** The torture room's (torture.ts): its mockup « Crasse et faim ». */
-export const TORTURE: Look = {
-  light: 'torture-light', texel: 1, torches: TORCHES, flicker: true, amb: '#16181a', night: 0.26,
-  lamp: [5, 46, 200], ys: 1, post: [3.2, 0.45, 0.24, 0.03], vig: [1.15, 0.55, 0.04, 0], pal: PAL, wY: 1.4,
-};
 
 /** The baked light of `src` (its first band, `texel` texels a room px), w x h room px, read back once: at each room px the
  *  floor's light as dark.ts draws it (its T, 4 at full, without the flicker), for the foes' sight (RoomScene hunts()). */
@@ -327,7 +323,7 @@ export function lightMap(src: CanvasImageSource, w: number, h: number, texel: nu
 /** Lights the room (`size`, room px) around `hero`; `lanterns()`: the Order's lanterns standing; `quads`: an open
  *  zone's light, chunk by chunk (its look has none of its own). The world camera's light is its filter 'dark' (set it
  *  inactive to see the room unlit: albedo only). */
-export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics.Arcade.Group, lanterns: () => Spot[], size: [number, number], look = TORTURE, quads?: Quads) {
+export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics.Arcade.Group, lanterns: () => Spot[], size: [number, number], look: Look, quads?: Quads) {
   const renderer = scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   if (!registered) renderer.renderNodes.addNodeConstructor('FilterDark', DarkNode);
   registered = true;

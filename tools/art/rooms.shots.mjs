@@ -2,7 +2,7 @@
 // screen. For each: the whole room, stitched a screen at a time from the stairs to the gate (the hero at his start, no
 // foe, no vignette); then in play: its foes placed for its ring (world.ts), the hero walking up into them, the next
 // part's, the top of the room by its open portcullises; in the cloister, the hero in the Dawn, the danger building
-// until it burns him. Then the frame rate of each, the torture room's and the refuge's (light shader on). The
+// until it burns him. Then the frame rate of each and the refuge's (light shader on). The
 // expedition through them is scripts/shot.mjs's. Writes <out>/<room>-<what>.png.
 // Usage: node tools/art/rooms.shots.mjs [--out=shots/rooms --port=5210 --only=hall,nave,ossuary,chapel,cloister]   (exit code 1 on a page error)
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -28,8 +28,8 @@ const shot = async (what) => {
   await page.screenshot({ path: `${out}/${what}.png` });
   await run(() => window.game.loop.wake());
 };
-const enter = async (layout, training = false) => {
-  await run(([layout, training]) => window.game.scene.getScene('room').scene.restart({ layout, training }), [layout, training]);
+const enter = async (layout) => {
+  await run((layout) => window.game.scene.getScene('room').scene.restart({ layout }), layout);
   await page.waitForFunction((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.hero?.body && s.sys.isActive(); }, layout);
   await page.waitForTimeout(600);
 };
@@ -124,7 +124,8 @@ for (const id of only) {
   await run(() => { const s = window.game.scene.getScene('room'); s.cameras.main.centerOn(240, 135); });
   await shot(`${id}-gate`);
 }
-for (const id of ['torture', 'refuge']) { await enter(id, id === 'torture'); rates[id] = await fps(); }
+await enter('refuge');
+rates.refuge = await fps();
 console.log(`fps (headless, SwiftShader, 1920x1080): ${JSON.stringify(rates)}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
