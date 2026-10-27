@@ -44,6 +44,12 @@ Noms et personnalités choisis par Claude à la demande de l'utilisateur (provis
   qui se trame sous la cathédrale. La seule à ne pas mépriser le Sans-Maison : sa maison aussi était la risée des
   nobles. Au refuge, c'est la marchande, qui échange le sang récolté contre des améliorations.
   *« Les nobles crachaient sur les rats, gamin. Les rats, eux, ont survécu. »*
+  Répliques de sa libération et de son échoppe, **provisoires** (écrites par Claude dans sa voix, à valider) :
+  *« Un sans-maison qui ouvre ma cage... Le monde tourne à l'envers. Tant mieux. »*, *« Je rentre par mes chemins.
+  Rapporte du sang au refuge : on fera affaire. »* ; à l'échoppe : *« Alors, gamin, on fait affaire ? »*, *« Du sang
+  frais ? Montre voir. »*, *« Mes rats t'ont vu venir. »*, *« Marché conclu. Mes petits te suivront. »*, *« Prends. Et
+  ne le gâche pas. »*, *« Pas de sang, pas de rats. »*, *« Reviens les poches pleines, gamin. »*, *« Bon choix. »*,
+  *« Ça te va mieux qu'à un noble. »*, *« Comme tu veux. »*.
 - **Séverin d'Ombrelune** (Maison de la Brume) : prince raffiné, ironique, distant, qui parle par sous-entendus. Le
   plus méprisant au début, et le plus long à admettre qu'il doit sa liberté à un sans-maison. Au refuge, il entraîne
   à l'esquive. *« Un sans-maison qui libère un prince. Le monde a vraiment perdu la raison. »*
@@ -81,7 +87,9 @@ longtemps sans sang, il redevient bête un temps : boutique fermée, il grogne d
 - **Les humains de l'Ordre** : arbalétriers, prêtres qui posent des zones de lumière sacrée, chiens de chasse,
   inquisiteurs. Chaque menace doit avoir sa forme, sa couleur et son attaque, lisibles d'un coup d'œil.
 - **Les goules** des catacombes : des vampires affamés devenus bêtes (le serviteur de sang actuel).
-- **Mini-boss** : un gardien par région, devant le reliquaire du chef de maison.
+- **Mini-boss** : un gardien par région, devant le reliquaire du chef de maison. Celui des catacombes : **la Nourrice
+  des goules** (nom provisoire), une vampire affamée devenue géante que l'Ordre garde enchaînée devant Vesna, étirée
+  comme une araignée, des goules accrochées à elle.
 - **Boss final** : le Grand Inquisiteur, en haut du clocher.
 
 ## Mécaniques liées au lore

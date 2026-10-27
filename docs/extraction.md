@@ -1,6 +1,6 @@
 # Dracul : direction « extraction × ARPG » (document de travail)
 
-Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26) ; puis les objets et le sac (§6, 2026-10-26) ; puis les catacombes, deuxième zone ouverte (§4, 2026-10-27). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
+Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26) ; puis les objets et le sac (§6, 2026-10-26) ; puis les catacombes, deuxième zone ouverte (§4, 2026-10-27) ; puis la Nourrice, Vesna libérée et ses pouvoirs (§4, §6, 2026-10-27). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
 lore (`docs/lore.md`) ou sont des choix ouverts.
 
 ## 1. L'idée en une phrase
@@ -160,12 +160,16 @@ l'Ordre, lune tombée par les puits, pourriture phosphorescente). Plan (x vers l
   noir), les eaux noires (lac infranchissable qu'on contourne, cercueil noyé, lune), les nids de rats et leur passage
   éboulé, la croisée basse, la galerie basse (niches, sarcophage), l'antichambre (braseros, bannières, coffre,
   lanterne), **la prison de Vesna**.
-- **La prison de Vesna** (fermée pour l'instant) : une salle dallée de l'Ordre (médaillon gravé, piliers brisés,
-  braseros), fermée au sud par un mur d'os où s'ouvre **une grille** (`GATES` id `prison`, `arena: true` : levée tant
-  qu'aucun combat ne la referme ; ses images de fermeture sont cuites) ; contre le mur de crânes du nord, **le reliquaire**
-  (cage de fer sur une estrade, coffre doré scellé de cire rouge, chaînes en croix, le signe du Rat sur une plaque
-  d'argent). F devant lui : « Le reliquaire est scellé. ». Crochets pour le boss : `ARENA` (le rectangle de l'arène),
-  `RELIQUARY` (son pied, la place où l'on parle), la grille `prison` ; le secteur `prison` n'a aucun groupe.
+- **La prison de Vesna** : une salle dallée de l'Ordre (médaillon gravé, piliers brisés, braseros), fermée au sud par un
+  mur d'os où s'ouvre **une grille** (`GATES` id `prison`, `arena: true`) ; contre le mur de crânes du nord, **le
+  reliquaire** (cage de fer sur une estrade, coffre doré scellé de cire rouge, chaînes en croix, le signe du Rat sur une
+  plaque d'argent) ; le secteur `prison` n'a aucun groupe. **Son gardien, la Nourrice des goules** (« l'Araignée »,
+  2026-10-27) : entrer dans l'arène fait tomber la grille derrière le héros (la battue reste dehors) et la Nourrice
+  descend de la voûte ; deux phases (détail et chiffres : `docs/decisions.md`, `T.nourrice`) ; morte, la grille se lève,
+  pour toujours (`Save.nourrice`). Mourir pendant le combat suit la règle de toujours (tout ce qui est porté est perdu).
+  Puis **F au reliquaire libère Vesna** : une courte scène (ses yeux dans la fente, la cage s'ouvre, ses rats en
+  sortent, elle se lève et parle), libérée pour toujours dès que la cage s'ouvre (`Save.vesna`), même si le héros meurt
+  en rentrant ; elle rentre seule au refuge (en nuée de rats). Après : « Le reliquaire est vide. ».
 - **Secteurs** (premier qui contient le point) : puits, escalier (aucun groupe : des pauses sûres), prison (aucun),
   galeries-est 2, croisée 2, galeries-ouest 2 (anneau 3) ; nid 4, eaux-noires 2, rats 1, galerie-basse 3 (anneau 4).
   Réserves propres aux catacombes (`T.expedition.catacombs`) : goules et Amas surtout, chiens et pénitents de l'Ordre qui
@@ -228,6 +232,9 @@ Proposition de trois familles, lisibles et peu nombreuses :
 ### Ce que deviennent les Dons et les Pactes
 - Les **Dons du Rat** deviennent des **pouvoirs débloqués au refuge** auprès de Vesna, une fois libérée (Peste, rats,
   la Nuée). Ils sont permanents et se choisissent avant de partir, dans des emplacements comme aujourd'hui.
+  **Codé** (2026-10-27, `src/powers.ts`) : à son échoppe, huit pouvoirs d'emplacement (deux par emplacement : griffes,
+  tir, glyphe, brume ; les Dons d'emplacement de `gifts.ts`, rareté commune) achetés avec le sang du bassin, un seul porté
+  par emplacement (le porter remplace l'autre), et la Nuée (R) au sommet ; prix dans `T.vesna`.
 - Les **Pactes de sang** restent : ce sont des reliques maudites trouvées dans le monde, très fortes avec un prix.
 - La rareté passe des Dons aux objets.
 
