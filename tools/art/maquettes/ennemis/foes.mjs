@@ -11,21 +11,21 @@ const lp = (a, b, t) => add(a, sc(sub(b, a), t));
 const clone = J => JSON.parse(JSON.stringify(J));
 
 // colours
-const K = {
+export const K = {
   ivory: L('#b8ad90'), ivoryD: L('#6e6652'), gold: L('#9a7428'), goldD: L('#4e3410'), goldL: L('#c8a050'),
   black: L('#16130f'), blackL: L('#2c2620'), oxblood: L('#3e0a0c'), skin: L('#a87a5a'), skinD: L('#6e4a36'), pale: L('#c4b89c'),
   leather: L('#3a2818'), leatherD: L('#22170e'), brass: L('#9a6430'), brassD: L('#4a2a12'), bronze: L('#7a5424'), verd: L('#4e5e44'),
   wood: L('#3e2c1c'), woodD: L('#24190f'), sack: L('#6a5c44'), sackD: L('#3e3428'), hide: L('#4a2a1a'), hideD: L('#1c100a'), mange: L('#8e5e4c'),
 };
-const HOLY = [1.7, 1.3, 0.62], HEAL = [1.15, 1.2, 1.05], FIRE = [2.4, 0.95, 0.22];
-const glow = (e, k = 1) => ({ alb: [0.15, 0.12, 0.08], emi: e.map(v => v * k), noAO: true, noShadow: true, rim: 0 });
-const ironM = (x, y, z, s = 7) => { const n = vn3(x * 0.4, y * 0.4, z * 0.4, s); return { alb: mix(S.iron, n > 0.55 ? S.rustL : S.rust, clamp(n * 1.8 - 0.5)), spec: 0.5, gloss: 40 }; };
-const goldM = (x, y, z) => { const n = vn3(x * 0.6, y * 0.6, z * 0.6, 3); return { alb: mix(K.gold, K.goldD, clamp(n * 1.8 - 0.5)), spec: 0.9, gloss: 45 }; };
+export const HOLY = [1.7, 1.3, 0.62], HEAL = [1.15, 1.2, 1.05], FIRE = [2.4, 0.95, 0.22];
+export const glow = (e, k = 1) => ({ alb: [0.15, 0.12, 0.08], emi: e.map(v => v * k), noAO: true, noShadow: true, rim: 0 });
+export const ironM = (x, y, z, s = 7) => { const n = vn3(x * 0.4, y * 0.4, z * 0.4, s); return { alb: mix(S.iron, n > 0.55 ? S.rustL : S.rust, clamp(n * 1.8 - 0.5)), spec: 0.5, gloss: 40 }; };
+export const goldM = (x, y, z) => { const n = vn3(x * 0.6, y * 0.6, z * 0.6, 3); return { alb: mix(K.gold, K.goldD, clamp(n * 1.8 - 0.5)), spec: 0.9, gloss: 45 }; };
 const cloth = (a, b, x, y, z, s = 1, k = 1) => ({ alb: mix(a, b, clamp(fbm3(x * 0.3, y * 0.3, z * 0.3, 3, s) * 1.6 - 0.35) * k), wrap: 0.3, spec: 0.04, gloss: 10 });
-const bloodHem = (c, x, y, z, top, s = 5) => mix(c, S.bloodD, clamp((top - z) / 10) * clamp(vn3(x * 0.5, y * 0.5, z * 0.25, s) * 1.7 - 0.35));
+export const bloodHem = (c, x, y, z, top, s = 5) => mix(c, S.bloodD, clamp((top - z) / 10) * clamp(vn3(x * 0.5, y * 0.5, z * 0.25, s) * 1.7 - 0.35));
 
 // builder with a few extra shapes
-function B() {
+export function B() {
   const b = builder();
   b.f = (f, box, m, k = 0, ex = {}) => b.parts.push({ f, m, k, box, ...ex });
   b.box = (c, h, m, k = 0, r = 0.3, ex = {}) => b.f((x, y, z) => sdBox(x, y, z, c[0], c[1], c[2], h[0], h[1], h[2], r), [c[0] - h[0] - 1, c[1] - h[1] - 1, c[2] - h[2] - 1, c[0] + h[0] + 1, c[1] + h[1] + 1, c[2] + h[2] + 1], m, k, ex);
@@ -39,9 +39,9 @@ function B() {
   b.chain = (pts, r, m, k = 0) => { for (let i = 0; i < pts.length - 1; i++) b.rc(pts[i], pts[i + 1], r, r, m, k); };
   return b;
 }
-const done = (b, mat, extra = {}) => ({ sdf: partsSdf(b.parts), mat, bounds: boundsOf(b.parts, 2), step: 0.6, lights: [], fx: [], ...extra });
+export const done = (b, mat, extra = {}) => ({ sdf: partsSdf(b.parts), mat, bounds: boundsOf(b.parts, 2), step: 0.6, lights: [], fx: [], ...extra });
 // claws: n fingers from wrist W along dir d
-function claws(b, W, d, side, m, mc, len = 5, spread = 0.5) {
+export function claws(b, W, d, side, m, mc, len = 5, spread = 0.5) {
   d = nz(d); const sv = nz([d[1] || 0.001, -d[0], 0]);
   for (let f = 0; f < 4; f++) { const o = (f - 1.5); const base = add(W, sc(sv, o * 0.7)); const dir = nz(add(d, sc(sv, o * spread * 0.4))); const mid = add(base, sc(dir, len * 0.55)); const tip = add(mid, add(sc(dir, len * 0.5), [0, 0, -len * 0.15])); b.rc(base, mid, 0.45, 0.35, m, 0.3); b.rc(mid, tip, 0.35, 0.05, mc, 0.15); }
 }
