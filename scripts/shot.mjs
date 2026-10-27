@@ -1,5 +1,5 @@
 // Plays the expeditions through la nécropole in headless Chromium (1920x1080 = native x4) and saves captures of the loop.
-// Usage: npm run shot [-- --out=shots --port=5199]
+// Usage: npm run shot [-- --out=shots --port=5199 --only=catacombs|fps]   (--only: expedition 3 alone, or the frame rates alone)
 // A fresh save. Expedition 1: the bot walks from the coffin down the refuge's stairs into the zone (zone-refuge.png),
 // comes up unseen on a group at its post (group.png), fights the ghouls that hunt him, picks up their blood, goes into
 // the crypt by its door (zone-crypt-door.png), fights there, searches a cache that hides an item (item-glint.png: it lies
@@ -15,6 +15,9 @@
 // lets the foes kill him: he re-forms at his coffin with nothing carried, the new item lost, the acquired one still worn. Le Rongé's wares (ronge.png, shop.png). Hounds follow him through one
 // door, never a second. Headless FPS of every place, and of the zone walked across chunk borders. In the training room
 // a crossbowman clawed to his knees, then bitten. The whole zone's map: shots/necropolis-overview.png (its bake).
+// Expedition 3, les catacombes: across the necropolis by its shortcuts, down the well (well-top, cata-well-bottom), a gallery,
+// a crossroads, la grille du caveau raised from below (cata-shortcut-before, -after; caveau-before from above), le nid, the
+// prison and its sealed reliquary (cata-prison), the battue down there and up in the necropolis, back up le caveau (caveau-after), home.
 // Exit code 1 if the page logged an error or a step failed.
 import { mkdir, copyFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -210,6 +213,7 @@ async function catacombs() {
   await keep(true);
   const bottom = await state();
   check(Math.abs(bottom.hero.x - 2600) < 20 && bottom.hero.y < 200, `at the well's foot (${await where()})`);
+  await until(() => window.game.scene.getScene('room').room.zone.chunks.shown.size >= 4, null, 10000); // its chunks in
   await page.waitForTimeout(500);
   await shot('cata-well-bottom');
   const placed = await run(() => { const s = window.game.scene.getScene('room'), live = s.enemies.getChildren().filter((e) => e.body?.enable), kinds = {}; for (const e of live) kinds[e.getData('kind')] = (kinds[e.getData('kind')] ?? 0) + 1;
@@ -231,7 +235,7 @@ async function catacombs() {
   await run(() => { const s = window.game.scene.getScene('room'), t = s.hud.title.bind(s.hud), seen = []; s.hud.title = (m) => (seen.push(m), t(m)); window.seen = seen; });
   for (let k = 0; k < 4 && !(await run(() => window.seen.includes('Le reliquaire est scellé.'))); k++) { await page.keyboard.press('f'); await page.waitForTimeout(400); }
   check(await run(() => window.seen.includes('Le reliquaire est scellé.')), "F at Vesna's reliquary: « Le reliquaire est scellé. »");
-  await look('cata-prison', 2360, 770);
+  await look('cata-prison', 2360, 740);
   // his scent, down here: packs at the catacombs' narrow ways, and every other one up in the necropolis on his way home
   const scent = await run(async () => {
     const s = window.game.scene.getScene('room'), f = s.hero.body.center;
@@ -243,7 +247,8 @@ async function catacombs() {
   });
   check(scent.down.length > 0 && scent.up.length > 0, `the battue: ${scent.loosed} packs loosed; down here: ${scent.down.join(' | ')}; up in the necropolis: ${scent.up.join(' | ')}`);
   await trek([[2350, 1000], [2180, 1012], [1700, 1004], [1450, 950], [1080, 880], [880, 770], [600, 650], [360, 470], [262, 420], [218, 320], [262, 215], [300, 150]], "back by the low gallery, le nid and the rat-run to le caveau's stairs");
-  check(await exit(300, 136, 'ArrowUp', 'necropolis'), "up le caveau's stairs");
+  await walk(300, 134, 8000, 3); // square in its recess
+  check(await exit(300, 134, 'ArrowUp', 'necropolis'), "up le caveau's stairs");
   const top = (await state()).hero;
   check(Math.abs(top.x - 720) < 20 && top.y > 150 && top.y < 200, `out of le caveau, in the near field (${Math.round(top.x)},${Math.round(top.y)})`);
   await page.waitForTimeout(600);
@@ -260,9 +265,10 @@ async function catacombsFps(fps) {
   await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'catacombs' }));
   await arrived('catacombs');
   await keep(true);
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(4000); // its first chunks read back (their light): a slow start
   fps.push(`catacombs ${(await rate(2000)).toFixed(1)}`);
-  await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) e.disableBody(true, true); s.hero.body.reset(2520, 205); });
+  await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) e.disableBody(true, true); });
+  await run(() => { const s = window.game.scene.getScene('room'); s.hero.body.reset(2520, 205); });
   await page.waitForTimeout(800);
   const chunks = [], measure = rate(9000);
   for (let end = Date.now() + 9000; Date.now() < end;) { await step(1500, 240, 8); chunks.push(await run(() => window.game.scene.getScene('room').room.zone?.chunks.shown.size ?? -1)); }
@@ -281,12 +287,44 @@ async function end() {
   process.exit(errors.length || failed.length ? 1 : 0);
 }
 
+/** Headless FPS: each place opened directly (its foes on their posts, the hero kept from harm); the zones walked across
+ *  chunk borders. */
+async function measureFps() {
+  const fps = [];
+  for (const layout of ['refuge', 'necropolis', 'hall', 'nave', 'ossuary', 'chapel', 'cloister']) {
+    await run((layout) => window.game.scene.getScene('room').scene.restart({ layout }), layout);
+    await until((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.sys.isActive(); }, layout);
+    await keep(true);
+    await page.waitForTimeout(1000);
+    fps.push(`${layout} ${(await rate(2000)).toFixed(1)}`);
+  }
+  {
+    await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'necropolis' }));
+    await arrived('necropolis');
+    await keep(true);
+    await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) e.disableBody(true, true); s.hero.body.reset(330, 176); }); // the north path, out of the way
+    await page.waitForTimeout(800);
+    const chunks = [], measure = rate(9000);
+    for (let end = Date.now() + 9000; Date.now() < end;) { // east along the north path, through x 480 and 960: chunk borders
+      await step(1300, 233, 8);
+      chunks.push(await run(() => { const s = window.game.scene.getScene('room'); return s.room.zone?.chunks.shown.size ?? -1; }));
+    }
+    const n = await measure, x = (await state()).hero.x;
+    if (chunks.includes(-1)) console.log(`left the zone while walking: ${(await state()).layout}`);
+    fps.push(`necropolis walked across chunk borders ${n.toFixed(1)} (to x ${Math.round(x)}, ${Math.min(...chunks)}-${Math.max(...chunks)} chunks shown)`);
+    check(x > 960 && Math.max(...chunks) <= 12, `walking east across chunk borders, ${Math.max(...chunks)} chunks held at most`);
+  }
+  await catacombsFps(fps);
+  console.log(`headless fps: ${fps.join(', ')}`);
+}
+
 await mkdir(out, { recursive: true });
 await page.goto(`http://localhost:${port}/`);
 await run(() => localStorage.clear());
 await page.reload();
 await arrived('refuge');
 await page.waitForTimeout(500);
+if (arg('only', '') === 'fps') { await measureFps(); await end(); } // the frame rates alone
 if (arg('only', '') === 'catacombs') { // the catacombs alone, from a save with the necropolis' shortcuts open
   await run(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 2, banked: 0, shortcuts: ['grille', 'galerie'] })));
   await catacombs();
@@ -585,32 +623,7 @@ await catacombs();
 
 // ---- Headless FPS: each place opened directly (its foes on their posts, the hero kept from harm); the zones walked
 // across chunk borders ----
-const fps = [];
-for (const layout of ['refuge', 'necropolis', 'hall', 'nave', 'ossuary', 'chapel', 'cloister']) {
-  await run((layout) => window.game.scene.getScene('room').scene.restart({ layout }), layout);
-  await until((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.sys.isActive(); }, layout);
-  await keep(true);
-  await page.waitForTimeout(1000);
-  fps.push(`${layout} ${(await rate(2000)).toFixed(1)}`);
-}
-{
-  await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'necropolis' }));
-  await arrived('necropolis');
-  await keep(true);
-  await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) e.disableBody(true, true); s.hero.body.reset(330, 176); }); // the north path, out of the way
-  await page.waitForTimeout(800);
-  const chunks = [], measure = rate(9000);
-  for (let end = Date.now() + 9000; Date.now() < end;) { // east along the north path, through x 480 and 960: chunk borders
-    await step(1300, 233, 8);
-    chunks.push(await run(() => { const s = window.game.scene.getScene('room'); return s.room.zone?.chunks.shown.size ?? -1; }));
-  }
-  const n = await measure, x = (await state()).hero.x;
-  if (chunks.includes(-1)) console.log(`left the zone while walking: ${(await state()).layout}`);
-  fps.push(`necropolis walked across chunk borders ${n.toFixed(1)} (to x ${Math.round(x)}, ${Math.min(...chunks)}-${Math.max(...chunks)} chunks shown)`);
-  check(x > 960 && Math.max(...chunks) <= 12, `walking east across chunk borders, ${Math.max(...chunks)} chunks held at most`);
-}
-await catacombsFps(fps);
-console.log(`headless fps: ${fps.join(', ')}`);
+await measureFps();
 
 // ---- The bite, bought from le Rongé: a crossbowman clawed to his knees, then bitten ----
 await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'refuge' }));

@@ -94,7 +94,7 @@ function dug(X, Y) {
   return d + noisy(X, Y) * built * (inSpan(X, Y - 6) ? 0.35 : 1) * clamp(nearDoor(X, Y) / 50); // the ossuaries' faces built straighter
 }
 for (let Y = 0; Y < RH; Y++) for (let X = 0; X < RW; X++) if (dug(X + 0.5, Y + 0.5) < 0) floor[Y * RW + X] = 1;
-for (const d of Object.values(DOORS)) for (let Y = d.y - RECESS - 6; Y < d.y + 8; Y++) for (let X = d.x - d.w / 2; X < d.x + d.w / 2; X++) floor[Y * RW + X] = 1; // their recesses
+for (const d of Object.values(DOORS)) for (let Y = d.y - RECESS - 6; Y < d.y + 8; Y++) for (let X = d.x - d.w / 2 - 4; X < d.x + d.w / 2 + 4; X++) floor[Y * RW + X] = 1; // their recesses (wide enough that the 8 px collision cells leave him their width)
 /** Out of the dug floor: rock. */
 export const rock = (X, Y) => { const x = Math.floor(X), y = Math.floor(Y); return x < 0 || y < 0 || x >= RW || y >= RH || !floor[y * RW + x]; };
 const inWater = (X, Y, e = 0) => Math.hypot((X - WATER[0]) / WATER[2], (Y - WATER[1]) / WATER[3]) < 1 + e + 0.12 * (fbm(X / 14, Y / 10, 3, 9) - 0.5);
@@ -391,7 +391,7 @@ function mound(r, h, seed) {
 
 // ---------- props ----------
 const PROPS = [ // kind, floor x, feet line y (room px)
-  { kind: 'reliquary', x: RELIQUARY.x, y: RELIQUARY.y, w: 116, h: 70 },
+  { kind: 'reliquary', x: RELIQUARY.x, y: RELIQUARY.y, w: 84, h: 34 },
   { kind: 'pillar', x: 2236, y: 776, w: 22, h: 11, tall: 60 }, { kind: 'pillar', x: 2486, y: 776, w: 22, h: 11, tall: 90 },
   { kind: 'sarc', x: 2160, y: 238, w: 40, h: 14 }, { kind: 'sarc', x: 1100, y: 892, w: 40, h: 14 }, { kind: 'chest', x: 2500, y: 1040, w: 26, h: 12 }, { kind: 'chest', x: 1722, y: 90, w: 26, h: 12 },
   { kind: 'coffin', x: 380, y: 140, w: 46, h: 12 }, { kind: 'coffin', x: 1375, y: 588, w: 46, h: 12, sunk: true }, { kind: 'coffin', x: 1062, y: 108, w: 46, h: 12 },
@@ -411,7 +411,7 @@ const CANDLES = [[2340, 724, 3], [2386, 726, 2], [2316, 736, 2], [2404, 738, 3],
   [330, 140, 3], [262, 146, 2], [1722, 104, 2], [1100, 902, 2], [2600, 170, 2], [1462, 920, 2], [2240, 990, 2], [1064, 122, 2]];
 export const LANTERNS = [[1468, 362], [2470, 1012]];
 // Moon down the wells to the necropolis: floor patches x, y, r; the nest's a crack over its mound.
-const MOONHOLES = [[2600, 214, 44], [1396, 330, 34], [1610, 650, 26]];
+const MOONHOLES = [[2600, 214, 44], [1396, 330, 34], [1610, 650, 26], [2360, 712, 30]]; // and down on Vesna's reliquary
 
 // ---------- the gameplay plan, read by zone.gen.mjs ----------
 // Areas (first match): ring 3 near the well, 4 deep; none by the ways out and in the arena (its boss, later).
@@ -459,7 +459,7 @@ for (const w of WALLS) add('bones', boneWall(w), [0, 0, 0]);
 const ports = GATES.map((g) => { if (!g.arch) add('gatehouse', gatehouse(g), [0, 0, 0]); return add('portcullis', portcullis(wx(g.x1 - g.x0) + 6, 110), [wx((g.x0 + g.x1) / 2), wy((g.y0 + g.y1) / 2), -400]); });
 for (const o of PROPS) {
   const P = [wx(o.x), wy(o.y - o.h / 2), 0];
-  if (o.kind === 'reliquary') add('reliquary', reliquary(), P, 0);
+  if (o.kind === 'reliquary') add('reliquary', scaled(reliquary(), 1.35), P, 0);
   else if (o.kind === 'pillar') add('pillar', broken(pillar(40, 30, wz(o.tall) + 30), (x, y) => wz(o.tall) - 10 + x * 0.3 + 9 * vn(x / 5, y / 5, o.x)), P, 0);
   else if (o.kind === 'sarc') add('sarc', sarcophagus(o.x % 17), P, 0);
   else if (o.kind === 'chest') add('chest', chest(o.x % 5), P, 0);
