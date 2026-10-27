@@ -28,7 +28,8 @@ const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}
 const out = arg('out', 'shots');
 const port = Number(arg('port', 5199));
 
-const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
+// no hmr: an edit to src/ mid-run would reload the page under the bot
+const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' });
 await server.listen();
 // SwiftShader gives WebGL without a GPU (cloud containers); harmless on a desktop.
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -60,9 +61,18 @@ const keep = (on) => run((on) => {
 }, on);
 const save = () => run(() => JSON.parse(localStorage.getItem('dracul.save')) ?? { banked: 0, shortcuts: [] });
 
+/** The game's time (ms), its frames' deltas summed: on a loaded machine it runs slower than the clock (a frame of 200 ms
+ *  at most), and a key held for the clock's 200 ms may never be seen down. The bot holds keys and gives up on game time. */
+const clock = () => run(() => { const g = window.game; if (g.botClock === undefined) { g.botClock = 0; g.events.on('step', (t, d) => (g.botClock += d)); } return g.botClock; });
+/** A deadline `ms` of game time away: true while it is not past (nor 6 times as long on the clock: the game stalled). */
+async function timer(ms) {
+  const t = await clock(), w = Date.now() + 6 * ms;
+  return async () => Date.now() < w && (await clock()) < t + ms;
+}
 async function hold(keys, ms) {
+  const t = await clock();
   for (const k of keys) await page.keyboard.down(k);
-  await page.waitForTimeout(ms);
+  await page.waitForFunction(([t, ms]) => window.game.botClock >= t + ms, [t, ms], { timeout: 6 * ms + 1000 }).catch(() => {});
   for (const k of keys) await page.keyboard.up(k);
 }
 
@@ -101,16 +111,18 @@ async function step(x, y, r = 6) {
 }
 async function walk(x, y, ms = 40000, r = 6) {
   const from = (await state()).layout;
-  for (const end = Date.now() + ms; Date.now() < end;) if (!(await step(x, y, r)) || (await state()).layout !== from) return true;
+  for (const left = await timer(ms); await left();) if (!(await step(x, y, r)) || (await state()).layout !== from) return true;
   return false;
 }
-/** Chasing foes in the zone, the bot may walk into a door: back out by the place's stairs. */
+/** Chasing foes in the zone, the bot may walk into a door: back out by the place's stairs (the refuge's go down: a
+ *  new expedition, which fails the run). */
 async function stay() {
   const l = (await state()).layout;
   if (l === 'necropolis') return;
+  if (l === 'refuge') check(false, 'walked up into the refuge mid-expedition: it ends there');
   console.log(`(walked into ${l} by mistake: back out)`);
   await until(() => window.game.scene.getScene('room').phase === 'play', null, 5000);
-  await run(() => window.game.scene.getScene('room').leave(-1));
+  await run((l) => window.game.scene.getScene('room').leave(l === 'refuge' ? 0 : -1), l);
   await arrived('necropolis');
 }
 /** A walk by way of `points` ([x, y]...), each within 24 px; logs where it was cut short. */
@@ -127,27 +139,33 @@ async function exit(x, y, key, to) {
   return ok;
 }
 
-/** Fights the enemies within `reach` (all: Infinity), the nearest first, for at most `ms`: walks up to it, claws it
- *  toward it. True once none is left there. */
+/** The doors of the place, its ways up, the gallery's mouths: the bot never goes after a foe or blood within 48 px of
+ *  one (chasing, it would walk through). */
+const doors = () => run(() => { const s = window.game.scene.getScene('room'); return [...s.room.exits, s.room.stairs, ...(s.layout === 'necropolis' ? [{ x: 1690, y: 92 }, { x: 3260, y: 92 }] : [])]; });
+/** Fights the enemies within `reach` (all: Infinity) of where he stood at the start, none by a door, the nearest first,
+ *  for at most `ms`: walks up to it, claws it toward it. True once none is left there. */
 async function fight(ms, reach = Infinity) {
-  for (const end = Date.now() + ms; Date.now() < end;) {
-    const t = await run((reach) => {
+  const at = (await state()).hero, by = await doors();
+  for (const left = await timer(ms); await left();) {
+    const t = await run(([reach, at, by]) => {
       const s = window.game.scene.getScene('room'), f = s.hero?.body?.center, c = s.cameras.main.worldView;
       if (!f) return undefined;
+      at ??= f;
       const live = s.enemies.getChildren().filter((e) => e.body?.enable).map((e) => ({ x: e.body.center.x, y: e.body.center.y, d: Math.hypot(e.body.center.x - f.x, e.body.center.y - f.y) }));
-      const e = live.filter((e) => e.d < reach).sort((a, b) => a.d - b.d)[0];
+      const e = live.filter((e) => Math.hypot(e.x - at.x, e.y - at.y) < reach && by.every((d) => Math.hypot(e.x - d.x, e.y - d.y) > 48)).sort((a, b) => a.d - b.d)[0];
       return e && { ...e, sx: (e.x - c.x) * 4, sy: (e.y - 8 - c.y) * 4 };
-    }, reach);
+    }, [reach, at, by]);
     if (!t) return true;
     if (t.d > 24) await step(t.x, t.y, 20);
     else { await page.mouse.click(t.sx, t.sy); await page.waitForTimeout(80); }
   }
   return false;
 }
-/** Picks up the blood lying within `reach` (all: Infinity), the nearest first. */
+/** Picks up the blood lying within `reach` (all: Infinity) of where he stood at the start, none by a door, the nearest first. */
 async function gather(ms = 20000, reach = Infinity) {
-  for (const end = Date.now() + ms; Date.now() < end;) {
-    const d = await run((reach) => { const s = window.game.scene.getScene('room'), f = s.hero?.body?.center; return f && s.drops.map((d) => ({ x: d.x, y: d.y, k: Math.hypot(d.x - f.x, d.y - f.y) })).filter((d) => d.k < reach).sort((a, b) => a.k - b.k)[0]; }, reach);
+  const at = (await state()).hero, by = await doors();
+  for (const left = await timer(ms); await left();) {
+    const d = await run(([reach, at, by]) => { const s = window.game.scene.getScene('room'), f = s.hero?.body?.center; at ??= f; return f && s.drops.map((d) => ({ x: d.x, y: d.y, k: Math.hypot(d.x - f.x, d.y - f.y) })).filter((d) => Math.hypot(d.x - at.x, d.y - at.y) < reach && by.every((o) => Math.hypot(d.x - o.x, d.y - o.y) > 48)).sort((a, b) => a.k - b.k)[0]; }, [reach, at, by]);
     if (!d) return true;
     await walk(d.x, d.y, 8000, 10); // picked up within 16
     await page.waitForTimeout(100);
@@ -271,7 +289,7 @@ async function catacombsFps(fps) {
   await run(() => { const s = window.game.scene.getScene('room'); s.hero.body.reset(2520, 205); });
   await page.waitForTimeout(800);
   const chunks = [], measure = rate(9000);
-  for (let end = Date.now() + 9000; Date.now() < end;) { await step(1500, 240, 8); chunks.push(await run(() => window.game.scene.getScene('room').room.zone?.chunks.shown.size ?? -1)); }
+  for (const left = await timer(9000); await left();) { await step(1500, 240, 8); chunks.push(await run(() => window.game.scene.getScene('room').room.zone?.chunks.shown.size ?? -1)); }
   const n = await measure, x = (await state()).hero.x;
   fps.push(`catacombs walked across chunk borders ${n.toFixed(1)} (to x ${Math.round(x)}, ${Math.min(...chunks)}-${Math.max(...chunks)} chunks shown)`);
   check(x < 2400 && Math.max(...chunks) <= 12, `walking west across the catacombs' chunk borders, ${Math.max(...chunks)} chunks held at most`);
@@ -305,11 +323,13 @@ async function measureFps() {
     await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) e.disableBody(true, true); s.hero.body.reset(330, 176); }); // the north path, out of the way
     await page.waitForTimeout(800);
     const chunks = [], measure = rate(9000);
-    for (let end = Date.now() + 9000; Date.now() < end;) { // east along the north path, through x 480 and 960: chunk borders
+    let x = 0; // past x 960: the walk is checked, not how far 9 s on a loaded machine's clock take him
+    for (const left = await timer(30000); x <= 1000 && await left();) { // east along the north path, through x 480 and 960: chunk borders
       await step(1300, 233, 8);
       chunks.push(await run(() => { const s = window.game.scene.getScene('room'); return s.room.zone?.chunks.shown.size ?? -1; }));
+      x = (await state()).hero?.x ?? x;
     }
-    const n = await measure, x = (await state()).hero.x;
+    const n = await measure;
     if (chunks.includes(-1)) console.log(`left the zone while walking: ${(await state()).layout}`);
     fps.push(`necropolis walked across chunk borders ${n.toFixed(1)} (to x ${Math.round(x)}, ${Math.min(...chunks)}-${Math.max(...chunks)} chunks shown)`);
     check(x > 960 && Math.max(...chunks) <= 12, `walking east across chunk borders, ${Math.max(...chunks)} chunks held at most`);
@@ -353,7 +373,7 @@ const byRing = await run(() => { const s = window.game.scene.getScene('room'), r
 check(!/inquisitor|ringer|purifier|priest/.test(byRing.proche ?? ''), `foes by distance: near ${byRing.proche} | middle ${byRing.milieu} | far ${byRing.loin}`);
 { // The nearest group on its post, the hero coming up to it unseen (just out of its sight), between them on screen.
   const f = (await state()).hero, g = placed.at.filter((e) => e.x < 1300).sort((a, b) => Math.hypot(a.x - f.x, a.y - f.y) - Math.hypot(b.x - f.x, b.y - f.y))[0];
-  for (let end = Date.now() + 30000; Date.now() < end;) {
+  for (const left = await timer(30000); await left();) {
     const h = (await state()).hero;
     if (Math.hypot(g.x - h.x, g.y - h.y) < 175) break;
     await step(g.x, g.y, 165);
@@ -492,7 +512,7 @@ check(await until(() => { const s = window.game.scene.getScene('room'); return s
 const upon = () => run(() => { const s = window.game?.scene.getScene('room'), f = s?.hero?.body?.center; if (!f || !s.sys.isActive()) return false; return s.enemies.getChildren().some((e) => e.body?.enable && Math.hypot(e.x - f.x, e.y - f.y) < 90 && (e.getData('pack') || e.getData('kind') === 'hound')); });
 const pack = () => run(() => { const s = window.game.scene.getScene('room'), f = s.hero.body.center; return s.enemies.getChildren().filter((e) => e.body?.enable && (e.getData('pack') || e.getData('kind') === 'hound')).map((e) => ({ x: e.body.center.x, y: e.body.center.y, d: Math.hypot(e.x - f.x, e.y - f.y) })).sort((a, b) => a.d - b.d)[0]; });
 let met = false;
-for (let end = Date.now() + 30000; Date.now() < end && !(met ||= await upon());) { const p = await pack(); if (p) await step(p.x, p.y, 40); else await page.waitForTimeout(150); }
+for (const left = await timer(30000); !(met ||= await upon()) && await left();) { const p = await pack(); if (p) await step(p.x, p.y, 40); else await page.waitForTimeout(150); }
 if (met) {
   await keep(false);
   await until(() => { const s = window.game.scene.getScene('room'); return s.phase === 'play' && !s.cameras.main.fadeEffect.isRunning; }, null, 5000); // out of the gallery's fade: the pack seen
@@ -568,7 +588,7 @@ await page.waitForTimeout(200);
 check((await save()).worn.some((w) => w?.n === 9000), `expedition 2: a new item (${fresh2.it.id}) taken and worn, not yet brought back`);
 await keep(false);
 await run(() => { const s = window.game.scene.getScene('room'); s.health = 1; s.hud.health(1, 5); });
-for (let end = Date.now() + 30000; Date.now() < end && (await state()).layout === 'necropolis';) {
+for (const left = await timer(30000); (await state()).layout === 'necropolis' && await left();) {
   const s = await state();
   if (s.live) await fight(1500); else break;
 }
@@ -635,17 +655,19 @@ if (check(!!(await page.waitForSelector('#training', { timeout: 5000 }).catch(()
   await until(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable), null, 10000);
   const bit = await run(async () => {
     const s = window.game.scene.getScene('room'), e = s.enemies.getChildren().find((e) => e.body?.enable), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const until = async (f) => { for (const end = Date.now() + 8000; !f() && Date.now() < end;) await wait(20); return f(); }; // on game time, not the clock's
     s.health = 3; s.hud.health(3, s.maxHealth());
     s.hero.body.reset(e.x - 18, e.y);
-    await wait(200);
+    const t0 = s.time.now;
+    await until(() => s.time.now > t0 + 200);
     s.slash(Math.atan2(e.body.center.y - s.hero.body.center.y, e.body.center.x - s.hero.body.center.x));
-    await wait(100);
-    const knelt = s.time.now < e.getData('kneelUntil'), hp = e.getData('hp');
-    await wait(250);
+    const knelt = await until(() => s.time.now < e.getData('kneelUntil')), hp = e.getData('hp');
+    await until(() => s.time.now >= s.slashUntil); // no bite mid-swing
     s.hero.body.reset(e.x - 18, e.y); // the claw's knockback may have carried it out of reach on a slow frame
     s.bite();
-    await wait(1500);
-    return { knelt, hp, health: s.health, dead: !e.body?.enable };
+    const dead = await until(() => !e.body?.enable);
+    await until(() => s.health > 3); // healed as it dies
+    return { knelt, hp, health: s.health, dead };
   });
   check(bit.knelt && bit.hp === 1 && bit.dead && bit.health > 3, `clawed to ${bit.hp} hp, he kneels (${bit.knelt}); bitten (${bit.dead ? 'dead' : 'alive'}): 3 -> ${bit.health} blood`);
   await page.click('#training [data-opt="passive"]');
