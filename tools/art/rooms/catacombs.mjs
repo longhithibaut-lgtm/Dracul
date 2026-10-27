@@ -338,7 +338,7 @@ function galleryAt(u, v, X, Y, i, dr, laid) {
   if (h(0) < (laid ? 0.02 : 0.07)) { const d = dustAt(u, v, X, Y, i); return { c: mul(d.c, 0.7), N: d.N }; } // a stone gone
   if (e < 1.3) return { c: mix(mul(E.joint, 1.2), E.dustD, 0.25 + 0.75 * clamp(drift * 2)), N: [0, 0, 1] }; // its joint, dust in it
   const sunk = h(1) < 0.12, tx = (h(2) - 0.5) * (sunk ? 0.5 : 0.12), ty = (h(3) - 0.5) * (sunk ? 0.5 : 0.12);
-  let c = mul(mix(mix(C.stA, C.stB, h(4)), C.stC, h(5) * 0.6), (0.6 + 0.32 * h(6)) * (sunk ? 0.75 : 1));
+  let c = mul(mix(mix(C.stA, C.stB, h(4)), C.stC, h(5) * 0.6), (0.52 + 0.44 * h(6)) * (sunk ? 0.75 : 1));
   c = mul(c, 0.82 + 0.36 * fbm(u / 9, v / 9, 2, p.id & 63)); // its own grain
   if (vn(u / 2.4, v / 2.4, 215) > 0.8) c = mul(c, 0.72); // pitted
   c = mix(c, mul(C.grime, 0.9), 0.4 * clamp((fbm(u / 16, v / 16, 3, 216) - 0.6) * 5)); // old stains across the stones
@@ -385,7 +385,8 @@ function nestAt(u, v) {
   c = mul(c, 0.8 + 0.4 * h);
   const rag = fbm(u / 50, v / 50, 2, 603) + 0.1 * (vn(u / 4, v / 4, 604) - 0.5);
   if (rag > 0.64) { // rotting cloth in folds, torn at its edges
-    const an = vn(u / 90, v / 90, 605) * 6.28, s = Math.sin((u * Math.cos(an) + v * Math.sin(an)) / 3.6 + 1.2 * vn(u / 14, v / 14, 606));
+    // one fold direction a rag: one bending across it rings
+    const an = h2(Math.floor(u / 160), Math.floor(v / 160), 605) * 3.14, s = Math.sin((u * Math.cos(an) + v * Math.sin(an)) / 3.6 + 1.2 * vn(u / 14, v / 14, 606));
     c = mul(mix(E.linen, E.rag, vn(u / 30, v / 30, 607)), 0.7 + 0.2 * s);
     if (vn(u / 6, v / 6, 608) > 0.72) c = mix(c, L('#2a3022'), 0.5); // mould
     return { c: mul(c, rag < 0.67 ? 0.4 : 0.55), N: [Math.cos(an) * s * 0.3, Math.sin(an) * s * 0.3, 1], spec: 0.03 };
@@ -395,9 +396,9 @@ function nestAt(u, v) {
     if (d < 1) { const an = hc.b * 3.14, s = Math.sin((hc.dx * Math.cos(an) + hc.dy * Math.sin(an)) * 0.8 + 2 * vn(u / 5, v / 5, 611));
       return { c: mul(E.hair, (0.9 + 0.6 * clamp(s)) * (d > 0.8 ? 1.3 : 1)), N: [0, s * 0.1, 1], spec: 0.3, gloss: 50 }; } }
   const gore = fbm(u / 44, v / 44, 3, 612);
-  if (gore > 0.54) { // gore: pooled, its edge drying dark, its middle wet; a few clots
-    const g = clamp((gore - 0.54) * 6);
-    c = mix(c, g < 0.5 ? mul(C.bloodD, 0.8) : mul(mix(E.gore, C.bloodD, vn(u / 9, v / 9, 613) * 0.6), 0.9), clamp(g * 3));
+  if (gore > 0.57) { // gore: soaked in, its edge drying dark, its middle wet; a few clots
+    const g = clamp((gore - 0.57) * 6);
+    c = mix(c, mul(g < 0.4 ? C.bloodD : mix(E.gore, C.bloodD, 0.4), 0.55 + 0.55 * vn(u / 5, v / 5, 613)), clamp(g * 2.5) * 0.85);
     const clot = item(u, v, 14, 0.25 * g, 614), st = clot && stoneAt(clot.dx, clot.dy, 2 + 2 * clot.a, clot.b * 3);
     if (st && !st.shade) return { c: mul(mix(C.bloodD, E.gore, 0.4), st.k * 0.7), N: st.N, spec: 0.6, gloss: 80 };
     spec = 0.6 * g; gloss = 90; N = [N[0] * (1 - g), N[1] * (1 - g), 1];
@@ -531,7 +532,12 @@ function floorAt(x, y) {
   else m = earthAt(u, v, X, Y, i, dr);
   let { c, N: Nn, spec = 0.03, gloss = 12, emi } = m;
   if (k === 5) { const s = vn(u / 2, v / 6, 57); c = mix(c, mix(mix(E.straw, E.rag, s), C.grime, 0.3 + 0.4 * vn(u / 9, v / 9, 58)), 0.85); Nn = [(s - 0.5) * 0.6, 0, 1]; } // the rats' straw
-  if (k !== 2 && k !== 3 && a !== NID && a !== PRISON) { const p = fbm(u / 34, v / 34, 3, 121); if (p > 0.74) { c = mul(c, 0.55); spec = 0.35 * clamp((p - 0.74) * 12); gloss = 70; Nn = [0, 0, 1]; } } // seeping water
+  if (k !== 2 && k !== 3 && a !== NID && a !== PRISON) { // seeping water: a puddle, its wet margin, a lit lip where it meets the dry
+    const p = fbm(u / 34, v / 34, 3, 121);
+    if (p > 0.745) { c = mul(c, 0.5); spec = 0.5 * clamp((p - 0.745) * 12); gloss = 90; Nn = [0, 0, 1]; }
+    else if (p > 0.735) { c = mul(c, 1.15); spec = 0.3; gloss = 60; }
+    else if (p > 0.68) { c = mul(c, 0.8 + 0.2 * clamp((0.735 - p) * 18)); spec = Math.max(spec, 0.15); gloss = 50; }
+  }
   // the edge of the rock: its dust heaped, darker
   if (dr < 14 && k !== 2) c = mix(c, E.dustD, (1 - Math.max(0, dr) / 14) * 0.5);
   if (blood[i]) { const b = blood[i] / 255; c = mix(c, mix(C.bloodD, C.blood, vn(u / 4, v / 4, 8) * 0.6), b); if (b > 0.3) { spec = 0.4 * b; gloss = 70; Nn = [0, 0, 1]; } }
