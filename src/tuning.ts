@@ -236,7 +236,8 @@ export const T = {
     light: 1.2, // his reliquary's faint gold in the dark rooms
   },
 
-  // La Nourrice des goules (« l'Araignée »), the catacombs' guardian before Vesna's reliquary (docs/decisions.md): huge,
+  // La Nourrice des goules, version A « l'Araignée » (docs/decisions.md): kept for a later boss, out of the catacombs
+  // (the training room calls her in; her phase 2 crawls the edges of the view she was called into). Huge,
   // perched high on four long limbs, goules clinging to them. Nothing marks the floor: her body, her seal's gold, the
   // sound tell every blow. Blows never cut her short nor push her back; the glyph does not bind her.
   nourrice: {
@@ -264,6 +265,33 @@ export const T = {
     hurlMs: 750, flightMs: 650, hurlRadius: 16, hurlDamage: 1, hurls: 2, hurlGapMs: 900,
     vaultZ: 110, vaultSpeed: 120, creepMs: 1800, holdMs: 750, fallMs: 220, stuck2Ms: 1800, floorMs: 6000,
     light: 1.2, teleLight: 2.6, // her seal's gold in the dark, flaring as she winds up
+  },
+
+  // La Matrice (the Nourrice des goules, version B), the catacombs' guardian before Vesna's reliquary (docs/decisions.md):
+  // crucified on an Order wheel hung from the vault over the arena's middle (its pivot), her belly a translucent sac of
+  // larvae, umbilical cords to the goules crawling round her. Nothing marks the floor: the wheel, the sac's light, the
+  // chains' sound tell every swing. Blows never cut her short; the glyph does not bind her.
+  matrice: {
+    hp: 40, speed: 0,
+    reach: 16, // the wheel is broad: the claws reach her this much farther
+    hangZ: 34, vault: 170, // hanging, the rim's foot this high (out of reach); the pivot this high over the floor
+    // Phase 1, the pendulum. Hanging `reloadMs`, then the tell (`teleMs`): the wheel drawn back `back` away from him and
+    // turned a notch, the sac lit from within, the cords taut, the chains creaking; her aim follows him `trackMs`, then
+    // locks. The swing (`swingMs`) sweeps from there through the pivot to `over` past where he stood (at most `arm` from
+    // the pivot): whoever is within `radius` (floor) of the wheel as it passes low is struck for `damage`. It ends low,
+    // grounded (`lowMs`: the time to strike her), then is hauled back up to the pivot (`haulMs`).
+    reloadMs: 1400, teleMs: 1000, trackMs: 200, back: 50, swingMs: 650, over: 40, arm: 230, radius: 24, damage: 2,
+    lowMs: 2000, haulMs: 900,
+    // Her cords: `cords` goules at most tethered to the sac, fed (+1 hp every `feedMs`, up to a ghoul's) and kept within
+    // `tether` (floor) of the pivot; one born every `birthMs` while fewer. A cord is cut by a claw across it or the
+    // goule's death. Each cut cord bares the sac: a blow on her deals its share of the cords cut (none cut: nothing).
+    cords: 3, tether: 100, feedMs: 1500, birthMs: 9000,
+    // Phase 2, at half her blood: the chains snap, the wheel shudders and spins, the sac tears (`tearMs`), `burst` young
+    // goules spill out (untethered), then one every `broodMs` while fewer than `brood` of hers live; the cords are gone and
+    // every blow on her lands whole. The swing, faster and wider: a tell of `tele2Ms`, out to `over2` past him (at most
+    // `arm2`) and back to the pivot in `swing2Ms`, striking both ways; then low at the bottom of its swing (`low2Ms`).
+    tearMs: 1600, burst: 3, brood: 4, broodMs: 6000, tele2Ms: 800, swing2Ms: 1000, over2: 60, arm2: 260, low2Ms: 1500,
+    light: 1.4, teleLight: 3.4, // the sac's glow in the dark, blazing on the tell
   },
 
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
@@ -322,7 +350,7 @@ export const T = {
   // refuge's basin (within `basin`).
   blood: {
     ring: [0, 1, 3, 8, 20],
-    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20 },
+    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20, matrice: 20 },
     cache: 5,
     pickup: 16, search: 24, bag: 400, basin: 52,
   },
@@ -370,7 +398,7 @@ export const T = {
     cache: [0, 0.3, 0.4, 0.5, 0.6],
     odds: [[1, 0, 0], [0.9, 0.1, 0], [0.6, 0.33, 0.07], [0.35, 0.45, 0.2], [0.2, 0.45, 0.35]],
     sure: ['camp'],
-    elites: ['inquisitor', 'amas', 'bourreau', 'nourrice'],
+    elites: ['inquisitor', 'amas', 'bourreau', 'nourrice', 'matrice'],
     pickup: 22,
     bleedMs: 2000, bleedTicks: 4,
     defs: {

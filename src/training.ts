@@ -9,13 +9,13 @@ import { ITEMS, ITEM_IDS, type Item, type ItemId } from './items.ts';
 import { POWERS, SLOTS, slotOf, type Power } from './powers.ts';
 import { itemSlots } from './shop.ts';
 
-export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'priest' | 'hounds' | 'penitents' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau';
+export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'priest' | 'hounds' | 'penitents' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau' | 'matrice' | 'nourrice';
 /** Survive the scene restarts (a death in training starts the training room again). out, cool: the « Mode test »'s,
  *  out of the training room too, until a reload: invincible, the mist's, the glyph's and la Nuée's recharges at once. */
 export const opts = { god: true, passive: false, out: false, cool: false };
 
 const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître'], ['refuge', 'Le refuge'], ['necropolis', 'La nécropole']];
-const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne'], ['purifier', 'Purificateur'], ['priest', 'Prêtre'], ['hounds', 'Chiens (3)'], ['penitents', 'Pénitents (6)'], ['ringer', 'Sonneur'], ['inquisitor', 'Inquisiteur'], ['amas', 'Amas'], ['bourreau', 'Bourreau']];
+const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne'], ['purifier', 'Purificateur'], ['priest', 'Prêtre'], ['hounds', 'Chiens (3)'], ['penitents', 'Pénitents (6)'], ['ringer', 'Sonneur'], ['inquisitor', 'Inquisiteur'], ['amas', 'Amas'], ['bourreau', 'Bourreau'], ['matrice', 'La Matrice'], ['nourrice', 'L\'Araignée']];
 // [label, group, key, min, max, step]
 const KNOBS = [
   ['Vitesse de marche', 'hero', 'speed', 30, 160, 2],

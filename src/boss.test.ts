@@ -1,12 +1,40 @@
 import { describe, expect, it } from 'vitest';
 import { T } from './tuning.ts';
-import { choose, edge, edgeLength, fightStarts, floor, nearestEdge, phaseOf, raked, shed, struck } from './boss.ts';
+import { bared, choose, edge, edgeLength, fightStarts, floor, nearestEdge, phaseOf, raked, shed, struck, swingPath } from './boss.ts';
 import { ARENA, GATES, OPENS, RELIQUARY } from './catacombs.data.ts';
 import { gateOpen } from './world.ts';
 import { parse } from './save.ts';
 import { POWERS, LINES, NUEE, buy, price, swarm, wear, worn } from './powers.ts';
 import { GIFTS } from './gifts.ts';
 import { missing } from './font.ts';
+
+describe('La Matrice', () => {
+  const M = T.matrice, sq = T.lantern.squash, pivot = { x: (ARENA[0] + ARENA[2]) / 2, y: (ARENA[1] + ARENA[3]) / 2 };
+
+  it('turns to her second phase at half her blood', () => {
+    expect([M.hp, M.hp / 2 + 1, M.hp / 2, 1].map((hp) => phaseOf(hp, M.hp))).toEqual([1, 1, 2, 2]);
+  });
+
+  it('is fed by her cords: each one cut bares her sac a share; torn open in phase 2, every blow lands whole', () => {
+    expect([3, 2, 1, 0].map((c) => bared(c, 1))).toEqual([0, 1 / 3, 2 / 3, 1]);
+    expect(bared(5, 1)).toBe(0);
+    expect([bared(3, 2), bared(0, 2)]).toEqual([1, 1]);
+  });
+
+  it('swings from behind the pivot, away from him, through it, to past where he stands, within reach and the arena', () => {
+    const at = { x: pivot.x - 100, y: pivot.y }, p = swingPath(pivot, at, ARENA, M.back, M.over, M.arm);
+    expect(p.from).toEqual({ x: pivot.x + M.back, y: pivot.y });
+    expect(p.to).toEqual({ x: pivot.x - 100 - M.over, y: pivot.y });
+    expect(struck(p.to, at, M.radius + M.over)).toBe(true);
+    const down = swingPath(pivot, { x: pivot.x, y: pivot.y + 60 * sq }, ARENA, M.back, M.over, M.arm); // the ground's foreshortening undone
+    expect(down.to.y).toBeCloseTo(pivot.y + (60 + M.over) * sq);
+    const far = swingPath(pivot, { x: ARENA[2] + 400, y: pivot.y }, ARENA, M.back, M.over, M.arm);
+    expect(far.to.x).toBeLessThanOrEqual(Math.min(pivot.x + M.arm, ARENA[2]));
+    const corner = swingPath(pivot, { x: ARENA[0], y: ARENA[1] }, ARENA, M.back, M.over2, M.arm2);
+    expect(corner.to.x >= ARENA[0] && corner.to.y >= ARENA[1]).toBe(true);
+    expect(swingPath(pivot, pivot, ARENA, M.back, M.over, M.arm).to.x).toBeGreaterThan(pivot.x); // under her: any way
+  });
+});
 
 describe('La Nourrice', () => {
   const N = T.nourrice, sq = T.lantern.squash;
@@ -76,6 +104,12 @@ describe('Vesna freed, and her powers', () => {
     expect(parse('{"v":3,"vesna":"yes","nourrice":{"tries":-2,"dead":1}}')).toMatchObject({ vesna: false, nourrice: { tries: 0, dead: false } });
   });
 
+  it('counts Vesna freed for an older save that killed her guardian (the Araignée), not for one that only fought her', () => {
+    expect(parse('{"v":3,"nourrice":{"tries":2,"dead":true},"vesna":false}')).toMatchObject({ v: 4, vesna: true, nourrice: { tries: 2, dead: true } });
+    expect(parse('{"v":3,"nourrice":{"tries":2,"dead":false}}')).toMatchObject({ vesna: false, nourrice: { dead: false } });
+    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":true},"vesna":false}').vesna).toBe(false); // la Matrice killed, the reliquary still sealed
+  });
+
   it('sells the slot powers dearer with each one bought, la Nuée at its own price', () => {
     const s = parse('{"banked":100000}');
     const paid = POWERS.filter((p) => p !== 'swarm').map((p) => { const c = price(s, p); buy(s, p); return c; });
@@ -110,6 +144,6 @@ describe('Vesna freed, and her powers', () => {
     expect(POWERS.slice(0, 8).map((p) => GIFTS[p as keyof typeof GIFTS].slot)).toEqual(['griffes', 'griffes', 'tir', 'tir', 'glyphe', 'glyphe', 'brume', 'brume']);
     for (const l of [...Object.values(LINES).flat(), NUEE.name, NUEE.text, 'VESNA LA GRISE', 'Porté Porter Apprise Remplace : Comme tu veux. Celle-là, tu l\'as déjà.', '1 à 9 ou clic : acheter, porter, ôter ; Échap ou F : partir',
       'Les nobles crachaient sur les rats, gamin. Les rats, eux, ont survécu.', 'Un sans-maison qui ouvre ma cage... Le monde tourne à l\'envers. Tant mieux.', 'Je rentre par mes chemins. Rapporte du sang au refuge : on fera affaire.',
-      'La Nourrice est morte. Vesna est libre. Le reliquaire est vide. Vesna (F)']) expect(missing(l)).toEqual([]);
+      'La Matrice est morte. La Nourrice est morte. Vesna est libre. Le reliquaire est vide. Vesna (F)']) expect(missing(l)).toEqual([]);
   });
 });

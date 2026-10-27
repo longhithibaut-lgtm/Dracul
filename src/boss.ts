@@ -1,5 +1,5 @@
-// La Nourrice's fight (T.nourrice, docs/decisions.md): its pure pieces, unit tested. RoomScene runs the fight,
-// nourrice.ts shows her. Floor distances undo the ground's foreshortening (T.lantern.squash), like every blow's.
+// The catacombs' guardian, la Matrice (T.matrice), and la Nourrice « l'Araignée » kept for later (T.nourrice;
+// docs/decisions.md): their fights' pure pieces, unit tested. RoomScene runs the fights, matrice.ts and nourrice.ts show them. Floor distances undo the ground's foreshortening (T.lantern.squash), like every blow's.
 import { T } from './tuning.ts';
 import type { Save } from './save.ts';
 
@@ -48,4 +48,19 @@ export function nearestEdge(a: Rect, p: P, inset = 8) {
   const e = sides(a, inset), c = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
   const cands = [e.h - (c(p.y, e.y0, e.y1) - e.y0), e.h + c(p.x, e.x0, e.x1) - e.x0, e.h + e.w + c(p.y, e.y0, e.y1) - e.y0];
   return cands.reduce((b, s) => (Math.hypot(edge(a, s, inset).x - p.x, edge(a, s, inset).y - p.y) < Math.hypot(edge(a, b, inset).x - p.x, edge(a, b, inset).y - p.y) ? s : b));
+}
+
+// ---- La Matrice ----
+
+/** How much of a blow reaches her: in phase 1, the share of her `cap` cords cut (all `cords` tethered: nothing); torn
+ *  open in phase 2, all of it. */
+export const bared = (cords: number, phase: number, cap = T.matrice.cords) => (phase === 2 ? 1 : Math.max(0, cap - cords) / cap);
+
+/** The swing aimed at `at` from the wheel's `pivot`: from `back` behind the pivot (away from him), through it, to `over`
+ *  past him, at most `arm` out (floor), kept within the arena; `aim`, the floor angle it sweeps along. */
+export function swingPath(pivot: P, at: P, arena: Rect, back: number, over: number, arm: number, squash = T.lantern.squash) {
+  const dx = at.x - pivot.x, dy = (at.y - pivot.y) / squash, d = Math.hypot(dx, dy), ux = d > 1 ? dx / d : 1, uy = d > 1 ? dy / d : 0;
+  const c = (p: P, inset = 16) => ({ x: Math.max(arena[0] + inset, Math.min(arena[2] - inset, p.x)), y: Math.max(arena[1] + inset, Math.min(arena[3] - inset, p.y)) });
+  const out = Math.min(arm, d + over);
+  return { from: c({ x: pivot.x - ux * back, y: pivot.y - uy * back * squash }), to: c({ x: pivot.x + ux * out, y: pivot.y + uy * out * squash }), aim: Math.atan2(uy, ux) };
 }

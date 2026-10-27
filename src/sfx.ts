@@ -307,6 +307,19 @@ export const recipes = {
     }
     bursts(o, Array.from({ length: 12 }, (_, i) => 0.85 + i * 0.05 + Math.random() * 0.03), { src: 'noise', filter: 'bandpass', ff: 3400, q: 6, gain: 0.3, attack: 0.001, dur: 0.03 });
   },
+  // La Matrice's wheel drawn back for `dur` s: the chains creaking over the vault, a ratchet clicking a notch, the
+  // wheel's wood groaning; the sac's wet heave under it.
+  creak(o: Play, dur: number) {
+    voice(o, { src: 'sawtooth', f: 95, f2: 140, filter: 'bandpass', ff: 700, ff2: 1100, q: 9, trem: 11, gain: 0.5, attack: dur * 0.4, dur });
+    bursts(o, [0.05, 0.11, dur * 0.55], { src: 'noise', filter: 'bandpass', ff: 2600, q: 5, gain: 0.5, attack: 0.001, dur: 0.04 });
+    bursts(o, Array.from({ length: 8 }, (_, i) => (i / 8) * dur + Math.random() * 0.04), { src: 'noise', filter: 'bandpass', ff: 3200, q: 6, gain: 0.22, attack: 0.001, dur: 0.03 });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: 300, ff2: 600, trem: 4, gain: 0.5, attack: dur * 0.7, dur });
+  },
+  // The wheel swinging through the arena for `dur` s: a heavy rush of air, the chains singing.
+  swoosh(o: Play, dur: number) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 250, ff2: 900, q: 2, gain: 0.9, attack: dur * 0.35, dur });
+    voice(o, { src: 'noise', filter: 'highpass', ff: 2500, trem: 26, gain: 0.25, attack: dur * 0.3, dur: dur * 0.9 });
+  },
   // A blow turned aside: steel on steel, a bright ring over a dry knock.
   parry(o: Play) {
     voice(o, { src: 'noise', filter: 'highpass', ff: 3000, gain: 0.8, attack: 0.001, dur: 0.05 });
