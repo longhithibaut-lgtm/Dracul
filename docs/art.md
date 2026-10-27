@@ -56,7 +56,8 @@ bûcher, braseros, lanternes vert sale dont la flaque brûle) ; mêmes lumière,
 | `fx-b-*.png`, `fx-c-*.png` | pistes d'effets écartées (ombre, cendre) |
 | `cloitre.png` | cloître validé (« plus clair dehors, moins d'arbres ») |
 | `ennemis-*.png` | ennemis retenus (voir `docs/decisions.md`) |
-| `boss-catacombes-*.png` | trois pistes pour le gardien des catacombes (Dératiseur, Procession, Nourrice des goules), à choisir ; générateur `tools/art/maquettes/boss/` |
+| `boss-catacombes-*.png` | trois pistes pour le gardien des catacombes ; la Nourrice des goules est retenue, à redessiner |
+| `boss-nourrice-*.png` | quatre variantes de la Nourrice (Araignée, Matrice, Sainte, Emmurée), à choisir ; générateur `tools/art/maquettes/boss/` (`SET=nourrice`) |
 
 **À décider avec l'utilisateur** (aucune règle tant que ce n'est pas tranché) : palette commune des salles, HUD et
 police à 960×540.

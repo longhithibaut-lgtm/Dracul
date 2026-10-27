@@ -26,12 +26,12 @@ export function rat(b, p, d, k = 1, m = 20, eyes = false) {
 }
 const ratMat = (m, x, y, z) => m === 22 ? glow([1.4, 0.12, 0.05], 0.7) : m === 21 ? { alb: L('#6e5650'), spec: 0.3, gloss: 30, sss: 0.3 } : { alb: mix(L('#3a342c'), L('#1c1915'), vn3(x * 0.8, y * 0.8, z * 0.8, 5)), wrap: 0.4, spec: 0.08, rim: 1.0 };
 // a chain of capsule links from a to b, sagging by sag
-function chainLinks(b, a, c, sag, r = 0.9, m = 9, seg = 3.4) {
+export function chainLinks(b, a, c, sag, r = 0.9, m = 9, seg = 3.4) {
   const n = Math.max(2, Math.round(Math.hypot(...sub(c, a)) / seg)); const P = t => add(lp(a, c, t), [0, 0, -sag * 4 * t * (1 - t)]);
   for (let i = 0; i < n; i++) b.rc(P(i / n), P((i + 1) / n), i & 1 ? r * 0.75 : r, i & 1 ? r * 0.75 : r, m, 0);
 }
 // iron cage of bars, centre c (floor of the cage at c[2] - h[2])
-function cageBars(b, c, h, m = 9, n = 2, r = 0.55) {
+export function cageBars(b, c, h, m = 9, n = 2, r = 0.55) {
   const [x0, y0, z0] = sub(c, h), [x1, y1, z1] = add(c, h);
   for (const z of [z0, z1]) { b.rc([x0, y0, z], [x1, y0, z], r * 1.2, r * 1.2, m); b.rc([x0, y1, z], [x1, y1, z], r * 1.2, r * 1.2, m); b.rc([x0, y0, z], [x0, y1, z], r * 1.2, r * 1.2, m); b.rc([x1, y0, z], [x1, y1, z], r * 1.2, r * 1.2, m); }
   for (let i = 0; i <= n + 1; i++) { const x = lerp(x0, x1, i / (n + 1)); b.rc([x, y0, z0], [x, y0, z1], r, r, m); b.rc([x, y1, z0], [x, y1, z1], r, r, m); }
@@ -39,7 +39,7 @@ function cageBars(b, c, h, m = 9, n = 2, r = 0.55) {
 }
 
 // the model k times bigger (its lights are placed after)
-function grow(r, k) {
+export function grow(r, k) {
   const { sdf, mat, bounds } = r; r.sdf = (x, y, z) => sdf(x / k, y / k, z / k) * k; r.mat = (m, x, y, z, ...n) => mat(m, x / k, y / k, z / k, ...n); r.bounds = bounds.map(v => v * k); return r;
 }
 

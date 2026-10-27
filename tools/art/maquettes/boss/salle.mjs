@@ -1,21 +1,31 @@
 // « La prison de Vesna »: a small catacomb chamber (ossuary wall, alcove with her reliquary-cage, pools of black water,
 // bone heaps, rat nests) with one boss concept facing the hero, at game scale (480x270 native, the hero ~80 px).
 // From this folder: OUT=<dir> BOSS=n node ../ennemis/run.mjs ../boss/salle.mjs -> <OUT>/sNN.png, sNN-x2.png
+// SET=nourrice BOSS=1..4: the Nourrice variants (nourrices.mjs) -> <OUT>/tNN.png
 import fs from 'fs';
 import { camera, post, haze, writePNG, L, clamp, h2, vn, fbm, mix, mul } from '../ennemis/lib.mjs';
 import { hero } from '../ennemis/hero.mjs';
 import { place } from '../ennemis/fx.mjs';
 import { pillar, sconce, skull } from '../ennemis/cast.mjs';
 import { BOSSES, vesnaCage, bonePile, ratNest } from './bosses.mjs';
+import { NOURRICES } from './nourrices.mjs';
 
-const N = +(process.env.BOSS ?? 1), OUT = process.env.OUT || 'out';
+const N = +(process.env.BOSS ?? 1), OUT = process.env.OUT || 'out', NOU = process.env.SET === 'nourrice';
 const W = 480, H = 270, cam = camera(38 * Math.PI / 180), off = -95, { s: SN, c: CS } = cam;
-// per concept: the boss's pose and place, the hero's place, the cage's x
-const CFG = {
+// per concept: the boss's pose and place, the hero's place, the cage's x; pool: the black water [x, y, rx, ry];
+// voids: [x, z, rx, rz] holes in the back wall that open on darkness; props: bone heaps [x, y, w, d, n], rat nests [x, y]
+const NP = { bones: [[226, 10, 70, 18, 34], [420, 9, 60, 16, 30]], nests: [[456, 244], [30, 150]] };
+const CFG = NOU ? {
+  1: { pose: 'idle', B: [292, 136], hero: [176, 226], cage: 104, pool: [446, 172, 40, 30], props: NP },
+  2: { pose: 'idle', B: [300, 104], yaw: 0.22, hero: [160, 228], cage: 104, pool: [446, 172, 40, 30], props: NP },
+  3: { pose: 'tele', B: [300, 132], hero: [168, 226], cage: 104, pool: [446, 172, 40, 30], props: NP },
+  4: { pose: 'idle', B: [300, 4], yaw: 0, hero: [176, 230], cage: 104, pool: [446, 172, 40, 30], voids: [[300, 30, 50, 80], [226, 58, 8, 8], [370, 40, 8, 8], [358, 112, 8, 8]], props: { bones: [[440, 9, 50, 16, 26]], nests: [[30, 150], [456, 244]] } },
+}[N] : {
   1: { pose: 'tele', B: [318, 176], hero: [150, 214], cage: 200, turn: 0.5 },
   2: { pose: 'idle', B: [292, 140], hero: [304, 236], cage: 176, yaw: 0.52 },
   3: { pose: 'idle', B: [318, 148], hero: [136, 222], cage: 168 },
 }[N];
+const PROPS = { bones: [[72, 10, 70, 18, 34], [420, 9, 60, 16, 30]], nests: [[452, 118], [30, 120]], ...CFG.props };
 const AL = { x0: CFG.cage - 50, x1: CFG.cage + 50, D: 22, top: 112 }; // the alcove: recess depth D, arch top
 const C = { mortar: L('#0c0a08'), stA: L('#3e382e'), stB: L('#4a4236'), grime: L('#17140f'), moss: L('#2e3820'), bone: L('#a89c7e'), boneD: L('#5e5440'), wall: L('#2e2a22'), bloodD: L('#2e0406') };
 
@@ -64,6 +74,7 @@ function wallAt(x, z) {
 }
 function env(ox, oy, oz) {
   const tw = oy / CS, zw = oz - SN * tw, xw = ox;
+  if (zw > 0 && (CFG.voids || []).some(([vx, vz, rx, rz]) => Math.hypot((xw - vx) / rx, (zw - vz) / rz) < 1)) return { t: tw, P: [xw, 0, zw], alb: [0.002, 0.002, 0.002], N: [0, 1, 0], noAO: true, id: -2 };
   if (zw > 0) {
     const ax = (AL.x0 + AL.x1) / 2, ar = (AL.x1 - AL.x0) / 2, archZ = AL.top - ar * 0.55;
     const inAl = Math.abs(xw - ax) < ar && Math.hypot(xw - ax, (Math.max(zw, archZ) - archZ) / 0.55) < ar;
@@ -72,11 +83,16 @@ function env(ox, oy, oz) {
     if (zb > 0) { const w = wallAt(xw * 0.9 + 13, zb); return { t: tb, P: [xw, -AL.D, zb], alb: mul(w.alb, 0.55), N: w.N, spec: w.spec, gloss: w.gloss, id: -2 }; }
   }
   const tf = oz / SN, yf = oy - CS * tf;
-  const pool = fbm(ox / 50, yf / 34, 3, 61) - clamp((360 - ox) / 60) * 0.3 - clamp((190 - yf) / 40) * 0.3; // black water, in the near right corner
-  if (pool > 0.63) { // black water: dead still, a few ripples, a muddy rim
-    const rip = vn(ox / 5, yf / 3, 8) - 0.5, rip2 = vn(ox / 2, yf / 1.5, 9) - 0.5, edge = clamp((pool - 0.63) / 0.05);
-    if (edge < 1) return { t: tf, P: [ox, yf, 0], alb: L('#24201a'), N: [0, 0, 1], spec: 0.9, gloss: 90, id: -4 };
-    return { t: tf, P: [ox, yf, 0], alb: [0.005, 0.006, 0.006], N: [rip * 0.2 + rip2 * 0.08, rip2 * 0.16, 1], spec: 1.4, gloss: 160, wrap: 0, rim: 0, noAO: true, id: -4 };
+  const [px, py, prx, pry] = CFG.pool || [410, 228, 60, 32];
+  const pool = 1 - Math.hypot((ox - px) / prx, (yf - py) / pry) + (fbm(ox / 14, yf / 10, 3, 61) - 0.5) * 0.7;
+  if (pool > 0) { // black water, dead still: a muddy wet rim, then a mirror that shows the ossuary wall and the flames
+    if (pool < 0.1) return { t: tf, P: [ox, yf, 0], alb: L('#3a3226'), N: [0, 0, 1], spec: 1.0, gloss: 90, id: -4 };
+    const rip = vn(ox / 6, yf / 2.5, 8) - 0.5, rx = ox + rip * 3, tr = yf / CS, zr = SN * tr; // mirrored ray up to the wall Y = 0
+    const wp = [rx, 0, zr]; let lit = [0.02, 0.02, 0.025]; // the wall as the lights show it (no shadows)
+    for (const l of lights) { if (l.only) continue; const d = Math.hypot(l.p[0] - wp[0], l.p[1] - wp[1], l.p[2] - wp[2]); if (d > l.R) continue; const k = l.I / (1 + (d / l.r0) ** 2) * (1 - (d / l.R) ** 2) ** 2 * 0.5; lit = [lit[0] + l.c[0] * k, lit[1] + l.c[1] * k, lit[2] + l.c[2] * k]; }
+    const wa = wallAt(rx, zr).alb; let e = zr < 175 ? [wa[0] * lit[0] * 2.2, wa[1] * lit[1] * 2.2, wa[2] * lit[2] * 2.2] : [0, 0, 0];
+    for (const l of lights) { if (!l.haze) continue; const w = [l.p[0] - rx, l.p[1] - yf, l.p[2]], t = -w[1] * CS + w[2] * SN; if (t < 0) continue; const d = Math.hypot(w[0], w[1] + CS * t, w[2] - SN * t); const k = l.I * 0.3 * Math.exp(-(d * d) / 10); e = [e[0] + l.c[0] * k, e[1] + l.c[1] * k, e[2] + l.c[2] * k]; }
+    return { t: tf, P: [ox, yf, 0], alb: [0.004, 0.005, 0.005], emi: e, N: [rip * 0.15, 0, 1], spec: 1.4, gloss: 160, wrap: 0, rim: 0, noAO: true, id: -4 };
   }
   const f = floorAt(ox, yf);
   if (yf < 0) { f.alb = mul(f.alb, 0.6); } // the alcove's floor
@@ -89,7 +105,7 @@ const addO = (name, m, pos, yaw = 0, extra = {}) => { const o = { name, pos, yaw
 const HERO = CFG.hero, toward = (x, y, t) => Math.atan2(-(t[0] - x), t[1] - y);
 const hz = hero('idle'), hYaw = toward(HERO[0], HERO[1], CFG.B);
 addO('hero', hz, [HERO[0], HERO[1], 0], hYaw, { id: 60 });
-const bm = BOSSES[N - 1].fn(CFG.pose), bYaw = CFG.yaw ?? toward(CFG.B[0], CFG.B[1], HERO) + (CFG.turn || 0), P = { x: CFG.B[0], y: CFG.B[1], yaw: bYaw };
+const bm = (NOU ? NOURRICES : BOSSES)[N - 1].fn(CFG.pose), bYaw = CFG.yaw ?? toward(CFG.B[0], CFG.B[1], HERO) + (CFG.turn || 0), P = { x: CFG.B[0], y: CFG.B[1], yaw: bYaw };
 const bossNames = ['boss'];
 addO('boss', bm, [P.x, P.y, 0], bYaw, { id: 70 });
 for (const s of bm.subs || []) { bossNames.push('boss' + s.name); addO('boss' + s.name, s.model, [P.x, P.y, 0], bYaw, { id: 71 }); }
@@ -98,9 +114,9 @@ const cg = vesnaCage(); addO('cage', cg, [CFG.cage, -2, 0], 0);
 for (const l of cg.lights) lights.push({ ...l, p: [l.p[0] + CFG.cage, l.p[1] - 2, l.p[2]] });
 addO('pillarL', pillar(34, 22, 140), [16, 10, 0]); addO('pillarR', pillar(34, 22, 140), [464, 10, 0]);
 addO('sconceL', sconce(0.7), [16, 21, 74]); addO('sconceR', sconce(0.5), [464, 21, 74]);
-addO('bonesL', bonePile(2, 70, 18, 34), [72, 10, 0]); addO('bonesR', bonePile(4, 60, 16, 30), [420, 9, 0]);
+PROPS.bones.forEach(([x, y, w, d, n], i) => addO('bones' + i, bonePile(2 + i * 2, w, d, n), [x, y, 0]));
 addO('bonesF', bonePile(6, 34, 14, 14), [40, 196, 0], 0.4);
-addO('nestA', ratNest(3, 7), [452, 118, 0], 0.3); addO('nestB', ratNest(8, 5), [30, 120, 0], -0.5);
+PROPS.nests.forEach(([x, y], i) => addO('nest' + i, ratNest(3 + i * 5, 7 - i * 2), [x, y, 0], 0.3 - i * 0.8));
 for (const [x, y, yaw] of [[208, 196, 0.8], [380, 230, -0.4], [96, 160, 2.0], [250, 92, 1.1]]) addO('skull', skull(), [x, y, 0], yaw);
 
 lights.push(
@@ -116,6 +132,6 @@ export async function finish(img, sc) {
   haze(img, sc);
   const rgba = post(img, { exposure: 3.4, vignette: 0.4, desat: 0.18, grain: 0.012, dither: 0.02, noPal: !!process.env.NOPAL });
   fs.mkdirSync(OUT, { recursive: true });
-  const tag = OUT + '/s' + String(N).padStart(2, '0');
+  const tag = OUT + (NOU ? '/t' : '/s') + String(N).padStart(2, '0');
   writePNG(tag + '.png', rgba, W, H, 1); writePNG(tag + '-x2.png', rgba, W, H, 2);
 }
