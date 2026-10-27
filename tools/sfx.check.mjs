@@ -24,7 +24,7 @@ const sounds = [['slash', 0, 60, 140], ['slash', 1, 60, 140], ['slash', 2, 120, 
   ['shatter', 1, 350, 600], ['bite', 0, 70, 180], ['drain', 0, 380, 520], ['heal', 0, 250, 450], ['snap', 0, 50, 130],
   ['shoot', 0, 30, 110], ['splat', 0, 30, 120], ['splat', 1, 30, 110],
   ['clear', 0, 650, 1000], ['gift', 0, 380, 650], ['gift', 1, 380, 650], ['gate', 0, 1000, 1300],
-  ['glyph', 0, 450, 900], ['bind', 0, 220, 420], ['groan', 0.9, 600, 950], ['heave', 1, 700, 1050], ['slam', 0, 250, 450], ['slam', 1, 300, 500], ['horn', 0, 1800, 3300], ['growl', 0, 550, 1050], ['joints', 0.9, 800, 1100], ['chains', 0, 1300, 1700]];
+  ['glyph', 0, 450, 900], ['bind', 0, 220, 420], ['groan', 0.9, 600, 950], ['heave', 1, 700, 1050], ['slam', 0, 250, 450], ['slam', 1, 300, 500], ['horn', 0, 1800, 3300], ['growl', 0, 550, 1050], ['joints', 0.9, 600, 1100], ['chains', 0, 1300, 1700]];
 const results = await page.evaluate(async (sounds) => {
   const m = await import('/src/sfx.ts');
   const rate = 44100;
