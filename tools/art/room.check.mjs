@@ -9,7 +9,7 @@ import { chromium } from 'playwright';
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
 const port = Number(arg('port', 5206));
 // Where the hero waits for the pack, per layout: behind props, in corners, across the pits, from the stairs up to the
-// gate (the crypt rooms are as tall as an upright phone's view: three parts, see room.ts PARTS).
+// gate (the crypt rooms are three parts tall).
 const WAITS = {
   hall: [[240, 600], [56, 610], [424, 610], [92, 470], [424, 470], [240, 420], [100, 362], [380, 362], [172, 320], [56, 290],
     [240, 222], [96, 205], [392, 205], [92, 110], [388, 110], [56, 245], [424, 245], [240, 75]],
@@ -22,10 +22,6 @@ const WAITS = {
   // Three screens tall: the well's garden and the south walk, the graves and the first gallery, the yews and the north walk.
   cloister: [[24, 745], [456, 760], [180, 660], [312, 700], [108, 700], [360, 664], [24, 420], [312, 470], [120, 444],
     [456, 520], [240, 540], [240, 75], [24, 160], [456, 250], [312, 196], [240, 306]],
-  // The trial room: behind the pillars and cages, round the two body pits, in the corners.
-  torture: [[240, 600], [56, 610], [424, 610], [92, 570], [130, 596], [112, 470], [368, 456], [186, 350], [328, 376], [400, 400],
-    [326, 424], [112, 326], [368, 326], [130, 318], [240, 318], [186, 286], [392, 280], [56, 245], [424, 245], [144, 140], [144, 190],
-    [112, 120], [368, 120], [240, 75]],
 };
 const only = arg('only', '');
 const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
