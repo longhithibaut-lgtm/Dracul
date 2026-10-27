@@ -229,18 +229,18 @@ for (const [px, py, sx, sy] of POOLS) paint(px - 3 * sx, py - 3 * sy, px + 3 * s
 for (const d of DRAGS) for (let k = 0; k < d.length - 1; k++) { const a = d[k], b = d[k + 1];
   paint(Math.min(a[0], b[0]) - 4, Math.min(a[1], b[1]) - 4, Math.max(a[0], b[0]) + 4, Math.max(a[1], b[1]) + 4, (i, x, y) => { const t = segDist(x, y, a, b); if (t < 2.6 && vn(x / 1.2, y / 1.2, 36 + k) > 0.3 + t / 6) blood[i] = Math.max(blood[i], 200); }); }
 // The prison's dried blood: the prisoners dragged from its gate to the reliquary, two heels' smears each (polylines).
-const TRAILS = [[[2350, 966], [2342, 910], [2338, 860], [2348, 800], [2358, 752]], [[2172, 1010], [2236, 990], [2300, 972], [2346, 966]], [[2140, 760], [2220, 748], [2300, 742]]];
+const TRAILS = [[[2350, 966], [2318, 924], [2290, 868], [2300, 800], [2336, 762], [2356, 750]], [[2172, 1010], [2236, 990], [2300, 972], [2346, 966]], [[2140, 760], [2220, 748], [2300, 742]]];
 for (const t of TRAILS) for (let k = 0; k < t.length - 1; k++) { const a = t[k], b = t[k + 1];
   paint(Math.min(a[0], b[0]) - 8, Math.min(a[1], b[1]) - 8, Math.max(a[0], b[0]) + 8, Math.max(a[1], b[1]) + 8, (i, x, y) => {
-    const d = segDist(x, y, a, b), s = Math.abs(d - 3.2) < 1.6 ? 1 : d < 5.5 ? 0.35 : 0; // two smears, a stain between
-    if (s && vn(x / 2.5, y / 9, 90 + k) > 0.32) dry[i] = Math.max(dry[i], 255 * s * clamp(1.15 - 0.25 * vn(x / 14, y / 14, 91)));
+    const d = segDist(x, y, a, b) + 1.5 * (vn(x / 6, y / 6, 89) - 0.5), s = Math.abs(d - 3) < 1.4 ? 1 : d < 5 ? 0.4 : 0; // two smears, a stain between
+    if (s && vn(x / 3, y / 4, 90 + k) > 0.36) dry[i] = Math.max(dry[i], 180 * s * clamp(1.15 - 0.4 * vn(x / 14, y / 14, 91)));
   }); }
 // Phosphorescent rot where the dead lie thick: the nest, the rats, the low gallery, the black water's shore (x, y, r).
 const ROT = [[470, 600, 40], [700, 700, 46], [560, 470, 30], [820, 620, 30], [380, 690, 26], [2020, 490, 30], [2110, 545, 22], [1180, 900, 30], [1640, 990, 26], [1420, 590, 26], [1700, 690, 24], [990, 480, 18], [2260, 570, 18]];
 const rotAt = (X, Y) => { let k = 0; for (const [x, y, r] of ROT) { const d = Math.hypot(X - x, (Y - y) * 1.3) / r; if (d < 1.6) k = Math.max(k, clamp(1.2 - d) * clamp((fbm(X / 7, Y / 6, 3, x) - 0.48) * 4)); } return k; };
 // The prison's iron: drain grates in its floor, the rings its prisoners were chained to (room px); where wax ran.
 const GRATES = [[2230, 862], [2490, 862], [2360, 1018]], RINGS = [[2128, 712], [2128, 836], [2128, 930], [2592, 712], [2592, 836], [2592, 930], [2250, 792], [2472, 792]];
-const iron = (u, v, z) => { const r = ironMat(u, v, z); return { c: r.alb, spec: r.spec, gloss: r.gloss }; };
+const iron = (u, v, z) => { const r = ironMat(u, v, z); return { c: mul(mix(r.alb, C.iron, 0.5), 0.8), spec: r.spec, gloss: r.gloss }; }; // darker than the props' rust: trodden, wet
 let WAX; // the prison's candles (CANDLES, filled further on)
 
 // ---------- the floor ----------
@@ -258,9 +258,9 @@ function item(u, v, s, p, seed) {
 }
 /** A bone lying `dx, dy` texels from its middle, turned `an`, `hl` long each way, `r` thick, its ends knobbed: its
  *  albedo factor and normal; { shade } in its shadow south of it; null off it. */
-function boneAt(dx, dy, an, hl, r) {
+function boneAt(dx, dy, an, hl, r, knob = 1.2) {
   const c = Math.cos(an), s = Math.sin(an), u = dx * c + dy * s, v = -dx * s + dy * c, t = Math.abs(u) / hl;
-  const rr = r * (t > 0.8 ? 1 + (t - 0.8) * 1.2 : 1), d = Math.hypot(Math.max(0, Math.abs(u) - hl), v);
+  const rr = r * (t > 0.8 ? 1 + (t - 0.8) * knob : 1), d = Math.hypot(Math.max(0, Math.abs(u) - hl), v);
   if (d > rr) return d < rr + 1.4 && dy > 0 ? { shade: true } : null;
   const q = clamp(v / rr, -1, 1);
   return { k: 1 - 0.3 * q * q, N: [-s * q * 0.8, c * q * 0.8, 1], end: t };
@@ -314,7 +314,8 @@ function earthAt(u, v, X, Y, i, dr) {
   c = mix(mul(c, 0.8 + 0.4 * h), mul(E.dustL, 0.7), tr * 0.25 * clamp(fbm(u / 12, v / 12, 2, 503) * 2 - 0.5));
   let fall = clamp(1 - dr / 26) * 0.5;
   for (const [x, y, r] of RUBBLE) fall = Math.max(fall, clamp(1.3 - Math.hypot(X - x, (Y - y) * 1.2) / (r * 2.2)));
-  for (const [s, p, r0, r1, seed] of [[18, 0.08 + 0.55 * fall, 3.5, 6.5, 504], [8, 0.16 + 0.35 * fall, 1.3, 2.6, 505]]) {
+  const bare = clamp((fbm(u / 30, v / 30, 2, 507) - 0.45) * 4) * (1 - fall); // packed bare between the scatters
+  for (const [s, p, r0, r1, seed] of [[30, 0.5 * fall, 6, 10, 508], [18, (0.08 + 0.5 * fall) * (1 - bare), 3.5, 6.5, 504], [8, (0.12 + 0.35 * fall) * (1 - bare), 1.3, 2.6, 505]]) {
     const t = item(u, v, s, p, seed);
     const st = t && stoneAt(t.dx, t.dy, r0 + (r1 - r0) * t.a, t.b * 3);
     if (st?.shade) c = mul(c, 0.55);
@@ -340,6 +341,7 @@ function galleryAt(u, v, X, Y, i, dr, laid) {
   let c = mul(mix(mix(C.stA, C.stB, h(4)), C.stC, h(5) * 0.6), (0.6 + 0.32 * h(6)) * (sunk ? 0.75 : 1));
   c = mul(c, 0.82 + 0.36 * fbm(u / 9, v / 9, 2, p.id & 63)); // its own grain
   if (vn(u / 2.4, v / 2.4, 215) > 0.8) c = mul(c, 0.72); // pitted
+  c = mix(c, mul(C.grime, 0.9), 0.4 * clamp((fbm(u / 16, v / 16, 3, 216) - 0.6) * 5)); // old stains across the stones
   c = mix(c, mul(c, 1.3), tr * 0.45 * clamp(1 - Math.hypot(p.cu, p.cv) / 20)); // worn smooth where they walk
   c = mix(c, C.grime, clamp(1 - (e - 1.3) / 5) * 0.45 + drift * 0.3); // grime toward its edge
   let N = [tx, ty, 1], spec = 0.04 + 0.08 * tr, gloss = 30;
@@ -349,26 +351,31 @@ function galleryAt(u, v, X, Y, i, dr, laid) {
   if (sunk && p.cu * tx + p.cv * ty < -3) { c = mul(c, 0.5); spec = 0.5; gloss = 90; N = [0, 0, 1]; } // water in its low side
   return { c, N, spec, gloss };
 }
-/** Long bones laid side by side in rows (the rows waver, the bones vary), here and there a skull set crown up in their
- *  stead; worn flat, grimy, dust packed between and over them. */
+/** A bed of bones pressed into the floor: long bones jumbled roughly along the gallery (of the bones of the cells round,
+ *  the one on top), now and then a skull crown up; grimy, worn flat, dust packed between. */
 function bonePaved(u, v, drift) {
-  const vw = v + 5 * (vn(u / 60, 3, 220) - 0.5), row = Math.floor(vw / 8), fy = vw - row * 8 - 4, Lb = 30, off = h2(row, 0, 225) * Lb;
-  const gap = { c: mix(mul(E.joint, 1.3), E.dustD, 0.45 + 0.5 * clamp(drift)), N: [0, 0, 1] };
-  const b = (k) => k * Lb + (h2(row, k, 226) - 0.5) * 12 - off;
-  let k = Math.floor((u + off) / Lb);
-  if (u < b(k)) k--; else if (u >= b(k + 1)) k++;
-  const x0 = b(k) + 1, x1 = b(k + 1) - 1, t = Math.min(u - x0, x1 - u), id = row * 991 + k, hh = (n) => h2(id, n, 227);
-  if (t < 0 || hh(0) < 0.1) return gap;
-  const tone = mul(mix(mix(C.boneD, C.bone, 0.15 + 0.35 * hh(1)), C.grime, 0.3 + 0.4 * clamp(drift)), 0.5 * (0.85 + 0.3 * fbm(u / 6, v / 6, 2, 229)));
-  if (hh(2) < 0.14) { // a skull in the row
-    const dx = (u - (x0 + x1) / 2) / 5.6, dy = fy / 4.6, d = Math.hypot(dx, dy);
-    if (d > 1) return gap;
-    if (hh(3) < 0.4 && (Math.hypot(Math.abs(dx) - 0.38, dy - 0.25) < 0.26)) return { c: mul(E.joint, 1.2), N: [0, 0, 1] }; // its face up: the orbits
-    return { c: mul(tone, 1.15 - 0.45 * d * d), N: [dx * 0.6, dy * 0.6, 1], spec: 0.08, gloss: 40 };
+  const gap = { c: mix(E.joint, E.dustD, 0.25 + 0.5 * clamp(drift)), N: [0, 0, 1] };
+  const flow = (vn(u / 90, v / 90, 220) - 0.5) * 0.8, gx = Math.floor(u / 12), gy = Math.floor(v / 8);
+  let best = gap, top = -1;
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const a = gx + i, b = gy + j, h = (n) => h2(a, b, 230 + n);
+    if (h(0) < 0.1 || h(7) < top) continue;
+    const dx = u - (a + h(1)) * 12, dy = v - (b + h(2)) * 8;
+    const tone = mul(mix(mix(C.boneD, C.bone, 0.15 + 0.35 * h(3)), C.grime, 0.3 + 0.4 * clamp(drift)), 0.5 * (0.85 + 0.3 * fbm(u / 6, v / 6, 2, 229)));
+    if (h(4) < 0.1) { // a skull
+      const sx = dx / 5.4, sy = dy / 4.4, d = Math.hypot(sx, sy);
+      if (d > 1) continue;
+      top = h(7);
+      best = h(5) < 0.45 && Math.hypot(Math.abs(sx) - 0.38, sy - 0.25) < 0.27 ? { c: mul(E.joint, 1.2), N: [0, 0, 1] } // its face up: the orbits
+        : { c: mul(tone, 1.15 - 0.45 * d * d), N: [sx * 0.6, sy * 0.6, 1], spec: 0.08, gloss: 40 };
+      continue;
+    }
+    const bn = boneAt(dx, dy, flow + (h(5) - 0.5) * 0.7, 6 + 5 * h(6), 1.6 + 0.8 * h(8), 2.6);
+    if (!bn || bn.shade) continue;
+    top = h(7);
+    best = { c: mul(tone, bn.k), N: bn.N, spec: 0.08, gloss: 40 };
   }
-  const tilt = (hh(6) - 0.5) * 0.22, r = (2.3 + 1.0 * hh(4)) * (t < 3.5 ? 1.18 - 0.06 * Math.abs(t - 1.8) : 1), q = (fy + 1.6 * (hh(5) - 0.5) - tilt * (u - (x0 + x1) / 2)) / r; // laid by hand, askew
-  if (Math.abs(q) > 1) return gap;
-  return { c: mul(tone, 1 - 0.3 * q * q), N: [0, q * 0.6, 1], spec: 0.08, gloss: 40 };
+  return best;
 }
 /** Le nid: sodden filth, gore clotted and wet, rotting rags in folds, mats of hair, scraps of flesh. */
 function nestAt(u, v) {
@@ -378,28 +385,28 @@ function nestAt(u, v) {
   c = mul(c, 0.8 + 0.4 * h);
   const rag = fbm(u / 50, v / 50, 2, 603) + 0.1 * (vn(u / 4, v / 4, 604) - 0.5);
   if (rag > 0.64) { // rotting cloth in folds, torn at its edges
-    const an = vn(u / 90, v / 90, 605) * 6.28, s = Math.sin((u * Math.cos(an) + v * Math.sin(an)) / 3.6 + 3 * vn(u / 14, v / 14, 606));
+    const an = vn(u / 90, v / 90, 605) * 6.28, s = Math.sin((u * Math.cos(an) + v * Math.sin(an)) / 3.6 + 1.2 * vn(u / 14, v / 14, 606));
     c = mul(mix(E.linen, E.rag, vn(u / 30, v / 30, 607)), 0.7 + 0.2 * s);
     if (vn(u / 6, v / 6, 608) > 0.72) c = mix(c, L('#2a3022'), 0.5); // mould
     return { c: mul(c, rag < 0.67 ? 0.4 : 0.55), N: [Math.cos(an) * s * 0.3, Math.sin(an) * s * 0.3, 1], spec: 0.03 };
   }
-  const hair = fbm(u / 30, v / 30, 2, 609);
-  if (hair > 0.72) { // a mat of hair, its strands combed by the drag
-    const an = 1.2 + vn(u / 40, v / 40, 610) * 1.5, s = Math.sin((u * Math.cos(an) + v * Math.sin(an)) * 0.9 + 5 * vn(u / 9, v / 9, 611));
-    return { c: mul(E.hair, (s > 0.3 ? 1.35 : 0.85) * (hair < 0.75 ? 1.4 : 1)), N: [0, s * 0.15, 1], spec: 0.25, gloss: 50 };
-  }
-  const gore = fbm(u / 40, v / 40, 3, 612);
-  if (gore > 0.54) { // gore: pooled, clotted, glistening
-    const g = clamp((gore - 0.54) * 5);
-    c = mix(c, mul(mix(E.gore, C.bloodD, vn(u / 7, v / 7, 613)), 0.85), g);
-    const clot = item(u, v, 9, 0.35 * g, 614), st = clot && stoneAt(clot.dx, clot.dy, 1.8 + 1.6 * clot.a, clot.b * 3);
-    if (st && !st.shade) return { c: mul(mix(C.bloodD, E.gore, 0.5), st.k * 0.7), N: st.N, spec: 0.6, gloss: 80 };
-    spec = 0.45 * g; gloss = 80;
+  const hc = item(u, v, 30, 0.2, 609); // a clump of hair torn out, its strands combed one way
+  if (hc) { const r = 6 + 5 * hc.a, d = Math.hypot(hc.dx, hc.dy * 1.2) / r + 0.3 * (vn(u / 3, v / 3, 610) - 0.5);
+    if (d < 1) { const an = hc.b * 3.14, s = Math.sin((hc.dx * Math.cos(an) + hc.dy * Math.sin(an)) * 0.8 + 2 * vn(u / 5, v / 5, 611));
+      return { c: mul(E.hair, (0.9 + 0.6 * clamp(s)) * (d > 0.8 ? 1.3 : 1)), N: [0, s * 0.1, 1], spec: 0.3, gloss: 50 }; } }
+  const gore = fbm(u / 44, v / 44, 3, 612);
+  if (gore > 0.54) { // gore: pooled, its edge drying dark, its middle wet; a few clots
+    const g = clamp((gore - 0.54) * 6);
+    c = mix(c, g < 0.5 ? mul(C.bloodD, 0.8) : mul(mix(E.gore, C.bloodD, vn(u / 9, v / 9, 613) * 0.6), 0.9), clamp(g * 3));
+    const clot = item(u, v, 14, 0.25 * g, 614), st = clot && stoneAt(clot.dx, clot.dy, 2 + 2 * clot.a, clot.b * 3);
+    if (st && !st.shade) return { c: mul(mix(C.bloodD, E.gore, 0.4), st.k * 0.7), N: st.N, spec: 0.6, gloss: 80 };
+    spec = 0.6 * g; gloss = 90; N = [N[0] * (1 - g), N[1] * (1 - g), 1];
   }
   const scrap = item(u, v, 28, 0.12, 615); // flesh torn off and left, its fat
-  if (scrap) { const r = 3 + 3 * scrap.a, d = Math.hypot(scrap.dx, scrap.dy * 1.3) / r + 0.35 * (vn(u / 2.5, v / 2.5, 616) - 0.5);
-    if (d < 1) return { c: d > 0.72 ? mul(E.fat, 0.7) : mul(E.flesh, 0.75 + 0.3 * vn(u / 2, v / 2, 617)), N: [scrap.dx / r * 0.6, scrap.dy / r * 0.6, 1], spec: 0.5, gloss: 70 }; }
-  if (fbm(u / 20, v / 20, 2, 618) > 0.66) { c = mul(c, 0.55); spec = 0.6; gloss = 100; N = [0, 0, 1]; } // wet, glistening
+  if (scrap) { const an = scrap.b * 3.14, cu = scrap.dx * Math.cos(an) + scrap.dy * Math.sin(an), cv = -scrap.dx * Math.sin(an) + scrap.dy * Math.cos(an), r = 3 + 3 * scrap.a; // torn long, ragged
+    const d = Math.hypot(cu / 1.8, cv) / r + 0.45 * (vn(u / 2.5, v / 2.5, 616) - 0.5);
+    if (d < 1) return { c: mul(d > 0.85 && cv < 0 ? E.fat : E.flesh, 0.55 + 0.3 * vn(u / 2, v / 2, 617)), N: [scrap.dx / r * 0.4, scrap.dy / r * 0.4, 1], spec: 0.5, gloss: 70 }; }
+  if (fbm(u / 20, v / 20, 2, 618) > 0.66) { c = mul(c, 0.75); spec = 0.6; gloss = 100; N = [0, 0, 1]; } // wet, glistening
   return { c, N, spec, gloss };
 }
 /** The black water's shore: a shelf of wet rock cracked into slabs, darker and glossier toward the water. */
@@ -421,7 +428,7 @@ function waterAt(u, v, X, Y, wd) {
   let c = mix(mul(E.mud, 0.7), mul(E.water, 0.8 + 0.4 * vn(u / 60, v / 60, 51)), 0.35 + 0.65 * deep);
   let nx = (vn(u / 22, v / 10, 52) - 0.5) * 0.1, ny = (vn(u / 22, v / 10, 53) - 0.5) * 0.1, emi;
   for (const [x, y, ph] of DRIPS) { const du = u - 2 * x, dv = (v - 2 * y) / 0.62, r = Math.hypot(du, dv); // rings, flat on the water
-    if (r < 60 && r > 1) { const a = Math.sin(r * 0.7 - ph) * Math.exp(-r / 22) * 0.35; nx += du / r * a; ny += dv / r * a; } }
+    if (r < 60 && r > 1) { const a = Math.sin(r * 0.7 - ph + 2.5 * vn(u / 9, v / 9, 50)) * Math.exp(-r / 18) * 0.16; nx += du / r * a; ny += dv / r * a; } }
   for (const [x, y, w, col, k] of GLINTS) { // the light lying on it: a broken streak down from where it falls
     const du = (u - 2 * x) / w, dv = v - 2 * y;
     if (Math.abs(du) < 1.5 && dv > -w * 0.4 && dv < w * 3) {
@@ -482,7 +489,7 @@ function prisonAt(u, v, X, Y, i) {
     if (bev > 0) { N = [ex < ey ? (fx < SW / 2 ? -1 : 1) * bev * 0.5 : 0, ey <= ex ? (fy < SH / 2 ? -1 : 1) * bev * 0.5 : 0, 1]; c = mul(c, 1 - 0.2 * bev); }
     if (h(3) < 0.07 && e > 2) { // carved: a border ruled in, two lines of the Order's writing
       if (Math.abs(e - 5) < 0.7) c = mul(c, 0.6);
-      else if (e > 8 && (Math.abs(fy - 15) < 1.8 || Math.abs(fy - 24) < 1.8) && h2(Math.floor(fx / 3.2), row * 7 + k, 717) < 0.6 && (fx % 3.2) < 2) c = mul(c, 0.6);
+      else if (e > 10 && Math.abs(fy - SH / 2) < 2 && h2(Math.floor(fx / 3.4), row * 7 + k, 717) < 0.5 && (fx % 3.4) < 2) c = mul(c, 0.65);
     }
     if (h(4) < 0.25) { const d = crack(fx - SW / 2, fy - SH / 2, u, v, h(5)); if (e > 2 && d < 0.7) c = mul(c, 0.5); }
     if (h(6) < 0.04) { const q = paving(u, v, 22, 718); if (q.e < 1) c = mul(c, 0.45); else N = [(h2(q.id, 1, 719) - 0.5) * 0.3, (h2(q.id, 2, 719) - 0.5) * 0.3, 1]; } // broken in shards
@@ -491,7 +498,7 @@ function prisonAt(u, v, X, Y, i) {
     if (worn > 0) { c = mul(c, 1 + 0.25 * worn); spec = 0.04 + 0.12 * worn; }
     c = grime(c, u, v, 0.7);
   }
-  if (rust) c = mix(c, mix(C.rust, L('#2a1408'), vn(u / 3, v / 3, 724)), rust * 0.6);
+  if (rust) c = mix(c, mul(mix(C.rust, L('#2a1408'), 0.3 + 0.7 * vn(u / 3, v / 3, 724)), 0.7), rust * 0.45);
   // wax run from the candles, pooled and hard; the Order's red seals dripped near the reliquary
   for (const [x, y, n] of (WAX ??= CANDLES.filter(([x, y]) => x > ARENA[0] && y > ARENA[1]))) {
     const du = u - 2 * (x + n * 1.5), dv = v - 2 * y;
@@ -528,7 +535,7 @@ function floorAt(x, y) {
   // the edge of the rock: its dust heaped, darker
   if (dr < 14 && k !== 2) c = mix(c, E.dustD, (1 - Math.max(0, dr) / 14) * 0.5);
   if (blood[i]) { const b = blood[i] / 255; c = mix(c, mix(C.bloodD, C.blood, vn(u / 4, v / 4, 8) * 0.6), b); if (b > 0.3) { spec = 0.4 * b; gloss = 70; Nn = [0, 0, 1]; } }
-  if (dry[i]) c = mix(c, mix(L('#260a07'), L('#3e110b'), vn(u / 3, v / 3, 92)), dry[i] / 255 * 0.85); // dried: matte, flaking
+  if (dry[i]) c = mix(c, mix(L('#24100b'), L('#3a140d'), vn(u / 3, v / 3, 92)), dry[i] / 255 * 0.8); // dried: matte, brown, flaking
   if (k !== 2) { // what lies about: bones, teeth, rat droppings, straw, at sizes the game's pixel shows
     const near = clamp(1 - dr / 18), ossu = inSpan(X, Y + 30) ? 1 : 0;
     const pb = [0.02 + 0.08 * ossu, 0.02, 0.06, 0.03, 0.1, 0.012][a] + 0.03 * near;
@@ -536,8 +543,8 @@ function floorAt(x, y) {
     if (bn?.shade) c = mul(c, 0.65);
     else if (bn) return { alb: mul(mix(mix(C.boneD, C.bone, 0.2 + 0.35 * h2(b.id, 6, 300)), a === NID && bn.end > 0.7 ? C.bloodD : C.grime, a === NID ? 0.4 : 0.3), bn.k * 0.6), N: bn.N, spec: 0.08, gloss: 30 };
     const pt = clamp((fbm(u / 16, v / 16, 2, 320) - 0.62) * 4) * ([0.12 + 0.2 * ossu, 0.06, 0.25, 0.04, 0.12, 0][a]);
-    const t = item(u, v, 5, pt, 321);
-    if (t && Math.hypot(t.dx, t.dy * 1.2) < 1.25) return { alb: mul(mix(C.bone, C.wax, 0.3), 0.8 - 0.25 * clamp(t.dy)), N: [t.dx * 0.4, t.dy * 0.4, 1], spec: 0.15, gloss: 40 }; // a tooth
+    const t = item(u, v, 7, pt * 0.5, 321);
+    if (t && Math.hypot(t.dx, t.dy * 1.2) < 1.25) return { alb: mul(mix(C.bone, C.wax, 0.3), 0.6 - 0.2 * clamp(t.dy)), N: [t.dx * 0.4, t.dy * 0.4, 1], spec: 0.15, gloss: 40 }; // a tooth
     if (t && t.dy > 1 && t.dy < 2.2 && Math.abs(t.dx) < 1.2) c = mul(c, 0.6);
     const pd = clamp((fbm(u / 12, v / 12, 2, 330) - 0.55) * 4) * ([near * 0.6, near * 0.6, 0.4, near * 0.3, 0.8, near * 0.2][a]);
     const dp = item(u, v, 4, pd, 331);
