@@ -34,9 +34,11 @@ export const VESNA = { x: 1240, y: 564 };
 const STAIRWAY = { x: 840, y: 876 };
 
 export function preload(scene: Phaser.Scene) {
-  Baked.preload(scene, 'refuge');
-  if (!Save.data.vesna) return;
-  for (const k of ['albedo', 'light']) if (!scene.textures.exists(`refuge-vesna-${k}`)) scene.load.image(`refuge-vesna-${k}~`, Baked.url(`refuge-vesna-${k}`));
+  if (!Save.data.vesna) return Baked.preload(scene, 'refuge');
+  for (const k of ['albedo', 'light']) if (!scene.textures.exists(`refuge-vesna-${k}`)) { // the first state's, and hers over it, to lay together
+    if (!scene.textures.exists(`refuge-${k}`)) scene.load.image(`refuge-${k}`, Baked.url(`refuge-${k}`));
+    scene.load.image(`refuge-vesna-${k}~`, Baked.url(`refuge-vesna-${k}`));
+  }
   if (!scene.textures.exists('refuge-vesna-over')) scene.load.image('refuge-vesna-over', Baked.url('refuge-vesna-over'));
 }
 
@@ -46,11 +48,13 @@ function layered(scene: Phaser.Scene) {
     const key = `refuge-vesna-${k}`;
     if (scene.textures.exists(key)) continue;
     const base = scene.textures.get(`refuge-${k}`).getSourceImage() as HTMLImageElement, over = scene.textures.get(`${key}~`).getSourceImage() as HTMLImageElement;
-    const c = scene.textures.createCanvas(key, base.width, base.height)!;
-    c.context.drawImage(base, 0, 0);
-    c.context.drawImage(over, 0, 0);
-    c.refresh();
-    scene.textures.remove(`${key}~`);
+    const c = document.createElement('canvas'); // a plain one (a Phaser CanvasTexture keeps a copy of its pixels too)
+    [c.width, c.height] = [base.width, base.height];
+    const g = c.getContext('2d')!;
+    g.drawImage(base, 0, 0);
+    g.drawImage(over, 0, 0);
+    scene.textures.addImage(key, c as unknown as HTMLImageElement);
+    for (const k2 of [`${key}~`, `refuge-${k}`]) scene.textures.remove(k2); // a big room: never both states held at once (headless, it ran out of memory)
   }
 }
 
