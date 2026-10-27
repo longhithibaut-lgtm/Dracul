@@ -266,6 +266,13 @@ export const T = {
       [['ghoul', 'purifier', 'crossbow', 'crossbow'], ['penitent', 'penitent', 'penitent', 'ringer'], ['hound', 'hound', 'hound', 'crossbow'], ['inquisitor', 'penitent', 'penitent', 'crossbow'], ['amas', 'ghoul', 'ghoul']],
       [['purifier', 'inquisitor', 'penitent', 'priest'], ['hound', 'hound', 'hound', 'crossbow', 'ringer'], ['amas', 'penitent', 'penitent', 'purifier', 'priest']],
     ],
+    // Les catacombes' own, by ring (3 by the well, 4 deep): the ghouls' den, the Amas, the Order's hounds and penitents
+    // hunting down there (docs/extraction.md §4).
+    catacombs: [
+      [], [], [],
+      [['ghoul', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'ghoul', 'ghoul'], ['hound', 'hound', 'penitent'], ['penitent', 'penitent', 'penitent'], ['amas', 'ghoul', 'ghoul']],
+      [['ghoul', 'ghoul', 'ghoul', 'ghoul', 'ghoul'], ['amas', 'ghoul', 'ghoul', 'ghoul'], ['hound', 'hound', 'hound', 'penitent'], ['penitent', 'penitent', 'penitent', 'priest'], ['amas', 'amas', 'ghoul'], ['inquisitor', 'hound', 'hound', 'penitent']],
+    ],
     guards: { cloister: ['bourreau'] },
     clear: 170, gap: 90, zoneGap: 180, // the zone's groups farther apart (twice T.sight.call): one roused does not wake its neighbours
     caches: [1, 2],

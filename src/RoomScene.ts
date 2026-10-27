@@ -21,10 +21,9 @@ import * as Save from './save.ts';
 import * as Shop from './shop.ts';
 import * as Ronge from './ronge.ts';
 import * as Zone from './zone.ts';
-import * as Nec from './necropolis.data.ts';
 import * as Items from './items.ts';
 import * as Satchel from './satchel.ts';
-import { WORLD, expedition, galleryOpen, go, homeward, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState } from './world.ts';
+import { WORLD, ZONES, areaAt, chokes, expedition, galleryOpen, go, homeward, isZone, lair, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState, type ZoneId } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -173,7 +172,7 @@ export class RoomScene extends Phaser.Scene {
     this.biteReadyAt = 0;
     this.prey = undefined;
     this.phase = data.entry !== undefined ? 'enter' : 'play';
-    this.walk = this.layout === 'necropolis' ? 1 : this.layout === 'refuge' || data.entry === -1 ? -1 : 1; // up from stairs, down from an exit (out of the zone's doors)
+    this.walk = isZone(this.layout) ? 1 : this.layout === 'refuge' || data.entry === -1 ? -1 : 1; // up from stairs, down from an exit (out of a zone's doors)
     this.rats = [];
     this.glyph = undefined; // the last scene's is ended on its shutdown
     this.glyphReadyAt = this.castUntil = 0;
@@ -227,7 +226,7 @@ export class RoomScene extends Phaser.Scene {
     // its rim glows and rings, then its lanterns. Their bodies' tells, in the dark rooms.
     const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (['priest', 'inquisitor', 'bourreau'].includes(e.getData('kind')) || ['ignite', 'fire', 'raise', 'toll'].includes(e.getData('state'))))
       .map((e) => ({ ...Foes.lamp(e), lit: true, I: this.glow(e) })), ...this.lanterns];
-    if (this.room.zone) Dark.light(this, this.hero, this.enemies, lights, [Nec.SW, Nec.SH], this.room.look, this.room.zone.chunks.quads);
+    if (this.room.zone) Dark.light(this, this.hero, this.enemies, lights, [ZONES[this.room.zone.id].SW, ZONES[this.room.zone.id].SH], this.room.look, this.room.zone.chunks.quads);
     else Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
     this.propBoxes = this.room.obstacles.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody);
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
@@ -384,25 +383,26 @@ export class RoomScene extends Phaser.Scene {
   }
 
   /** A place of the expedition, as he left it, or, entered for the first time, its foes placed and its caches hidden
-   *  (the zone's by area, each from its ring's pools); the words over its exits; the hounds that hunted him here come
-   *  in after him. */
+   *  (a zone's by area, each from its ring's pools: the catacombs' their own); the words over its exits; the hounds that
+   *  hunted him here come in after him. */
   private enterRoom() {
-    const W = WORLD[this.here], E = T.expedition, ring = W.ring, r = this.room, zone = this.room.zone, d = this.zoneDoor();
+    const W = WORLD[this.here], E = T.expedition, ring = W.ring, r = this.room, zone = this.room.zone, d = this.zoneDoor(), Z = zone && ZONES[zone.id];
     if (W.ahead.length && !zone) Room.raiseGate(this, 1); // open: he goes deeper when he pleases
     const at = d ?? (this.entry === undefined ? r.heroStart : this.entry < 0 ? { x: r.stairs.x, y: r.bounds.bottom } : r.exits[this.entry]);
     this.exp ??= expedition(ring); // a room opened directly (scripts, tools): an expedition of its own
-    const groups = (pool: number, n: number, spawns: { x: number; y: number }[]) => placeGroups(E.pools[pool] as readonly (readonly string[])[], n, spawns, at, E.clear, zone ? E.zoneGap : E.gap, Math.random)
+    const pools = (zone?.id === 'catacombs' ? E.catacombs : E.pools) as readonly (readonly (readonly string[])[])[];
+    const groups = (pool: number, n: number, spawns: { x: number; y: number }[]) => placeGroups(pools[pool], n, spawns, at, E.clear, zone ? E.zoneGap : E.gap, Math.random)
       .flatMap((g) => g.kinds.map((kind, i) => ({ x: g.at.x + (i % 2 ? 12 : -12) * Math.ceil(i / 2), y: g.at.y, kind }))); // side by side: they push each other off
     const hide = (list: { x: number; y: number }[]) => Phaser.Utils.Array.Shuffle([...list]).slice(0, Phaser.Math.Between(E.caches[0], E.caches[1]));
     const inArea = (p: { x: number; y: number }, [x0, y0, x1, y1]: readonly number[]) => p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1;
     const st: RoomState = (this.exp.rooms[this.here] ??= {
-      foes: (zone
-        ? Nec.AREAS.flatMap((a, k) => groups(a.ring, a.groups, Nec.SPAWNS.filter((p) => p[2] === k).map(([x, y]) => ({ x, y }))))
+      foes: (Z
+        ? Z.AREAS.flatMap((a, k) => groups(a.ring, a.groups, Z.SPAWNS.filter((p) => p[2] === k).map(([x, y]) => ({ x, y }))))
         : [...groups(ring, E.groups[ring], r.spawns), ...((E.guards as Record<string, readonly string[]>)[this.layout] ?? []).map((kind) => ({ ...r.medallion, kind }))]
       ).map((f) => ({ ...f, hp: stats(f.kind).hp, home: { x: f.x, y: f.y } })),
       // the zone's: one or two in each area
-      caches: (zone ? Nec.AREAS.flatMap((a) => hide(W.caches.filter((c) => inArea(c, a.rect) && Nec.AREAS.find((b) => inArea(c, b.rect)) === a))) : hide(W.caches))
-        .map((c) => ({ ...c, blood: T.blood.cache * T.blood.ring[this.ring(c)], item: this.found(this.ring(c), !!zone && (T.items.sure as readonly string[]).includes(Nec.AREAS.find((a) => inArea(c, a.rect))?.id ?? '')) })),
+      caches: (Z ? Z.AREAS.flatMap((a) => hide(W.caches.filter((c) => inArea(c, a.rect) && Z.AREAS.find((b) => inArea(c, b.rect)) === a))) : hide(W.caches))
+        .map((c) => ({ ...c, blood: T.blood.cache * T.blood.ring[this.ring(c)], item: this.found(this.ring(c), !!zone && (T.items.sure as readonly string[]).includes(areaAt(zone.id, c.x, c.y)?.id ?? '')) })),
       drops: [],
       items: [],
     });
@@ -411,27 +411,38 @@ export class RoomScene extends Phaser.Scene {
     for (const d of st.drops) this.addDrop(d);
     for (const l of st.items) this.addLoot(l);
     this.loose(T.expedition.titleMs); // packs his scent called with nowhere to go, now that he is farther from the refuge
-    r.exits.forEach((g, i) => W.ahead[i] && this.labels.push({ at: g, l: Loot.label(this, g.x, g.y - (zone ? 40 : 4), WORLD[W.ahead[i]].name) }));
     const back = this.exp.came[this.here]?.from ?? parents(this.here)[0].from;
     if (zone) {
-      this.labels.push({ at: r.stairs, l: Loot.label(this, r.stairs.x, r.stairs.y - 44, WORLD.refuge.name) });
+      this.doorLabels();
       for (const g of zone.gates) if (!g.open) this.gateLabels(g);
       if (galleryOpen(Save.data.shortcuts)) this.galleryLabels();
-    } else this.labels.push({ at: { x: r.stairs.x, y: r.bounds.bottom }, l: Loot.label(this, r.stairs.x, r.bounds.bottom - 26, WORLD[back].name) });
+    } else {
+      r.exits.forEach((g, i) => W.ahead[i] && this.labels.push({ at: g, l: Loot.label(this, g.x, g.y - 4, WORLD[W.ahead[i]].name) }));
+      this.labels.push({ at: { x: r.stairs.x, y: r.bounds.bottom }, l: Loot.label(this, r.stairs.x, r.bounds.bottom - 26, WORLD[back].name) });
+    }
     const door = d ? { x: d.x, y: d.y - 4 } : (this.entry ?? -1) < 0 ? { x: at.x, y: r.bounds.bottom - 16 } : { x: at.x, y: r.bounds.top + 4 }; // sprite, feet inside
     for (const hp of this.hounds) this.time.delayedCall(T.sight.followMs, () => !this.dead && this.place(door, 'hound', { hp, alert: true, followed: true }));
   }
 
-  /** In the zone, the door he comes out of (the refuge's stairs, else the door of the place he comes back from). */
+  /** In a zone, the door he comes out of: the way up he came in by (entry -1 - k: the necropolis' refuge stairs, the
+   *  catacombs' well or caveau), else the door of the place he comes back from. */
   private zoneDoor() {
-    if (this.layout !== 'necropolis') return undefined;
+    if (!isZone(this.layout)) return undefined;
     const e = this.entry ?? -1;
-    return e < 0 ? Nec.DOORS.refuge : Zone.DOORS[e];
+    return e < 0 ? Zone.ups(this.layout)[-1 - e] : Zone.exits(this.layout)[e];
   }
 
-  /** The ring where floor point `p` lies: the zone's by area, a room's own. */
+  /** The ring where floor point `p` lies: a zone's by area, a room's own. */
   private ring(p: { x: number; y: number }) {
-    return this.room.zone ? ringAt(p.x, p.y) : WORLD[this.here].ring;
+    return this.room.zone ? ringAt(this.room.zone.id, p.x, p.y) : WORLD[this.here].ring;
+  }
+
+  /** A zone's words over its doors and ways up (`only`: that one's): where each leads; none while a gate shuts it. */
+  private doorLabels(only?: string) {
+    const z = this.room.zone!, W = WORLD[this.here], D = ZONES[z.id].DOORS, shut = (k: string) => z.gates.some((g) => g.id === k && !g.open);
+    const put = (k: string, to: Place) => { if (!shut(k) && (!only || k === only)) this.labels.push({ at: D[k], l: Loot.label(this, D[k].x, D[k].y - 44, WORLD[to].name) }); };
+    W.doors!.forEach((k, i) => put(k, W.ahead[i]));
+    W.up!.forEach((k, i) => put(k, parents(this.here)[i].from));
   }
 
   /** A shortcut's words: at its winch, how to raise it; on its other side (the gallery's other mouth), that it is shut
@@ -446,7 +457,7 @@ export class RoomScene extends Phaser.Scene {
 
   /** The gallery's two mouths, once open: where each leads. */
   private galleryLabels() {
-    for (const t of Nec.TUNNEL) this.labels.push({ at: t, l: Loot.label(this, t.x, t.y - 44, 'La galerie') });
+    for (const t of ZONES[this.room.zone!.id].TUNNEL) this.labels.push({ at: t, l: Loot.label(this, t.x, t.y - 44, 'La galerie') });
   }
 
   /** Into a mouth of the gallery: fade to black, out of its other mouth (`to`), the zone as it is. */
@@ -472,6 +483,7 @@ export class RoomScene extends Phaser.Scene {
     Save.data.shortcuts = [...Save.data.shortcuts, g.id];
     Save.store();
     if (galleryOpen(Save.data.shortcuts) && g.id === 'galerie') this.galleryLabels();
+    this.doorLabels(g.id); // le caveau's stairs: where they lead
     this.walkGrid();
     this.propBoxes = this.room.obstacles.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody);
     this.castUntil = this.time.now + T.glyph.castMs;
@@ -566,13 +578,14 @@ export class RoomScene extends Phaser.Scene {
     // Out by any exit, when he pleases: down the refuge's stairs; into a door of the zone (its stairs up to the refuge); up
     // through a room's open portcullises, or down its stairs.
     if (this.phase === 'play' && this.layout === 'refuge' && feet.bottom > Refuge.STAIRS) this.leave(0);
-    else if (this.phase === 'play' && !this.training && zone) { // into a door of the zone: up into its dark
+    else if (this.phase === 'play' && !this.training && zone) { // into a door of the zone: up into its dark (a shut gate keeps him out of its recess)
       const into = (d: { x: number; y: number; w: number }) => Math.abs(feet.center.x - d.x) < d.w / 2 - 4 && feet.bottom < d.y - 3 && feet.bottom > d.y - 40; // in its recess
-      const exit = Zone.DOORS.findIndex(into), mouth = galleryOpen(Save.data.shortcuts) ? Nec.TUNNEL.findIndex(into) : -1;
-      if (into(Nec.DOORS.refuge)) this.leave(-1);
+      const Z = ZONES[zone.id], tunnel = galleryOpen(Save.data.shortcuts) ? Z.TUNNEL : [];
+      const up = Zone.ups(zone.id).findIndex(into), exit = Zone.exits(zone.id).findIndex(into), mouth = tunnel.findIndex(into);
+      if (up >= 0) this.leave(-1 - up);
       else if (exit >= 0) this.leave(exit);
-      else if (mouth >= 0 && time > this.passedAt + T.expedition.fadeMs * 4) this.through(Nec.TUNNEL[1 - mouth]);
-      if (this.exp) this.exp.deepest = Math.max(this.exp.deepest, ringAt(feet.center.x, feet.center.y));
+      else if (mouth >= 0 && time > this.passedAt + T.expedition.fadeMs * 4) this.through(tunnel[1 - mouth]);
+      if (this.exp) this.exp.deepest = Math.max(this.exp.deepest, ringAt(zone.id, feet.center.x, feet.center.y));
     } else if (this.phase === 'play' && !this.training && this.layout !== 'refuge') {
       const exit = this.room.exits.findIndex((g, i) => Math.abs(feet.center.x - g.x) < 14 && WORLD[this.here].ahead[i]);
       if (feet.top <= b.top + 1 && exit >= 0) this.leave(exit);
@@ -1505,21 +1518,36 @@ export class RoomScene extends Phaser.Scene {
    *  its door; world.ts loose()), out of his sight; a distant horn and a line say so, `delay` ms later (after a place's
    *  name). In the zone they stand there at once; else they wait in its state for him to come back out. */
   private loose(delay = 0) {
-    const exp = this.exp!, st = exp.rooms.necropolis;
-    if (!exp.packs || !st) return;
-    let from: { x: number; y: number } = this.hero.body!.center;
-    if (!this.room.zone) { // the door of the zone he went in by
+    const exp = this.exp!;
+    if (!exp.packs) return;
+    // the zone where they lie in wait: the one he is in, else the zone whose door he went in by (from that door)
+    let z: ZoneId, from: { x: number; y: number } = this.hero.body!.center;
+    if (this.room.zone) z = this.room.zone.id;
+    else {
       let p = this.here;
-      while (exp.came[p] && exp.came[p]!.from !== 'necropolis') p = exp.came[p]!.from;
-      const d = Zone.DOORS[exp.came[p]?.exit ?? -1];
-      if (!d) return;
+      while (exp.came[p] && !isZone(exp.came[p]!.from)) p = exp.came[p]!.from;
+      const c = exp.came[p], d = c && isZone(c.from) ? Zone.exits(c.from)[c.exit] : undefined;
+      if (!c || !d) return;
+      z = c.from as ZoneId;
       from = d;
     }
-    const g = homeward(Save.data.shortcuts), now = loose(exp, wayBack(g.steps, g.cols, from, g.links), from, T.battue.packs, T.battue.far, T.battue.door);
-    for (const { at, kinds } of now) kinds.forEach((kind, i) => {
+    const st = exp.rooms[z], nec = exp.rooms.necropolis;
+    if (!st) return;
+    const g = homeward(z, Save.data.shortcuts), way = wayBack(g.steps, g.cols, from, g.links);
+    // down in the catacombs, every other pack waits up in the necropolis, at the narrow ways of his way home from the
+    // door he will come up by (the way up his way back ends at)
+    let above: ((k: number) => { x: number; y: number } | undefined) | undefined;
+    if (z === 'catacombs' && nec && way.length) {
+      const end = way[way.length - 1], ups = Zone.ups(z), k = ups.reduce((b, d, i) => (Math.hypot(d.x - end.x, d.y - end.y) < Math.hypot(ups[b].x - end.x, ups[b].y - end.y) ? i : b), 0);
+      const top = Zone.exits('necropolis')[parents('catacombs')[k].exit], out = { x: top.x, y: top.y + 14 }, ng = homeward('necropolis', Save.data.shortcuts);
+      const home = wayBack(ng.steps, ng.cols, out, ng.links);
+      above = (n) => lair(home, out, 0, false, T.battue.door, n);
+    }
+    const now = loose(exp, way, from, T.battue.packs, T.battue.far, T.battue.door, chokes(z), above);
+    for (const { at, kinds, up } of now) kinds.forEach((kind, i) => {
       const p = { x: at.x + (i % 2 ? 12 : -12) * Math.ceil(i / 2), y: at.y }; // side by side
-      if (this.room.zone) this.place(p, kind as Kind, { pack: exp.loosed });
-      else st.foes.push({ kind, ...p, hp: stats(kind).hp, home: p, pack: exp.loosed });
+      if (!up && this.room.zone) this.place(p, kind as Kind, { pack: exp.loosed });
+      else (up ? nec! : st).foes.push({ kind, ...p, hp: stats(kind).hp, home: p, pack: exp.loosed });
     });
     if (now.length) this.time.delayedCall(delay, () => !this.dead && this.warn(now.some((p) => p.kinds.includes('inquisitor'))));
   }

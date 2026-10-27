@@ -200,8 +200,8 @@ ${Object.entries(Z.DATA ?? {}).map(([k, v]) => `export const ${k} = ${J(v)};\n`)
   for (let y = 0; y < RH; y += 2) for (let x = 0; x < RW; x += 2) { if (walk[y * RW + x] && (x + y) % 8 === 0) dot(x, y, [60, 200, 60, 255]); if (lit[y * RW + x] && (x + y) % 4 === 2) dot(x, y, [255, 190, 0, 255]); }
   const frame = (list, c) => { for (const [x, y, w, h] of list) { for (let k = 0; k < w; k += 2) { dot(x + k, y, c); dot(x + k, y + h - 1, c); } for (let k = 0; k < h; k += 2) { dot(x, y + k, c); dot(x + w - 1, y + k, c); } } };
   frame(BOXES, [220, 40, 40, 255]); frame(PITS, [200, 60, 220, 255]); frame(GATES.map((g) => g.box), [255, 255, 255, 255]);
-  const A = [[80, 160, 255, 255], [240, 220, 40, 255], [255, 120, 40, 255], [255, 255, 255, 255]];
-  for (const [x, y, a] of SPAWNS) for (let d = -4; d <= 4; d += 2) { dot(x + d, y, A[Z.AREAS[a]?.ring ?? 3]); dot(x, y + d, A[Z.AREAS[a]?.ring ?? 3]); }
+  const A = [[80, 160, 255, 255], [240, 220, 40, 255], [255, 120, 40, 255], [255, 255, 255, 255], [220, 60, 255, 255]];
+  for (const [x, y, a] of SPAWNS) for (let d = -4; d <= 4; d += 2) { dot(x + d, y, A[Z.AREAS[a]?.ring ?? 4]); dot(x, y + d, A[Z.AREAS[a]?.ring ?? 4]); }
   for (const d of Object.values(Z.DOORS)) for (let k = -12; k <= 12; k++) { dot(d.x + k, d.y, [255, 255, 255, 255]); dot(d.x + k, d.y + 1, [255, 255, 255, 255]); }
   for (const [x, y] of caches) for (let k = -6; k <= 6; k++) { dot(x + k, y + k, [255, 40, 120, 255]); dot(x + k, y - k, [255, 40, 120, 255]); }
   png(`shots/${ZONE}-plan.png`, P, OW, OH);

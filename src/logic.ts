@@ -165,9 +165,9 @@ export function walkCells(b: Box, boxes: readonly Box[], nav: number): boolean[]
 /** Steps from cell `goal` to every cell of a grid `cols` wide, walking through `open` cells only, 8 ways but never
  *  cutting a corner; Infinity where it can't get. The goal itself may be closed (someone standing on a brink). `links`:
  *  cells a step apart however far (a gallery's two mouths). */
-export function stepsFrom(open: readonly boolean[], cols: number, goal: number, links: Map<number, number> = new Map()): number[] {
-  const rows = open.length / cols, d = open.map(() => Infinity), queue = [goal];
-  d[goal] = 0;
+export function stepsFrom(open: readonly boolean[], cols: number, goal: number | readonly number[], links: Map<number, number> = new Map()): number[] {
+  const rows = open.length / cols, d = open.map(() => Infinity), queue = [goal].flat(); // several goals: steps to the nearest
+  for (const g of queue) d[g] = 0;
   for (let i = 0; i < queue.length; i++) {
     const c = queue[i], x = c % cols, y = (c - x) / cols, l = links.get(c);
     if (l !== undefined && d[l] === Infinity) { d[l] = d[c] + 1; queue.push(l); }

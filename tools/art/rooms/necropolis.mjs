@@ -178,6 +178,7 @@ export function solids() {
   for (const [x, y] of LANTERNS) out.push(rect(x - 2, y - 3, x + 2, y));
   for (const [x, y] of STAKES) out.push(rect(x - 3, y - 3, x + 3, y));
   out.push(rect(PYRE[0] - 18, PYRE[1] - 12, PYRE[0] + 18, PYRE[1]));
+  out.push(rect(WELL.x - 26, WELL.y - 16, WELL.x + 26, WELL.y + 2), rect(WELL.x - 26, WELL.y + 2, WELL.x - 12, WELL.y + 16), rect(WELL.x + 12, WELL.y + 2, WELL.x + 26, WELL.y + 16)); // the well's coping, open at its gap
   return out;
 }
 /** The shortcuts' openings, closed (room px x, y, w, h). */
@@ -204,7 +205,8 @@ paint(CAMP[0] - 45, CAMP[1] - 45, CAMP[2] + 45, CAMP[3] + 45, (i, x, y) => { if 
 for (const [x0, y0, x1, y1] of PAVED) paint(x0, y0, x1, y1, (i, x, y) => { const e = Math.min(x - x0, x1 - x, y - y0, y1 - y); if (e > 7 * vn(x / 5, y / 5, 13) - 1 || y < y0 + 2) kind[i] = 2; }); // broken at its edges
 for (const p of DECKS) paint(...p, (i) => (kind[i] = 2));
 /** Room px (x, y) clear of paths and paving by `m`. */
-const clear = (x, y, m) => { for (let j = -m; j <= m; j += 2) for (let i = -m; i <= m; i += 2) { const X = x + i, Y = y + j; if (X < 0 || Y < 0 || X >= RW || Y >= RH || kind[Y * RW + X] === 1 || kind[Y * RW + X] === 2) return false; } return true; };
+let kindC = kind; // what clear() reads: the floor as it was before the ways down were laid (below)
+const clear = (x, y, m) => { for (let j = -m; j <= m; j += 2) for (let i = -m; i <= m; i += 2) { const X = x + i, Y = y + j; if (X < 0 || Y < 0 || X >= RW || Y >= RH || kindC[Y * RW + X] === 1 || kindC[Y * RW + X] === 2) return false; } return true; };
 
 // ---------- props on the floor: graves in their blocks, sarcophagi, statues, rubble, broken pillars ----------
 // Props with footprints (x: middle, y: feet line, w x h room px).
@@ -235,14 +237,17 @@ for (let x = 70; x < RW - 60; x += 60 + 30 * h2(x, 0, 91)) {
   if (ARCHES.some((a) => Math.abs(x - a.x) < 100) || [[1330, 1620], [1780, 1980], [2570, 2670], [3470, 3650]].some(([a, b]) => x > a && x < b)) continue;
   TALUS.push([Math.round(x), Math.round(north(x)), Math.round(14 + 10 * h2(x, 1, 91))]);
 }
+// What taken() sees: the zone as it was before the ways down were laid (below), so its random graves, skulls and bones
+// fall where they were baked.
+const BEFORE = { doors: Object.values(DOORS), gates: [...GATES], facades: [...FACADES], props: [...PROPS], braziers: [...BRAZIERS], caches: [...CACHES] };
 const taken = (x, y, m) => {
   const near = (x0, y0, x1, y1) => x > x0 - m && x < x1 + m && y > y0 - m && y < y1 + m;
   return pit(x, y) || pit(x, y + 8) || pit(x, y - 8) || rock(x, y - 20) || rock(x, y + 12) || WALLS.some((w) => near(w.x0, w.y0 - 30, w.x1, w.y1 + 10))
-    || FACADES.some((f) => near(f.x0, f.y0, f.x1, DOORS[f.door].y + 40)) || MAUS.some(([mx, my, w, d]) => near(mx - w / 2, my - d - 20, mx + w / 2, my + 6))
+    || BEFORE.facades.some((f) => near(f.x0, f.y0, f.x1, DOORS[f.door].y + 40)) || MAUS.some(([mx, my, w, d]) => near(mx - w / 2, my - d - 20, mx + w / 2, my + 6))
     || COLS.some(([cx, cy, r]) => near(cx - r, cy - r, cx + r, cy + 6)) || TENTS.some(([tx, ty]) => near(tx - 36, ty - 50, tx + 36, ty + 6)) || near(...CAMP)
-    || PROPS.some((o) => near(o.x - o.w / 2, o.y - o.h - 16, o.x + o.w / 2, o.y + 6)) || Object.values(DOORS).some((d) => Math.hypot(d.x - x, d.y - y) < 70)
-    || GATES.some((g) => near(g.x0 - 40, g.y0 - 40, g.x1 + 40, g.y1 + 50)) || BRAZIERS.some(([bx, by]) => Math.hypot(bx - x, by - y) < 18)
-    || SUNHOLES.some(([sx, sy, a]) => Math.hypot(sx - x, sy - y) < a + 30) || STAKES.some(([sx, sy]) => Math.hypot(sx - x, sy - y) < 16) || CACHES.some(([cx, cy]) => Math.hypot(cx - x, cy - y) < 24);
+    || BEFORE.props.some((o) => near(o.x - o.w / 2, o.y - o.h - 16, o.x + o.w / 2, o.y + 6)) || BEFORE.doors.some((d) => Math.hypot(d.x - x, d.y - y) < 70)
+    || BEFORE.gates.some((g) => near(g.x0 - 40, g.y0 - 40, g.x1 + 40, g.y1 + 50)) || BEFORE.braziers.some(([bx, by]) => Math.hypot(bx - x, by - y) < 18)
+    || SUNHOLES.some(([sx, sy, a]) => Math.hypot(sx - x, sy - y) < a + 30) || STAKES.some(([sx, sy]) => Math.hypot(sx - x, sy - y) < 16) || BEFORE.caches.some(([cx, cy]) => Math.hypot(cx - x, cy - y) < 24);
 };
 // Each grave: x, y (its feet line), kind, footprint w x h, seed.
 // Clearings and clusters (a slow noise over the blocks), jittered, sized +-25 %, some sunk or broken.
@@ -259,6 +264,23 @@ for (const [x0, y0, x1, y1, sx, sy] of BLOCKS) for (let y = y0; y < y1; y += sy)
 // Candles at the near field's graves, two or three to a screen (the near side is where they still come to mourn).
 const GRAVE_CANDLES = [];
 for (const g of GRAVES) if (g.x < 1380 && g.kind !== 'tomb' && h2(g.seed, 7, 3) < 0.2 && [...CANDLES, ...GRAVE_CANDLES].every(([x, y]) => Math.hypot(x - g.x, y - g.y) > 110)) GRAVE_CANDLES.push([g.x + 8, g.y + 5, 2 + (g.seed % 2)]);
+
+// ---------- the ways down to les catacombes (docs/extraction.md §4) ----------
+// The well at the far end (the path from the camp's east gate ends at it), whose rungs go down; le caveau in the near
+// field, a vault against the cliff whose stairs come up from the catacombs, its iron gate raised from below (the
+// shortcut). Laid after the graves were drawn (BEFORE, kindC), so the rest of the zone stays as baked; the ground they
+// stand on is cleared of graves, skulls and bones (aside()).
+export const WELL = { x: 3700, y: 1192 };
+const ASIDE = [[WELL.x, WELL.y + 4, 64], [720, 128, 74]]; // x, y, r
+const aside = (x, y) => ASIDE.some(([ax, ay, r]) => Math.hypot(ax - x, (ay - y) * 1.4) < r);
+for (const list of [GRAVES, GRAVE_CANDLES, TALUS]) for (let k = list.length - 1; k >= 0; k--) { const g = list[k]; if (aside(g.x ?? g[0], g.y ?? g[1])) list.splice(k, 1); }
+Object.assign(DOORS, { puits: { x: WELL.x, y: WELL.y + 16, w: 24, name: 'Le puits', well: true }, caveau: { x: 720, y: 150, w: 28, name: 'Le caveau' } });
+GATES.push({ id: 'caveau', name: 'La grille du caveau', x0: 704, x1: 736, y0: 136, y1: 150, side: 1, lever: null, arch: true });
+FACADES.push({ door: 'caveau', kind: 'vault', x0: 684, y0: 94, x1: 756, h: 150 });
+BRAZIERS.push([3652, 1226]);
+CANDLES.push([694, 156, 2], [744, 158, 3], [3730, 1222, 2]);
+kindC = kind.slice();
+paint(696, 150, 744, 178, (i, x, y) => { if (Math.min(x - 696, 744 - x, 178 - y) > 6 * vn(x / 5, y / 5, 13) - 1 || y < 152) kind[i] = 2; }); // the vault's step, its paving broken
 for (const g of GRAVES) if (g.kind !== 'tomb') paint(g.x - 14, g.y, g.x + 14, g.y + 24, (i, x, y) => {
   const dx = (x - g.x) / (8 * g.s), dy = (y - g.y - 9 * g.s) / (7 * g.s), v = 1 - dx * dx - dy * dy + (vn(x / 3, y / 3, g.seed) - 0.5) * 0.5;
   if (v > 0 && kind[i] === 0) mound[i] = Math.max(mound[i], Math.min(255, v * 300)); // a low dome
@@ -357,6 +379,7 @@ function facade(f) {
     if (f.kind === 'crypt') return Hh + 44 * (1 - Math.abs(y - yc) / hd);
     if (f.kind === 'church') return Hh + 70 * (1 - u / half) - (x > X0 + half * 1.3 ? 50 * clamp((x - X0 - half * 1.3) / 50) * (0.6 + 0.4 * vn(x / 9, y / 9, 3)) : 0); // fallen in on its east side
     if (f.kind === 'chapel') return Hh + 80 * clamp(1 - u / half) + (u < 14 && y > YF - 34 ? 60 : 0); // and its bell-cote over the door
+    if (f.kind === 'vault') return Hh + 46 * clamp(1 - Math.max(u / half, Math.abs(y - yc) / hd)); // le caveau: a stone pyramid
     return Hh - 8 * vn(x / 9, 0, 3);
   };
   const door = (x, y, z) => { const u = x - cx; return Math.min(hw - Math.abs(u), z - (y < YF - 4 ? -(YF - y) * 0.6 : 0), archTop(u, hw, dz0, dr) - z, y - YR); };
@@ -461,6 +484,36 @@ function pyre() {
     bounds: [-40, -40, 0, 40, 40, 36], step: 0.6,
   };
 }
+/** The well at the far end: a round coping broken open on its south side, where iron rungs go down into the dark; a
+ *  winch on two posts, its chain hanging down the shaft. */
+function wellHead() {
+  const R1 = 52, R0 = 38, Z = 26, gap = (x, y) => y > 0 && Math.abs(x) < 24;
+  return {
+    sdf: (x, y, z) => {
+      const r = Math.hypot(x, y * 1.0);
+      let d = Math.max(Math.abs(r - (R0 + R1) / 2) - (R1 - R0) / 2, Math.abs(z - Z / 2) - Z / 2) - 1.2 * (vn3(x * 0.2, y * 0.2, z * 0.2, 4) - 0.5);
+      if (gap(x, y)) d = Math.max(d, 24 - Math.abs(x)); // broken open
+      d = Math.min(d, Math.max(r - R0 - 1, Math.abs(z - 1) - 1)); // the dark down the shaft
+      for (const s of [-1, 1]) d = Math.min(d, sdBox(x, y, z, s * (R1 - 4), -6, 48, 3, 3, 48, 0.6)); // the winch's posts
+      d = Math.min(d, sdBox(x, y, z, 0, -6, 92, R1 - 2, 2.4, 2.4, 0.8), sdBox(x, y, z, 0, -6, 92, 7, 7, 7, 1)); // its beam, its drum
+      d = Math.min(d, Math.max(Math.hypot(x, y + 6) - 0.9, z - 92, -z + 4)); // its chain
+      for (let zz = 4; zz < 26; zz += 7) d = Math.min(d, sdBox(x, y, z, 0, R0 + 2, zz, 11, 1, 1, 0.3)); // the rungs, down the gap
+      return d;
+    },
+    mat: (m, x, y, z, nx, ny, nz) => {
+      const r = Math.hypot(x, y);
+      if (r < R0 + 0.5 && z < 2.5) return { alb: C.void, noAO: true }; // the dark down the shaft
+      if (z > 30 || Math.abs(Math.hypot(x, y + 6)) < 1.5) return z > 84 && Math.abs(x) < 10 ? ironMat(x, y, z) : z > 30 && Math.abs(x) > R1 - 9 ? { alb: mix(C.wood, C.woodD, vn3(x, y, z * 0.2, 3)) } : ironMat(x, y, z);
+      if (y > R0 && Math.abs(x) < 12) return ironMat(x, y, z);
+      let c = stone3(x, y, z, mul(C.stB, 1.05), 9);
+      if (r < R0 + 3 && nz < 0.5) c = mul(c, clamp(z / Z) * 0.8); // its inner wall sinking into the dark
+      if (nz > 0.6) c = mix(c, C.grime, 0.3);
+      return { alb: mix(c, C.moss, clamp(vn3(x * 0.1, y * 0.1, z * 0.1, 5) - 0.55) * 1.2), spec: 0.04 };
+    },
+    bounds: [-R1 - 4, -R1 - 4, -1, R1 + 4, R1 + 4, 104], step: 0.6,
+  };
+}
+
 // ---------- the scene ----------
 const S = stage();
 const { add, light } = S;
@@ -508,6 +561,8 @@ for (const o of PROPS) {
 for (const [x, y, r] of TALUS) add('rubble', rubble(x % 31, wx(r) * 0.8, 18), [wx(x), wy(y), 0], h2(x, 0, 3) * 6);
 for (const [x, y] of BRAZIERS) add('brazier', brazier2(true), [wx(x), wy(y - 4), 0]);
 add('pyre', pyre(), [wx(PYRE[0]), wy(PYRE[1] - 6), 0]);
+add('well', wellHead(), [wx(WELL.x), wy(WELL.y), 0]);
+for (const [x, y] of [[3672, 1214], [3724, 1170], [3746, 1206]]) add('skull', skull(), [wx(x), wy(y), 0], x % 6);
 for (const [x, y] of LANTERNS) add('lantern', pole(120), [wx(x), wy(y), 0]);
 for (const [x, y] of STAKES) { add('stake', charred(stake(78, x % 7)), [wx(x), wy(y), 0]); add('skull', skull(), [wx(x + 4), wy(y + 3), 0], 2); }
 /** A group of `n` candles at room px (x, y), as an object of its own (culled with the chunks). */
@@ -517,9 +572,9 @@ for (const [x, y] of MAUS) { candles(x - 18, y + 3, 2); candles(x + 12, y + 3, 1
 // Skulls on the floor, most of them in the middle's north band; bones; skulls and bones fallen at the walls' feet.
 for (let k = 0; k < 250; k++) {
   const mid = k >= 60, x = mid ? 1450 + R() * 1140 : 60 + R() * (RW - 120), y = mid ? 100 + R() * 590 : 120 + R() * (RH - 200);
-  if (!taken(x, y, 4) && clear(x | 0, y | 0, 2)) add('skull', skull(), [wx(x), wy(y), 0], R() * 6);
+  if (!taken(x, y, 4) && clear(x | 0, y | 0, 2)) { const yaw = R() * 6; if (!aside(x, y)) add('skull', skull(), [wx(x), wy(y), 0], yaw); }
 }
-for (let k = 0; k < 24; k++) { const x = 60 + R() * (RW - 120), y = 120 + R() * (RH - 200); if (!taken(x, y, 12) && clear(x | 0, y | 0, 6)) add('bones', pitBones(k + 3), [wx(x), wy(y), 0], R() * 6); }
+for (let k = 0; k < 24; k++) { const x = 60 + R() * (RW - 120), y = 120 + R() * (RH - 200); if (!taken(x, y, 12) && clear(x | 0, y | 0, 6)) { const yaw = R() * 6; if (!aside(x, y)) add('bones', pitBones(k + 3), [wx(x), wy(y), 0], yaw); } }
 add('bones', pitBones(9), [wx(2655), wy(342), 0], 0.4); // in the Dawn, their shadows long
 const fallen = (x, y, n) => { if (!pit(x, y) && !rock(x, y) && Object.values(DOORS).every((d) => Math.hypot(d.x - x, d.y - y) > 50)) for (let k = 0; k < n; k++) add('skull', skull(), [wx(x + (R() - 0.5) * 10), wy(y + (R() - 0.5) * 4), 0], R() * 6); };
 for (const w of WALLS.filter((w) => w.h > 70 || w.end)) {
@@ -547,7 +602,7 @@ for (const [x, y, n] of CANDLES) light({ p: [wx(x + n * 1.5), wy(y) + 2, 16], c:
 for (const [x, y, n] of GRAVE_CANDLES) light({ p: [wx(x + n * 1.5), wy(y) + 2, 16], c: CANDLE, I: 0.6 + 0.4 * n, r0: 18, R: 160, soft: 4, pad: 3, haze: 0.01, hazeR: 3, skip: ['candles'] });
 for (const [x, y] of MAUS) light({ p: [wx(x), wy(y + 3) + 2, 16], c: CANDLE, I: 1.4, r0: 18, R: 180, soft: 4, pad: 3, haze: 0.01, hazeR: 3, skip: ['candles'] });
 for (const [x, y] of LANTERNS) light({ p: [wx(x), wy(y), 124], c: ORDER, I: 6, r0: 30, R: 300, soft: 6, pad: 6, haze: 0.012, hazeR: 5, skip: ['lantern'] });
-for (const d of Object.values(DOORS)) light({ p: [wx(d.x), wy(d.y - RECESS - 6), 26], c: CANDLE, I: 1.4, r0: 16, R: 160, soft: 4, pad: 4 }); // a glow deep in each doorway
+for (const d of Object.values(DOORS)) if (!d.well) light({ p: [wx(d.x), wy(d.y - RECESS - 6), 26], c: CANDLE, I: 1.4, r0: 16, R: 160, soft: 4, pad: 4 }); // a glow deep in each doorway
 for (const [x, y] of MOONHOLES) light({ p: [wx(x), wy(y), 30], c: MOONC, I: 0.3, r0: 60, R: 260, noShadow: true, noEnv: true }); // what a moonlit patch throws back
 
 const env = ground(floorAt, (X, Y) => pit(X, Y, 1));
