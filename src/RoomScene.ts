@@ -1569,8 +1569,8 @@ export class RoomScene extends Phaser.Scene {
     if (z === 'catacombs' && nec && way.length) {
       const end = way[way.length - 1], ups = Zone.ups(z), k = ups.reduce((b, d, i) => (Math.hypot(d.x - end.x, d.y - end.y) < Math.hypot(ups[b].x - end.x, ups[b].y - end.y) ? i : b), 0);
       const top = Zone.exits('necropolis')[parents('catacombs')[k].exit], out = { x: top.x, y: top.y + 14 }, ng = homeward('necropolis', Save.data.shortcuts);
-      const home = wayBack(ng.steps, ng.cols, out, ng.links);
-      above = (n) => lair(home, out, 0, false, T.battue.door, n);
+      const home = wayBack(ng.steps, ng.cols, out, ng.links), laid = new Set(nec.foes.flatMap((f) => (f.pack ? [f.pack] : []))).size; // those already up there
+      above = (n) => lair(home, out, T.battue.up, false, T.battue.door, laid + n); // a little way from the door: he sees them coming out
     }
     const now = loose(exp, way, from, T.battue.packs, T.battue.far, T.battue.door, chokes(z), above);
     for (const { at, kinds, up } of now) kinds.forEach((kind, i) => {

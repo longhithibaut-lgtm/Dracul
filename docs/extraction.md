@@ -1,6 +1,6 @@
 # Dracul : direction « extraction × ARPG » (document de travail)
 
-Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26) ; puis les objets et le sac (§6, 2026-10-26). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
+Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26) ; puis les objets et le sac (§6, 2026-10-26) ; puis les catacombes, deuxième zone ouverte (§4, 2026-10-27). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
 lore (`docs/lore.md`) ou sont des choix ouverts.
 
 ## 1. L'idée en une phrase
@@ -48,7 +48,7 @@ Du plus proche au plus lointain du refuge, donc du plus facile au plus dur :
 |---|---|---|---|
 | 0 | Le refuge | sûr | aucun |
 | 1 | La nécropole | tombes, ossuaires, goules | goules, Amas |
-| 2 | Les catacombes | galeries, rats, la cheffe du Rat prisonnière | goules, chiens, pénitents |
+| 2 | Les catacombes | galeries, rats, la cheffe du Rat prisonnière | goules, chiens, pénitents (codées sous la nécropole, anneaux 3 et 4 : ci-dessous) |
 | 3 | La crypte de l'Ordre | gardée, lumière des lanternes | arbalétriers, prêtres, purificateurs |
 | 4 | Le cloître et le bourg | surface, soleil de l'Aube | inquisiteurs, sonneurs, chiens |
 | 5 | La cathédrale et le clocher | le cœur de l'Ordre | tout, plus le Grand Inquisiteur |
@@ -115,6 +115,71 @@ directions ; les salles déjà peintes deviennent des **intérieurs** dont on pa
   vue ; une meute sur deux tient l'escalier.
 - **Technique** : la caverne est cuite hors ligne comme les salles, en **morceaux d'un écran** (480 × 270) chargés
   autour de la caméra et déchargés derrière elle ; murs, fosses et accessoires sont des données.
+
+### Les catacombes, deuxième zone ouverte *(demande de l'utilisateur, 2026-10-27)*
+Sous la nécropole, environ **6 × 4 écrans** (2880 × 1080 px de salle) : un **réseau de galeries étroites** creusées
+dans l'os et la roche (carrefours, culs-de-sac, niches d'ossuaire, eau noire, nids de rats, passages éboulés) qui
+s'ouvre sur **deux grandes salles**, **le nid** des goules et **la prison de Vesna** (l'arène du futur boss, au plus
+profond). Moins ouvert que la nécropole : embuscades, ombre partout, peu de lumière (bougies des patrouilles de
+l'Ordre, lune tombée par les puits, pourriture phosphorescente). Plan (x vers l'est) :
+
+```
+ N  roche ════════════════════════════════════════════════════════════════════════════════════
+     ▲ escalier          ┌ cul-de-sac           ┌ cul-de-sac (niches)                       ▲ échelle du puits
+    (C) du caveau ═ galerie ouest ═╗══ (G) grande ═ galerie de l'ossuaire ═ (c) croisée ═══ (P) fond du puits
+     ║ grille, treuil  └ éboulé    ║  croisée (lanterne, bûcher, lune)        est    ║        (lune, arrivée)
+     ║                             ║    ║   ╲                                         ║
+     ║ boyau          galerie du nid    ║    ╲                                   nids de rats ═ éboulis
+     ║ des rats ╔══════════════════╝    ║     (E) eaux noires ═════════════════════╝
+   ┌─╨──────────╨──┐                    ║      (lac noir, cercueil noyé)    ┌──────────────────────────┐
+   │    LE NID     │                    ║                                   │   PRISON DE VESNA        │
+   │ (goules, Amas,│                    ║                                   │ reliquaire scellé ▣      │
+   │  amas d'os)   │                    ║                                   │   médaillon              │
+   └──────────╥────┘                    ║                                   └═══ mur d'os ═╡grille╞════┘
+              ╚═══ galerie basse ═══ (b) croisée basse ═══ galerie basse ═══ antichambre (braseros, lanterne)
+ S  roche ════════════════════════════════════════════════════════════════════════════════════
+        anneau 3 au nord (près du puits, du caveau)          anneau 4 : le nid, les eaux noires, le sud, la prison
+```
+
+- **L'accès** : **le puits** au fond de la nécropole (coin sud-est, au bout du chemin qui part de la porte est du camp de
+  l'Ordre) : une margelle ronde ouverte au sud, des échelons de fer qui descendent, un treuil ; on y entre comme dans une
+  porte, fondu au noir, et l'on arrive **au pied de l'échelle**, au fond du puits des catacombes, sous un rai de lune.
+  En remontant l'échelle, on ressort au puits. Il faut donc traverser toute la nécropole.
+- **Le raccourci, la grille du caveau** : au nord-ouest des catacombes, un escalier remonte vers **le caveau**, un petit
+  mausolée adossé à la falaise de la nécropole, à 500 px de l'escalier du refuge ; une grille ferme le pied de
+  l'escalier, levée **seulement d'en bas** (treuil), ouverte pour toujours (`Save.shortcuts` : `caveau`) ; côté nécropole
+  la grille du caveau est « fermée de l'autre côté ». Ensuite, le caveau est une deuxième porte de la nécropole vers les
+  catacombes. Il ne court-circuite pas l'intérieur : du caveau à la prison, il reste tout le nid et la galerie basse.
+  Retour mesuré du reliquaire jusqu'à l'escalier du refuge (pas de la grille de marche de 8 px) : 795 par le puits, 389
+  par le caveau.
+- **Points d'intérêt** : le fond du puits (lune, ossements de ceux qui sont tombés, une cache), la croisée est
+  (sarcophage), la galerie de l'ossuaire (murs de crânes, niches aux bougies, cul-de-sac au coffre), la grande croisée
+  (croix de l'Ordre, brasero, une lanterne dont la flaque brûle, un trou dans le sol, lune), la galerie ouest (deux
+  culs-de-sac, l'un éboulé), l'escalier du caveau (grille, treuil, cercueils), le boyau des rats, **le nid** (amas de
+  restes couvert de crânes, cadavres rongés, cercueils éventrés, sang traîné, pourriture qui luit, un puits dans le
+  noir), les eaux noires (lac infranchissable qu'on contourne, cercueil noyé, lune), les nids de rats et leur passage
+  éboulé, la croisée basse, la galerie basse (niches, sarcophage), l'antichambre (braseros, bannières, coffre,
+  lanterne), **la prison de Vesna**.
+- **La prison de Vesna** (fermée pour l'instant) : une salle dallée de l'Ordre (médaillon gravé, piliers brisés,
+  braseros), fermée au sud par un mur d'os où s'ouvre **une grille** (`GATES` id `prison`, `arena: true` : levée tant
+  qu'aucun combat ne la referme ; ses images de fermeture sont cuites) ; contre le mur de crânes du nord, **le reliquaire**
+  (cage de fer sur une estrade, coffre doré scellé de cire rouge, chaînes en croix, le signe du Rat sur une plaque
+  d'argent). F devant lui : « Le reliquaire est scellé. ». Crochets pour le boss : `ARENA` (le rectangle de l'arène),
+  `RELIQUARY` (son pied, la place où l'on parle), la grille `prison` ; le secteur `prison` n'a aucun groupe.
+- **Secteurs** (premier qui contient le point) : puits, escalier (aucun groupe : des pauses sûres), prison (aucun),
+  galeries-est 2, croisée 2, galeries-ouest 2 (anneau 3) ; nid 4, eaux-noires 2, rats 1, galerie-basse 3 (anneau 4).
+  Réserves propres aux catacombes (`T.expedition.catacombs`) : goules et Amas surtout, chiens et pénitents de l'Ordre qui
+  chassent là, un prêtre, un Inquisiteur au plus profond. Des **rats** vivent autour de leurs nids et fuient le héros.
+  17 caches (1 ou 2 tirées par secteur), objets selon l'anneau (`T.items`).
+- **La battue** : sur le chemin du retour vers la sortie la plus proche (le puits, ou le caveau s'il est levé), aux
+  **passages étroits** des catacombes (`CHOKES` : la galerie du puits, l'ossuaire, entre la grande croisée et les eaux
+  noires, la galerie du nid, entre les eaux noires et la croisée basse, la galerie basse, la galerie ouest, le boyau
+  des rats) ; **une meute sur deux attend là-haut dans la nécropole**, sur le chemin du refuge depuis la porte par
+  laquelle il remontera (à 120 px au moins de cette porte, `T.battue.up`).
+- **Technique** : la même chaîne que la nécropole, généralisée (`tools/art/zone.gen.mjs --zone=catacombs`,
+  `src/zone.ts`, `src/world.ts` : `ZONES`, deux zones, leurs sorties et leurs voies de remontée). La roche est un seul
+  champ de hauteur sur le contour du sol : basse là où une galerie la longe au nord (elle ne cache jamais une galerie),
+  haute là où sa face regarde la caméra, talutée sur ses flancs.
 
 ## 5. Ennemis et niveaux cachés
 

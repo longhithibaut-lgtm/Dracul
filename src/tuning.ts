@@ -301,10 +301,12 @@ export const T = {
   // first point of it at least `far` px from him (out of sight; from a room, from its door), every other pack before the
   // refuge's stairs (`door` walk cells short of them). The k-th pack loosed in an expedition is `packs[k - 1]` (the last
   // repeats): hounds first, then an Inquisiteur with his. Too near the refuge for that, it waits until he is farther.
+  // Down in the catacombs, the packs wait at their narrow ways, every other one up in the necropolis on his way home.
   battue: {
     every: 80,
     packs: [['hound', 'hound'], ['hound', 'hound', 'hound'], ['inquisitor', 'hound', 'hound']],
     far: 300, door: 8,
+    up: 120, // from the catacombs, every other pack waits up in the necropolis, this far at least from the door he comes up by
   },
 
   // Le Rongé, the refuge's merchant (docs/lore.md), crouched by the basin (refuge.ts RONGE): F within `talk` of him

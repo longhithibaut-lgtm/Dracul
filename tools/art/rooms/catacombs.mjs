@@ -324,7 +324,7 @@ function doorway(d, kind) {
     sdf: (x, y, z) => {
       const u = x - cx;
       let s = sdBox(x, y, z, cx, (YB + YF) / 2 - 2, top / 2, hw + 22, (YF - YB) / 2 + 3, top / 2, 1);
-      s = Math.max(s, -Math.max(Math.min(hw - Math.abs(u), archTop(u, hw, 62, R0) - z, YF + 10 - y), -1e9)); // the doorway
+      s = Math.max(s, Math.min(hw - Math.abs(u), archTop(u, hw, 62, R0) - z, YF + 10 - y)); // the doorway, hollow
       if (kind === 'well') for (let zz = 16; zz < 140; zz += 18) s = Math.min(s, sdBox(x, y, z, cx, YB + 4, zz, hw * 0.55, 1.2, 1.2, 0.4)); // its rungs
       return s;
     },

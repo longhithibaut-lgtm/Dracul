@@ -324,7 +324,7 @@ describe('les catacombes', () => {
     const P = T.battue.packs, hero = Cat.RELIQUARY.at, way = wayBack(shut.steps, cols, hero), out = below(Zone.DOORS.puits);
     const up = wayBack(nec.steps, nec.cols, out), exp = expedition(0);
     exp.packs = 4;
-    const now = loose(exp, way, hero, P, T.battue.far, T.battue.door, chokes('catacombs'), (k) => lair(up, out, 0, false, T.battue.door, k));
+    const now = loose(exp, way, hero, P, T.battue.far, T.battue.door, chokes('catacombs'), (k) => lair(up, out, T.battue.up, false, T.battue.door, k));
     expect(now.map((p) => !!p.up)).toEqual([false, true, false, true]);
     const down = now.filter((p) => !p.up);
     for (const p of down) expect(Math.hypot(p.at.x - hero.x, p.at.y - hero.y)).toBeGreaterThanOrEqual(T.battue.far);
