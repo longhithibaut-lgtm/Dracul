@@ -22,6 +22,7 @@ import * as Shop from './shop.ts';
 import * as Ronge from './ronge.ts';
 import * as Zone from './zone.ts';
 import * as Items from './items.ts';
+import * as Cat from './catacombs.data.ts';
 import * as Satchel from './satchel.ts';
 import { WORLD, ZONES, areaAt, chokes, expedition, galleryOpen, go, homeward, isZone, lair, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState, type ZoneId } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
@@ -112,6 +113,7 @@ export class RoomScene extends Phaser.Scene {
   private passage?: { x: number; y: number }; // out of the zone's gallery: the mouth he comes out of
   private passedAt = -1e9; // when he last came out of it: its mouths take him again a while later only
   private rats: Rat[] = [];
+  private vermin: { s: Phaser.GameObjects.Sprite; home: { x: number; y: number }; heading: number; turnAt: number }[] = []; // the catacombs' rats, about their nests
   // La Nuée: the hero a swarm until swarmUntil; when each enemy may be bitten again.
   private swarmUntil = 0;
   private swarmReadyAt = 0;
@@ -174,6 +176,7 @@ export class RoomScene extends Phaser.Scene {
     this.phase = data.entry !== undefined ? 'enter' : 'play';
     this.walk = isZone(this.layout) ? 1 : this.layout === 'refuge' || data.entry === -1 ? -1 : 1; // up from stairs, down from an exit (out of a zone's doors)
     this.rats = [];
+    this.vermin = [];
     this.glyph = undefined; // the last scene's is ended on its shutdown
     this.glyphReadyAt = this.castUntil = 0;
     this.nestAt = Infinity;
@@ -416,6 +419,7 @@ export class RoomScene extends Phaser.Scene {
       this.doorLabels();
       for (const g of zone.gates) if (!g.open) this.gateLabels(g);
       if (galleryOpen(Save.data.shortcuts)) this.galleryLabels();
+      if (zone.id === 'catacombs') { const a = Cat.RELIQUARY.at; this.labels.push({ at: a, l: Loot.label(this, a.x, a.y - 70, 'Le reliquaire (F)') }); }
     } else {
       r.exits.forEach((g, i) => W.ahead[i] && this.labels.push({ at: g, l: Loot.label(this, g.x, g.y - 4, WORLD[W.ahead[i]].name) }));
       this.labels.push({ at: { x: r.stairs.x, y: r.bounds.bottom }, l: Loot.label(this, r.stairs.x, r.bounds.bottom - 26, WORLD[back].name) });
@@ -569,6 +573,7 @@ export class RoomScene extends Phaser.Scene {
     const feet = this.hero.body!, b = this.room.bounds, near = (p: { x: number; y: number }, r: number) => Phaser.Math.Distance.BetweenPoints(feet.center, p) < r;
     const door = this.passage ?? this.zoneDoor(), zone = this.room.zone;
     zone?.chunks.stream(this.cameras.main.worldView);
+    this.scurry(time, delta);
     if (this.phase === 'enter' && (door ? feet.bottom > door.y + 6 : this.layout === 'refuge' ? feet.bottom < Refuge.STAIRS - 10 : this.walk < 0 ? feet.bottom < b.bottom - 16 : feet.top > b.top + 8)) {
       this.phase = 'play';
       if (this.passage) this.passedAt = time;
@@ -1368,7 +1373,7 @@ export class RoomScene extends Phaser.Scene {
       B.range, B.arcDeg, B.weakAt)?.e : undefined;
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.talk) return this.talk();
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.CHEST) < T.ronge.talk) return this.openSatchel('coffre');
-    if (!prey && (this.search() || this.lever() || this.take())) return true;
+    if (!prey && (this.search() || this.lever() || this.reliquary() || this.take())) return true;
     if (!fangs) return true; // the bite is not his yet (the Rongé will teach it)
     this.biteAt = now;
     if (!prey) {
@@ -1476,6 +1481,30 @@ export class RoomScene extends Phaser.Scene {
   }
 
   /** F by a cache: he stoops a moment and its blood spills out at his feet (picked up as he stands in it). */
+  /** F by Vesna's reliquary, in the catacombs' arena: sealed, for now (what keeps it comes later). */
+  private reliquary() {
+    if (this.room.zone?.id !== 'catacombs' || Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Cat.RELIQUARY.at) > T.blood.search + 12) return false;
+    Sfx.play(this, 'thunk');
+    this.hud.title('Le reliquaire est scellé.');
+    return true;
+  }
+
+  /** The catacombs' rats: a few about each nest, nosing here and there, scattering from the hero; never far from home. */
+  private scurry(time: number, delta: number) {
+    if (this.room.zone?.id === 'catacombs' && !this.vermin.length && this.navOpen.length)
+      for (const [x, y] of Cat.RATS) for (let k = 0; k < 3; k++) this.vermin.push({ s: Rats.rat(this, x + Phaser.Math.Between(-14, 14), y + Phaser.Math.Between(-6, 6)), home: { x, y }, heading: Math.random() * 6.3, turnAt: 0 });
+    const f = this.hero.body!.center;
+    for (const v of this.vermin) {
+      const away = Phaser.Math.Distance.BetweenPoints(v.s, f) < 70, home = Phaser.Math.Distance.BetweenPoints(v.s, v.home);
+      if (away) v.heading = Phaser.Math.Angle.Between(f.x, f.y, v.s.x, v.s.y);
+      else if (time > v.turnAt) [v.heading, v.turnAt] = [home > 60 ? Phaser.Math.Angle.Between(v.s.x, v.s.y, v.home.x, v.home.y) : Math.random() * 6.3, time + Phaser.Math.Between(300, 1200)];
+      const step = ((away ? T.gifts.ratSpeed : T.gifts.ratSpeed * 0.4) * delta) / 1000, to = { x: v.s.x + Math.cos(v.heading) * step, y: v.s.y + Math.sin(v.heading) * step };
+      if (this.navOpen[this.cellOf(to)] && Phaser.Math.Distance.BetweenPoints(to, v.home) < 110) v.s.setPosition(to.x, to.y);
+      else v.turnAt = 0; // a wall, too far: another way
+      Rats.scurry(v.s, v.heading, away || time % 1400 < 900 ? time : 0);
+    }
+  }
+
   private search() {
     const f = this.hero.body!.center, c = this.caches.find((c) => Phaser.Math.Distance.BetweenPoints(f, c) < T.blood.search);
     if (!c) return false;
