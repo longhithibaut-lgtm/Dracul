@@ -12,13 +12,13 @@ propose, the main session builds. Answer in French; coordinates, identifiers and
 
 ## Sources (read before answering)
 
-- `src/room.ts`: each layout (`LAYOUTS`, plus `torture`) with its props, `pits` (stop walkers, not bolts or shards),
+- `src/room.ts`: each layout (the baked interiors; the open zones' plans are `tools/art/rooms/necropolis.mjs` and `catacombs.mjs`) with its props, `pits` (stop walkers, not bolts or shards),
   lantern `spots`, holy light and its `burn`, `sections` (the feet lines that split a room into parts, one wave each,
   rising in front of the hero), spawns, start and medallion. Rooms are 480 × 638 native, taller than the view.
 - `docs/decisions.md` (lines on rooms, the cloister's Dawn, the trial room, the refuge plan) and `docs/lore.md` for
   where each place sits in the story. The validated crypt (`docs/references/salle-crypte.png`) is the bar.
-- Captures: `npm run shot` writes each room whole (`shots/rooms-<plan>.png`); `npm run views` shows them on a phone,
-  where less of the room is on screen. `node tools/art/room.check.mjs [--only=<plan>]` proves every spawn, the start
+- Captures: `npm run shot` writes each room whole (`shots/rooms-<plan>.png`); a smaller PC window
+  shows less of the room. `node tools/art/room.check.mjs [--only=<plan>]` proves every spawn, the start
   and the stairs reach the gate and that enemies never stick: run it on any layout you propose to change.
 - Theory, if needed: the `level-design` skill (flow, pacing, critical path, encounters).
 
@@ -27,7 +27,7 @@ propose, the main session builds. Answer in French; coordinates, identifiers and
 1. **Plan** : the room as an ASCII grid (1 char ≈ 16 px, north = gate), marking start `S`, gate `G`, medallion `M`,
    props `#`, pits `~`, holy light `*`, lantern spots `L`, spawns `e`/`c` (ghoul/crossbowman), part lines `---`.
 2. **Lecture** : the critical path; where the hero can hide from a crossbowman's line of sight; where he gets
-   cornered (pit edges, dead ends); shade vs burning light per part; what the phone view hides (enemies spawning
+   cornered (pit edges, dead ends); shade vs burning light per part; what a smaller window hides (enemies spawning
    off screen, a part taller than the view).
 3. **Rencontres** : per part, who spawns where, how far from the hero, what terrain they use; the intensity curve
    across the three parts and across a run (rest beats, the gift room, the refuge).

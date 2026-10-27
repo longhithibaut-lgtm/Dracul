@@ -16,9 +16,8 @@ You guard Dracul's visual identity. You review, the main session fixes. Answer i
 - The validated mockups it lists (`docs/maquettes/*.png`, open them with Read). Discarded or archived mockups are not
   a bar.
 - The last lines of `docs/decisions.md` for what is on trial right now.
-- What you review: the images you were given, or fresh ones. `npm run shot` (`shots/`), `npm run views`
-  (`shots/views/`, phone and other shapes), `node tools/art/torture.shots.mjs` (the trial room on the phone),
-  `node tools/art/rooms.shots.mjs` (the run's rooms), `node tools/art/foes.shots.mjs` (the Order's men and the Amas),
+- What you review: the images you were given, or fresh ones. `npm run shot` (`shots/`), `node tools/art/catacombs.shots.mjs`
+  (fixed views of the catacombs), `node tools/art/nourrice.shots.mjs` (the boss), `node tools/art/rooms.shots.mjs` (the run's rooms), `node tools/art/foes.shots.mjs` (the Order's men and the Amas),
   `node tools/art/fx.shots.mjs` (effects). Each header
   says what it writes. Never edit `tools/art/` or `docs/maquettes/`.
 
@@ -28,7 +27,7 @@ You guard Dracul's visual identity. You review, the main session fixes. Answer i
    allows it (the trial room's mixed pixel densities are allowed).
 2. **Palette et lumière** : colours outside the direction's palette, light from the wrong side, bright glows spent on
    what does not matter (they are for hits, dangers, interactions), what glows over the dark (eyes, flames, aim line).
-3. **Lisibilité** : hero, enemies and dangers readable at phone size (the views captures, not only 1080p), as a
+3. **Lisibilité** : hero, enemies and dangers readable at 1920×1080 and in a smaller PC window, as a
    silhouette; enemy wind-ups and holy light visible at a glance.
 4. **Écart avec la maquette** : put the capture next to its mockup and name what differs (material, contrast, scale,
    composition), most visible first.

@@ -13,11 +13,10 @@ You test Dracul and report; the main session fixes. Answer in French.
 
 Pick what the change touches; when unsure, all of the first block. Each script's header says what it does and writes.
 
-- `npm test` · `npm run build` · `npm run shot` (the bot plays rooms, fights, gifts; captures in `shots/`) ·
-  `npm run views` (phone sideways and upright, tablet, 21:9, a turn mid-fight that must keep the run).
+- `npm test` · `npm run build` · `npm run shot` (the bot plays rooms, fights, gifts; captures in `shots/`) (the full
+  extraction loop; `-- --only=catacombs` for the catacombs).
 - As relevant: `node tools/art/room.check.mjs` (layouts walkable, enemies never stuck), `node tools/sfx.check.mjs`
-  (sounds), `node tools/art/torture.shots.mjs` (the trial room on the phone, with its fps), `node tools/art/hud.frames.mjs
-  --out=shots/hud`. Capture scripts take a `--port`: give each concurrent run its own. Never edit `src/` or `tools/`.
+  (sounds), `node tools/art/foes.shots.mjs` (foes' dodge check), `node tools/art/nourrice.shots.mjs` (the boss). Capture scripts take a `--port`: give each concurrent run its own. Never edit `src/` or `tools/`.
 
 Then **look at the captures** (Read the PNGs): an exit code 0 with a black frame, a hero off screen, a missing HUD or
 cards cut by the screen edge is still a bug. `shots/` is not in git: to compare with before the change, copy it
@@ -45,5 +44,5 @@ Attendu / obtenu : … · Preuve : <capture, ligne de log> · Piste : <fichier:l
 Non testé : …
 ```
 
-A bug on the phone that the headless captures cannot show (feel, real touch, real fps) goes under « Non testé » with
-the step to try on the device; for frame rate, point to `/perf-profile`.
+A bug the headless captures cannot show (feel, real keyboard and mouse, real fps on a GPU) goes under « Non testé » with
+the step to try on the user's PC; for frame rate, point to `/perf-profile`.

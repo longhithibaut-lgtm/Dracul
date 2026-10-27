@@ -1,6 +1,6 @@
 ---
 name: patch-notes
-description: Write a short French « Quoi de neuf » of what changed in Dracul since the last publish to GitHub Pages, in the player's words, with what to try on the phone. Use after `sh scripts/pages.sh`, for "quoi de neuf", "notes de version", "qu'est-ce qui a changé", /patch-notes.
+description: Write a short French « Quoi de neuf » of what changed in Dracul since the last publish to GitHub Pages, in the player's words, with what to try on PC. Use after `sh scripts/pages.sh`, for "quoi de neuf", "notes de version", "qu'est-ce qui a changé", /patch-notes.
 argument-hint: "[commit ou date de départ, sinon la dernière publication]"
 ---
 
@@ -24,7 +24,7 @@ argument-hint: "[commit ou date de départ, sinon la dernière publication]"
 **Nouveau** : …
 **Changé** : …
 **Corrigé** : …
-**À essayer sur le téléphone** : 1. … 2. … (le plus risqué d'abord : contrôles, formes d'écran, fluidité)
+**À essayer** : 1. … 2. … (le plus risqué d'abord : contrôles, nouveaux lieux, fluidité)
 https://longhithibaut-lgtm.github.io/Dracul/
 ```
 
