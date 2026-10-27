@@ -1,6 +1,6 @@
 ---
 name: perf-profile
-description: Measure Dracul's frame time, room build time and hotspots in headless Chromium (before/after a change), find the likely costs in the code, and give the recipe to measure on the user's phone. Use for "ça rame", "saccades", "fps", "performance", "c'est lent sur le téléphone", /perf-profile.
+description: Measure Dracul's frame time, room build time and hotspots in headless Chromium (before/after a change), find the likely costs in the code, and give the recipe to measure on the user's PC. Use for "ça rame", "saccades", "fps", "performance", /perf-profile.
 argument-hint: "[salle (refuge|necropolis|catacombs|hall|nave|ossuary|chapel|cloister) ou changement à mesurer]"
 ---
 
