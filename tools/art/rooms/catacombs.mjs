@@ -23,33 +23,34 @@ const W = 2 * RW, VAULT = 320, HMAX = 92; // world units: the ceiling never seen
 const R = mulberry32(2417);
 
 // ---------- the plan (room px) ----------
-// Galleries: [width, polyline]. Chambers: ellipses x, y, rx, ry (a chamber's lobes listed together).
+// Galleries: [width, polyline, floor]. Chambers: ellipses x, y, rx, ry, floor (a chamber's lobes listed together). The
+// floor: g paved (flagstones, bones), d dug (packed earth, rubble), n le nid's filth, w the black water's shore, r the rats'.
 const WAYS = [
-  [56, [[2520, 205], [2380, 200], [2210, 210]]], // the well's bottom to the east crossroads
-  [52, [[2110, 205], [1960, 180], [1800, 172], [1640, 185], [1500, 240], [1440, 290]]], // the ossuary gallery
-  [42, [[1712, 180], [1722, 76]]], // its dead end north, niches all round
-  [48, [[1340, 296], [1150, 240], [960, 205], [720, 195], [520, 178], [380, 172]]], // the west gallery to the stairs up
-  [40, [[1040, 214], [1062, 92]]], // a dead end north
-  [40, [[700, 200], [690, 330]]], // a dead end south, fallen in
-  [34, [[262, 210], [218, 320], [262, 420], [360, 470]]], // the rat-run down to the nest
-  [50, [[1352, 362], [1160, 420], [960, 470], [830, 540]]], // the great crossroads to the nest
-  [46, [[1420, 378], [1440, 520]]], // the great crossroads down to the black water
-  [44, [[2160, 250], [2150, 370], [2092, 460]]], // the east crossroads down to the rats
-  [44, [[1700, 600], [1850, 568], [1990, 530]]], // the black water to the rats
-  [38, [[2140, 545], [2282, 560]]], // the rats' passage, fallen in
-  [46, [[1440, 730], [1440, 885]]], // the black water down to the low crossroads
-  [50, [[880, 768], [1080, 880], [1380, 930]]], // the nest to the low crossroads
-  [52, [[1480, 950], [1700, 1004], [1950, 1014], [2180, 1012]]], // the low gallery to the prison
+  [56, [[2520, 205], [2380, 200], [2210, 210]], 'g'], // the well's bottom to the east crossroads
+  [52, [[2110, 205], [1960, 180], [1800, 172], [1640, 185], [1500, 240], [1440, 290]], 'g'], // the ossuary gallery
+  [42, [[1712, 180], [1722, 76]], 'd'], // its dead end north, niches all round
+  [48, [[1340, 296], [1150, 240], [960, 205], [720, 195], [520, 178], [380, 172]], 'g'], // the west gallery to the stairs up
+  [40, [[1040, 214], [1062, 92]], 'd'], // a dead end north
+  [40, [[700, 200], [690, 330]], 'd'], // a dead end south, fallen in
+  [34, [[262, 210], [218, 320], [262, 420], [360, 470]], 'd'], // the rat-run down to the nest
+  [50, [[1352, 362], [1160, 420], [960, 470], [830, 540]], 'g'], // the great crossroads to the nest
+  [46, [[1420, 378], [1440, 520]], 'd'], // the great crossroads down to the black water
+  [44, [[2160, 250], [2150, 370], [2092, 460]], 'd'], // the east crossroads down to the rats
+  [44, [[1700, 600], [1850, 568], [1990, 530]], 'd'], // the black water to the rats
+  [38, [[2140, 545], [2282, 560]], 'd'], // the rats' passage, fallen in
+  [46, [[1440, 730], [1440, 885]], 'g'], // the black water down to the low crossroads
+  [50, [[880, 768], [1080, 880], [1380, 930]], 'g'], // the nest to the low crossroads
+  [52, [[1480, 950], [1700, 1004], [1950, 1014], [2180, 1012]], 'g'], // the low gallery to the prison
 ];
 const CHAMBERS = [
-  [2600, 200, 92, 66], // the well's bottom
-  [2160, 210, 54, 46], // the east crossroads
-  [1400, 320, 74, 60], // the great crossroads
-  [300, 170, 84, 56], // the stairs up, the shortcut
-  [610, 610, 250, 150], [450, 530, 120, 90], [790, 700, 150, 100], [540, 735, 150, 70], // le nid
-  [1530, 625, 200, 125], // the black water
-  [2060, 510, 110, 66], // the rats
-  [1440, 935, 56, 50], // the low crossroads
+  [2600, 200, 92, 66, 'g'], // the well's bottom
+  [2160, 210, 54, 46, 'g'], // the east crossroads
+  [1400, 320, 74, 60, 'g'], // the great crossroads
+  [300, 170, 84, 56, 'g'], // the stairs up, the shortcut
+  [610, 610, 250, 150, 'n'], [450, 530, 120, 90, 'n'], [790, 700, 150, 100, 'n'], [540, 735, 150, 70, 'n'], // le nid
+  [1530, 625, 200, 125, 'w'], // the black water
+  [2060, 510, 110, 66, 'r'], // the rats
+  [1440, 935, 56, 50, 'g'], // the low crossroads
 ];
 // La prison de Vesna (the arena, closed for now: its boss comes later), its south wall of bones, its antechamber.
 export const ARENA = [2100, 660, 2620, 960];
@@ -80,7 +81,7 @@ const OSSUARY = [[1440, 60, 2140, 260], [1690, 40, 1760, 200], [2100, 150, 2230,
 const inSpan = (X, Y, list = OSSUARY) => list.some(([x0, y0, x1, y1]) => X >= x0 && X < x1 && Y >= y0 && Y < y1);
 // ---------- the floor's outline ----------
 const N = RW * RH, floor = new Uint8Array(N);
-const SEGS = WAYS.flatMap(([w, pts]) => pts.slice(1).map((b, k) => [w, pts[k], b]));
+const SEGS = WAYS.flatMap(([w, pts, f]) => pts.slice(1).map((b, k) => [w, pts[k], b, f]));
 const noisy = (X, Y) => 7 * (fbm(X / 22, Y / 22, 3, 5) - 0.5) + 3 * (vn(X / 6, Y / 6, 6) - 0.5); // dug, never straight
 const nearDoor = (X, Y) => Math.min(...Object.values(DOORS).map((d) => Math.hypot(X - d.x, (Y - d.y) * 1.4)));
 /** How far room px (X, Y) lies outside the dug floor (< 0: on it), as the rock is cut: ragged but at the doors. */
@@ -196,8 +197,20 @@ function niche(x, y, z) {
 }
 
 // ---------- the floor's rasters ----------
-// kind: 0 dust, 1 flagstones, 2 black water, 3 its mud, 4 the nest's filth, 5 the rats' straw; trod: the patrols' path.
-const kind = new Uint8Array(N), blood = new Uint8Array(N), trod = new Uint8Array(N);
+// kind: 0 bare, 1 laid flagstones, 2 black water, 3 its mud, 4 the nest's filth, 5 the rats' straw; trod: the patrols'
+// path; area: what the floor is (FLOOR), the way or chamber a room px lies deepest in (its border ragged), the prison's.
+const kind = new Uint8Array(N), blood = new Uint8Array(N), dry = new Uint8Array(N), trod = new Uint8Array(N), area = new Uint8Array(N);
+const FLOOR = ['g', 'd', 'n', 'w', 'r', 'p'], G = 0, DUG = 1, NID = 2, SHORE = 3, RAT = 4, PRISON = 5;
+for (let Y = 0; Y < RH; Y++) for (let X = 0; X < RW; X++) {
+  const i = Y * RW + X;
+  if (!floor[i]) continue;
+  if (X > ARENA[0] - 14 && X < ARENA[2] + 14 && Y > ARENA[1] - 14) { area[i] = PRISON; continue; } // the Order's
+  const n = 16 * (fbm(X / 26, Y / 26, 3, 17) - 0.5);
+  let d = 1e9, f = 'g';
+  for (const [w, a, b, t] of SEGS) { const e = segDist(X, Y, a, b) - w / 2 + (t === 'g' ? n : 0); if (e < d) { d = e; f = t; } }
+  for (const [x, y, a, b, t] of CHAMBERS) { const e = (Math.hypot((X - x) / a, (Y - y) / b) - 1) * Math.min(a, b) + (t === 'g' ? n : 0); if (e < d) { d = e; f = t; } }
+  area[i] = FLOOR.indexOf(f);
+}
 const paint = (x0, y0, x1, y1, f) => { for (let y = Math.max(0, Math.floor(y0)); y < Math.min(RH, Math.ceil(y1)); y++) for (let x = Math.max(0, Math.floor(x0)); x < Math.min(RW, Math.ceil(x1)); x++) f(y * RW + x, x, y); };
 for (const [w, a, b] of SEGS) paint(Math.min(a[0], b[0]) - w, Math.min(a[1], b[1]) - w, Math.max(a[0], b[0]) + w, Math.max(a[1], b[1]) + w, (i, x, y) => {
   const d = segDist(x, y, a, b) - w * 0.16 - 4 * (vn(x / 9, y / 9, 31) - 0.5);
@@ -215,53 +228,324 @@ const DRAGS = [[[880, 500], [780, 560], [640, 630]], [[360, 470], [430, 510], [4
 for (const [px, py, sx, sy] of POOLS) paint(px - 3 * sx, py - 3 * sy, px + 3 * sx, py + 3 * sy, (i, x, y) => { blood[i] = Math.max(blood[i], 255 * stain(x, y, px, py, sx * 1.3, sy * 1.3, 0.85, px + py)); });
 for (const d of DRAGS) for (let k = 0; k < d.length - 1; k++) { const a = d[k], b = d[k + 1];
   paint(Math.min(a[0], b[0]) - 4, Math.min(a[1], b[1]) - 4, Math.max(a[0], b[0]) + 4, Math.max(a[1], b[1]) + 4, (i, x, y) => { const t = segDist(x, y, a, b); if (t < 2.6 && vn(x / 1.2, y / 1.2, 36 + k) > 0.3 + t / 6) blood[i] = Math.max(blood[i], 200); }); }
+// The prison's dried blood: the prisoners dragged from its gate to the reliquary, two heels' smears each (polylines).
+const TRAILS = [[[2350, 966], [2342, 910], [2338, 860], [2348, 800], [2358, 752]], [[2172, 1010], [2236, 990], [2300, 972], [2346, 966]], [[2140, 760], [2220, 748], [2300, 742]]];
+for (const t of TRAILS) for (let k = 0; k < t.length - 1; k++) { const a = t[k], b = t[k + 1];
+  paint(Math.min(a[0], b[0]) - 8, Math.min(a[1], b[1]) - 8, Math.max(a[0], b[0]) + 8, Math.max(a[1], b[1]) + 8, (i, x, y) => {
+    const d = segDist(x, y, a, b), s = Math.abs(d - 3.2) < 1.6 ? 1 : d < 5.5 ? 0.35 : 0; // two smears, a stain between
+    if (s && vn(x / 2.5, y / 9, 90 + k) > 0.32) dry[i] = Math.max(dry[i], 255 * s * clamp(1.15 - 0.25 * vn(x / 14, y / 14, 91)));
+  }); }
 // Phosphorescent rot where the dead lie thick: the nest, the rats, the low gallery, the black water's shore (x, y, r).
 const ROT = [[470, 600, 40], [700, 700, 46], [560, 470, 30], [820, 620, 30], [380, 690, 26], [2020, 490, 30], [2110, 545, 22], [1180, 900, 30], [1640, 990, 26], [1420, 590, 26], [1700, 690, 24], [990, 480, 18], [2260, 570, 18]];
 const rotAt = (X, Y) => { let k = 0; for (const [x, y, r] of ROT) { const d = Math.hypot(X - x, (Y - y) * 1.3) / r; if (d < 1.6) k = Math.max(k, clamp(1.2 - d) * clamp((fbm(X / 7, Y / 6, 3, x) - 0.48) * 4)); } return k; };
+// The prison's iron: drain grates in its floor, the rings its prisoners were chained to (room px); where wax ran.
+const GRATES = [[2230, 862], [2490, 862], [2360, 1018]], RINGS = [[2128, 712], [2128, 836], [2128, 930], [2592, 712], [2592, 836], [2592, 930], [2250, 792], [2472, 792]];
+const iron = (u, v, z) => { const r = ironMat(u, v, z); return { c: r.alb, spec: r.spec, gloss: r.gloss }; };
+let WAX; // the prison's candles (CANDLES, filled further on)
 
 // ---------- the floor ----------
+// Drawn in texel space (u = x, v = y * SN: one unit a texel, two screen px at 1080p, round on screen) with its forms two
+// texels across at the least: nothing finer than the game's pixel. The lantern (dark.ts) only sees the floor's tilt up
+// and down the screen, so its joints and hollows are darkened in the albedo too.
 const E = { dust: L('#403a31'), dustD: L('#29241d'), dustL: L('#625a4b'), bone: L('#6c6452'), mud: L('#1c1a14'), water: L('#05080a'), filth: L('#2a1c14'),
-  rag: L('#3e3428'), straw: L('#5e5032'), rot: L('#5a9a7a') };
+  rag: L('#3e3428'), straw: L('#5e5032'), rot: L('#5a9a7a'), earth: L('#3a3027'), earthD: L('#211a14'), joint: L('#110e0b'), gore: L('#3c0b08'),
+  flesh: L('#5e2b24'), fat: L('#7a6a4a'), hair: L('#140e0b'), linen: L('#4c4434'), wax: L('#a89a76'), scum: L('#4a4c3a'), salt: L('#6a6658') };
+/** The one thing of the s-texel cell round (u, v), there with chance p: (dx, dy) from its middle, its id, two hashes. */
+function item(u, v, s, p, seed) {
+  const cx = Math.floor(u / s), cy = Math.floor(v / s);
+  if (p <= 0 || h2(cx, cy, seed) >= p) return null;
+  return { dx: u - (cx + 0.3 + 0.4 * h2(cx, cy, seed + 1)) * s, dy: v - (cy + 0.3 + 0.4 * h2(cx, cy, seed + 2)) * s, id: cx * 7919 + cy, a: h2(cx, cy, seed + 3), b: h2(cx, cy, seed + 4) };
+}
+/** A bone lying `dx, dy` texels from its middle, turned `an`, `hl` long each way, `r` thick, its ends knobbed: its
+ *  albedo factor and normal; { shade } in its shadow south of it; null off it. */
+function boneAt(dx, dy, an, hl, r) {
+  const c = Math.cos(an), s = Math.sin(an), u = dx * c + dy * s, v = -dx * s + dy * c, t = Math.abs(u) / hl;
+  const rr = r * (t > 0.8 ? 1 + (t - 0.8) * 1.2 : 1), d = Math.hypot(Math.max(0, Math.abs(u) - hl), v);
+  if (d > rr) return d < rr + 1.4 && dy > 0 ? { shade: true } : null;
+  const q = clamp(v / rr, -1, 1);
+  return { k: 1 - 0.3 * q * q, N: [-s * q * 0.8, c * q * 0.8, 1], end: t };
+}
+/** A stone `dx, dy` texels from its middle, `r` across, its facets turned `an`: its look, its shadow, or null. */
+function stoneAt(dx, dy, r, an) {
+  const c = Math.cos(an), s = Math.sin(an), u = dx * c + dy * s, v = -dx * s + dy * c;
+  const d = (0.55 * Math.hypot(u, v) + 0.45 * Math.max(Math.abs(u) * 0.9, Math.abs(v) * 1.25)) / r;
+  if (d > 1) return d < 1.35 && dy > 0.3 * r ? { shade: true } : null;
+  return { k: 1.05 - 0.4 * d * d, N: [dx / r * 0.8, dy / r * 0.8, 1] };
+}
+const PV = new Float64Array(27);
+/** Irregular flagstones (a power diagram on a jittered grid, so they vary in size), `s` texels across: the stone's id,
+ *  how far in from its edge (texels, its corners rounded), the outward normal of its nearest edge, its middle. */
+function paving(u, v, s, seed) {
+  const sy = s * 0.7, gx = Math.floor(u / s), gy = Math.floor(v / sy);
+  let best = 1e9, bk = 0, id = 0;
+  for (let j = -1, k = 0; j <= 1; j++) for (let i = -1; i <= 1; i++, k += 3) {
+    const a = gx + i, b = gy + j, px = (a + 0.15 + 0.7 * h2(a, b, seed)) * s, py = (b + 0.15 + 0.7 * h2(a, b, seed + 1)) * sy;
+    const d = (u - px) ** 2 + (v - py) ** 2 - h2(a, b, seed + 2) * s * s * 0.12;
+    PV[k] = px; PV[k + 1] = py; PV[k + 2] = d;
+    if (d < best) { best = d; bk = k; id = a * 7919 + b; }
+  }
+  let e1 = 1e9, e2 = 1e9, nx = 0, ny = 0;
+  for (let k = 0; k < 27; k += 3) {
+    if (k === bk) continue;
+    const dx = PV[k] - PV[bk], dy = PV[k + 1] - PV[bk + 1], l = Math.hypot(dx, dy), t = (PV[k + 2] - best) / (2 * l);
+    if (t < e1) { e2 = e1; e1 = t; nx = dx / l; ny = dy / l; } else if (t < e2) e2 = t;
+  }
+  const rc = 3.5, e = e2 < rc ? rc - Math.hypot(rc - e1, rc - e2) : e1;
+  return { id, e, nx, ny, cu: u - PV[bk], cv: v - PV[bk + 1] };
+}
+/** A crack across a stone: how far (texels) from it, `h` its hash (none: 1e9). */
+function crack(cu, cv, u, v, h) {
+  const an = h * 6.28, ox = (h2(h * 1e6 | 0, 1, 9) - 0.5) * 10, oy = (h2(h * 1e6 | 0, 2, 9) - 0.5) * 6;
+  return Math.abs((cu - ox) * -Math.sin(an) + (cv - oy) * Math.cos(an) + 2.2 * (vn(u / 5, v / 5, 19) - 0.5));
+}
+/** Dust and bone dust, lumpy, round on screen (the bare floor, the drifts over the stones). */
+function dustAt(u, v, X, Y, i) {
+  let c = mix(E.dust, E.dustD, clamp(fbm(u / 26, v / 26, 3, 101) * 1.4 - 0.2));
+  c = mix(c, E.bone, clamp((fbm(u / 50, v / 50, 3, 102) - 0.5) * 2.5) * (inSpan(X, Y + 30) ? 0.6 : 0.3)); // bone dust under the skulls
+  c = mix(c, E.dustL, (trod[i] / 255) * 0.4 * clamp(fbm(u / 16, v / 16, 3, 104) * 1.6 - 0.2)); // the patrols' beaten path
+  const f = (a, b) => fbm(a / 6, b / 6, 2, 21), h = f(u, v);
+  return { c: mul(c, 0.85 + 0.3 * h), N: [-(f(u + 1, v) - h) * 3, -(f(u, v + 1) - h) * 3, 1] };
+}
+/** Packed earth, clods and hollows, the patrols' ruts; tuff chips, pebbles and rubble, thicker by the rock and the falls. */
+function earthAt(u, v, X, Y, i, dr) {
+  let c = mix(E.earth, E.earthD, clamp(fbm(u / 22, v / 22, 3, 501) * 1.5 - 0.3));
+  const f = (a, b) => fbm(a / 7, b / 7, 2, 502), h = f(u, v), tr = trod[i] / 255;
+  let N = [-(f(u + 1, v) - h) * 3.5 * (1 - 0.6 * tr), -(f(u, v + 1) - h) * 3.5 * (1 - 0.6 * tr), 1];
+  c = mix(mul(c, 0.8 + 0.4 * h), mul(E.dustL, 0.7), tr * 0.25 * clamp(fbm(u / 12, v / 12, 2, 503) * 2 - 0.5));
+  let fall = clamp(1 - dr / 26) * 0.5;
+  for (const [x, y, r] of RUBBLE) fall = Math.max(fall, clamp(1.3 - Math.hypot(X - x, (Y - y) * 1.2) / (r * 2.2)));
+  for (const [s, p, r0, r1, seed] of [[18, 0.08 + 0.55 * fall, 3.5, 6.5, 504], [8, 0.16 + 0.35 * fall, 1.3, 2.6, 505]]) {
+    const t = item(u, v, s, p, seed);
+    const st = t && stoneAt(t.dx, t.dy, r0 + (r1 - r0) * t.a, t.b * 3);
+    if (st?.shade) c = mul(c, 0.55);
+    else if (st) return { c: mul(mix(TUFF[0], TUFF[1], h2(t.id, 5, seed)), st.k * (0.7 + 0.3 * h2(t.id, 6, seed))), N: st.N };
+  }
+  const chip = item(u, v, 6, 0.05, 506); // a flake of tuff from the picks
+  if (chip && Math.hypot(chip.dx, chip.dy * 1.4) < 1.2) c = mul(TUFF[0], 0.9);
+  return { c, N };
+}
+/** The galleries' floor: worn flagstones, chipped, cracked, some sunk and holding water, some gone; long bones and skulls
+ *  laid in rows where the ossuaries are; dust drifted over both, deepest by the rock. `laid`: the crossroads' paving. */
+function galleryAt(u, v, X, Y, i, dr, laid) {
+  const drift = clamp((fbm(u / 40, v / 40, 3, 230) - (laid ? 0.62 : 0.5)) * 3 + clamp(1 - dr / 20) * 0.9 - 0.15 * trod[i] / 255);
+  const cover = drift > 0.55 + 0.25 * (vn(u / 5, v / 5, 231) - 0.5);
+  if (cover) return dustAt(u, v, X, Y, i);
+  const bones = !laid && fbm(u / 70, v / 50, 2, 232) + (inSpan(X, Y + 34) ? 0.12 : 0) > 0.6;
+  if (bones) return bonePaved(u, v, drift);
+  const p = paving(u, v, 44, 211), h = (k) => h2(p.id, k, 212), tr = trod[i] / 255;
+  const e = p.e + 1.6 * (vn(u / 3.5, v / 3.5, 213) - 0.5) - 3 * clamp((vn(u / 6, v / 6, 214) - 0.75) * 5); // worn, chipped
+  if (h(0) < (laid ? 0.02 : 0.07)) { const d = dustAt(u, v, X, Y, i); return { c: mul(d.c, 0.7), N: d.N }; } // a stone gone
+  if (e < 1.3) return { c: mix(mul(E.joint, 1.2), E.dustD, 0.25 + 0.75 * clamp(drift * 2)), N: [0, 0, 1] }; // its joint, dust in it
+  const sunk = h(1) < 0.12, tx = (h(2) - 0.5) * (sunk ? 0.5 : 0.12), ty = (h(3) - 0.5) * (sunk ? 0.5 : 0.12);
+  let c = mul(mix(mix(C.stA, C.stB, h(4)), C.stC, h(5) * 0.6), (0.6 + 0.32 * h(6)) * (sunk ? 0.75 : 1));
+  c = mul(c, 0.82 + 0.36 * fbm(u / 9, v / 9, 2, p.id & 63)); // its own grain
+  if (vn(u / 2.4, v / 2.4, 215) > 0.8) c = mul(c, 0.72); // pitted
+  c = mix(c, mul(c, 1.3), tr * 0.45 * clamp(1 - Math.hypot(p.cu, p.cv) / 20)); // worn smooth where they walk
+  c = mix(c, C.grime, clamp(1 - (e - 1.3) / 5) * 0.45 + drift * 0.3); // grime toward its edge
+  let N = [tx, ty, 1], spec = 0.04 + 0.08 * tr, gloss = 30;
+  const bev = clamp(1 - (e - 1.3) / 1.6);
+  if (bev > 0) { N = [tx + p.nx * bev * 0.6, ty + p.ny * bev * 0.6, 1]; c = mul(c, 1 - 0.18 * bev); }
+  if (h(7) < 0.18) { const d = crack(p.cu, p.cv, u, v, h(8)); if (e > 2 && d < 0.7) c = mul(c, 0.5); }
+  if (sunk && p.cu * tx + p.cv * ty < -3) { c = mul(c, 0.5); spec = 0.5; gloss = 90; N = [0, 0, 1]; } // water in its low side
+  return { c, N, spec, gloss };
+}
+/** Long bones laid side by side in rows (the rows waver, the bones vary), here and there a skull set crown up in their
+ *  stead; worn flat, grimy, dust packed between and over them. */
+function bonePaved(u, v, drift) {
+  const vw = v + 5 * (vn(u / 60, 3, 220) - 0.5), row = Math.floor(vw / 8), fy = vw - row * 8 - 4, Lb = 30, off = h2(row, 0, 225) * Lb;
+  const gap = { c: mix(mul(E.joint, 1.3), E.dustD, 0.45 + 0.5 * clamp(drift)), N: [0, 0, 1] };
+  const b = (k) => k * Lb + (h2(row, k, 226) - 0.5) * 12 - off;
+  let k = Math.floor((u + off) / Lb);
+  if (u < b(k)) k--; else if (u >= b(k + 1)) k++;
+  const x0 = b(k) + 1, x1 = b(k + 1) - 1, t = Math.min(u - x0, x1 - u), id = row * 991 + k, hh = (n) => h2(id, n, 227);
+  if (t < 0 || hh(0) < 0.1) return gap;
+  const tone = mul(mix(mix(C.boneD, C.bone, 0.15 + 0.35 * hh(1)), C.grime, 0.3 + 0.4 * clamp(drift)), 0.5 * (0.85 + 0.3 * fbm(u / 6, v / 6, 2, 229)));
+  if (hh(2) < 0.14) { // a skull in the row
+    const dx = (u - (x0 + x1) / 2) / 5.6, dy = fy / 4.6, d = Math.hypot(dx, dy);
+    if (d > 1) return gap;
+    if (hh(3) < 0.4 && (Math.hypot(Math.abs(dx) - 0.38, dy - 0.25) < 0.26)) return { c: mul(E.joint, 1.2), N: [0, 0, 1] }; // its face up: the orbits
+    return { c: mul(tone, 1.15 - 0.45 * d * d), N: [dx * 0.6, dy * 0.6, 1], spec: 0.08, gloss: 40 };
+  }
+  const tilt = (hh(6) - 0.5) * 0.22, r = (2.3 + 1.0 * hh(4)) * (t < 3.5 ? 1.18 - 0.06 * Math.abs(t - 1.8) : 1), q = (fy + 1.6 * (hh(5) - 0.5) - tilt * (u - (x0 + x1) / 2)) / r; // laid by hand, askew
+  if (Math.abs(q) > 1) return gap;
+  return { c: mul(tone, 1 - 0.3 * q * q), N: [0, q * 0.6, 1], spec: 0.08, gloss: 40 };
+}
+/** Le nid: sodden filth, gore clotted and wet, rotting rags in folds, mats of hair, scraps of flesh. */
+function nestAt(u, v) {
+  let c = mix(E.filth, E.earthD, clamp(fbm(u / 18, v / 18, 3, 601) * 1.5 - 0.3)), N = [0, 0, 1], spec = 0.05, gloss = 20;
+  const f = (a, b) => fbm(a / 6, b / 6, 2, 602), h = f(u, v);
+  N = [-(f(u + 1, v) - h) * 3, -(f(u, v + 1) - h) * 3, 1];
+  c = mul(c, 0.8 + 0.4 * h);
+  const rag = fbm(u / 50, v / 50, 2, 603) + 0.1 * (vn(u / 4, v / 4, 604) - 0.5);
+  if (rag > 0.64) { // rotting cloth in folds, torn at its edges
+    const an = vn(u / 90, v / 90, 605) * 6.28, s = Math.sin((u * Math.cos(an) + v * Math.sin(an)) / 3.6 + 3 * vn(u / 14, v / 14, 606));
+    c = mul(mix(E.linen, E.rag, vn(u / 30, v / 30, 607)), 0.7 + 0.2 * s);
+    if (vn(u / 6, v / 6, 608) > 0.72) c = mix(c, L('#2a3022'), 0.5); // mould
+    return { c: mul(c, rag < 0.67 ? 0.4 : 0.55), N: [Math.cos(an) * s * 0.3, Math.sin(an) * s * 0.3, 1], spec: 0.03 };
+  }
+  const hair = fbm(u / 30, v / 30, 2, 609);
+  if (hair > 0.72) { // a mat of hair, its strands combed by the drag
+    const an = 1.2 + vn(u / 40, v / 40, 610) * 1.5, s = Math.sin((u * Math.cos(an) + v * Math.sin(an)) * 0.9 + 5 * vn(u / 9, v / 9, 611));
+    return { c: mul(E.hair, (s > 0.3 ? 1.35 : 0.85) * (hair < 0.75 ? 1.4 : 1)), N: [0, s * 0.15, 1], spec: 0.25, gloss: 50 };
+  }
+  const gore = fbm(u / 40, v / 40, 3, 612);
+  if (gore > 0.54) { // gore: pooled, clotted, glistening
+    const g = clamp((gore - 0.54) * 5);
+    c = mix(c, mul(mix(E.gore, C.bloodD, vn(u / 7, v / 7, 613)), 0.85), g);
+    const clot = item(u, v, 9, 0.35 * g, 614), st = clot && stoneAt(clot.dx, clot.dy, 1.8 + 1.6 * clot.a, clot.b * 3);
+    if (st && !st.shade) return { c: mul(mix(C.bloodD, E.gore, 0.5), st.k * 0.7), N: st.N, spec: 0.6, gloss: 80 };
+    spec = 0.45 * g; gloss = 80;
+  }
+  const scrap = item(u, v, 28, 0.12, 615); // flesh torn off and left, its fat
+  if (scrap) { const r = 3 + 3 * scrap.a, d = Math.hypot(scrap.dx, scrap.dy * 1.3) / r + 0.35 * (vn(u / 2.5, v / 2.5, 616) - 0.5);
+    if (d < 1) return { c: d > 0.72 ? mul(E.fat, 0.7) : mul(E.flesh, 0.75 + 0.3 * vn(u / 2, v / 2, 617)), N: [scrap.dx / r * 0.6, scrap.dy / r * 0.6, 1], spec: 0.5, gloss: 70 }; }
+  if (fbm(u / 20, v / 20, 2, 618) > 0.66) { c = mul(c, 0.55); spec = 0.6; gloss = 100; N = [0, 0, 1]; } // wet, glistening
+  return { c, N, spec, gloss };
+}
+/** The black water's shore: a shelf of wet rock cracked into slabs, darker and glossier toward the water. */
+function shoreAt(u, v, X, Y, i, dr, wd) {
+  const damp = clamp(1 - (wd - 1.15) / 0.4);
+  const p = paving(u, v, 46, 701), e = p.e + 2 * (vn(u / 4, v / 4, 702) - 0.5);
+  let { c, N } = earthAt(u, v, X, Y, i, dr), spec = 0.04 + 0.4 * damp, gloss = 70;
+  if (fbm(u / 34, v / 34, 2, 703) > 0.46 && e > 1.2) { // the shelf, bared
+    c = mul(mix(TUFF[0], TUFF[1], h2(p.id, 1, 704)), 0.75 + 0.2 * fbm(u / 8, v / 8, 2, 705));
+    N = [p.nx * clamp(1 - (e - 1.2) / 2) * 0.5, p.ny * clamp(1 - (e - 1.2) / 2) * 0.5, 1];
+  }
+  return { c: mul(c, 1 - 0.45 * damp), N, spec, gloss };
+}
+/** The black water and its mud: the bottom seen near the edge, ripples round where the vault drips, the light lying on it
+ *  in broken streaks (moon down the well, the rot's green), scum at the waterline. */
+const DRIPS = [[1560, 628, 0], [1626, 664, 2], [1478, 618, 4], [1660, 610, 1]], GLINTS = [[1610, 650, 30, L('#9ab0be'), 0.05], [1420, 590, 12, L('#6ab08a'), 0.03], [1700, 690, 12, L('#6ab08a'), 0.03]];
+function waterAt(u, v, X, Y, wd) {
+  const deep = clamp((1 - wd) * 5);
+  let c = mix(mul(E.mud, 0.7), mul(E.water, 0.8 + 0.4 * vn(u / 60, v / 60, 51)), 0.35 + 0.65 * deep);
+  let nx = (vn(u / 22, v / 10, 52) - 0.5) * 0.1, ny = (vn(u / 22, v / 10, 53) - 0.5) * 0.1, emi;
+  for (const [x, y, ph] of DRIPS) { const du = u - 2 * x, dv = (v - 2 * y) / 0.62, r = Math.hypot(du, dv); // rings, flat on the water
+    if (r < 60 && r > 1) { const a = Math.sin(r * 0.7 - ph) * Math.exp(-r / 22) * 0.35; nx += du / r * a; ny += dv / r * a; } }
+  for (const [x, y, w, col, k] of GLINTS) { // the light lying on it: a broken streak down from where it falls
+    const du = (u - 2 * x) / w, dv = v - 2 * y;
+    if (Math.abs(du) < 1.5 && dv > -w * 0.4 && dv < w * 3) {
+      const g = Math.exp(-du * du * 2) * clamp(1 - dv / (w * 3)) * clamp((vn(u / 5, v / 1.6, 54) - 0.5) * 5);
+      if (g > 0) emi = mul(col, k * g);
+    }
+  }
+  if (wd > 0.97) c = mix(c, E.scum, clamp((wd - 0.97) * 40) * 0.6 * vn(u / 3, v / 3, 55)); // scum at the edge
+  return { c, N: [nx, ny, 1], spec: 0.9, gloss: 120, emi };
+}
+function mudAt(u, v, wd) {
+  let c = mix(E.mud, mul(E.mud, 0.55), fbm(u / 8, v / 8, 2, 54)), N = [0, 0, 1], spec = 0.35, gloss = 60;
+  const f = (a, b) => fbm(a / 5, b / 5, 2, 56), h = f(u, v);
+  N = [-(f(u + 1, v) - h) * 3, -(f(u, v + 1) - h) * 3, 1];
+  if (h < 0.42) { c = mul(c, 0.6); spec = 0.8; gloss = 110; N = [0, 0, 1]; } // water in its hollows
+  const st = item(u, v, 12, 0.3, 57), s = st && stoneAt(st.dx, st.dy, 1.8 + 2.2 * st.a, st.b * 3); // stones at the waterline, wet
+  if (s && !s.shade) return { c: mul(TUFF[1], s.k * 0.9), N: s.N, spec: 0.6, gloss: 80 };
+  if (s?.shade) c = mul(c, 0.6);
+  return { c: mul(c, 1 + 0.4 * clamp((wd - 1.05) * 8)), N, spec, gloss };
+}
+/** The prison: the Order's dressed slabs in half bond, older than the rest, ruled joints, some carved with lines of its
+ *  writing, cracked, broken; saltpetre; the path to the reliquary worn smooth; drain grates, rings and chains, wax. */
+function prisonAt(u, v, X, Y, i) {
+  // its iron first: the grates and the rings with their chains, rust run round them
+  for (const [x, y] of GRATES) {
+    const du = u - 2 * x, dv = v - 2 * y;
+    if (Math.abs(du) < 10 && Math.abs(dv) < 7) {
+      if (Math.abs(du) > 8.6 || Math.abs(dv) > 5.6 || ((du + 20) % 3.4 + 3.4) % 3.4 < 1.4) return { ...iron(u, v, 0), N: [0, Math.abs(dv) > 5.6 ? Math.sign(dv) * 0.4 : 0, 1] };
+      return { c: mix(L('#040303'), L('#1a0806'), clamp(0.5 - dv / 10)), N: [0, 0, 1], spec: 0.5, gloss: 90 }; // the dark under it, wet
+    }
+  }
+  let rust = 0;
+  for (const [x, y] of RINGS) {
+    const du = u - 2 * x, dv = v - 2 * y, ring = Math.abs(Math.hypot(du, dv / 0.7) - 6);
+    if (Math.abs(du) < 4 && Math.abs(dv + 4) < 2.5) return { ...iron(u, v, 1), N: [0, -0.3, 1] }; // its staple
+    if (ring < 1.3) return { ...iron(u, v, 2), N: [0, (dv > 0 ? 0.3 : -0.3), 1] };
+    for (let l = 0; l < 6; l++) { // its chain, lying slack
+      const lx = du - 8 - l * 5, ly = dv - 2 - 3 * Math.sin(l * 0.9 + x), e = Math.hypot(lx / (l & 1 ? 1.6 : 3), ly / (l & 1 ? 2 : 1.5));
+      if (Math.abs(e - 1) < 0.4) return { ...iron(u, v, 3 + l), N: [0, 0, 1] };
+      if (e < 1.8 && ly > 0) rust = Math.max(rust, 0.5); // its shadow
+    }
+    rust = Math.max(rust, clamp(1 - Math.hypot(du, dv) / (12 + 8 * vn(u / 4, v / 4, 721))));
+  }
+  for (const [x, y] of GRATES) rust = Math.max(rust, clamp(1.3 - Math.hypot(u - 2 * x, (v - 2 * y) * 1.2) / (16 + 8 * vn(u / 5, v / 5, 722))));
+  const SH = 44, row = Math.floor(v / SH), fy = v - row * SH, off = h2(row, 0, 711) * 72, b = (n) => n * 72 + (h2(row, n, 710) - 0.5) * 40 - off; // slabs of all widths
+  let k = Math.floor((u + off) / 72);
+  if (u < b(k)) k--; else if (u >= b(k + 1)) k++;
+  const SW = b(k + 1) - b(k), fx = u - b(k), id = row * 977 + k, h = (n) => h2(id, n, 712), ex = Math.min(fx, SW - fx), ey = Math.min(fy, SH - fy);
+  let e = Math.min(ex, ey) + 1.0 * (vn(u / 3, v / 3, 713) - 0.5) - 2.5 * clamp((vn(u / 5, v / 5, 714) - 0.76) * 5);
+  let N = [0, 0, 1], spec = 0.04, gloss = 30;
+  let c;
+  if (e < 1.2) c = mix(E.joint, mul(E.salt, 0.35), 0.3); // ruled joints, saltpetre in them
+  else {
+    c = mul(mix(mix(C.stC, C.wall, h(0)), C.stA, h(1) * 0.4), 0.6 + 0.22 * h(2));
+    c = mul(c, 0.85 + 0.3 * fbm(u / 16, v / 9, 2, 715)); // its grain, laid along the bed
+    if (vn(u / 2.4, v / 2.4, 716) > 0.8) c = mul(c, 0.75);
+    const bev = clamp(1 - (e - 1.2) / 1.8);
+    if (bev > 0) { N = [ex < ey ? (fx < SW / 2 ? -1 : 1) * bev * 0.5 : 0, ey <= ex ? (fy < SH / 2 ? -1 : 1) * bev * 0.5 : 0, 1]; c = mul(c, 1 - 0.2 * bev); }
+    if (h(3) < 0.07 && e > 2) { // carved: a border ruled in, two lines of the Order's writing
+      if (Math.abs(e - 5) < 0.7) c = mul(c, 0.6);
+      else if (e > 8 && (Math.abs(fy - 15) < 1.8 || Math.abs(fy - 24) < 1.8) && h2(Math.floor(fx / 3.2), row * 7 + k, 717) < 0.6 && (fx % 3.2) < 2) c = mul(c, 0.6);
+    }
+    if (h(4) < 0.25) { const d = crack(fx - SW / 2, fy - SH / 2, u, v, h(5)); if (e > 2 && d < 0.7) c = mul(c, 0.5); }
+    if (h(6) < 0.04) { const q = paving(u, v, 22, 718); if (q.e < 1) c = mul(c, 0.45); else N = [(h2(q.id, 1, 719) - 0.5) * 0.3, (h2(q.id, 2, 719) - 0.5) * 0.3, 1]; } // broken in shards
+    c = mix(c, mul(E.salt, 0.8), 0.5 * clamp((fbm(u / 18, v / 18, 3, 720) - 0.64) * 6) * clamp((vn(u / 3, v / 3, 723) - 0.3) * 3)); // saltpetre
+    const worn = clamp(1 - Math.abs(X - 2356) / 26) * clamp((Y - 730) / 30); // the way to the reliquary, worn smooth
+    if (worn > 0) { c = mul(c, 1 + 0.25 * worn); spec = 0.04 + 0.12 * worn; }
+    c = grime(c, u, v, 0.7);
+  }
+  if (rust) c = mix(c, mix(C.rust, L('#2a1408'), vn(u / 3, v / 3, 724)), rust * 0.6);
+  // wax run from the candles, pooled and hard; the Order's red seals dripped near the reliquary
+  for (const [x, y, n] of (WAX ??= CANDLES.filter(([x, y]) => x > ARENA[0] && y > ARENA[1]))) {
+    const du = u - 2 * (x + n * 1.5), dv = v - 2 * y;
+    if (Math.abs(du) > 26 || Math.abs(dv) > 18) continue;
+    const w = item(u, v, 8, clamp(1 - Math.hypot(du, dv * 1.3) / 26) * 0.6, 725), r = w && 1.5 + 1.7 * w.a, d = w && Math.hypot(w.dx, w.dy * 1.3) / r + 0.3 * (vn(u / 2, v / 2, 726) - 0.5);
+    if (w && d < 1) return { c: mul(w.b < 0.12 ? L('#6a1210') : E.wax, 1.05 - 0.3 * d * d), N: [w.dx / r * 0.6, w.dy / r * 0.6, 1], spec: 0.35, gloss: 60 };
+  }
+  return { c, N, spec, gloss };
+}
+
 function floorAt(x, y) {
   const X = rx(x), Y = ry(y), xi = Math.floor(X), yi = Math.floor(Y);
   if (xi < 0 || yi < 0 || xi >= RW || yi >= RH || !floor[yi * RW + xi]) return { alb: mul(mix(L('#2a251f'), L('#0c0a08'), vn(x / 9, y / 9, 71)), 0.3), N: [0, 0, 1], spec: 0.02 }; // under the rock's low edge: its scree
-  const i = yi * RW + xi, k = kind[i], ys = y * SN;
-  let c, Nn = [0, 0, 1], spec = 0.03, gloss = 12, emi;
+  const i = yi * RW + xi, k = kind[i], a = area[i], u = x, v = y * SN;
   // the ways out: steps up into the dark
   for (const d of Object.values(DOORS)) if (Math.abs(X - d.x) < d.w / 2 + 1 && Y < d.y + 1 && Y > d.y - RECESS - 8) {
     const t = clamp((d.y - Y) / (RECESS + 6)), step = Math.floor((d.y - Y) / 3) & 1;
     return { alb: mul(mix(C.stB, C.stC, vn(x / 6, y / 6, 3)), (step ? 0.75 : 1) * (1 - 0.9 * t)), N: step ? [0, 0.3, 1] : [0, 0, 1], spec: 0.03 };
   }
-  if (k === 1) {
-    const f = flags(x, y, 40, 30, 23); c = grime(mul(f.c, 0.85), x, y, 0.9); Nn = f.N;
-    const m = Math.abs(X - MED[0]) < 90 && Math.abs(Y - MED[1]) < 60 && medallion(x - wx(MED[0]) + wx(240), y, MED[1], 1.25); // the arena's: carved round its middle
-    if (m) { c = m.c; if (m.N) Nn = m.N; if (m.wet) { spec = m.wet * 0.6; gloss = 60; } }
-  }
-  else if (k === 2) { // black water: still, a faint swell, the light lying on it
-    c = mul(E.water, 0.8 + 0.4 * vn(x / 30, ys / 30, 51)); spec = 0.9; gloss = 120;
-    Nn = [(vn(x / 11, ys / 7, 52) - 0.5) * 0.12, (vn(x / 11, ys / 7, 53) - 0.5) * 0.12, 1];
-  } else {
-    c = mix(E.dust, E.dustD, clamp(fbm(x / 24, ys / 24, 4, 101) * 1.3 - 0.15));
-    c = mix(c, E.bone, clamp((fbm(x / 50, ys / 50, 3, 102) - 0.5) * 2.5) * (inSpan(X, Y + 30) ? 0.7 : 0.35)); // bone dust under the skulls
-    c = mix(c, E.dustL, (trod[i] / 255) * 0.5 * clamp(fbm(x / 16, ys / 16, 3, 104) * 1.6 - 0.2)); // the patrols' beaten path
-    const f = (u, v) => vn(u / 14, v / 14, 21); Nn = [-(f(x + 1, ys) - f(x - 1, ys)) * 0.4, -(f(x, ys + 1) - f(x, ys - 1)) * 0.4, 1];
-    const cx = Math.floor(x / 9), cy = Math.floor(ys / 9);
-    if (h2(cx, cy, 120) < 0.025) { // a stone, a lump of dust
-      const ox = (cx + 0.2 + 0.6 * h2(cx, cy, 121)) * 9, oy = (cy + 0.2 + 0.6 * h2(cx, cy, 122)) * 9, r = 1.5 + 2.5 * h2(cx, cy, 123), d = Math.hypot(x - ox, ys - oy) / r;
-      if (d < 1) { Nn = [(x - ox) / r * 0.5, (ys - oy) / r * 0.5, 1]; c = mul(c, 0.8 + 0.3 * (1 - d)); }
-    }
-    const p = fbm(x / 34, ys / 34, 3, 121); if (p > 0.74) { c = mul(c, 0.55); spec = 0.35 * clamp((p - 0.74) * 12); gloss = 70; Nn = [0, 0, 1]; } // seeping water
-    if (k === 3) { c = mix(E.mud, mul(E.mud, 0.6), vn(x / 5, ys / 5, 54)); spec = 0.45; gloss = 60; Nn = [0, 0, 1]; }
-    if (k === 4) c = mix(c, mix(E.filth, E.rag, clamp(vn(x / 9, ys / 9, 55) * 1.4 - 0.2)), 0.7 * clamp((fbm(x / 26, ys / 20, 3, 41) - 0.5) * 6)); // rags, filth
-    if (k === 5) { const s = vn(x / 2, ys / 6, 57); c = mix(mix(E.straw, E.rag, s), C.grime, 0.3 + 0.4 * vn(x / 9, ys / 9, 58)); Nn = [(s - 0.5) * 0.6, 0, 1]; }
-  }
+  const dr = bil(D, X, Y), wd = Math.hypot((X - WATER[0]) / WATER[2], (Y - WATER[1]) / WATER[3]) - 0.12 * (fbm(X / 14, Y / 10, 3, 9) - 0.5);
+  let m;
+  if (k === 2) m = waterAt(u, v, X, Y, wd);
+  else if (k === 3) m = mudAt(u, v, wd);
+  else if (a === PRISON) {
+    const med = Math.abs(X - MED[0]) < 90 && Math.abs(Y - MED[1]) < 60 && medallion(x - wx(MED[0]) + wx(240), y, MED[1], 1.25); // the arena's: carved round its middle
+    m = med ? { c: med.c, N: med.N ?? [0, 0, 1], spec: med.wet * 0.6, gloss: 60 } : prisonAt(u, v, X, Y, i);
+  } else if (a === G) m = galleryAt(u, v, X, Y, i, dr, k === 1);
+  else if (a === NID) m = k === 4 || fbm(u / 50, v / 50, 2, 40) > 0.35 ? nestAt(u, v) : earthAt(u, v, X, Y, i, dr);
+  else if (a === SHORE) m = shoreAt(u, v, X, Y, i, dr, wd);
+  else m = earthAt(u, v, X, Y, i, dr);
+  let { c, N: Nn, spec = 0.03, gloss = 12, emi } = m;
+  if (k === 5) { const s = vn(u / 2, v / 6, 57); c = mix(c, mix(mix(E.straw, E.rag, s), C.grime, 0.3 + 0.4 * vn(u / 9, v / 9, 58)), 0.85); Nn = [(s - 0.5) * 0.6, 0, 1]; } // the rats' straw
+  if (k !== 2 && k !== 3 && a !== NID && a !== PRISON) { const p = fbm(u / 34, v / 34, 3, 121); if (p > 0.74) { c = mul(c, 0.55); spec = 0.35 * clamp((p - 0.74) * 12); gloss = 70; Nn = [0, 0, 1]; } } // seeping water
   // the edge of the rock: its dust heaped, darker
-  const dr = bil(D, X, Y); if (dr < 14) c = mix(c, E.dustD, (1 - Math.max(0, dr) / 14) * 0.55);
-  if (blood[i]) { const a = blood[i] / 255; c = mix(c, mix(C.bloodD, C.blood, vn(x / 4, y / 4, 8) * 0.6), a); if (a > 0.3) { spec = 0.4 * a; gloss = 70; Nn = [0, 0, 1]; } }
-  // bone splinters and teeth, thicker under the ossuaries and in the nest
-  { const cx = Math.floor(x / 7), cy = Math.floor(y / 7), n = k === 4 ? 0.012 : inSpan(X, Y + 30) ? 0.01 : 0.004;
-    if (h2(cx, cy, 300) < n) { const an = h2(cx, cy, 301) * 3.14, lx = x - (cx * 7 + 3.5), ly = y - (cy * 7 + 3.5), u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an);
-      if (Math.abs(v) < 0.7 && Math.abs(u) < 3) { c = mix(c, C.bone, 0.65); Nn = [0, 0, 1]; } } }
+  if (dr < 14 && k !== 2) c = mix(c, E.dustD, (1 - Math.max(0, dr) / 14) * 0.5);
+  if (blood[i]) { const b = blood[i] / 255; c = mix(c, mix(C.bloodD, C.blood, vn(u / 4, v / 4, 8) * 0.6), b); if (b > 0.3) { spec = 0.4 * b; gloss = 70; Nn = [0, 0, 1]; } }
+  if (dry[i]) c = mix(c, mix(L('#260a07'), L('#3e110b'), vn(u / 3, v / 3, 92)), dry[i] / 255 * 0.85); // dried: matte, flaking
+  if (k !== 2) { // what lies about: bones, teeth, rat droppings, straw, at sizes the game's pixel shows
+    const near = clamp(1 - dr / 18), ossu = inSpan(X, Y + 30) ? 1 : 0;
+    const pb = [0.02 + 0.08 * ossu, 0.02, 0.06, 0.03, 0.1, 0.012][a] + 0.03 * near;
+    const b = item(u, v, 16, pb, 300), bn = b && boneAt(b.dx, b.dy, b.a * 3.14, 2 + 3 * b.b, 1.05 + 0.3 * h2(b.id, 5, 300));
+    if (bn?.shade) c = mul(c, 0.65);
+    else if (bn) return { alb: mul(mix(mix(C.boneD, C.bone, 0.2 + 0.35 * h2(b.id, 6, 300)), a === NID && bn.end > 0.7 ? C.bloodD : C.grime, a === NID ? 0.4 : 0.3), bn.k * 0.6), N: bn.N, spec: 0.08, gloss: 30 };
+    const pt = clamp((fbm(u / 16, v / 16, 2, 320) - 0.62) * 4) * ([0.12 + 0.2 * ossu, 0.06, 0.25, 0.04, 0.12, 0][a]);
+    const t = item(u, v, 5, pt, 321);
+    if (t && Math.hypot(t.dx, t.dy * 1.2) < 1.25) return { alb: mul(mix(C.bone, C.wax, 0.3), 0.8 - 0.25 * clamp(t.dy)), N: [t.dx * 0.4, t.dy * 0.4, 1], spec: 0.15, gloss: 40 }; // a tooth
+    if (t && t.dy > 1 && t.dy < 2.2 && Math.abs(t.dx) < 1.2) c = mul(c, 0.6);
+    const pd = clamp((fbm(u / 12, v / 12, 2, 330) - 0.55) * 4) * ([near * 0.6, near * 0.6, 0.4, near * 0.3, 0.8, near * 0.2][a]);
+    const dp = item(u, v, 4, pd, 331);
+    if (dp && Math.hypot(dp.dx / 1.15, dp.dy / 0.8) < 1) return { alb: L('#100a07'), N: [0, dp.dy * 0.5, 1], spec: 0.25, gloss: 50 }; // a dropping
+    const ps = clamp((fbm(u / 20, v / 20, 2, 340) - 0.5) * 3) * ([near * 0.25, near * 0.3, 0.2, 0, 0.6, 0][a]);
+    const s = item(u, v, 10, ps, 341), sn = s && boneAt(s.dx, s.dy, s.a * 3.14, 3 + 2.5 * s.b, 0.75);
+    if (sn && !sn.shade) return { alb: mul(mix(E.straw, E.rag, h2(s.id, 7, 341) * 0.6), sn.k * 0.85), N: sn.N, spec: 0.05 }; // a straw
+  }
   const rot = rotAt(X, Y); if (rot > 0) { c = mix(c, mul(E.rot, 0.3), rot * 0.4); emi = mul(E.rot, rot * 0.05); }
   return { alb: c, N: Nn, spec, gloss, emi };
 }
