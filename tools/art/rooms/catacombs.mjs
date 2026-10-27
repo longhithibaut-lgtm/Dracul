@@ -640,15 +640,29 @@ function doorway(d, kind) {
 }
 /** Vesna's reliquary: a dais of two steps, an iron cage round a reliquary chest bound in tarnished gilt, sealed with the
  *  Order's red wax and chained across; the Rat's sign on a silver plaque at the dais' foot. */
+// How far it is opened (0 shut, as the chunks are baked; 1 open: the frames the game plays as Vesna is freed, open()).
+const REL = { o: 0 };
 function reliquary() {
   const gilt = L('#7a5a24'), giltD = L('#3a2a10'), wax = L('#7a1010'), silver = L('#9a9a90');
-  const bars = cage(64, 40, 120);
+  const bars = cage(64, 40, 120), cageAt = (x, y, z) => bars.sdf(x, y, z - 16);
+  // Opening: the cage's front swings out on its hinge (its left corner), the chest's two doors swing open on theirs
+  // (its sides) showing its dark inside, the chains slide off and down into the dais, the seals are broken.
+  const front = (x, y, z) => sdBox(x, y, z, 1, 20, 76, 31, 2.6, 64, 0); // the cage's front, but its hinge's corner bar
+  const turn = (x, y, hx, hy, a) => { const dx = x - hx, dy = y - hy; return [hx + dx * Math.cos(a) + dy * Math.sin(a), hy - dx * Math.sin(a) + dy * Math.cos(a)]; };
+  const ironF = (x, y, z) => {
+    if (!REL.o) return cageAt(x, y, z);
+    const [u, v] = turn(x, y, -32, 20, 1.9 * REL.o);
+    return Math.min(Math.max(cageAt(x, y, z), -front(x, y, z)), Math.max(cageAt(u, v, z), front(u, v, z)));
+  };
+  const doors = (x, y, z) => Math.min(...[-1, 1].map((s) => { const [u, v] = turn(x, y, s * 20, 12, -s * 1.5 * REL.o); return sdBox(u, v, z, s * 10, 11, 72, 10, 1, 54, 0.6); }));
+  const chestF = (x, y, z) => (!REL.o ? sdBox(x, y, z, 0, 0, 72, 20, 12, 54, 2) : Math.min(Math.max(sdBox(x, y, z, 0, 0, 72, 20, 12, 54, 2), -sdBox(x, y, z, 0, 3, 72, 18, 11, 52, 0)), doors(x, y, z)));
+  const fall = 120 * REL.o;
   const parts = [
     { f: (x, y, z) => Math.min(sdBox(x, y, z, 0, 0, 5, 58, 36, 5, 1), sdBox(x, y, z, 0, 0, 13, 48, 28, 3.5, 1)), m: 'dais' },
-    { f: (x, y, z) => bars.sdf(x, y, z - 16), m: 'iron' },
+    { f: ironF, m: 'iron' },
     { f: (x, y, z) => { const q = Math.max(Math.abs(x) / 34, Math.abs(y) / 22); return Math.max(q * 34 - 34 * clamp(1 - (z - 136) / 44), 136 - z, z - 182); }, m: 'roof' }, // its pointed roof
-    { f: (x, y, z) => sdBox(x, y, z, 0, 0, 72, 20, 12, 54, 2), m: 'chest' },
-    { f: (x, y, z) => Math.min(...[-1, 1].map((s) => Math.max(Math.abs((x - s * 0) * 0.62 + s * (z - 80) * 0.78) - 1.6, Math.abs(y - 21) - 1.6, Math.abs(x) - 34, Math.abs(z - 80) - 46))), m: 'chain' }, // chained across, an X
+    { f: chestF, m: 'chest' },
+    { f: (x, y, z) => { z += fall; const d = Math.min(...[-1, 1].map((s) => Math.max(Math.abs((x - s * 0) * 0.62 + s * (z - 80) * 0.78) - 1.6, Math.abs(y - 21) - 1.6, Math.abs(x) - 34, Math.abs(z - 80) - 46))); return fall ? Math.max(d, 17 - (z - fall)) : d; }, m: 'chain' }, // chained across, an X
     { f: (x, y, z) => sdBox(x, y, z, 0, 37, 9, 13, 1.5, 7, 0.5), m: 'plaque' },
   ];
   const sdf = (x, y, z) => Math.min(...parts.map((p) => p.f(x, y, z)));
@@ -662,10 +676,11 @@ function reliquary() {
       if (p.m === 'plaque') return sign('rat', x / 9, (z - 9) / 6) ? { alb: silver, spec: 0.9, gloss: 60 } : { alb: mul(silver, 0.35), spec: 0.4, gloss: 40 };
       // the chest: dark wood bound in gilt bands, the seals of wax
       if (Math.abs(z - 40) < 3 || Math.abs(z - 104) < 3 || Math.abs(x) > 17) return { alb: mix(gilt, giltD, vn3(x, y, z, 8)), spec: 0.5, gloss: 40 };
-      if (Math.hypot(x - 8, z - 72) < 4.5 || Math.hypot(x + 9, z - 88) < 4) return { alb: wax, spec: 0.5, gloss: 50 };
+      if (REL.o && sdBox(x, y, z, 0, 3, 72, 18.5, 11.5, 52.5, 0) < 0) return { alb: L('#040303'), spec: 0 }; // its inside, opened
+      if (Math.hypot(x - 8, z - 72) < 4.5 || Math.hypot(x + 9, z - 88) < 4) return REL.o > 0.15 ? { alb: mix(wax, L('#1a0606'), 0.5), spec: 0.2 } : { alb: wax, spec: 0.5, gloss: 50 }; // broken
       return { alb: mix(C.woodD, L('#0e0a07'), vn3(x * 0.3, y * 0.3, z * 0.1, 9)), spec: 0.08 };
     },
-    bounds: [-60, -38, 0, 60, 40, 186], step: 0.6,
+    bounds: [-60, -38, 0, 60, 100, 186], step: 0.6,
   };
 }
 /** A rat's nest: a low heap of rags, straw and gnawed bones. */
@@ -813,6 +828,10 @@ export async function scene() { return SC; }
 /** Gate `k` of GATES let down to `d` room px above its sill (d >= its height: raised out of sight). */
 export function raise(sc, k, d) { ports[k].pos[2] = d >= GATE_RISE ? -400 : wz(d); }
 export const GATE_RISE = 44; // room px: a gate's travel up, its frames 4 px apart
+/** What opens once, played by the game: Vesna's reliquary (its region, room px; its frames, shut to open). */
+export const OPENINGS = [{ id: 'reliquary', box: [RELIQUARY.x - 56, RELIQUARY.y - 120, RELIQUARY.x + 64, RELIQUARY.y + 26], y: RELIQUARY.y, frames: 10 }];
+/** Opening `id` opened to `t` (0 shut, 1 open). */
+export function opened(sc, id, t) { REL.o = t; }
 export const finish = (img, x0, y0) => shafts(img, x0, y0, MOONH.map((o) => [o[0], o[1], o[2], o[2], MOON, MOONC, 0.003]), VAULT);
 export const PAL = [...CRYPT_PAL, ...[['#1a2a24', '#2e4a3c', '#4e7a62', '#8ac0a0']].flatMap((s) => s.map((c) => hex(c).map((v) => v * 255)))];
 export const POST = { exposure: 3.3, vignette: 0.2, desat: 0.18, grain: 0.012, dither: 0.02 };

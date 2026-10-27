@@ -49,11 +49,13 @@ function region(x0, y0, w, h) {
 }
 
 if (!isMainThread) { // a worker: rows k, k + NW... of the region it is sent; or a gate's frame
-  parentPort.on('message', ({ x0, y0, w, h, k, NW, gate }) => {
+  parentPort.on('message', ({ x0, y0, w, h, k, NW, gate, opening }) => {
     if (gate) Z.raise(sc, gate.k, gate.d);
+    if (opening) Z.opened(sc, opening.id, opening.t);
     const sub = { ...region(x0, y0, w, h), rowN: NW, rowK: k };
     const r = posted(render(sub));
     if (gate) Z.raise(sc, gate.k, Z.GATE_RISE);
+    if (opening) Z.opened(sc, opening.id, 0);
     parentPort.postMessage(r, Object.values(r).map((a) => a.buffer));
   });
 } else await main();
@@ -62,7 +64,7 @@ async function main() {
   const NW = availableParallelism(), pool = [...Array(NW)].map(() => new Worker(new URL(import.meta.url), { workerData: { zone: ZONE } }));
   const KEYS = ['out', 'alb', 'emi', 'depth', 'nrm', 'sun'], SIZE = { out: 3, alb: 3, emi: 3, depth: 1, nrm: 3, sun: 1 };
   /** The texels x0, y0, w x h of the zone rendered by every worker (rows shared out), cached in `cache` unless --fresh. */
-  async function renderRegion(x0, y0, w, h, cache, gate) {
+  async function renderRegion(x0, y0, w, h, cache, gate, opening) {
     const N = w * h;
     if (cache && existsSync(cache) && !process.argv.includes('--fresh') && statSync(cache).size === 4 * N * 14) {
       const b = readFileSync(cache), f = new Float32Array(b.buffer, b.byteOffset, b.length / 4), img = {};
@@ -70,7 +72,7 @@ async function main() {
       for (const k of KEYS) { img[k] = f.slice(o, o + SIZE[k] * N); o += SIZE[k] * N; }
       return img;
     }
-    const parts = await Promise.all(pool.map((wk, k) => new Promise((res) => { wk.once('message', res); wk.postMessage({ x0, y0, w, h, k, NW, gate }); })));
+    const parts = await Promise.all(pool.map((wk, k) => new Promise((res) => { wk.once('message', res); wk.postMessage({ x0, y0, w, h, k, NW, gate, opening }); })));
     const img = Object.fromEntries(KEYS.map((k) => [k, new Float32Array(SIZE[k] * N)]));
     for (let y = 0; y < h; y++) { const p = parts[y % NW], a = y * w, b = a + w; for (const k of KEYS) img[k].set(p[k].subarray(a * SIZE[k], b * SIZE[k]), a * SIZE[k]); }
     if (cache) writeFileSync(cache, Buffer.concat(KEYS.map((k) => Buffer.from(img[k].buffer))));
@@ -150,6 +152,20 @@ async function main() {
     gframes.push(...list);
     GATES.push({ id: g.id, name: g.name, side: g.side, lever: g.lever, arch: !!g.arch, arena: !!g.arena, box: [g.x0, g.y0, g.x1 - g.x0, g.y1 - g.y0], at: [gx0, gy0], w: gw, h: gh, depth: Math.floor(yc / 2) * 2 - 11, list });
   }
+  // ---------- what opens once (Vesna's reliquary): its frames shut to open, kept where any differs from shut ----------
+  const OPENS = [];
+  for (const o of Z.OPENINGS ?? []) {
+    const [bx0, by0, bx1, by1] = o.box, ox0 = 2 * bx0, oy0 = Math.round(2 * by0), ow = 2 * (bx1 - bx0), oh = Math.round(2 * (by1 - by0));
+    const shot = async (t, n) => { const r = await renderRegion(ox0, oy0, ow, oh, `shots/${ZONE}/${o.id}-${n}.cache`, undefined, { id: o.id, t }); const a = new Uint8ClampedArray(ow * oh * 4);
+      for (let p = 0; p < ow * oh; p++) for (let c = 0; c < 3; c++) a[p * 4 + c] = Math.round(Math.min(1, Math.max(0, r.alb[p * 3 + c])) ** (1 / 2.2) * 255); return a; };
+    const frames = [];
+    for (let n = 0; n < o.frames; n++) frames.push(await shot(n / (o.frames - 1), n));
+    for (let p = 0; p < ow * oh; p++) { const on = frames.some((f) => [0, 1, 2].some((c) => f[p * 4 + c] !== frames[0][p * 4 + c])); for (const f of frames) f[p * 4 + 3] = on ? 255 : 0; }
+    const list = frames.slice(1).map((rgba) => ({ x0: ox0, y0: oy0, x1: ox0 + ow - 1, y1: oy0 + oh - 1, rgba }));
+    gframes.push(...list);
+    OPENS.push({ id: o.id, at: [ox0, oy0], w: ow, h: oh, depth: Math.floor(o.y / 2) * 2 - 11, list });
+    console.log(`opening ${o.id}: ${o.frames} frames`);
+  }
   const ga = pack(gframes, null, 0, 1024);
   bytes += webp(`src/${ZONE}/gates.webp`, ga.atlas, ga.AW, ga.AH, 'rgba', 0);
 
@@ -182,6 +198,7 @@ export const OVER: [number, number, number, number, number, number, number][][] 
 export const BOXES: [number, number, number, number][] = ${J(BOXES)};
 export const PITS: [number, number, number, number][] = ${J(PITS)};
 export const GATES = ${J(GATES.map(({ list, ...g }) => ({ ...g, frames: list.map((f) => [f.ax, f.ay]) })))} as { id: string; name: string; side: number; lever: { x: number; y: number } | null; arch: boolean; arena: boolean; box: [number, number, number, number]; at: [number, number]; w: number; h: number; depth: number; frames: [number, number][] }[];
+export const OPENS = ${J(OPENS.map(({ list, ...o }) => ({ ...o, frames: list.map((f) => [f.ax, f.ay]) })))} as { id: string; at: [number, number]; w: number; h: number; depth: number; frames: [number, number][] }[];
 export const TUNNEL: { x: number; y: number; w: number }[] = ${J(Z.TUNNEL)};
 export const DOORS: Record<string, { x: number; y: number; w: number }> = ${J(Object.fromEntries(Object.entries(Z.DOORS).map(([k, d]) => [k, { x: d.x, y: d.y, w: d.w }])))};
 export const AREAS = ${J(Z.AREAS)} as { id: string; ring: number; rect: [number, number, number, number]; groups: number }[];
