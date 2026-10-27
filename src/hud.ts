@@ -16,7 +16,7 @@ import { PAL as ITEM_PAL } from './satchel.ts';
 // the bag's items, a shelf of their icons and its empty slots.
 // Also the title card of a room (its name, or what just happened), centred, and a pip on the screen's edge pointing at
 // each enemy off it.
-// It sits in the screen's safe area (clear of a phone's notch or rounded corners) and follows the view's size.
+// It follows the view's size.
 // Gameplay pushes values in; it never reads from here. Redrawn every frame into one Graphics, in native pixels.
 export type Hud = {
   health(current: number, max: number): void;
@@ -134,7 +134,7 @@ const SEAL = [
 ];
 const SEAL_W = 11 + 3; // with its gap from the drops
 
-const X0 = 8, Y0 = 6; // top-left corner of the HUD, inside the safe area
+const X0 = 8, Y0 = 6; // top-left corner of the HUD
 const PITCH = 8; // drop spacing: 7 px drop + 1 px gap
 const PIPS = 3, PIP_GAP = 3; // dash pips under the drops
 const FLASH_MS = 60; // a lost drop flashes white, cracks, then bursts
@@ -142,11 +142,6 @@ const BURST_MS = 140;
 const FILL_MS = 120; // a regained drop fills from the bottom
 // An off-screen enemy's pip, tip outward: rows of a triangle from the tip (a straight way), or a corner (a diagonal).
 const PIP = 4;
-
-// The safe area's insets in CSS pixels (env(safe-area-inset-*), 0 off phones), read off a hidden probe.
-const probe = document.createElement('div');
-probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) 0 0 env(safe-area-inset-left,0px)';
-document.body.append(probe);
 
 type Shard = { x: number; y: number; vx: number; vy: number; c: number; t0: number; life: number; size: number };
 
@@ -172,13 +167,7 @@ export function create(scene: Phaser.Scene): Hud {
   let carried = -1, bag = 0, banked: number | undefined, gotAt = -1e9; // carried -1: not shown (the training room)
   let items: readonly Item[] | undefined, slots = 0, itemAt = -1e9;
   let boss: { name: string; hp: number; max: number; hitAt: number; shown: number } | undefined, line: { who: string; text: string; at: number; ms: number } | undefined;
-  // The corner, in from the safe area (native px per CSS px: the scale manager's displayScale).
-  const corner = () => {
-    const css = getComputedStyle(probe), k = scene.scale.displayScale.x / Z;
-    return { x: X0 + Math.ceil(parseFloat(css.paddingLeft) * k || 0), y: Y0 + Math.ceil(parseFloat(css.paddingTop) * k || 0) };
-  };
-  let at = corner();
-  const place = () => (at = corner());
+  const at = { x: X0, y: Y0 };
 
   // Draws a pixel grid, one rectangle per horizontal run, rows from `fromRow` down.
   const grid = (x: number, y: number, rows: string[], px: Record<string, number>, fromRow = 0) => {
@@ -369,9 +358,7 @@ export function create(scene: Phaser.Scene): Hud {
 
   scene.events.on(Phaser.Scenes.Events.ADDED_TO_SCENE, ignoreNew);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, draw);
-  scene.scale.on(Phaser.Scale.Events.RESIZE, place);
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-    scene.scale.off(Phaser.Scale.Events.RESIZE, place);
     scene.events.off(Phaser.Scenes.Events.ADDED_TO_SCENE, ignoreNew);
     scene.events.off(Phaser.Scenes.Events.POST_UPDATE, draw);
   });

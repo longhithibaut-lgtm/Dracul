@@ -80,14 +80,13 @@ export type Counter = {
 };
 
 /** His wares `offers` over the dimmed refuge: his name, what he says (`line`), a card each, the blood in the basin, the
- *  keys. Pinned to the view, laid out live: side by side, or stacked on a view too narrow (an upright phone). */
+ *  keys. Pinned to the view, laid out live: side by side, or stacked on a view too narrow (a window taller than wide). */
 export function counter(scene: Scene, offers: Offer[], banked: number, line: string): Counter {
   const dim = scene.add.rectangle(0, 0, 10, 10, VOID, 0.8).setOrigin(0).setDepth(UI);
   const head = scene.add.image(0, 0, Font.bake(scene, ['LE RONGÉ'], SILVER, VOID, 2)).setOrigin(0.5, 0).setDepth(UI + 1);
   const said = scene.add.image(0, 0, '__DEFAULT').setOrigin(0.5, 0).setDepth(UI + 1);
   const bank = scene.add.image(0, 0, '__DEFAULT').setOrigin(0.5, 0).setDepth(UI + 1);
-  const keys = matchMedia('(pointer: coarse)').matches ? 'touche une carte' : '1, 2, 3 ou clic : acheter ; Échap ou F : partir';
-  const hint = scene.add.image(0, 0, Font.bake(scene, [keys], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
+  const hint = scene.add.image(0, 0, Font.bake(scene, ['1, 2, 3 ou clic : acheter ; Échap ou F : partir'], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
   let cards: Phaser.GameObjects.Image[] = [], xs: number[] = [], ys: number[] = [], hot = -1, h = 0, now = offers;
   const all = () => [dim, head, said, bank, hint, ...cards];
   const place = () => {

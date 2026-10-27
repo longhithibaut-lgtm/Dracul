@@ -14,7 +14,6 @@ import * as Glyph from './glyph.ts';
 import * as Rats from './rats.ts';
 import * as Training from './training.ts';
 import * as Dark from './dark.ts';
-import * as Touch from './touch.ts';
 import * as Refuge from './refuge.ts';
 import * as Loot from './loot.ts';
 import * as Save from './save.ts';
@@ -311,20 +310,11 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-L', castAhead);
     this.input.keyboard!.on('keydown-R', () => this.press(() => this.swarm(this.training))); // la Nuée
     this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
-    // P: full screen in and out (the whole page, so the training panel and touch buttons come along); refused: nothing happens.
+    // P: full screen in and out (the whole page, so the training panel comes along); refused: nothing happens.
     this.input.keyboard!.on('keydown-P', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}));
 
     const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true, layout: 'hall' }) satisfies Run); // its panel picks a room
     this.input.keyboard!.on('keydown-T', toggleTraining);
-    // Touch screens: the same actions as J, K, L, F and Space, aimed where he faces, and T.
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, Touch.controls((a) => {
-      if (a === 'slash') this.press(() => this.slash(this.facing));
-      else if (a === 'shoot') this.press(() => this.shoot(this.facing));
-      else if (a === 'bite') this.press(() => this.bite());
-      else if (a === 'cast') castAhead();
-      else if (a === 'dash') this.dashPressedAt = this.time.now;
-      else toggleTraining();
-    }));
     if (this.training) {
       this.hud.title('Entraînement');
       let calls = 0;
@@ -520,9 +510,9 @@ export class RoomScene extends Phaser.Scene {
     return true;
   }
 
-  /** Frames the room in the view (see main.ts), on creation and live on every resize: a turn of the phone mid-fight
+  /** Frames the room in the view (see main.ts), on creation and live on every resize: a resize mid-fight
    *  keeps everything as it is. Along a side where the room is smaller than the view, it sits in the middle, its
-   *  surroundings round it; where it is larger (an upright phone, the tall cloister), the camera follows the hero,
+   *  surroundings round it; where it is larger (a tall window, the tall cloister), the camera follows the hero,
    *  smoothly, kept inside the room. */
   private frame() {
     const w = this.scale.width / Dark.ZOOM, h = this.scale.height / Dark.ZOOM, rw = this.room.width, rh = this.room.height;
@@ -547,8 +537,8 @@ export class RoomScene extends Phaser.Scene {
     const k = this.keys;
     // Coming in or going out by an exit, the hero walks on his own.
     const auto = this.phase === 'enter' || this.phase === 'leave', dazed = time < this.dazedUntil;
-    const x = auto || dazed ? 0 : Phaser.Math.Clamp(Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown) + Touch.stick.x, -1, 1);
-    const y = dazed ? 0 : auto ? this.walk : Phaser.Math.Clamp(Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown) + Touch.stick.y, -1, 1);
+    const x = auto || dazed ? 0 : Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
+    const y = dazed ? 0 : auto ? this.walk : Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
     const posing = time < this.slashUntil || time < this.castUntil;
     if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
@@ -723,7 +713,7 @@ export class RoomScene extends Phaser.Scene {
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
     }
-    // Enemies hunting him off the screen (an upright phone, the tall cloister) are pointed at from its edge, all alike:
+    // Enemies hunting him off the screen (a tall window, the tall cloister) are pointed at from its edge, all alike:
     // where they are, never what they are about to do; on screen, they are not marked, nor those that have not seen him
     // (but the battue's packs in wait near him, with the Cor de chasse volé).
     const view = this.cameras.main.worldView, horn = (e: Sprite) => !!e.getData('pack') && Phaser.Math.Distance.BetweenPoints(e, feet.center) < this.gear.horn;

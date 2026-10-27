@@ -110,8 +110,7 @@ export function stall(scene: Scene, offers: Offer[], banked: number, line: strin
   const slots = SLOTS.map((k) => scene.add.image(0, 0, Font.bake(scene, [KINDS[k].toUpperCase()], GREY, VOID)).setOrigin(0.5, 0).setDepth(UI + 1));
   const about = scene.add.image(0, 0, '__DEFAULT').setOrigin(0.5, 0).setDepth(UI + 1);
   const bank = scene.add.image(0, 0, '__DEFAULT').setOrigin(0.5, 0).setDepth(UI + 1);
-  const keys = matchMedia('(pointer: coarse)').matches ? 'touche une carte' : '1 à 9 ou clic : acheter, porter, ôter ; Échap ou F : partir';
-  const hint = scene.add.image(0, 0, Font.bake(scene, [keys], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
+  const hint = scene.add.image(0, 0, Font.bake(scene, ['1 à 9 ou clic : acheter, porter, ôter ; Échap ou F : partir'], GREY)).setOrigin(0.5, 0).setDepth(UI + 1);
   let cards: Phaser.GameObjects.Image[] = [], xs: number[] = [], ys: number[] = [], hot = -1, now = offers;
   const width = (i: number) => (now[i].id === 'swarm' ? NUEE_W : CARD.w);
   const all = () => [dim, head, said, ...slots, about, bank, hint, ...cards];

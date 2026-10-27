@@ -274,8 +274,8 @@ describe('stepsFrom', () => {
 describe('viewSize', () => {
   it('shows 480x270 on any 16:9 screen, and grows the other side to the screen', () => {
     expect(viewSize(1920, 1080, 480, 270)).toEqual({ width: 480, height: 270 });
-    expect(viewSize(915, 412, 480, 270)).toEqual({ width: 480, height: 216 }); // 20:9 phone, landscape: as wide as a room
-    expect(viewSize(412, 915, 480, 270)).toEqual({ width: 270, height: 600 }); // and upright
+    expect(viewSize(915, 412, 480, 270)).toEqual({ width: 480, height: 216 }); // 20:9: as wide as a room
+    expect(viewSize(412, 915, 480, 270)).toEqual({ width: 270, height: 600 }); // a window taller than wide
     expect(viewSize(1024, 768, 480, 270)).toEqual({ width: 480, height: 360 }); // 4:3
     expect(viewSize(2560, 1080, 480, 270)).toEqual({ width: 480, height: 203 }); // 21:9
   });

@@ -48,7 +48,7 @@ const KNOBS = [
   ['Aube (cloître) : une brûlure toutes les (ms)', 'dawn', 'burnEveryMs', 300, 3000, 50],
 ] as const;
 
-// Folded or not, the panel stays so across the training room's restarts (on a phone, it is folded to play).
+// Folded or not, the panel stays so across the training room's restarts.
 let shown = true;
 let rank = 0; // the rarity of the gifts ticked
 
@@ -56,8 +56,8 @@ const tuned = T as unknown as Record<string, Record<string, number>>;
 const defaults: Record<string, number> = Object.fromEntries(KNOBS.map(([, g, k]) => [`${g}.${k}`, tuned[g][k]]));
 
 const CSS = `
-#training{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));width:min(260px,calc(100vw - 16px));
-  max-height:calc(100% - 16px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto;overscroll-behavior:contain;box-sizing:border-box;z-index:10;
+#training{position:fixed;top:8px;right:8px;width:min(260px,calc(100vw - 16px));
+  max-height:calc(100% - 16px);overflow:auto;overscroll-behavior:contain;box-sizing:border-box;z-index:10;
   padding:8px 10px;background:#170d22ee;border:1px solid #2e1838;color:#e8dcc8;font:13px/1.35 Georgia,"Times New Roman",serif}
 #training summary{cursor:pointer;font-weight:700;color:#e0284a;letter-spacing:.06em}
 #training small{color:#a8929f;font-weight:400;letter-spacing:0}
@@ -72,14 +72,7 @@ const CSS = `
 #training select{font:inherit;color:inherit;background:#0b0710;border:1px solid #2e1838}
 #training output{color:#8ff0dc}
 #training textarea{width:100%;box-sizing:border-box;margin:8px 0 4px;background:#0b0710;color:#e8dcc8;border:1px solid #2e1838;
-  font:11px/1.3 ui-monospace,monospace;resize:vertical}
-@media (pointer:coarse){
-  #training{top:calc(52px + env(safe-area-inset-top,0px));width:min(240px,60vw);max-height:calc(100% - 60px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
-  #training button{padding:6px 8px}
-}
-@media (pointer:coarse) and (orientation:portrait){ /* over the dark above the room, not over the room */
-  #training{left:calc(8px + env(safe-area-inset-left,0px));width:auto;max-height:28vh}
-}`;
+  font:11px/1.3 ui-monospace,monospace;resize:vertical}`;
 
 /** Opens the panel; returns what closes it. */
 export function panel(api: {
@@ -89,10 +82,9 @@ export function panel(api: {
   // Every gift can be ticked, several in one slot too: the one-per-slot rule is the run's, not the training room's.
   const gifts = (k: (id: GiftId) => boolean) => GIFT_IDS.filter(k).map((id) =>
     `<label><input type="checkbox" data-gift="${id}"${api.gifts.includes(id) ? ' checked' : ''}> ${GIFTS[id].name}${GIFTS[id].slot ? ` <small>· ${KINDS[kind(id)]}</small>` : ''}</label>`).join('');
-  const coarse = matchMedia('(pointer: coarse)').matches;
   const root = document.createElement('aside');
   root.id = 'training';
-  root.innerHTML = `<style>${CSS}</style><details${shown ? ' open' : ''}><summary>ENTRAÎNEMENT${coarse ? '' : ' <small>· T pour quitter · P plein écran</small>'}</summary>
+  root.innerHTML = `<style>${CSS}</style><details${shown ? ' open' : ''}><summary>ENTRAÎNEMENT <small>· T pour quitter · P plein écran</small></summary>
     <h3>Salle</h3>
     <div class="row">${ROOMS.map(([id, l]) => `<button type="button" data-layout="${id}">${l}</button>`).join('')}</div>
     <h3>Ennemis</h3>
