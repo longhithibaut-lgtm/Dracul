@@ -1739,13 +1739,15 @@ export class RoomScene extends Phaser.Scene {
    *  room it leads to (world.ts), this one kept as he leaves it, the hounds hunting him at his heels. Leaving the refuge
    *  starts an expedition. In the training room, the refuge's stairs lead to the training crypt. */
   private leave(exit: number) {
+    const exp = this.exp ?? expedition(0), way = this.training ? undefined : go(exp.came, this.here, exit);
+    if (!this.training && !way) return console.warn(`no way out of ${this.layout} by exit ${exit}: ignored`); // e.g. the refuge's -1
     this.phase = 'leave';
     this.walk = this.room.zone ? -1 : exit < 0 || this.layout === 'refuge' ? 1 : -1;
     this.hero.setCollideWorldBounds(false);
     this.cameras.main.fadeOut(T.expedition.fadeMs);
     let next: Run = { training: true, gifts: this.gifts, ranks: this.ranks, layout: 'hall' };
     if (!this.training) {
-      const exp = this.exp ?? expedition(0), live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
+      const live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable);
       const hounds = live.filter((e) => e.getData('kind') === 'hound' && e.getData('alert') && !e.getData('followed'));
       const st = exp.rooms[this.here];
       if (st) Object.assign(st, { // as he leaves it; an Amas' torn ghouls are its own, gone with it
@@ -1754,9 +1756,8 @@ export class RoomScene extends Phaser.Scene {
         drops: this.drops.map(({ x, y, blood }) => ({ x, y, blood })),
         items: this.loot.map(({ x, y, item }) => ({ x, y, item })),
       });
-      const way = go(exp.came, this.here, exit)!;
-      exp.deepest = Math.max(exp.deepest, WORLD[way.to].ring);
-      next = { layout: way.to, entry: way.entry, exp, health: this.health, carried: this.carried, hounds: hounds.map((e) => e.getData('hp')), bag: this.bag };
+      exp.deepest = Math.max(exp.deepest, WORLD[way!.to].ring);
+      next = { layout: way!.to, entry: way!.entry, exp, health: this.health, carried: this.carried, hounds: hounds.map((e) => e.getData('hp')), bag: this.bag };
     }
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(next));
   }

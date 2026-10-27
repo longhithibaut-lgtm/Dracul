@@ -58,6 +58,7 @@ describe('the world: the refuge, la nécropole round it, les catacombes under it
     expect(go(came, 'catacombs', -1)).toEqual({ to: 'necropolis', entry: 4 }); // up the well, whichever way he came down
     expect(go(came, 'catacombs', -2)).toEqual({ to: 'necropolis', entry: 5 }); // up le caveau's stairs
     expect(go(came, 'catacombs', -3)).toBeUndefined();
+    expect(go(came, 'refuge', -1)).toBeUndefined(); // the refuge has no way back: leave() ignores it
     expect(go(came, 'cloister', 0)).toBeUndefined(); // the deepest: its doors lead nowhere yet
     expect(go(came, 'refuge', -1)).toBeUndefined();
     expect(parents('cloister')).toEqual([{ from: 'chapel', exit: 0 }, { from: 'chapel', exit: 1 }]);
