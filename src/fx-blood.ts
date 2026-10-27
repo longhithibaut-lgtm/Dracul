@@ -3,7 +3,7 @@ import { T } from './tuning.ts';
 import { prelit, SANG, ZOOM } from './dark.ts';
 import { stains } from './enemy.ts';
 
-// « A. Sang » (docs/maquettes/fx-a-sang.png, drawn by tools/art/maquettes/fx/fx.py): the combat effects (fx.ts hands
+// « A. Sang » (docs/maquettes/fx-a-sang.png): the combat effects (fx.ts hands
 // over to these). Arterial dark red, sprays of drops that fall and stay on the
 // floor, clotted vapour; nothing glows, nothing is white. Drawn on the hero's fine grid: Graphics scaled 1/Z, so a unit
 // here is one screen pixel of the x2 room (coordinates are room px times Z). What lands goes into the floor's blood

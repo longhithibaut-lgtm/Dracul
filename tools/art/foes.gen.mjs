@@ -231,7 +231,7 @@ const JOBS = Object.entries(FOES).filter(([id]) => !ONLY || ONLY.includes(id)).f
   { id, view: 'side', name: 'corpse', n: -1 },
 ]);
 
-// The card's lighting (fiche.mjs put()), the foe standing at the cell's centre turned to `yaw`.
+// The enemy sheets' lighting, the foe standing at the cell's centre turned to `yaw`.
 function scene(job) {
   const F = FOES[job.id], CX = F.FW / 2, dead = job.name === 'corpse', yaw = dead ? 0.25 : VIEWS[job.view];
   const [, make, { bob = 0, layer } = {}] = dead ? [] : F.frames[job.n];

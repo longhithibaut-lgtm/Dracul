@@ -1,6 +1,6 @@
 # Direction artistique
 
-Tout le jeu est en **« grand pixel »** (le refuge, les cinq salles des fuites, la salle de torture d'entraînement) ;
+Tout le jeu est en **« grand pixel »** (le refuge, les zones ouvertes, les cinq intérieurs) ;
 la **« Nuit de sang »**, la direction précédente, est archivée en bas de page. Sections inspirées du modèle d'art bible de
 [claude-code-game-studios](https://github.com/donchitos/claude-code-game-studios) (MIT) ; chaque règle cite une
 décision ou une maquette validée.
@@ -35,9 +35,7 @@ tombent une à une ; ce qui la lit dans le noir : le sceau d'or sur son dos (une
 elle se prépare), ses yeux, les maillons de ses laisses, sa peau cendrée. Vesna la Grise : le modèle de la maquette du
 refuge (`tools/art/maquettes/hub3/chiefs3.mjs`), ses rats sur elle, rendue comme le Rongé (`tools/art/vesna.gen.mjs`).
 
-**Lieux** : le refuge validé (`docs/maquettes/refuge-*.png`, `refuge2-*.png`, plan dans `docs/lore.md`) ; la salle de
-torture (`docs/maquettes/grand-ecran.png`, `src/torture.ts`) : pierre crasseuse, sang séché, torches mourantes, pendus,
-cages, fosse aux corps ; la crypte (`tools/art/rooms/crypt.mjs`) : dalles crasseuses, médaillons gravés sous deux rais
+**Lieux** : le refuge validé (`docs/maquettes/refuge-*.png`, `refuge2-*.png`, plan dans `docs/lore.md`) ; la crypte (`tools/art/rooms/crypt.mjs`) : dalles crasseuses, médaillons gravés sous deux rais
 de lune, cercueils moisis sur leurs socles, piliers à torche, braseros, bougies, ossuaire, os et vieux sang ; le cloître
 sous l'Aube (`docs/maquettes/cloitre.png`, `tools/art/rooms/cloister.mjs`) : soleil sacré dur venu d'en haut à gauche,
 ombres froides nettes, plus clair que les cryptes ; le soleil y est le danger, l'ombre l'abri ; la nef
@@ -51,11 +49,12 @@ sommet de crânes entassés, moignons de colonnes de roche, flaques de lune par 
 ne brûlent pas) et la brèche où tombe l'Aube (dorée, qui brûle, liseré jaune) ; le camp de l'Ordre (tentes coniques,
 bûcher, braseros, lanternes vert sale dont la flaque brûle) ; mêmes lumière, palette et post-production que les cryptes. Les catacombes (`tools/art/rooms/catacombs.mjs`, sous la nécropole, mêmes morceaux d'un écran) : roche creusée en lits, coups de pic en biais, suintements ; vue d'en haut, la roche est un noir à peine strié (son sommet), basse au bord sud des galeries pour ne jamais les cacher, haute là où sa face regarde la caméra ; faces d'ossuaire aux rangs de crânes, niches en arc aux crânes posés sur leur rebord, crânes tombés au pied ; sol par lieu : dalles usées (joints crasseux, éclats, fissures, dalles enfoncées où l'eau stagne) et lits d'ossements tassés dans les galeries, terre battue et éboulis dans les boyaux, crasse du nid (sang caillé, chiffons pourris, touffes de cheveux, lambeaux de chair), rive de roche mouillée et boue au lac, grandes dalles de l'Ordre à la prison (gravées, salpêtrées, grilles d'égout, anneaux et chaînes, cire, traînées de sang séché vers le reliquaire), sentier plus clair des patrouilles, flaques suintantes ; peu de lumière : bougies des patrouilles dans une niche sur trois, la lune par les puits (le fond du puits, la grande croisée, les eaux noires), braseros et lanterne de l'Ordre aux croisées et à la prison, pourriture phosphorescente vert pâle au nid, aux rats, dans la galerie basse ; le nid (amas de restes couvert de crânes, cadavres rongés, sang traîné), le lac noir, la prison dallée au médaillon gravé et le reliquaire de Vesna (cage de fer, coffre doré, cire rouge, signe du Rat en argent). Dans la nécropole, le puits (margelle ouverte, échelons, treuil) et le caveau (mausolée à pyramide de pierre, grille). Le reliquaire s'ouvre une fois (images cuites par-dessus le morceau : la porte de la cage pivote, les portes du coffre s'ouvrent sur le noir, les chaînes glissent, la cire se brise) ; la tour de la grille de l'arène est basse (elle cachait le sol du combat). Le refuge une fois Vesna libérée (`tools/art/refuge.gen.mjs --vesna`, l'état « rat » de la maquette) : son cercueil ouvert dans la crypte, son échoppe ouverte (étagères de bocaux, étal, lampe, tapis au signe du Rat), posés sur la première cuisson là où ils diffèrent.
 
-**Maquettes** (`docs/maquettes/`, générateurs dans `tools/art/maquettes/`)
+**Maquettes** (`docs/maquettes/`). `tools/art/maquettes/` ne garde que les modules importés par les générateurs du jeu ;
+les générateurs des maquettes archivées ont été retirés (2026-10-27), à reprendre dans l'historique git au besoin.
 
 | Fichier | Statut |
 |---|---|
-| `grand-heros.png`, `grand-ecran.png` | direction retenue (essai) |
+| `grand-heros.png`, `grand-ecran.png` | direction retenue (l'écran : l'ancienne salle de torture d'essai, retirée) |
 | `refuge-*.png`, `refuge2-*.png` | refuge validé |
 | `a-encre-gothique.png`, `b-crasse-et-faim.png`, `c-clair-obscur.png` | pistes écartées (la B a donné l'éclairage) |
 | `fx-a-sang*.png` | effets de combat retenus (sang artériel, gouttes, caillots ; `src/fx-blood.ts`) |
@@ -63,7 +62,7 @@ bûcher, braseros, lanternes vert sale dont la flaque brûle) ; mêmes lumière,
 | `cloitre.png` | cloître validé (« plus clair dehors, moins d'arbres ») |
 | `ennemis-*.png` | ennemis retenus (voir `docs/decisions.md`) |
 | `boss-catacombes-*.png` | trois pistes pour le gardien des catacombes ; la Nourrice des goules est retenue, à redessiner |
-| `boss-nourrice-*.png` | quatre variantes de la Nourrice (Araignée, Matrice, Sainte, Emmurée) ; **A, l'Araignée, retenue** (dans le jeu : `tools/art/nourrice.gen.mjs`) ; générateur `tools/art/maquettes/boss/` (`SET=nourrice`) |
+| `boss-nourrice-*.png` | quatre variantes de la Nourrice (Araignée, Matrice, Sainte, Emmurée) ; **A, l'Araignée, retenue** (dans le jeu : `tools/art/nourrice.gen.mjs`) |
 
 **À décider avec l'utilisateur** (aucune règle tant que ce n'est pas tranché) : palette commune des salles, HUD et
 police à 960×540.
