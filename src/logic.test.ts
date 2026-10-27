@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertness, sightRange, biteTarget, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, swarmUnlocked, wound } from './logic.ts';
+import { alertness, sightRange, biteTarget, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, shelf, value } from './gifts.ts';
 import { T } from './tuning.ts';
 import { missing, width } from './font.ts';
@@ -160,11 +160,6 @@ describe('gifts (training room)', () => {
     for (const id of GIFT_IDS.filter((id) => GIFTS[id].ranked)) expect(value(id, 0) < value(id, 1) && value(id, 1) < value(id, 2)).toBe(true);
     expect(GIFTS.griffes.ranked && !GIFTS.perce.ranked && !GIFTS.contagion.ranked && !GIFTS.maigre.ranked).toBe(true);
     expect(value('perce', 2)).toBe(0);
-  });
-
-  it('la Nuée answers a hero holding enough gifts', () => {
-    expect(swarmUnlocked(['griffes', 'jet'], T.swarm.gifts)).toBe(false);
-    expect(swarmUnlocked(['griffes', 'jet', 'maigre'], T.swarm.gifts)).toBe(true);
   });
 });
 

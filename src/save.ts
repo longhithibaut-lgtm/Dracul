@@ -2,14 +2,18 @@
 // localStorage; plus a log of the expeditions for the playtests (docs/extraction.md §12: returns, deaths, depth). The
 // game runs without storage (a private window, a framed preview): it then starts afresh each time.
 import { ITEMS, SLOTS, type Item, type Worn } from './items.ts';
+import { isPower, slotOf, type Power, type Worn as Powers } from './powers.ts';
 
-export const VERSION = 2; // 2: the items (stash, worn, next); a version 1 save comes up with none
+export const VERSION = 3; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers. An older save comes up without what it lacks
 // unlocks: what the Rongé sold for banked blood (shop.ts): the bite, the ranks of max life (`life`) and of the bag (`bag`)
 // bought. dry: how many times in a row the hero came back (or re-formed) without pouring blood: the Rongé's hunger.
 // shortcuts: the zone's gates raised for good (necropolis.data.ts GATES ids). stash: the items brought back (the
 // refuge's chest, acquired for good); worn: what he wears, by slot (items.ts SLOTS; on an expedition it may hold items
 // not yet brought back: those are dropped when read back, as at death); next: the number the next item found takes.
-export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number; shortcuts: string[]; stash: Item[]; worn: Worn; next: number };
+// nourrice: the catacombs' guardian, fights begun and her death (for good); vesna: freed (for good, even if he dies on
+// his way back); powers: the Rat house's powers bought from her, and those worn, one per slot (powers.ts).
+export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number; shortcuts: string[]; stash: Item[]; worn: Worn; next: number;
+  nourrice: { tries: number; dead: boolean }; vesna: boolean; powers: { bought: Power[]; worn: Powers } };
 const KEY = 'dracul.save', LOG = 'dracul.log';
 
 /** A save read back from `json`, whatever it holds: brought up to this version, missing or broken fields to their
@@ -29,7 +33,10 @@ export function parse(json: string | null): Save {
     worn.push(w && ITEMS[w.id].fam === f && !worn.includes(w) ? w : null);
   });
   const next = Math.max(count(o.next), ...stash.map((i) => i.n + 1));
-  return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry), shortcuts, stash, worn, next };
+  const bought = Array.isArray(o.powers?.bought) ? [...new Set(o.powers.bought.filter(isPower))] : [], wearing: Powers = {};
+  for (const id of bought) { const k = slotOf(id); if (k && o.powers?.worn?.[k] === id) wearing[k] = id as Powers[typeof k]; } // only what is bought, in its own slot
+  return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry), shortcuts, stash, worn, next,
+    nourrice: { tries: count(o.nourrice?.tries), dead: o.nourrice?.dead === true }, vesna: o.vesna === true, powers: { bought, worn: wearing } };
 }
 
 const storage = () => { try { return localStorage; } catch { return undefined; } }; // a sandboxed frame throws on access
@@ -48,9 +55,10 @@ export function store() {
 }
 
 /** One expedition ended: back at the refuge or dead. deepest: the deepest ring reached; blood: carried at its end;
- *  life: health left; s: how long it lasted; loosed, met: the battue's packs his scent loosed, and those he walked into.
+ *  life: health left; s: how long it lasted; loosed, met: the battue's packs his scent loosed, and those he walked into;
+ *  boss: the Nourrice fought (« essai ») or killed (« tuée ») on it.
  *  Kept (the last 200) in localStorage and shown in the console. */
-export type Entry = { end: 'retour' | 'mort'; deepest: number; blood: number; life: number; s: number; loosed: number; met: number; at: string };
+export type Entry = { end: 'retour' | 'mort'; deepest: number; blood: number; life: number; s: number; loosed: number; met: number; boss?: 'essai' | 'tuée'; at: string };
 export function log(e: Omit<Entry, 'at'>) {
   const entry = { ...e, at: new Date().toISOString() };
   console.info('expédition', JSON.stringify(entry));

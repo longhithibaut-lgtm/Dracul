@@ -31,7 +31,7 @@ export type Room = {
   width: number; height: number; // of the whole room (the camera follows the hero)
   look: Look; // in the dark (dark.ts): how it is lit
   sections: number[]; // feet lines the hero climbs past into the room's next part, bottom first (none: one part)
-  zone?: { id: ZoneId; chunks: Zone.Chunks; gates: Zone.Gate[]; lamps: P[] }; // an open zone (zone.ts): which, its chunks round the camera, its shortcuts, its lanterns' pools
+  zone?: { id: ZoneId; chunks: Zone.Chunks; gates: Zone.Gate[]; lamps: P[]; opens: Zone.Opening[] }; // an open zone (zone.ts): which, its chunks round the camera, its shortcuts, its lanterns' pools, what opens once
 };
 
 // The run's rooms, in the « grand pixel » style (docs/art.md), baked offline by tools/art/rooms.gen.mjs from their 3D
@@ -59,7 +59,8 @@ const BAKED: Record<(typeof LAYOUTS)[number], { key: string; D: Baked.Plan; look
 /** What a room's build needs loaded: a baked room's images; the zone's round where the hero comes in (`at`). */
 export function preload(scene: Phaser.Scene, id: LayoutId, at: { x: number; y: number }) {
   if (id === 'necropolis' || id === 'catacombs') Zone.preload(scene, id, at);
-  else if (id !== 'torture') Baked.preload(scene, id === 'refuge' ? 'refuge' : BAKED[id].key);
+  else if (id === 'refuge') Refuge.preload(scene);
+  else if (id !== 'torture') Baked.preload(scene, BAKED[id].key);
 }
 
 /** Winches the portcullises up over `ms`, letting the moonlight in. */
@@ -74,7 +75,7 @@ export function raiseGate(scene: Phaser.Scene, ms: number) {
 
 export function build(scene: Phaser.Scene, id: LayoutId): Room {
   if (id === 'refuge') return Refuge.build(scene);
-  if (id === 'necropolis' || id === 'catacombs') return Zone.build(scene, id, Save.data.shortcuts);
+  if (id === 'necropolis' || id === 'catacombs') return Zone.build(scene, id, Save.data.shortcuts, Save.data.vesna ? ['reliquary'] : []);
   if (id === 'torture') return torture(scene);
   const b = BAKED[id];
   return Baked.room(scene, b.key, b.D, b.look, b.dawn ? T.dawn : T.lantern);

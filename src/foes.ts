@@ -160,17 +160,17 @@ function rings(g: Phaser.GameObjects.Graphics, at: { x: number; y: number; at: n
 }
 
 /** How far over the floor an Amas' slam struck at `at` has spread by `now`: from under its body out to T.amas.reach. */
-export const slamAt = (at: number, now: number) =>
-  Phaser.Math.Linear(12, T.amas.reach, Phaser.Math.Easing.Quadratic.Out(Phaser.Math.Clamp((now - at) / T.amas.slamMs, 0, 1)));
+export const slamAt = (at: number, now: number, reach: number = T.amas.reach) =>
+  Phaser.Math.Linear(12, reach, Phaser.Math.Easing.Quadratic.Out(Phaser.Math.Clamp((now - at) / T.amas.slamMs, 0, 1)));
 
 /** An Amas slams down round its feet (x, y): a wave of dust and blood spreads over the floor to its reach (slamAt), the
  *  floor shakes, blood is flung all round and stains it. Drawn unlit, like the bell's rings: the blow shows in the dark. */
-export function slam(scene: Scene, x: number, y: number) {
+export function slam(scene: Scene, x: number, y: number, reach: number = T.amas.reach) { // (La Nourrice's slams: her own reach)
   const g = scene.add.graphics().setDepth(7990), at = scene.time.now;
   scene.cameras.main.shake(180, new Phaser.Math.Vector2(3 / scene.cameras.main.width, 3 / scene.cameras.main.height));
   for (let i = 0; i < 6; i++) bleed(scene, x, y - GROUND, (i * Math.PI) / 3, 8, Math.PI / 6, 1.4, 4);
   run(scene, 700, () => {
-    const now = scene.time.now, r = slamAt(at, now), fade = 1 - Phaser.Math.Clamp((now - at - T.amas.slamMs) / 480, 0, 1);
+    const now = scene.time.now, r = slamAt(at, now, reach), fade = 1 - Phaser.Math.Clamp((now - at - T.amas.slamMs) / 480, 0, 1);
     g.clear();
     for (let k = 0, n = Math.round((2 * Math.PI * r) / 0.8); k < n; k++) {
       const a = (k / n) * 2 * Math.PI, h = Math.sin(k * 12.9898 + 4.1) * 43758.5453, u = h - Math.floor(h), rr = r - u * 7; // a ragged crest

@@ -28,6 +28,8 @@ export type Hud = {
   blood(carried: number, bag: number, banked?: number): void; // blood carried out of the bag; at the refuge, banked too
   bag(items: readonly Item[] | undefined, size: number): void; // the items carried, in a bag of `size`; undefined: not shown
   threats(enemies: { x: number; y: number }[]): void; // on the screen's coordinates; off it, a pip points at each
+  boss(name: string | undefined, hp?: number, max?: number): void; // a guardian's blood, a bar at the screen's foot; undefined: none
+  say(who: string, text: string, ms: number): void; // a line spoken, under the middle of the screen, `ms` long
 };
 
 // "Nuit de sang" palette (docs/art.md), plus the Rat house's silver and grey for the gift icons.
@@ -169,6 +171,7 @@ export function create(scene: Phaser.Scene): Hud {
   let threats: { x: number; y: number }[] = [];
   let carried = -1, bag = 0, banked: number | undefined, gotAt = -1e9; // carried -1: not shown (the training room)
   let items: readonly Item[] | undefined, slots = 0, itemAt = -1e9;
+  let boss: { name: string; hp: number; max: number; hitAt: number; shown: number } | undefined, line: { who: string; text: string; at: number; ms: number } | undefined;
   // The corner, in from the safe area (native px per CSS px: the scale manager's displayScale).
   const corner = () => {
     const css = getComputedStyle(probe), k = scene.scale.displayScale.x / Z;
@@ -325,6 +328,29 @@ export function create(scene: Phaser.Scene): Hud {
       }
     }
 
+    // A guardian's blood: her name over a long bar at the screen's foot, blood red, what she just lost flashing bone
+    // and draining away after it.
+    if (boss) {
+      const W = scene.scale.width / Z, H = scene.scale.height / Z, w = Math.min(240, W - 40), x = Math.round((W - w) / 2), y = Math.round(H - 22);
+      boss.shown = Math.max(boss.hp, boss.shown - (now - boss.hitAt > 400 ? 0.15 : 0));
+      g.fillStyle(C.void, 0.85).fillRect(x - 2, y - 2, w + 4, 8);
+      g.fillStyle(C.dusk).fillRect(x - 1, y - 1, w + 2, 6);
+      g.fillStyle(C.night).fillRect(x, y, w, 4);
+      g.fillStyle(C.bone).fillRect(x, y, Math.round((w * boss.shown) / boss.max), 4);
+      g.fillStyle(C.blood[1]).fillRect(x, y, Math.round((w * boss.hp) / boss.max), 4);
+      g.fillStyle(C.blood[2]).fillRect(x, y, Math.round((w * boss.hp) / boss.max), 1);
+      for (const [c, d] of [[C.void, 1], [C.bone, 0]]) { g.fillStyle(c); Font.draw(boss.name, x + d, y - 13 + d, (px, py) => g.fillRect(px, py, 1, 1)); }
+    }
+    // A line spoken: who in silver, what in bone, wrapped under the middle of the screen; it fades out at its end.
+    if (line && now - line.at < line.ms) {
+      const W = scene.scale.width / Z, H = scene.scale.height / Z, a = Math.min(1, (line.ms - (now - line.at)) / 300), rows = Font.wrap(line.text, Math.min(320, W - 40));
+      const y = Math.round(H * 0.68);
+      g.fillStyle(C.void, 0.6 * a).fillRect(0, y - 4, W, (rows.length + 1) * Font.LINE + 8);
+      g.fillStyle(C.silver, a);
+      Font.draw(line.who, Math.round((W - Font.width(line.who)) / 2), y, (px, py) => g.fillRect(px, py, 1, 1));
+      rows.forEach((r, i) => { for (const [c, d] of [[C.void, 1], [C.bone, 0]]) { g.fillStyle(c, a); Font.draw(r, Math.round((W - Font.width(r)) / 2) + d, y + (i + 1) * Font.LINE + d, (px, py) => g.fillRect(px, py, 1, 1)); } });
+    }
+
     // Enemies off the screen: a small triangle on its edge points at each, blood red (where it is, never what it is
     // about to do). Outlined in the void, so it reads on any floor.
     for (const e of threats) {
@@ -407,6 +433,14 @@ export function create(scene: Phaser.Scene): Hud {
     },
     threats(list) {
       threats = list;
+    },
+    boss(name, hp = 0, max = 1) {
+      if (!name) return void (boss = undefined);
+      const shown = boss?.shown ?? hp;
+      boss = { name, hp: Math.max(0, hp), max, hitAt: hp < (boss?.hp ?? hp) ? scene.time.now : boss?.hitAt ?? -1e9, shown };
+    },
+    say(who, text, ms) {
+      line = { who, text, at: scene.time.now, ms };
     },
   };
 }

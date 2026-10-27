@@ -335,8 +335,9 @@ describe('les catacombes', () => {
 });
 
 describe('save', () => {
+  const V3 = { nourrice: { tries: 0, dead: false }, vesna: false, powers: { bought: [], worn: {} } }; // version 3's, at their start
   it('starts afresh without a save, or with a broken one', () => {
-    const fresh = { v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0 };
+    const fresh = { v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0, ...V3 };
     expect(parse(null)).toEqual(fresh);
     expect(parse('{not json')).toEqual(fresh);
     expect(parse('42')).toEqual(fresh);
@@ -344,13 +345,13 @@ describe('save', () => {
   });
 
   it('reads back what it stored', () => {
-    const s = { v: VERSION, banked: 120, unlocks: { bite: true, life: 2, bag: 1 }, dry: 2, shortcuts: ['grille'], stash: [], worn: [null, null, null, null, null, null], next: 0 };
+    const s = { v: VERSION, banked: 120, unlocks: { bite: true, life: 2, bag: 1 }, dry: 2, shortcuts: ['grille'], stash: [], worn: [null, null, null, null, null, null], next: 0, ...V3 };
     expect(parse(JSON.stringify(s))).toEqual(s);
   });
 
   it('brings an older or damaged save up to date: missing fields to their start, bad values cleaned, unknown ones dropped', () => {
-    expect(parse('{"banked":37}')).toEqual({ v: VERSION, banked: 37, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0 }); // before versions
-    expect(parse('{"v":1,"banked":-5,"unlocks":{"bite":"yes"},"junk":1}')).toEqual({ v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0 });
+    expect(parse('{"banked":37}')).toEqual({ v: VERSION, banked: 37, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0, ...V3 }); // before versions
+    expect(parse('{"v":1,"banked":-5,"unlocks":{"bite":"yes"},"junk":1}')).toEqual({ v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0, ...V3 });
     expect(parse('{"v":1,"banked":12.7}').banked).toBe(12);
     expect(parse('{"v":1,"banked":"NaN"}').banked).toBe(0);
     expect(parse('{"v":1,"unlocks":{"bite":true,"life":-1}}').unlocks).toEqual({ bite: true, life: 0, bag: 0 });

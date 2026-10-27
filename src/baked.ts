@@ -9,6 +9,9 @@ import { runMask } from './logic.ts';
 // and each exit's portcullis' frames). The refuge (refuge.ts) and the run rooms of tools/art/rooms.gen.mjs (src/<key>.data.ts).
 const URLS = import.meta.glob('./*-{albedo,light,over}.png', { eager: true, import: 'default' }) as Record<string, string>;
 
+/** The url of baked image `name` (src/<name>.png). */
+export const url = (name: string) => URLS[`./${name}.png`];
+
 export function preload(scene: Phaser.Scene, key: string) {
   for (const k of ['albedo', 'light', 'over']) if (!scene.textures.exists(`${key}-${k}`)) scene.load.image(`${key}-${k}`, URLS[`./${key}-${k}.png`]);
 }

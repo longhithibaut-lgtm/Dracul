@@ -17,6 +17,7 @@ export type ZoneData = {
   OVER: [number, number, number, number, number, number, number][][];
   BOXES: [number, number, number, number][]; PITS: [number, number, number, number][];
   GATES: { id: string; name: string; side: number; lever: P | null; arch: boolean; arena: boolean; box: [number, number, number, number]; at: [number, number]; w: number; h: number; depth: number; frames: [number, number][] }[];
+  OPENS?: { id: string; at: [number, number]; w: number; h: number; depth: number; frames: [number, number][] }[]; // what opens once (Vesna's reliquary)
   TUNNEL: { x: number; y: number; w: number }[]; DOORS: Record<string, { x: number; y: number; w: number }>;
   AREAS: { id: string; ring: number; rect: [number, number, number, number]; groups: number }[];
   SPAWNS: [number, number, number][]; CACHES: [number, number][]; CHOKES: [number, number, number][];
@@ -91,8 +92,8 @@ const grids = new Map<string, { open: boolean[]; cols: number; steps: number[]; 
 export const cellAt = (cols: number, x: number, y: number) => Math.floor(y / NAV) * cols + Math.floor(x / NAV);
 /** Raised for good: the gallery (shortcut B), its two mouths linked. */
 export const galleryOpen = (opened: readonly string[]) => opened.includes('galerie');
-/** A zone's gate open: raised for good (`opened`), or an arena's, open until a fight shuts it. */
-export const gateOpen = (g: ZoneData['GATES'][number], opened: readonly string[]) => g.arena || opened.includes(g.id);
+/** A zone's gate open: raised for good (`opened`), or an arena's, open but while a fight (`fight`) shuts it. */
+export const gateOpen = (g: ZoneData['GATES'][number], opened: readonly string[], fight = false) => (g.arena ? !fight : opened.includes(g.id));
 /** Zone `z`'s ways up open (the indexes in WORLD[z].up of those whose door no gate shuts). */
 export const waysUp = (z: ZoneId, opened: readonly string[]) => WORLD[z].up!.flatMap((k, i) => (ZONES[z].GATES.some((g) => g.id === k && !gateOpen(g, opened)) ? [] : [i]));
 /** Zone `z`'s walk grid (cells NAV px; the shortcuts not in `opened` shut; the gallery's mouths a step apart once open)
@@ -168,7 +169,7 @@ export type RoomState = {
 /** The expedition under way: when it started, the deepest ring reached, the way back, the places entered; `packs`: the
  *  battue's packs his scent has called (logic.ts scent()) still waiting for a lair; `loosed`: the packs laid in wait so
  *  far, `met`: those that found him. */
-export type Expedition = { startedAt: number; deepest: number; came: Came; rooms: Partial<Record<Place, RoomState>>; packs: number; loosed: number; met: number };
+export type Expedition = { startedAt: number; deepest: number; came: Came; rooms: Partial<Record<Place, RoomState>>; packs: number; loosed: number; met: number; boss?: 'essai' | 'tuée' }; // boss: the Nourrice fought, or killed
 export const expedition = (deepest: number): Expedition => ({ startedAt: Date.now(), deepest, came: {}, rooms: {}, packs: 0, loosed: 0, met: 0 });
 
 /** Lays the packs his scent has called (`exp.packs`) in wait across a zone, on his way back from `hero` (`way`, see

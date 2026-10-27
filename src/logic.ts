@@ -117,8 +117,6 @@ export function pickSpot(spots: P[], hero: P, taken: P[], rx: number, ry: number
     .sort((a, b) => d(a) - d(b))[0];
 }
 
-/** La Nuée, the Rat house's form of the night, answers a hero holding `need` of its gifts. */
-export const swarmUnlocked = (held: readonly unknown[], need: number) => held.length >= need;
 
 /** A placed foe on the watch: seeing the hero (`sees`) at `now` sets it hunting him; it gives up once it has not seen
  *  him for `giveUpMs`. */

@@ -236,6 +236,36 @@ export const T = {
     light: 1.2, // his reliquary's faint gold in the dark rooms
   },
 
+  // La Nourrice des goules (« l'Araignée »), the catacombs' guardian before Vesna's reliquary (docs/decisions.md): huge,
+  // perched high on four long limbs, goules clinging to them. Nothing marks the floor: her body, her seal's gold, the
+  // sound tell every blow. Blows never cut her short nor push her back; the glyph does not bind her.
+  nourrice: {
+    hp: 40,
+    speed: 46,
+    reach: 18, // her body's half-width on the floor: the claws reach her this much farther
+    hard: 2, goules: 3, // a blow of `hard` or more shakes one of her clinging goules off (three cling to her); no more than `goules` of hers alive at once
+    near: 50, far: 100, // phase 1: she stalks the hero between these
+    // The drop: the body sinks, the fore-limbs rise very high, claws open, her joints crack one after another
+    // (`teleMs`; she follows him with her eyes `trackMs`, then her aim is locked), then she leaps (`leapMs`) and slams
+    // down where he stood: struck within `radius` (floor). Then she pulls herself up (`stuckMs`): the time to strike.
+    dropRange: 170, teleMs: 900, trackMs: 250, leapMs: 320, radius: 30, dropDamage: 2, stuckMs: 1400,
+    // The rake: a fore-limb drawn back and up (`rakeTeleMs`, her aim locked), then swept low across her front
+    // (`rakeMs`): struck between `rakeIn` and `rakeOut` (floor) within `rakeDeg` of her aim.
+    rakeRange: 56, rakeTeleMs: 800, rakeMs: 200, rakeIn: 12, rakeOut: 70, rakeDeg: 150, rakeDamage: 1, rakeRecoverMs: 600,
+    reloadMs: 1100,
+    // Phase 2, at half her blood: the Order's chains snap off her (`snapMs`, the tell: she rears, links fly), she
+    // leaps onto the walls (`climbMs`) and crawls along the arena's edge `wallZ` px up (`wallSpeed`), out of reach.
+    snapMs: 1400, climbMs: 600, wallZ: 70, wallSpeed: 80,
+    // From the wall she hurls (`hurlMs`, the tell: a limb raised back with a lump of bones) debris, or one of her
+    // goules, at where he stands as it leaves her claws; it lands `flightMs` later, striking within `hurlRadius`.
+    // `hurls` throws `hurlGapMs` apart; then she crosses the vault over him (`vaultZ` up, `vaultSpeed`, at most
+    // `creepMs`), holds there (`holdMs`, locked: dust falls off her, her joints creak) and drops (`fallMs`), striking
+    // within `radius`; down, she pulls herself up (`stuck2Ms`) and walks the floor `floorMs` before she climbs again.
+    hurlMs: 750, flightMs: 650, hurlRadius: 16, hurlDamage: 1, hurls: 2, hurlGapMs: 900,
+    vaultZ: 110, vaultSpeed: 120, creepMs: 1800, holdMs: 750, fallMs: 220, stuck2Ms: 1800, floorMs: 6000,
+    light: 1.2, teleLight: 2.6, // her seal's gold in the dark, flaring as she winds up
+  },
+
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
   lantern: {
     hp: 3,
@@ -292,7 +322,7 @@ export const T = {
   // refuge's basin (within `basin`).
   blood: {
     ring: [0, 1, 3, 8, 20],
-    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15 },
+    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20 },
     cache: 5,
     pickup: 16, search: 24, bag: 400, basin: 52,
   },
@@ -322,6 +352,11 @@ export const T = {
     hunger: 3,
   },
 
+  // Vesna la Grise, freed, at her shop in the refuge (refuge.ts VESNA): F within `talk` of her opens her stall, the
+  // Rat house's powers (powers.ts) for the blood banked: the k-th of the slot powers bought costs `cost` x `mult`^k
+  // (100, 150, 225, 338, 506, 759, 1139, 1709), la Nuée `swarm`.
+  vesna: { talk: 40, cost: 100, mult: 1.5, swarm: 1200 },
+
   // Items (items.ts, docs/extraction.md §6): found on an expedition, lost at death until brought back to the refuge,
   // where they are acquired for good (its chest). Worn in `slots` by family; carried in a bag of `bag` items, one more
   // a rank of le Rongé's bag. Found: in a cache, by its ring's `cache` chance (every cache of the zone's `sure` areas:
@@ -335,7 +370,7 @@ export const T = {
     cache: [0, 0.3, 0.4, 0.5, 0.6],
     odds: [[1, 0, 0], [0.9, 0.1, 0], [0.6, 0.33, 0.07], [0.35, 0.45, 0.2], [0.2, 0.45, 0.35]],
     sure: ['camp'],
-    elites: ['inquisitor', 'amas', 'bourreau'],
+    elites: ['inquisitor', 'amas', 'bourreau', 'nourrice'],
     pickup: 22,
     bleedMs: 2000, bleedTicks: 4,
     defs: {
@@ -395,8 +430,8 @@ export const T = {
     curee: { every: 3, heal: 1, bite: 1 }, // every `every` kills heal `heal`; a bite costs `bite` blood instead of healing
     vermine: { rats: 2, toll: 1 }, // each kill releases `rats` rats; each new room costs `toll` blood (never the last)
   },
-  // La Nuée, the Rat house's form of the night: holding `gifts` gifts, R turns the hero into a swarm of rats for
+  // La Nuée, the Rat house's form of the night: bought from Vesna (powers.ts), R turns the hero into a swarm of rats for
   // `durationMs`: fast (`speed` times his walk), untouchable by blows, it bites every enemy within `radius` (floor),
   // each once every `tickMs`; no claws, shard, bite, glyph or dash. Holy light disperses it at once.
-  swarm: { gifts: 3, durationMs: 4000, cooldownMs: 18000, speed: 2, radius: 16, damage: 1, tickMs: 350, rats: 11 },
+  swarm: { durationMs: 4000, cooldownMs: 18000, speed: 2, radius: 16, damage: 1, tickMs: 350, rats: 11 },
 } as const;

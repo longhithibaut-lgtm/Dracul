@@ -290,6 +290,23 @@ export const recipes = {
     voice(o, { src: 'sawtooth', f: 70, f2: 95, filter: 'lowpass', ff: 380, ff2: 600, q: 4, trem: 23, gain: 0.7, attack: 0.12, dur: 0.9 });
     voice(o, { src: 'noise', filter: 'bandpass', ff: 300, q: 3, trem: 17, gain: 0.35, attack: 0.15, dur: 0.8 });
   },
+  // La Nourrice winding up for `dur` s: her joints cracking one after another, dry and loud, over a creak of stretched
+  // sinew; held over him under the vault, the same, slower.
+  joints(o: Play, dur: number) {
+    const n = Math.max(3, Math.round(dur * 7));
+    bursts(o, Array.from({ length: n }, (_, i) => (i / n) * dur * (0.6 + 0.4 * (i / n)) + Math.random() * 0.03), { src: 'noise', filter: 'bandpass', ff: 1900, q: 3, gain: 0.7, attack: 0.001, dur: 0.035 });
+    bursts(o, Array.from({ length: n }, (_, i) => (i / n) * dur * (0.6 + 0.4 * (i / n)) + 0.01), { src: 'sine', f: 180, f2: 70, gain: 0.35, attack: 0.001, dur: 0.06 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 300, ff2: 520, q: 9, trem: 14, gain: 1.2, attack: dur * 0.5, dur });
+  },
+  // The Order's chains snapping off her: links straining, then three iron snaps, and the links rattling to the floor.
+  chains(o: Play) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 900, ff2: 1600, q: 6, trem: 30, gain: 0.6, attack: 0.3, dur: 0.45 });
+    for (const delay of [0.45, 0.62, 0.74]) {
+      voice(o, { src: 'square', f: 520, f2: 300, filter: 'bandpass', ff: 2200, q: 4, gain: 0.45, attack: 0.001, dur: 0.12, delay });
+      voice(o, { src: 'noise', filter: 'highpass', ff: 3000, gain: 0.7, attack: 0.001, dur: 0.05, delay });
+    }
+    bursts(o, Array.from({ length: 12 }, (_, i) => 0.85 + i * 0.05 + Math.random() * 0.03), { src: 'noise', filter: 'bandpass', ff: 3400, q: 6, gain: 0.3, attack: 0.001, dur: 0.03 });
+  },
   // A blow turned aside: steel on steel, a bright ring over a dry knock.
   parry(o: Play) {
     voice(o, { src: 'noise', filter: 'highpass', ff: 3000, gain: 0.8, attack: 0.001, dur: 0.05 });

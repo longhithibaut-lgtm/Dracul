@@ -100,8 +100,11 @@ function bakeGhoul(scene: Scene) {
   tex.refresh();
 }
 
+/** The ghoul's frames, baked once. */
+export const ghoulTexture = (scene: Scene) => scene.textures.exists('enemy') || bakeGhoul(scene);
+
 export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, x: number, y: number): Sprite {
-  if (!scene.textures.exists('enemy')) bakeGhoul(scene);
+  ghoulTexture(scene);
   const s = (group.create(x, y, 'enemy', 'rise0') as Sprite).setOrigin(0.5, ORIGIN / SIZE);
   s.setSize(12, 6).setOffset(14, 30); // feet
   s.setData({ born: scene.time.now, phase: Math.round(x * 3) });

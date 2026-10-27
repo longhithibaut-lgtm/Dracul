@@ -134,12 +134,38 @@ export function raise(scene: Phaser.Scene, g: Gate, obstacles: Phaser.Physics.Ar
   g.body = undefined;
 }
 
+/** Lets gate `g` down over `ms` (its frames, raised to shut) and stops walkers there: an arena's, behind the hero. */
+export function lower(scene: Phaser.Scene, g: Gate, obstacles: Phaser.Physics.Arcade.StaticGroup, ms: number) {
+  const n = g.frames.length - 1, [x, y, w, h] = g.box;
+  g.open = false;
+  g.img.setVisible(true);
+  scene.tweens.addCounter({ from: n, to: 0, duration: ms, ease: 'Quad.easeIn', onUpdate: (tw) => g.img.setFrame(`g${g.k}-${Math.round(tw.getValue() ?? 0)}`) });
+  g.body = scene.add.zone(x + w / 2, y + h / 2, w, h);
+  obstacles.add(g.body);
+}
+
+/** What opens once (Vesna's reliquary): its frames over the bake (which shows it shut), the last shown once it is open. */
+export type Opening = NonNullable<ZoneData['OPENS']>[number] & { img: Phaser.GameObjects.Image };
+function openings(scene: Phaser.Scene, z: ZoneId, opened: readonly string[]): Opening[] {
+  const tex = scene.textures.get(`${KEY[z]}-gates`);
+  return (ZONES[z].OPENS ?? []).map((o) => {
+    o.frames.forEach(([ax, ay], n) => tex.has(`o-${o.id}-${n}`) || tex.add(`o-${o.id}-${n}`, 0, ax, ay, o.w, o.h));
+    const img = scene.add.image(o.at[0] / 2, o.at[1] / 2, `${KEY[z]}-gates`, `o-${o.id}-${o.frames.length - 1}`).setOrigin(0).setScale(0.5).setDepth(o.depth).setVisible(opened.includes(o.id));
+    return { ...o, img };
+  });
+}
+/** Plays opening `o` over `ms`. */
+export function open(scene: Phaser.Scene, o: Opening, ms: number) {
+  o.img.setVisible(true);
+  scene.tweens.addCounter({ from: 0, to: o.frames.length - 1, duration: ms, ease: 'Sine.easeInOut', onUpdate: (tw) => o.img.setFrame(`o-${o.id}-${Math.round(tw.getValue() ?? 0)}`) });
+}
+
 /** Zone `z`'s doors: its forward exits (in the order of WORLD[z].ahead), its ways up (WORLD[z].up). */
 export const exits = (z: ZoneId) => WORLD[z].doors!.map((k) => ZONES[z].DOORS[k]);
 export const ups = (z: ZoneId) => WORLD[z].up!.map((k) => ZONES[z].DOORS[k]);
 
-/** Builds zone `z`: its collisions, its gates (`opened`: raised for good), the chunks round the camera. */
-export function build(scene: Phaser.Scene, z: ZoneId, opened: readonly string[]): Room {
+/** Builds zone `z`: its collisions, its gates (`opened`: raised for good), what opens once (`done`: opened), the chunks round the camera. */
+export function build(scene: Phaser.Scene, z: ZoneId, opened: readonly string[], done: readonly string[] = []): Room {
   const D = ZONES[z], obstacles = scene.physics.add.staticGroup(), pits = scene.physics.add.staticGroup();
   for (const [x, y, w, h] of D.BOXES) obstacles.add(scene.add.zone(x + w / 2, y + h / 2, w, h));
   for (const [x, y, w, h] of D.PITS) pits.add(scene.add.zone(x + w / 2, y + h / 2, w, h));
@@ -163,6 +189,6 @@ export function build(scene: Phaser.Scene, z: ZoneId, opened: readonly string[])
     height: D.H,
     sections: [],
     look: LOOKS[z],
-    zone: { id: z, chunks, gates: gates(scene, z, obstacles, opened), lamps },
+    zone: { id: z, chunks, gates: gates(scene, z, obstacles, opened), lamps, opens: openings(scene, z, done) },
   };
 }
