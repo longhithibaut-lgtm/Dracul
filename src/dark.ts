@@ -24,7 +24,7 @@ export function fit(scale: Phaser.Scale.ScaleManager) {
   if (width && height && (w !== scale.width || h !== scale.height)) scale.setGameSize(w, h);
 }
 
-/** A blend mode for what is drawn already lit (the trial room's hero): normal colour, but it clears the alpha it
+/** A blend mode for what is drawn already lit (the hero, the foes): normal colour, but it clears the alpha it
  *  covers, which the light shader reads as "keep this colour" (anything drawn over it later restores the alpha). */
 let prelitMode = -1;
 export function prelit(scene: Phaser.Scene) {
@@ -243,18 +243,12 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
   }
 }
 
-// The mockup's palette and its colour distance; LUT: the nearest colour of every rgb / 4, 64 blue tiles of 64x64.
-const PAL = ['#1c140e', '#281c13', '#362619', '#463220', '#5a4228', '#745632', '#927040', '#000000', '#070605', '#0d0b09', '#13110d', '#1a1712', '#221e18', '#2b261e', '#353026', '#423a2e', '#504637', '#615541', '#76674e', '#8e7d60', '#a99878', '#c8b896', '#e6dab8',
-  '#141a10', '#1f2717', '#2d371f', '#3f4a29', '#566236', '#717f44', '#929e58', '#b8c070', '#dfe29a',
-  '#2e0d09', '#3a0408', '#5a0a10', '#7e1018', '#43130c', '#5c1a10', '#7a2416', '#a0301c', '#ff3a2a',
-  '#5a2a0e', '#8a4516', '#c06a20', '#e8a040', '#ffd890',
-  '#1e1222', '#2e1a36', '#46265a', '#643882', '#8a52a8',
-  '#1a1e20', '#262c2e', '#384042', '#58605e', '#8a908a', '#c4c8bc', '#f2f4e4'];
+// A look's palette and its colour distance; LUT: the nearest colour of every rgb / 4, 64 blue tiles of 64x64.
 function rgb(s: string) { return [1, 3, 5].map((k) => parseInt(s.slice(k, k + 2), 16)); }
 /** A '#rrggbb' colour in linear light (hoisted: the shader's source uses it). */
 function L(s: string) { return rgb(s).map((v) => (v / 255) ** 2.2); }
 /** The nearest colour of `pal` (rgb) to r, g, b; `wY`: the weight of brightness against hue. */
-export function nearest(r: number, g: number, b: number, pal = PAL.map(rgb), wY = 1.4) {
+function nearest(r: number, g: number, b: number, pal: number[][], wY: number) {
   let best = pal[0], bd = Infinity;
   for (const q of pal) {
     const dr = r - q[0], dg = g - q[1], db = b - q[2], dY = 0.3 * dr + 0.59 * dg + 0.11 * db, dCo = dr - db, dCg = dg - (dr + db) / 2;
