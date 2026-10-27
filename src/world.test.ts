@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHOKES, NAV, WORLD, around, cellAt, expedition, go, homeward, lair, loose, parents, quadOf, ringAt, wayBack, type Came, type Place } from './world.ts';
+import { CHOKES, NAV, WORLD, ZONES, around, chokes, cellAt, expedition, go, homeward, isZone, lair, loose, parents, quadOf, ringAt, wayBack, waysUp, type Came, type Place } from './world.ts';
 import { parse, VERSION, type Save } from './save.ts';
 import { LINES, WARES, WARE_TEXT, bagSize, beast, buy, owned, price } from './shop.ts';
 import { T } from './tuning.ts';
@@ -11,19 +11,23 @@ import * as Ossuary from './ossuary.data.ts';
 import * as Chapel from './chapel.data.ts';
 import * as Cloister from './cloister.data.ts';
 import * as Zone from './necropolis.data.ts';
+import * as Cat from './catacombs.data.ts';
 import type { Plan } from './baked.ts';
 
-const PLANS: Record<Exclude<Place, 'refuge' | 'necropolis'>, Plan> = { hall: Crypt, nave: Nave, ossuary: Ossuary, chapel: Chapel, cloister: Cloister };
+const PLANS: Record<Exclude<Place, 'refuge' | 'necropolis' | 'catacombs'>, Plan> = { hall: Crypt, nave: Nave, ossuary: Ossuary, chapel: Chapel, cloister: Cloister };
 const places = Object.keys(WORLD) as Place[], rooms = places.filter((p): p is keyof typeof PLANS => p in PLANS);
 
-describe('the world: the refuge, la nécropole round it, the painted rooms as its interiors', () => {
+describe('the world: the refuge, la nécropole round it, les catacombes under it, the painted rooms as its interiors', () => {
   it("the refuge's stairs lead into the zone; its doors into the crypt, the nave, the ossuary, the chapel; the chapel on to the cloister", () => {
     expect(WORLD.refuge.ahead).toEqual(['necropolis']);
-    expect(WORLD.necropolis.ahead).toEqual(['hall', 'nave', 'ossuary', 'chapel']);
+    expect(WORLD.necropolis.ahead).toEqual(['hall', 'nave', 'ossuary', 'chapel', 'catacombs', 'catacombs']); // its doors; the well, le caveau
+    expect(WORLD.catacombs.ahead).toEqual([]); // the prison's reliquary, sealed for now
     expect(WORLD.chapel.ahead).toEqual(['cloister', 'cloister']);
     for (const p of ['hall', 'nave', 'ossuary', 'cloister'] as const) expect(WORLD[p].ahead).toEqual([]);
     expect(rooms.map((p) => WORLD[p].ring)).toEqual([1, 2, 2, 3, 4]); // an interior keeps its ring
-    for (const p of WORLD.necropolis.ahead) expect(Zone.DOORS[p as keyof typeof Zone.DOORS], p).toBeDefined();
+    for (const z of ['necropolis', 'catacombs'] as const) for (const k of [...WORLD[z].doors!, ...WORLD[z].up!]) expect(ZONES[z].DOORS[k], `${z} ${k}`).toBeDefined();
+    expect(WORLD.necropolis.doors!.length).toBe(WORLD.necropolis.ahead.length);
+    expect(parents('catacombs').map((p) => WORLD.necropolis.doors![p.exit])).toEqual(WORLD.catacombs.up); // each way up comes out at the door that leads down to it
     for (const p of rooms) expect(PLANS[p].EXITS.length).toBeGreaterThanOrEqual(WORLD[p].ahead.length);
     for (const p of places) expect(missing(WORLD[p].name)).toEqual([]);
   });
@@ -48,6 +52,12 @@ describe('the world: the refuge, la nécropole round it, the painted rooms as it
     expect(go(came, 'chapel', -1)).toEqual({ to: 'necropolis', entry: 3 }); // at the chapel's door
     expect(go(came, 'necropolis', -1)).toEqual({ to: 'refuge', entry: 0 }); // up the refuge's stairs
     expect(go({}, 'ossuary', -1)).toEqual({ to: 'necropolis', entry: 2 });
+    // down the well, at its foot; down le caveau's stairs, at theirs; back up each at the door it comes out of
+    expect(go(came, 'necropolis', 4)).toEqual({ to: 'catacombs', entry: -1 });
+    expect(go(came, 'necropolis', 5)).toEqual({ to: 'catacombs', entry: -2 });
+    expect(go(came, 'catacombs', -1)).toEqual({ to: 'necropolis', entry: 4 }); // up the well, whichever way he came down
+    expect(go(came, 'catacombs', -2)).toEqual({ to: 'necropolis', entry: 5 }); // up le caveau's stairs
+    expect(go(came, 'catacombs', -3)).toBeUndefined();
     expect(go(came, 'cloister', 0)).toBeUndefined(); // the deepest: its doors lead nowhere yet
     expect(go(came, 'refuge', -1)).toBeUndefined();
     expect(parents('cloister')).toEqual([{ from: 'chapel', exit: 0 }, { from: 'chapel', exit: 1 }]);
@@ -67,7 +77,7 @@ describe('the world: the refuge, la nécropole round it, the painted rooms as it
 });
 
 describe('la nécropole', () => {
-  const shut = homeward([]), open = homeward(Zone.GATES.map((g) => g.id)), { cols } = shut;
+  const shut = homeward('necropolis', []), open = homeward('necropolis', Zone.GATES.map((g) => g.id)), { cols } = shut;
   const steps = (g: typeof shut, p: { x: number; y: number }) => g.steps[cellAt(cols, p.x, p.y)];
   const D = Zone.DOORS, below = (d: { x: number; y: number }) => ({ x: d.x, y: d.y + 14 }); // just out of a door
   const holy = runMask(Zone.HOLY, Zone.W, Zone.H), burns = (x: number, y: number) => holy[Math.floor(y) * Zone.W + Math.floor(x)] === 1;
@@ -79,18 +89,18 @@ describe('la nécropole', () => {
   });
 
   it('loads the chunks round the view, never the whole zone', () => {
-    expect(around(0, 0, 480, 270, 0)).toEqual([[0, 0]]);
-    expect(around(470, 260, 480, 270, 0)).toEqual([[0, 0], [1, 0], [0, 1], [1, 1]]);
-    expect(around(470, 260, 480, 270, 20)).toEqual([[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]]);
-    expect(around(1000, 600, 480, 270, 160).length).toBeLessThanOrEqual(16);
-    expect(around(-500, -500, 480, 270, 0)).toEqual([]);
-    expect(around(3360, 1080, 480, 270, 160).every(([i, j]) => i < Zone.COLS && j < Zone.ROWS)).toBe(true);
+    expect(around('necropolis', 0, 0, 480, 270, 0)).toEqual([[0, 0]]);
+    expect(around('necropolis', 470, 260, 480, 270, 0)).toEqual([[0, 0], [1, 0], [0, 1], [1, 1]]);
+    expect(around('necropolis', 470, 260, 480, 270, 20)).toEqual([[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]]);
+    expect(around('necropolis', 1000, 600, 480, 270, 160).length).toBeLessThanOrEqual(16);
+    expect(around('necropolis', -500, -500, 480, 270, 0)).toEqual([]);
+    expect(around('necropolis', 3360, 1080, 480, 270, 160).every(([i, j]) => i < Zone.COLS && j < Zone.ROWS)).toBe(true);
     // the light of the 2 x 2 chunks under the view; at the far edges, the last two
-    expect(quadOf(10, 10)).toEqual({ i: 0, j: 0 });
-    expect(quadOf(500, 300)).toEqual({ i: 1, j: 1 });
-    expect(quadOf(3360, 1080)).toEqual({ i: Zone.COLS - 2, j: Zone.ROWS - 2 });
+    expect(quadOf('necropolis', 10, 10)).toEqual({ i: 0, j: 0 });
+    expect(quadOf('necropolis', 500, 300)).toEqual({ i: 1, j: 1 });
+    expect(quadOf('necropolis', 3360, 1080)).toEqual({ i: Zone.COLS - 2, j: Zone.ROWS - 2 });
     for (const [x, y] of [[0, 0], [479, 269], [1234, 777], [3360, 1080]]) { // the view always within its 2 x 2
-      const { i, j } = quadOf(x, y);
+      const { i, j } = quadOf('necropolis', x, y);
       expect(x >= i * Zone.SW && x + 480 <= (i + 2) * Zone.SW && y >= j * Zone.SH && y + 270 <= (j + 2) * Zone.SH).toBe(true);
     }
   });
@@ -127,13 +137,13 @@ describe('la nécropole', () => {
     // A, la grille: shut, its other side is a long way round; raised, a few steps
     const [x, y, w, h] = Zone.GATES[0].box, beyond = { x: x + w / 2, y: y - 12 }, near = { x: x + w / 2, y: y + h + 12 };
     expect(Math.abs(steps(shut, beyond) - steps(shut, near))).toBeGreaterThan(40);
-    expect(Math.abs(steps(homeward(['grille']), beyond) - steps(homeward(['grille']), near))).toBeLessThan(8);
+    expect(Math.abs(steps(homeward('necropolis', ['grille']), beyond) - steps(homeward('necropolis', ['grille']), near))).toBeLessThan(8);
     // B, the gallery: its far mouth a step from its near one once raised
-    const [m0, m1] = Zone.TUNNEL.map(below), both = homeward(['galerie']);
+    const [m0, m1] = Zone.TUNNEL.map(below), both = homeward('necropolis', ['galerie']);
     expect(Math.abs(steps(both, m1) - steps(both, m0))).toBeLessThanOrEqual(2);
     expect(steps(open, m1)).toBeLessThan(steps(shut, m1) * 0.6); // with A, the far side's mouth is near the refuge
     // the way back from the deepest door, walked: each shortcut shortens it, both much more
-    const far = trip(shut, below(D.chapel)), a = trip(homeward(['grille']), below(D.chapel)), b = trip(both, below(D.chapel)), ab = trip(open, below(D.chapel));
+    const far = trip(shut, below(D.chapel)), a = trip(homeward('necropolis', ['grille']), below(D.chapel)), b = trip(both, below(D.chapel)), ab = trip(open, below(D.chapel));
     expect(a).toBeLessThan(far * 0.85);
     expect(b).toBeGreaterThan(0); // B alone opens the gallery from the middle's north band, still reached the long way
     expect(ab).toBeLessThan(far * 0.6);
@@ -148,11 +158,11 @@ describe('la nécropole', () => {
     expect([area(1380, 800).id, area(1430, 800).id]).toEqual(['proche-sud', 'milieu-sud']); // the sectors part in the chasm
     expect([area(3120, 880).id, area(2800, 1200).id, area(3500, 600).id]).toEqual(['camp', 'loin-sud', 'loin-est']);
     expect(area(3500, 600).groups).toBeGreaterThanOrEqual(3); // the far end not the emptiest
-    expect(ringAt(D.refuge.x, D.refuge.y + 40)).toBe(1);
-    expect(ringAt(D.hall.x, D.hall.y + 20)).toBe(1);
-    expect(ringAt(D.nave.x, D.nave.y + 20)).toBe(2);
-    expect(ringAt(D.ossuary.x, D.ossuary.y + 20)).toBe(2);
-    expect(ringAt(D.chapel.x, D.chapel.y + 20)).toBe(3);
+    expect(ringAt('necropolis', D.refuge.x, D.refuge.y + 40)).toBe(1);
+    expect(ringAt('necropolis', D.hall.x, D.hall.y + 20)).toBe(1);
+    expect(ringAt('necropolis', D.nave.x, D.nave.y + 20)).toBe(2);
+    expect(ringAt('necropolis', D.ossuary.x, D.ossuary.y + 20)).toBe(2);
+    expect(ringAt('necropolis', D.chapel.x, D.chapel.y + 20)).toBe(3);
     for (const [k, a] of Zone.AREAS.entries()) {
       const spawns = Zone.SPAWNS.filter((s) => s[2] === k);
       expect(spawns.length, a.id).toBeGreaterThanOrEqual(a.groups * 2);
@@ -244,6 +254,85 @@ describe('la nécropole', () => {
   });
 });
 
+describe('les catacombes', () => {
+  const shut = homeward('catacombs', []), open = homeward('catacombs', ['caveau']), { cols } = shut, nec = homeward('necropolis', []);
+  const steps = (g: typeof shut, p: { x: number; y: number }) => g.steps[cellAt(g.cols, p.x, p.y)];
+  const D = Cat.DOORS, below = (d: { x: number; y: number }) => ({ x: d.x, y: d.y + 14 });
+  const area = (x: number, y: number) => Cat.AREAS.find(({ rect: [x0, y0, x1, y1] }) => x >= x0 && x < x1 && y >= y0 && y < y1)!;
+
+  it('is 6 x 4 screens, in chunks of one screen, each with its sprites', () => {
+    expect([Cat.W, Cat.H, Cat.SW * Cat.COLS, Cat.SH * Cat.ROWS]).toEqual([2880, 1080, 2880, 1080]);
+    expect([Cat.SW, Cat.SH]).toEqual([T.width, T.height]);
+    expect(Cat.OVER.length).toBe(Cat.COLS * Cat.ROWS);
+    expect(isZone('catacombs') && isZone('necropolis') && !isZone('hall')).toBe(true);
+    expect(around('catacombs', 2400, 810, 480, 270, 160).every(([i, j]) => i < Cat.COLS && j < Cat.ROWS)).toBe(true);
+    expect(quadOf('catacombs', 2870, 1070)).toEqual({ i: Cat.COLS - 2, j: Cat.ROWS - 2 });
+  });
+
+  it("from the well's foot, every way, lever, cache, the arena and its reliquary are reached; the arena's gate stands open", () => {
+    for (const d of Object.values(D)) expect(steps(shut, below(d)), `${d.x},${d.y}`).toBeLessThan(Infinity);
+    for (const g of Cat.GATES) if (g.lever) expect(steps(shut, g.lever), g.id).toBeLessThan(Infinity);
+    for (const [x, y] of Cat.CACHES) expect(steps(shut, { x, y: y + 4 }), `cache ${x},${y}`).toBeLessThan(Infinity);
+    expect(Cat.CACHES.length).toBe(WORLD.catacombs.caches.length);
+    const [x0, y0, x1, y1] = Cat.ARENA, prison = Cat.GATES.find((g) => g.id === 'prison')!;
+    expect(steps(shut, Cat.RELIQUARY.at)).toBeLessThan(Infinity);
+    expect(steps(shut, { x: (x0 + x1) / 2, y: (y0 + y1) / 2 })).toBeLessThan(Infinity);
+    expect(prison.arena && !prison.lever && prison.frames.length > 2).toBe(true); // open now; its frames, to shut it behind him later
+    expect(prison.box[0] > x0 && prison.box[0] + prison.box[2] < x1 && Math.abs(prison.box[1] - y1) < 4).toBe(true); // in the arena's south wall
+    expect(Cat.RELIQUARY.at.x > x0 && Cat.RELIQUARY.at.x < x1 && Cat.RELIQUARY.at.y > y0 && Cat.RELIQUARY.at.y < y1).toBe(true);
+    expect(missing('Le reliquaire est scellé. Le reliquaire (F)')).toEqual([]);
+  });
+
+  it('places its foes by area and ring: ring 3 by the well, 4 deep; none at its ways up nor in the arena', () => {
+    expect([area(D.puits.x, D.puits.y + 40).groups, area(D.caveau.x, D.caveau.y + 40).groups, area(2360, 800).groups]).toEqual([0, 0, 0]);
+    expect([ringAt('catacombs', D.puits.x, D.puits.y + 40), ringAt('catacombs', 2160, 210)]).toEqual([3, 3]); // the well, the east crossroads
+    expect([ringAt('catacombs', 610, 610), ringAt('catacombs', 1530, 625), ringAt('catacombs', 2360, 800)]).toEqual([4, 4, 4]); // le nid, the black water, the prison
+    expect(area(610, 610).groups).toBeGreaterThanOrEqual(3); // le nid, the ghouls' own
+    for (const [k, a] of Cat.AREAS.entries()) {
+      expect(Cat.SPAWNS.filter((s) => s[2] === k).length, a.id).toBeGreaterThanOrEqual(a.groups * 2);
+      if (a.groups) expect(T.expedition.catacombs[a.ring].length, a.id).toBeGreaterThan(0);
+    }
+    for (const [x, y] of Cat.SPAWNS) {
+      expect(steps(shut, { x, y }), `${x},${y}`).toBeLessThan(Infinity);
+      for (const d of Object.values(D)) expect(Math.hypot(x - d.x, y - d.y), `${x},${y} by a way up`).toBeGreaterThan(60);
+    }
+    for (const c of chokes('catacombs')) { // the battue's narrow ways: on the walk grid, away from the ways up
+      expect(steps(shut, c), `${c.x},${c.y}`).toBeLessThan(Infinity);
+      for (const d of Object.values(D)) expect(Math.hypot(c.x - d.x, c.y - d.y), `${c.x},${c.y}`).toBeGreaterThanOrEqual(100);
+    }
+  });
+
+  it("raises le caveau's gate from below only, for good: the shortcut brings the refuge near", () => {
+    const g = Cat.GATES.find((g) => g.id === 'caveau')!, top = Zone.GATES.find((g) => g.id === 'caveau')!;
+    expect(g.lever!.y).toBeGreaterThan(g.box[1] + g.box[3]); // its winch below, on the catacombs' side
+    expect(top.lever).toBeNull(); // le caveau's side: shut from the other side
+    const foot = { x: D.caveau.x, y: D.caveau.y - 8 }; // in its recess, the stairs' foot
+    expect([steps(shut, foot), steps(open, foot) < Infinity]).toEqual([Infinity, true]);
+    expect([waysUp('catacombs', []), waysUp('catacombs', ['caveau'])]).toEqual([[0], [0, 1]]);
+    // the way home from the reliquary: up the nearest way open, then across the necropolis to the refuge's stairs (steps)
+    const home = (g: typeof shut, n: typeof nec) => {
+      const way = wayBack(g.steps, g.cols, Cat.RELIQUARY.at), end = way[way.length - 1], k = WORLD.catacombs.up!.findIndex((u) => Math.hypot(D[u].x - end.x, D[u].y - end.y) < 30);
+      return way.length + steps(n, below(Zone.DOORS[WORLD.necropolis.doors![parents('catacombs')[k].exit]]));
+    };
+    const viaWell = home(shut, nec), viaCaveau = home(open, homeward('necropolis', ['caveau']));
+    expect(viaCaveau).toBeLessThan(viaWell * 0.6);
+    expect(steps(nec, below(Zone.DOORS.puits))).toBeGreaterThan(steps(nec, below(Zone.DOORS.caveau)) * 4); // the well: the necropolis' far end; le caveau by the refuge
+    console.info(`the way home from Vesna's reliquary, in steps: ${viaWell} up the well, ${viaCaveau} up le caveau`);
+  });
+
+  it('lays the battue at its narrow ways, every other pack up in the necropolis on his way home', () => {
+    const P = T.battue.packs, hero = Cat.RELIQUARY.at, way = wayBack(shut.steps, cols, hero), out = below(Zone.DOORS.puits);
+    const up = wayBack(nec.steps, nec.cols, out), exp = expedition(0);
+    exp.packs = 4;
+    const now = loose(exp, way, hero, P, T.battue.far, T.battue.door, chokes('catacombs'), (k) => lair(up, out, T.battue.up, false, T.battue.door, k));
+    expect(now.map((p) => !!p.up)).toEqual([false, true, false, true]);
+    const down = now.filter((p) => !p.up);
+    for (const p of down) expect(Math.hypot(p.at.x - hero.x, p.at.y - hero.y)).toBeGreaterThanOrEqual(T.battue.far);
+    expect(down.some((p) => chokes('catacombs').some((c) => c.x === p.at.x && c.y === p.at.y))).toBe(true);
+    for (const p of now.filter((p) => p.up)) expect(steps(nec, p.at), `${p.at.x},${p.at.y} in the necropolis`).toBeLessThan(steps(nec, out));
+  });
+});
+
 describe('save', () => {
   it('starts afresh without a save, or with a broken one', () => {
     const fresh = { v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0 };
@@ -269,10 +358,11 @@ describe('save', () => {
   it('keeps the shortcuts raised for good, each once, whatever else the save holds', () => {
     expect(parse('{"v":1,"shortcuts":["grille","grille","scellee",3,null]}').shortcuts).toEqual(['grille', 'scellee']);
     expect(parse('{"v":1,"shortcuts":"grille"}').shortcuts).toEqual([]);
+    expect(parse('{"v":2,"shortcuts":["galerie","caveau"]}').shortcuts).toEqual(['galerie', 'caveau']); // le caveau, raised in the catacombs
     const s = parse(null);
     s.shortcuts.push('scellee');
     expect(parse(JSON.stringify(s)).shortcuts).toEqual(['scellee']);
-    for (const g of Zone.GATES) expect(missing(`${g.name} : lever (F) Fermée de l'autre côté ${g.name} : ouverte pour toujours.`)).toEqual([]);
+    for (const g of [...Zone.GATES, ...Cat.GATES]) expect(missing(`${g.name} : lever (F) Fermée de l'autre côté ${g.name} : ouverte pour toujours.`)).toEqual([]);
   });
 });
 
