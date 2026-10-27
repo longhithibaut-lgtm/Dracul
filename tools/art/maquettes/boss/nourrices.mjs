@@ -1,4 +1,4 @@
-// La Nourrice des goules, second round: four variants (mockup only). Conventions as bosses.mjs: x = her left, y = forward,
+// La Nourrice des goules, second round: four variants (mockup; the game's l'Araignée is posed by tools/art/nourrice.gen.mjs from these parts). Conventions as bosses.mjs: x = her left, y = forward,
 // z = up, the hero ~100 tall; variant(pose) with pose 'idle' or 'tele' (the wind-up). The goules are the game's own
 // (cast.mjs ghoul), placed as separate objects so they read on their own. No floor telegraph: body, light, sound.
 import { sdBox, sdEll, sdRC, smin, smax, partsSdf, clamp, lerp, vn3, fbm3, h2, L, mix, mul, mulberry32 } from '../ennemis/lib.mjs';
@@ -6,12 +6,12 @@ import { boundsOf, S, skinTex, ghoul } from '../ennemis/cast.mjs';
 import { B, done, glow, ironM, goldM, claws, HOLY, FIRE } from '../ennemis/foes.mjs';
 import { chainLinks, cageBars, grow, bonePile } from './bosses.mjs';
 
-const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const sc = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
-const nz = a => { const l = Math.hypot(...a) || 1; return sc(a, 1 / l); };
-const lp = (a, b, t) => add(a, sc(sub(b, a), t));
-const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+export const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+export const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+export const sc = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+export const nz = a => { const l = Math.hypot(...a) || 1; return sc(a, 1 / l); };
+export const lp = (a, b, t) => add(a, sc(sub(b, a), t));
+export const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 // a model moved, turned (R = Rz(yaw) Rx(pitch) Ry(roll)) and scaled by k
@@ -25,7 +25,7 @@ export function placed(m, pos, yaw = 0, pitch = 0, roll = 0, k = 1) {
   return { sdf: (x, y, z) => { const p = toL(x, y, z); return m.sdf(p[0], p[1], p[2]) * k; }, mat: (i, x, y, z, ...n) => { const p = toL(x, y, z); return m.mat(i, p[0], p[1], p[2], ...n); }, bounds: [...mn, ...mx], step: m.step || 0.6 };
 }
 // a goule lying along segment a-b at t (on top of it, or hanging under it with under = true)
-function cling(name, a, b, t, r, v, seed, k = 0.85, under = false) {
+export function cling(name, a, b, t, r, v, seed, k = 0.85, under = false) {
   const d = nz(sub(b, a)), e = Math.asin(clamp(d[2], -1, 1)), yaw = Math.atan2(-d[0], d[1]);
   const n = [Math.sin(yaw) * Math.sin(e), -Math.cos(yaw) * Math.sin(e), Math.cos(e)];
   return { name, model: placed(ghoul(v, seed), add(lp(a, b, t), sc(n, under ? -r : r)), yaw, e, under ? Math.PI : 0, k) };
@@ -33,7 +33,7 @@ function cling(name, a, b, t, r, v, seed, k = 0.85, under = false) {
 const floorKid = (name, p, yaw, v = 0, seed = 1, k = 0.85) => ({ name, model: placed(ghoul(v, seed), p, yaw, 0, 0, k) });
 
 // a starved vampire's head: skull, hollow cheeks, sockets (eyes glowing with material eye), hanging or unhinged jaw
-function face(b, H, F, U, s = 1, open = 2.5, eye = 17) {
+export function face(b, H, F, U, s = 1, open = 2.5, eye = 17) {
   const X = nz(crs(F, U)); const hp = (a, c, d) => add(H, add(sc(X, a * s), add(sc(F, c * s), sc(U, d * s))));
   b.el(hp(0, -1, 1.5), [6 * s, 6.6 * s, 6.3 * s], 1, 0); b.rc(hp(0, 3, -1), hp(0, 7.5, -6), 4.6 * s, 2.3 * s, 1, 1.5 * s);
   for (const sd of [-1, 1]) { b.rc(hp(sd * 3.6, 1, -4), hp(sd * 1.3, 7, -9 - open), 1.1 * s, 0.8 * s, 1, 0.6 * s); b.rc(hp(sd * 5.5, -1, 1.5), hp(sd * 9.5, -4.5, 5.5), 1.1 * s, 0.2 * s, 1, 0.5 * s); b.carve(hp(sd * 2.3, 5.8, 1.1), 1.6 * s, 0.4 * s); b.carve(hp(sd * 4.2, 4.2, -3), 1.6 * s, 0.8 * s); }
@@ -43,14 +43,14 @@ function face(b, H, F, U, s = 1, open = 2.5, eye = 17) {
   return hp;
 }
 // lank hair from the crown, falling straight down by len
-function hair(b, hp, len, n = 13, seed = 17, s = 1) {
+export function hair(b, hp, len, n = 13, seed = 17, s = 1) {
   const R = mulberry32(seed);
   for (let i = 0; i < n; i++) { const a = (i / (n - 1) - 0.5) * 3.6; const root = hp(Math.sin(a) * 5.6, -1 - Math.cos(a) * 4, 4 + Math.cos(a) * 1.5); const mid = add(root, [Math.sin(a) * 3 * s + (R() - 0.5) * 3, (R() - 0.5) * 3, -len * 0.45]); b.rc(root, mid, 1.4 * s, 1.0 * s, 13, 0.6); b.rc(mid, add(mid, [(R() - 0.5) * 4, (R() - 0.5) * 3, -len * (0.45 + R() * 0.2)]), 1.0 * s, 0.3 * s, 13, 0.4); }
 }
 // ribs pressing through the skin along axis ax round c
-const ribbed = (r, c, ax, half, amp = 0.55, f = 1.15) => { const sd = r.sdf; r.sdf = (x, y, z) => { let d = sd(x, y, z); const t = (x - c[0]) * ax[0] + (y - c[1]) * ax[1] + (z - c[2]) * ax[2]; if (Math.abs(t) < half) d += amp * Math.max(0, Math.sin(t * f)); return d; }; return r; };
-const skin = (base, dark, x, y, z, seed) => { let c = skinTex(base, dark, x, y, z, seed); if (Math.abs(vn3(x * 0.25, y * 0.25, z * 0.25, seed + 11) - 0.5) < 0.025) c = mix(c, L('#3e3448'), 0.6); return c; };
-const common = (m, x, y, z) => {
+export const ribbed = (r, c, ax, half, amp = 0.55, f = 1.15) => { const sd = r.sdf; r.sdf = (x, y, z) => { let d = sd(x, y, z); const t = (x - c[0]) * ax[0] + (y - c[1]) * ax[1] + (z - c[2]) * ax[2]; if (Math.abs(t) < half) d += amp * Math.max(0, Math.sin(t * f)); return d; }; return r; };
+export const skin = (base, dark, x, y, z, seed) => { let c = skinTex(base, dark, x, y, z, seed); if (Math.abs(vn3(x * 0.25, y * 0.25, z * 0.25, seed + 11) - 0.5) < 0.025) c = mix(c, L('#3e3448'), 0.6); return c; };
+export const common = (m, x, y, z) => {
   switch (m) {
     case 2: return { alb: mix(S.nail, S.blood, 0.35), spec: 0.4, gloss: 40 };
     case 7: return { alb: S.tooth, spec: 0.4, gloss: 40 };

@@ -1,5 +1,5 @@
 // Scene: the whole refuge complex, in one of three progression states.
-// Env: STATE=debut|milieu|complet, WIN="x0,row0,W,H" (native px), HERO=hall|crypt, OUT=name.
+// Env: STATE=debut|rat|milieu|complet (rat: Vesna alone freed, the game's refuge once she is), WIN="x0,row0,W,H" (native px), HERO=hall|crypt, OUT=name.
 // Screen row = 0.616 y - 0.788 z + 130 - row0 ; screen col = x - x0.
 import { post, haze, writePNG, L, hex, clamp, lerp, h2, vn, fbm, mix, mul, mulberry32, PALETTE } from './lib.mjs';
 import { cam, C, R, G, ROOMS, makeEnv, envShadow, envAO, HT, OWN, KIND, PROF, PROFILES, NX, heightAt, roomAt, isFloor, floorDist } from './world.mjs';
@@ -10,8 +10,8 @@ import { coffin, candles, stall, shelves, ringStakes, pitBones, hideFrame, mirro
 import { oldCoffin, ladder } from './props2.mjs';
 import { candles2, sideDoor, doorFrame, archSeal, chiefCoffin, lidUpright, pew, statue, offering, rubble, trainingDummy, weaponRack, grindstone, writingDesk, armoire, coatRail, chest, jarCrate, trophyPike, sideTable, basin2, brazier2, fencingDummy, armchair2 } from './props3.mjs';
 
-const STATE = process.env.STATE || 'complet', S = { debut: 0, milieu: 1, complet: 2 }[STATE];
-const FREE = { rat: S >= 1, brume: S >= 1, loup: S >= 2, bat: S >= 2 }, UP = S >= 2;
+const STATE = process.env.STATE || 'complet', S = { debut: 0, rat: 0, milieu: 1, complet: 2 }[STATE];
+const FREE = { rat: S >= 1 || STATE === 'rat', brume: S >= 1, loup: S >= 2, bat: S >= 2 }, UP = S >= 2;
 const [X0, ROW0, W, H] = (process.env.WIN || '120,-200,2870,1840').split(',').map(Number);
 const HERO_AT = process.env.HERO || (S === 0 ? 'crypt' : 'hall'), OUT = process.env.OUT || 'test';
 const off = -130 + ROW0;
@@ -421,7 +421,7 @@ for (const [x, y, yaw] of [[300, 1700, 0.4], [520, 1980, -0.8], [980, 1700, 1.2]
 // --- Vesna ---
 if (FREE.rat) {
   add('shelves', shelves(180), [2600, 1250, 0]); if (UP) { add('shelves2', shelves(150), [2585, 1250, 44]); add('crate1', jarCrate(3), [2530, 1405, 0], 0.3); add('crate2', jarCrate(5, 6), [2680, 1408, 0], -0.2); }
-  const oSt = add('stall', stall(), [2610, 1342, 0]); add('vesna', vesna('count'), [2600, 1316, 0], 0, { id: 61 });
+  const oSt = add('stall', stall(), [2610, 1342, 0]); if (!process.env.NOHERO) add('vesna', vesna('count'), [2600, 1316, 0], 0, { id: 61 }); // the game draws her
   const LAMP = lw(oSt, [46, -10, 80]); L_({ name: 'lamp', p: LAMP, c: L('#d8a050'), I: 5.2, r0: 45, R: 280, pad: 4, soft: 5, haze: 0.03, hazeR: 5 });
   L_({ p: [2610, 1398, 8], c: HC.rat, I: 1.2, r0: 30, R: 110, noShadow: true, haze: 0.02, hazeR: 6 });
   add('ratsV', rats([[2560, 1390, 0, 1.2], [2520, 1300, 0, -0.5], [2690, 1290, 0, 2.0], [2620, 1418, 0, -2.5], [2470, 1350, 0, 0.9], [2612, 1349, 42, 2.8]]), [0, 0, 0]);
