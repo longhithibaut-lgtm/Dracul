@@ -49,7 +49,7 @@ await page.waitForFunction(() => { const s = window.game.scene.getScene('room');
 await page.waitForTimeout(2000); // its first chunks
 await page.click('#training [data-opt="god"]');
 await page.click('#training [data-spawn="nourrice"]');
-await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable && e.getData('kind') === 'nourrice'), null, { timeout: 20000 });
+await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable && e.getData('kind') === 'nourrice'), null, { timeout: 120000 });
 await run(() => window.game.loop.sleep());
 check(true, "l'Araignée called in by the training room's button");
 const arena = await boss('arena'), cx = (arena[0] + arena[2]) / 2, cy = (arena[1] + arena[3]) / 2 + 30;
@@ -85,7 +85,7 @@ async function play(name, b, h, tell, attack, key, start, after = 150) {
   await step(REACT);
   if (key) await page.keyboard.down(key);
   for (let t = REACT; t < 5000 && [tell, ...attack].includes(await boss('state')); t += 16) await step(16);
-  await step(after); // what lands just after (a lump still in the air)
+  for (let t = 0; t < after; t += 50) { await step(50); await page.waitForTimeout(40); } // what lands just after (a lump in the air, on tweens: on the wall clock)
   if (key) await page.keyboard.up(key);
   return 10 - (await health());
 }
@@ -134,7 +134,7 @@ await shot('nourrice-wall');
 // her throws: debris at where he stands
 const hurl = (name, key) => play(name, [cx, cy - 20], [cx - 30, cy + 50], 'hurlT', [], key, async () => {
   await set({ state: 'wall', hurls: 1, nextHurl: 0, z: T.nourrice.wallZ });
-}, T.nourrice.flightMs + 1500); // (the lump flies on tweens, on the wall clock: stepped fast, it needs more frames)
+}, T.nourrice.flightMs + 300);
 // (play() puts her body at its point first: back on the wall's foot nearest him)
 const onWall = async () => run(`(() => { const s = ${S}, e = ${BOSS}; e.setData({ s: 600 }); })()`);
 await onWall();

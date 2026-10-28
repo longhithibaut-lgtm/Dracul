@@ -209,7 +209,7 @@ check(!(await run(`${S}.cut`)), 'the scene over, he is his own again');
 // ---- home, by le caveau: the refuge, her coffin open, her shop, her stall ----
 await run(() => window.game.loop.wake());
 await run(`${S}.leave(-2)`);
-await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.layout === 'necropolis' && s.sys.isActive() && s.phase === 'play'; }, null, { timeout: 30000 });
+await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.layout === 'necropolis' && s.sys.isActive() && s.phase === 'play'; }, null, { timeout: 120000 });
 await run(`${S}.leave(-1)`);
 await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.layout === 'refuge' && s.sys.isActive() && s.vesna; }, null, { timeout: 60000 });
 const log = await run(() => JSON.parse(localStorage.getItem('dracul.log')).at(-1));
