@@ -3,7 +3,7 @@ import { SHEETS } from './foes.data.ts';
 import { aimAt, inArc, onLine } from './logic.ts';
 import { T } from './tuning.ts';
 
-// The baked sheets (tools/art/foes.gen.mjs) hold every frame foes.ts show() and die() ask for, in every view (l'Enterré
+// The baked sheets (tools/art/foes.gen.mjs) hold every frame foes.ts show() and die() ask for, in every view (l'Enterré, la Chose
 // never turns: his front only).
 describe('foes sheets', () => {
   it('has every frame in every view, and the corpse', () => {
@@ -11,8 +11,9 @@ describe('foes sheets', () => {
       const frames = ['idle0', 'idle1', 'idle2', 'idle3', 'hurt', 'kneel', ...Array.from({ length: S.WALK }, (_, k) => `walk${k}`),
         ...{ purifier: ['ignite', 'fire0', 'fire1', 'jet0', 'jet1'], priest: ['pray'], hound: ['tele', 'leap'], penitent: ['tele', 'atk'], ringer: ['tele', 'atk'],
           inquisitor: ['whirl0', 'whirl1', 'whirl2', 'whirl3', 'sweep0', 'sweep1', 'sweep2', 'parry'], amas: ['tele0', 'tele1', 'atk'], bourreau: ['tele', 'atk', 'pull0', 'pull1'], crossbow: ['raise', 'aim', 'lock', 'shot'],
-          crow: ['tele', 'dive'], enterre: ['tele0', 'tele1', 'grab0', 'grab1', 'sink'], gave: ['eat0', 'eat1', 'tele', 'atk', 'gorge', 'spew0', 'spew1'] }[kind]!];
-      for (const view of kind === 'enterre' ? ['down'] : ['side', 'dside', 'down', 'uside', 'up']) for (const f of frames) expect(S.FRAMES[`${view}-${f}`], `${kind} ${view}-${f}`).toBeDefined();
+          crow: ['tele', 'dive'], enterre: ['tele0', 'tele1', 'grab0', 'grab1', 'sink'], gave: ['eat0', 'eat1', 'tele', 'atk', 'gorge', 'spew0', 'spew1'],
+          chose: ['tele0', 'tele1', 'tele2', 'swipe0', 'swipe1', 'swipe2', 'rest', 'sink'], crocheteur: ['spin0', 'spin1', 'spin2', 'spin3', 'toss', 'hook', 'drag0', 'drag1'] }[kind]!];
+      for (const view of kind === 'enterre' || kind === 'chose' ? ['down'] : ['side', 'dside', 'down', 'uside', 'up']) for (const f of frames) expect(S.FRAMES[`${view}-${f}`], `${kind} ${view}-${f}`).toBeDefined();
       expect(S.FRAMES.corpse).toBeDefined();
     }
   });

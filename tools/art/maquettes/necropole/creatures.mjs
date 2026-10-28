@@ -400,38 +400,53 @@ function bigHand(b, W, d, k, splay = 1, curl = 0.6) { // a huge bony hand at wri
     b.rc(p0, add(p0, sc(dir, 4 * k)), 0.7 * k, 0.1 * k, 2, 0.2);
   }
 }
-export function gouffre(pose = 'idle') {
+// The game's sheet (tools/art/foes.gen.mjs) also asks: o.rise (0..1: the head from just over the edge up to the card's
+// 'tele' height), o.open (0..1: the jaw), o.curl (the grip: 0.35 at rest, 1 clenched on the stone), o.arm ('grip': both
+// hands on the edge; 'rear': the card's tele, its right arm reared high; 'swipe': that arm swept down across the deck,
+// o.k 0..1 from its right to its left; 'recoil': both hands jerked back off the edge, fists), o.sink (0..1: sunk under
+// the edge); o.solid: what is in front of the edge (the deck, y > -14) cut at the floor, the chasm behind left whole.
+export function gouffre(pose = 'idle', o = {}) {
   const tele = pose === 'tele'; const b = B(); const { rc, el } = b;
-  const k = 2.2;
+  const k = 2.2, r = o.rise ?? (tele ? 1 : 0), arm = o.arm ?? (tele ? 'rear' : 'grip'), dz = [0, 0, -70 * (o.sink ?? 0)], curl = o.curl ?? 0.35;
   // the head: a starved, drowned skull of a face, wet hair hanging off it, pale eyes; the jaw drops when it rises
-  const H = tele ? [0, -40, 52] : [0, -34, -4], F = tele ? nz([0, 1, 0.25]) : nz([0, 1, 0.45]), U = tele ? nz([0, -0.25, 1]) : nz([0, -0.45, 1]);
-  const X = nz(crs(F, U)), q = 1.9, op = tele ? 9 : 1, hp = (a, c, d) => add(H, add(sc(X, a * q), add(sc(F, c * q), sc(U, d * q))));
+  const H = add(lp([0, -34, -4], [0, -40, 52], r), dz), F = nz(lp([0, 1, 0.45], [0, 1, 0.25], r)), U = nz(lp([0, -0.45, 1], [0, -0.25, 1], r));
+  const X = nz(crs(F, U)), q = 1.9, op = 1 + 8 * (o.open ?? (tele ? 1 : 0)), hp = (a, c, d) => add(H, add(sc(X, a * q), add(sc(F, c * q), sc(U, d * q))));
   oelN(b, hp(0, -2, 4), F, X, [15 * q, 11 * q, 14 * q], 1, 3, 1.4, 0.15); // a long, swollen cranium, no ears
   b.rc(hp(-8, 9, 4), hp(8, 9, 4), 2.6 * q, 2.6 * q, 1, 2); for (const sd of [-1, 1]) b.el(hp(sd * 9, 6, -2), [3 * q, 3 * q, 3 * q], 1, 2);
   for (const sd of [-1, 1]) { b.carve(hp(sd * 5, 11, 1), 3.2 * q, 1); b.el(hp(sd * 5, 9.4, 1), [1.3 * q, 1.3 * q, 1.3 * q], 17); b.carve(hp(sd * 1.5, 13, -4), 1.3 * q, 0.5); }
   for (const sd of [-1, 1]) b.rc(hp(sd * 9, 1, -5), hp(sd * 3, 10, -13 - op), 3 * q, 2 * q, 1, 2); b.el(hp(0, 10.5, -14 - op), [3.6 * q, 3 * q, 2.6 * q], 1, 2);
   for (let t = -1; t <= 1; t += 0.5) b.carve(hp(t * 5, 12.5, -8.5 - op * 0.45), (2.6 + op * 0.28) * q, 0.6);
   for (let i = 0; i < 9; i++) { const u = hp(-6 + i * 1.5, 11.6, -6.6), l = hp(-5.6 + i * 1.4, 11, -11.5 - op); b.rc(u, add(u, sc(U, -2.6 * q)), 0.55 * q, 0.1, 7); b.rc(l, add(l, sc(U, 2.2 * q)), 0.5 * q, 0.1, 7); }
-  hair(b, (a, c, d) => hp(a * 1.6, c * 1.6 - 4, d * 1.6 + 2), tele ? 46 : 22, 15, 97, 2.2);
+  hair(b, (a, c, d) => hp(a * 1.6, c * 1.6 - 4, d * 1.6 + 2), 22 + 24 * r, 15, 97, 2.2);
   const mo = hp(0, 10, -10 - op * 0.5);
   // shoulders and arms out of the dark
-  const Sh = (s) => tele ? [s * 34, -52, 18] : [s * 34, -48, -36];
+  const Sh = (s) => add(lp([s * 34, -48, -36], [s * 34, -52, 18], r), dz);
   rc(Sh(-1), Sh(1), 12, 12, 1, 6); rc(lp(Sh(-1), Sh(1), 0.5), add(H, sc(U, -10)), 9, 7, 1, 4);
-  const grip = (s, x) => { const W = [x, -20, -3], E = [s * 46, -44, -34]; rc(Sh(s), E, 9, 7, 1, 3); rc(E, W, 7, 5.5, 1, 2); el(E, [8, 8, 8], 1, 2); bigHand(b, W, [s * -0.15, 1, 0.12], k, 1, 0.35); };
+  const limb = (s, E, W) => { rc(Sh(s), E, 9, 7, 1, 3); rc(E, W, 7, 5.5, 1, 2); el(E, [8, 8, 8], 1, 2); };
+  const grip = (s, x) => {
+    if (arm === 'recoil') { const W = add([x * 1.15, -32, 12], dz); limb(s, add([s * 50, -46, -20], dz), W); return bigHand(b, W, [s * -0.2, 0.35, 0.9], k, 0.6, 1.1); } // torn back off the stone, fists
+    const c = curl - 0.35, W = add([x, -20 - 4 * c, -3 + 9 * c], dz); limb(s, add([s * 46, -44, -34], dz), W); bigHand(b, W, [s * -0.15, 1, 0.12 + 0.35 * c], k, 1 - 0.3 * c, curl); // clenched: the knuckles up, the nails dug in
+  };
   grip(1, 30);
-  if (!tele) grip(-1, -30);
-  else { const E = [-62, -28, 64], W = [-40, -6, 112]; rc(Sh(-1), E, 9, 7, 1, 3); rc(E, W, 7, 5.5, 1, 2); el(E, [8, 8, 8], 1, 2); bigHand(b, W, [0.3, 0.6, 0.5], k, 1.5, 0.5); }
+  if (arm === 'grip' || arm === 'recoil') grip(-1, -30);
+  else if (arm === 'rear') { const W = add([-40, -6, 112], dz); limb(-1, add([-62, -28, 64], dz), W); bigHand(b, W, [0.3, 0.6, 0.5], k, 1.5, 0.5); }
+  else { // swept along the deck from its right to its left, the hand flat, the elbow high
+    const t = o.k ?? 0, W = [lerp(-74, 66, t), 30 + 10 * Math.sin(t * Math.PI), 5];
+    limb(-1, add(lp(Sh(-1), W, 0.5), [0, -18, 34]), W); bigHand(b, W, [0.55, 1, -0.12], k, 1.4, 0.25);
+  }
   const mat = (m, x, y, z) => {
     if (m === 17) return glow([0.85, 0.88, 0.7], 0.55);
     const c0 = kitMat(m, x, y, z); if (c0) return c0;
     let c = mul(skin(L('#9a9e8e'), L('#4e5450'), x, y, z, 91), 0.8); // drowned white, grey-green in its folds
     if (Math.abs(vn3(x * 0.15, y * 0.15, z * 0.15, 92) - 0.5) < 0.03) c = mix(c, L('#3a3e52'), 0.7); // veins
     c = mix(c, L('#2a3024'), clamp((vn3(x * 0.1, y * 0.1, z * 0.1, 93) - 0.55) * 3) * 0.6); // slime, lichen
-    if (Math.hypot(x - mo[0], y - mo[1], z - mo[2]) < (tele ? 16 : 9)) c = mix(c, S.bloodD, 0.6);
+    if (Math.hypot(x - mo[0], y - mo[1], z - mo[2]) < 9 + 7 * r) c = mix(c, S.bloodD, 0.6);
     c = mul(c, clamp(0.25 + (z + 50) / 70)); // darker as it sinks into the chasm
     return { alb: c, sss: 0.45, wrap: 0.3, spec: 0.6, gloss: 50 };
   };
-  return done(b, mat, { size: 2.4, rim: 0.6 });
+  const m = done(b, mat, { size: 2.4, rim: 0.6 });
+  if (o.solid) { const sd = m.sdf; m.sdf = (x, y, z) => (y > -14 ? Math.max(sd(x, y, z), -z) : sd(x, y, z)); }
+  return m;
 }
 
 // ======================= 8. LA PLEUREUSE =======================

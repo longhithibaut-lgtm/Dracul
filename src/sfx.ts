@@ -361,6 +361,26 @@ export const recipes = {
     bursts(o, Array.from({ length: n }, (_, i) => (i / n) * dur + Math.random() * 0.1), { src: 'noise', filter: 'bandpass', ff: 700, ff2: 300, q: 3, gain: 0.7, attack: 0.01, dur: 0.18 });
     bursts(o, Array.from({ length: n }, (_, i) => (i / n) * dur + 0.12), { src: 'noise', filter: 'highpass', ff: 2400, gain: 0.35, attack: 0.001, dur: 0.03 });
   },
+  // La Chose du gouffre clenching on a bridge for `dur` s: stone grinding under its nails, the whole bridge groaning low,
+  // grit pattering into the void, louder and faster to the end.
+  grind(o: Play, dur: number) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 700, ff2: 1400, q: 5, trem: 17, gain: 1.1, attack: dur * 0.5, dur });
+    voice(o, { src: 'sawtooth', f: 38, f2: 52, filter: 'lowpass', ff: 160, ff2: 320, q: 6, trem: 5, gain: 0.9, attack: dur * 0.6, dur: dur + 0.2 });
+    const n = Math.max(4, Math.round(dur * 12));
+    bursts(o, Array.from({ length: n }, (_, i) => dur * Math.sqrt(i / n) + Math.random() * 0.03), { src: 'noise', filter: 'bandpass', ff: 3000, q: 4, gain: 0.5, attack: 0.001, dur: 0.025 });
+  },
+  // A Crocheteur's net whirled over his head for `dur` s: whooshes coming round faster and faster, its leads whistling.
+  spin(o: Play, dur: number) {
+    for (let t = 0, gap = 0.32; t < dur; t += gap, gap = Math.max(0.09, gap * 0.8)) {
+      voice(o, { src: 'noise', filter: 'bandpass', ff: 380, ff2: 1100, q: 2.5, gain: 0.8 + (0.9 * t) / dur, attack: gap * 0.5, dur: gap * 0.9, delay: t });
+      voice(o, { src: 'sine', f: 1900, f2: 2500, gain: 0.07 + (0.08 * t) / dur, attack: gap * 0.4, dur: gap * 0.7, delay: t });
+    }
+  },
+  // Thrown into the chasm: a rush of air falling away, his cry going down and out, nothing at the bottom.
+  fall(o: Play) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 1200, ff2: 200, q: 1.5, gain: 0.9, attack: 0.05, dur: 1.6 });
+    voice(o, { src: 'sawtooth', f: 330, f2: 120, filter: 'lowpass', ff: 1600, ff2: 300, q: 3, trem: 7, gain: 0.45, attack: 0.03, dur: 1.4 });
+  },
 };
 export type SfxName = keyof typeof recipes;
 

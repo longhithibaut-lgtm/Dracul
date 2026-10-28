@@ -7,7 +7,9 @@
 // dodged by slipping into his back, whose claws land where his front parries them; the Amas sprawled and the Bourreau
 // wrenching his axe free are struck without being cut short, the Amas losing a ghoul to each blow); and the frame rate
 // empty, with the hound pack, six pénitents, a Sonneur, an Inquisiteur, an Amas and a Bourreau fighting.
-// The necropolis' crows, Enterré and Gavé likewise (their alarm, grip and meals checked too).
+// The necropolis' crows, Enterré and Gavé likewise (their alarm, grip and meals checked too); la Chose du gouffre at the
+// bridge (its recoil under a claw, and the fall: a hero standing on the deck is flung into the chasm) and the Crocheteur
+// (his net, his hook hauling the hero toward a ghoul, the net torn off by keys).
 // Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=necropolis --only=fauna]
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -462,6 +464,103 @@ const fauna = async () => {
 };
 await fauna();
 
+// La Chose du gouffre at the bridge: gripping (the hero on the stone beside it), stirred by his feet on the deck (the tell
+// in three), its sweep, the arm lying there; clawed on its fingers in the tell: it tears its hands back and sinks, and
+// nothing reaches it under. Le Crocheteur: his net whirled (the tell), flung (the attack), the hero netted; his
+// boat-hook raised, the hero hauled toward a ghoul; the bot's keys tear the net off. (Hero invincible here: the fall
+// itself is in the dodge checks, last.)
+const S3 = (k) => run(`${foe(k)}.getData('state')`);
+const feet = (x, y) => run(([x, y]) => { const s = window.game.scene.getScene('room'), h = s.hero; h.body.reset(x + h.x - h.body.center.x, y + h.y - h.body.center.y); s.cameras.main.centerOn(x, y - 20); }, [x, y]);
+const until = async (f, ms = 4000) => { for (let t = 0; t < ms && !(await f()); t += 16) await step(16); };
+const batch2 = async () => {
+  await clear();
+  await feet(1330, 1172); // on the stone west of the bridge
+  await step(50);
+  await page.waitForTimeout(3000); // its chunks load (in real time)
+  await run(`${S}.place({ x: 1416, y: 1152 }, 'chose')`);
+  const edge = await run(`${foe('chose')}.getData('edge')`);
+  console.log('la Chose grips the edge', JSON.stringify(edge));
+  await step(900);
+  await crop('chose', 'chose-idle', 640, 480, 2);
+  await page.screenshot({ path: `${out}/foes-chose-full.png` });
+  await feet(edge.x - 24, edge.y + 22); // onto the deck
+  await until(async () => (await S3('chose')) === 'clench', 1000);
+  if ((await S3('chose')) !== 'clench') errors.push(`la Chose did not stir: ${await S3('chose')}`);
+  await step(T.chose.teleMs * 0.3);
+  await crop('chose', 'chose-tell0', 640, 480, 2);
+  await step(T.chose.teleMs * 0.5);
+  await crop('chose', 'chose-tell', 640, 480, 2);
+  await page.screenshot({ path: `${out}/foes-chose-tell-full.png` });
+  await step(T.chose.teleMs * 0.2 + T.chose.sweepMs * 0.5);
+  await crop('chose', 'chose-attack', 640, 480, 2);
+  await step(T.chose.sweepMs * 0.5 + 200);
+  await crop('chose', 'chose-rest', 640, 480, 2);
+  await until(async () => (await S3('chose')) === 'grip');
+  await run(`${foe('chose')}.setData('readyAt', 0)`);
+  await until(async () => (await S3('chose')) === 'clench', 1000);
+  await step(300);
+  await run(`(() => { const s = ${S}; s.slashReadyAt = 0; s.slash(-Math.PI / 2); })()`); // up at its fingers
+  await step(120);
+  if ((await S3('chose')) !== 'recoil') errors.push(`a claw on la Chose's fingers did not make it let go: ${await S3('chose')}`);
+  await crop('chose', 'chose-recoil', 640, 480, 2);
+  await step(T.chose.recoilMs + T.chose.sinkMs * 0.5);
+  await crop('chose', 'chose-sink', 640, 480, 2);
+  await step(T.chose.sinkMs * 0.5 + 300);
+  await run(`(() => { const s = ${S}; s.slashReadyAt = 0; s.slash(-Math.PI / 2); })()`);
+  await step(200);
+  if ((await S3('chose')) !== 'under') errors.push(`la Chose under the edge was reached: ${await S3('chose')}`);
+  await page.screenshot({ path: `${out}/foes-chose-under-full.png` });
+  await step(T.chose.underMs + T.chose.riseMs * 0.4);
+  await crop('chose', 'chose-rise', 640, 480, 2);
+  await clear();
+
+  // Le Crocheteur.
+  await hero(240, 330);
+  await call([['crocheteur', 160, 330]]);
+  await crop('crocheteur', 'crocheteur-idle', 420, 400, -14);
+  await hero(240, 250);
+  await set('crocheteur', { readyAt: Infinity, state: 'chase', until: 0 });
+  for (const k of [0, 1, 2]) { await step(140); await crop('crocheteur', `crocheteur-walk${k}`, 420, 400, -14); }
+  await hold();
+  await run(`${foe('crocheteur')}.body.reset(160, 330)`);
+  await hero(245, 335);
+  await still();
+  await set('crocheteur', { readyAt: 0, state: 'chase', until: 0 });
+  await until(async () => (await S3('crocheteur')) === 'spin', 1500);
+  await step(T.crocheteur.netTeleMs * 0.7);
+  await crop('crocheteur', 'crocheteur-tell', 480, 440, -18);
+  await page.screenshot({ path: `${out}/foes-crocheteur-tell-full.png` });
+  await step(T.crocheteur.netTeleMs * 0.3 + 200);
+  await crop('crocheteur', 'crocheteur-attack', 720, 440, -12);
+  await until(() => run(`${S}.netted()`), 1000);
+  if (!(await run(`${S}.netted()`))) errors.push('the Crocheteur\'s net missed a hero standing still');
+  await step(300);
+  const { x: hx, y: hy } = await run(`(() => { const c = ${S}.cameras.main, k = 1920 / c.worldView.width, h = ${S}.hero; return { x: (h.x - c.worldView.x) * k, y: (h.y - c.worldView.y) * k }; })()`);
+  await page.screenshot({ path: `${out}/foes-crocheteur-netted.png`, clip: { x: Math.max(0, hx - 260), y: Math.max(0, hy - 300), width: 520, height: 420 } });
+  await run(`${S}.place({ x: 330, y: 300 }, 'ghoul')`); // where he will haul him
+  await run(`${S}.enemies.getChildren().forEach((e) => !e.getData('kind') && e.setData({ readyAt: Infinity, stunnedUntil: Infinity }))`); // it stands
+  await run(`${S}.netUntil = ${S}.time.now + 9000`); // (kept netted for the look)
+  await until(async () => (await S3('crocheteur')) === 'hook', 3000);
+  await step(T.crocheteur.hookTeleMs * 0.6);
+  await crop('crocheteur', 'crocheteur-hook', 480, 440, -18);
+  await until(async () => (await S3('crocheteur')) === 'drag', 1000);
+  const ghoul = `${S}.enemies.getChildren().find((e) => e.body?.enable && !e.getData('kind'))`, gap = () => run(`(() => { const a = ${S}.hero.body.center, b = ${ghoul}.body.center; return Math.round(Math.hypot(a.x - b.x, a.y - b.y)); })()`);
+  const g0 = await gap();
+  await step(900);
+  const g1 = await gap();
+  console.log(`the Crocheteur hauls him toward the ghoul: ${g0} -> ${g1} px`);
+  if ((await S3('crocheteur')) !== 'drag' || g1 >= g0 - 15) errors.push(`the Crocheteur did not haul the hero: ${await S3('crocheteur')}, ${g0} -> ${g1}`);
+  await page.screenshot({ path: `${out}/foes-crocheteur-drag-full.png` });
+  await crop('crocheteur', 'crocheteur-drag', 720, 480, -12);
+  let presses = 0;
+  while ((await run(`${S}.netted()`)) && presses < 20) { await page.keyboard.press(presses % 2 ? 'a' : 'd'); await step(60); presses++; }
+  await step(100);
+  console.log(`the net torn off after ${presses} keys pressed anew; held: ${await run(`!!${S}.heldBy`)}`);
+  if (presses !== Math.ceil(T.crocheteur.free / T.crocheteur.key) || (await run(`!!${S}.heldBy`))) errors.push(`the net or the hook did not let go: ${presses} keys`);
+  await clear();
+};
+await batch2();
+
 // The bot plays each attack, the hero mortal and alone with the foe: standing still, then stepping out REACT ms after
 // the tell starts (holding a key: the hero walks at T.hero.speed). `then(t)`, if given, is what the bot does at each
 // step from then on (t: ms since the tell started), for a dodge that is more than a walk.
@@ -474,7 +573,7 @@ async function play(kind, dx, dy, key, tell, attack, then) {
   await hero(240, 330);
   await call([[kind, 240 - dx, 330 - dy]]);
   await still();
-  await run(() => { const s = window.game.scene.getScene('room'); s.health = 50; s.invulnUntil = s.dazedUntil = 0; s.bodies.length = 0; }); // (no meal to tempt a Gavé)
+  await run(() => { const s = window.game.scene.getScene('room'); s.health = 50; s.invulnUntil = s.dazedUntil = 0; s.bodies.length = 0; s.unnet(); s.heldBy = undefined; }); // (no meal to tempt a Gavé; no net from a Crocheteur)
   await set(kind, { readyAt: 0, facing: Math.atan2(dy, dx) });
   const state = () => run(`${foe(kind)}.getData('state')`), busy = () => run(`!!${foe(kind)}.getData('rings')`); // a bell's rings still rolling
   for (let t = 0; t < 2000 && (await state()) !== tell; t += 16) await step(16);
@@ -568,7 +667,40 @@ Object.assign(fights, {
   'Enterré, immobile': await play('enterre', 16, 0, null, 'crack', ['grab']), 'Enterré, s\'éloigne': await play('enterre', 16, 0, 'd', 'crack', ['grab']),
   'Gavé, immobile (écrasement)': await play('gave', 26, 0, null, 'rear', ['flop']), 'Gavé, pas de côté (écrasement)': await play('gave', 26, 0, 's', 'rear', ['flop']),
   'Gavé, immobile (bile)': await play('gave', 50, 0, null, 'gorge', ['spew']), 'Gavé, pas de côté (bile)': await play('gave', 50, 0, 's', 'gorge', ['spew']),
+  'Crocheteur, immobile (filet)': await play('crocheteur', 70, 0, null, 'spin', ['toss']), 'Crocheteur, pas de côté (filet)': await play('crocheteur', 70, 0, 's', 'spin', ['toss']),
 });
+// La Chose du gouffre: the hero on the bridge 10 px east of its middle when it stirs; he stands (flung into the chasm: the
+// fall, his whole life), or walks off east along the deck REACT ms into the tell. Last: the fall ends the scene (restart).
+async function sweep(key) {
+  await clear();
+  await run(`${S}.place({ x: 1416, y: 1152 }, 'chose')`);
+  const edge = await run(`(() => { const e = ${foe('chose')}; e.setData('readyAt', Infinity); return e.getData('edge'); })()`);
+  await feet(edge.x + 10, edge.y + 20);
+  await step(50);
+  await page.waitForTimeout(2500); // its chunks load (in real time)
+  await run(() => { const s = window.game.scene.getScene('room'); s.health = 50; s.invulnUntil = s.dazedUntil = 0; });
+  await run(`${foe('chose')}.setData('readyAt', 0)`);
+  await until(async () => (await S3('chose')) === 'clench', 1000);
+  await step(REACT);
+  if (key) await page.keyboard.down(key);
+  let fell = false, shot = 0;
+  for (let t = REACT; t < 3000 && !(await run(`${S}.dead`)) && ['clench', 'swipe'].includes(await S3('chose')); t += 16) await step(16);
+  for (let t = 0; t < 1500 && (await run(`!!${S}.fly || ${S}.dead`)); t += 16) { // flung, then falling
+    fell = await run(`${S}.dead`);
+    if (!shot && !fell) (shot = 1), await page.screenshot({ path: `${out}/foes-chose-fling.png` });
+    if (fell && shot === 1) { await step(450); (shot = 2), await page.screenshot({ path: `${out}/foes-chose-fall.png` }); break; }
+    await step(16);
+  }
+  await keys([], ['w', 'a', 's', 'd']);
+  const lost = 50 - (await run(`${S}.health`));
+  return { lost, fell };
+}
+const away = await sweep('d'), stood = await sweep(null);
+console.log('la Chose du gouffre:', JSON.stringify({ stood, away }));
+if (!stood.fell) errors.push('la Chose\'s sweep did not throw a hero standing on the bridge into the chasm');
+Object.assign(fights, { 'Chose du gouffre, immobile (le gouffre)': stood.lost, 'Chose du gouffre, s\'éloigne sur le pont': away.lost });
+await step(2500); // re-formed in the training room (its panel built anew once the room is up)
+for (let t = 0; t < 20000 && !(await run(() => !!document.querySelector('[data-opt="god"]') && !!window.game.scene.getScene('room').hero?.body?.enable)); t += 200) { await page.waitForTimeout(200); await step(16); }
 await run(() => document.querySelector('[data-opt="god"]').click());
 const names = Object.keys(fights), fair = names.every((n, i) => (i % 2 ? !fights[n] : fights[n] > 0));
 if (!fair) errors.push(`unfair or toothless attacks: ${JSON.stringify(fights)}`);

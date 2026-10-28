@@ -12,7 +12,8 @@
 // hit, kneeling (the idle sunk to the knees, cut at the floor); one bloodied corpse.
 // Writes src/<id>.png for each (purifier, priest, hound, penitent, ringer, inquisitor, amas, bourreau, crossbow) and
 // src/foes.data.ts.
-// The necropolis' crow (a flock's, src/crows.ts), Enterré and Gavé: tools/art/maquettes/necropole/creatures.mjs.
+// The necropolis' crow (a flock's, src/crows.ts), Enterré, Gavé and Chose du gouffre: tools/art/maquettes/necropole/creatures.mjs;
+// its Crocheteur: ../necropole/ordre.mjs.
 // Usage: node tools/art/foes.gen.mjs (~30 s on 4 cores); ONLY=priest renders one of them to
 // shots/priest-preview.png (x2, on grey) instead, to try a pose; ONLY=crow,gave WRITE=1 renders those into src/ (their
 // sheets and their rows of foes.data.ts), the others left as they are.
@@ -24,8 +25,9 @@ import { writePNG } from './grand/lib.mjs'; // keeps the alpha channel
 import { purificateur, pretre, chien, penitent, sonneur, inquisiteur, amas, bourreau } from './maquettes/ennemis/foes.mjs';
 import { place } from './maquettes/ennemis/fx.mjs';
 import { std, crossbowman } from './maquettes/ennemis/cast.mjs';
-import { corneille, enterre, gave, placed0 } from './maquettes/necropole/creatures.mjs';
+import { corneille, enterre, gave, gouffre, placed0 } from './maquettes/necropole/creatures.mjs';
 import { lyingCorpse } from './maquettes/necropole/kit.mjs';
+import { crocheteur } from './maquettes/necropole/ordre.mjs';
 
 const cam = camera(38 * Math.PI / 180);
 const VIEWS = { side: -Math.PI / 2, dside: -Math.PI / 4, down: 0, uside: -3 * Math.PI / 4, up: Math.PI }; // yaw: the model looks down +y
@@ -247,6 +249,44 @@ const FOES = {
       ['hurt', () => gave('hurt', { solid: true })],
     ],
     corpse: () => { const m = gave('dead', { solid: true }), [x0, y0, , x1, y1, z1] = m.bounds; return fallen(m, (X, Y, Z) => [X, Y, Z / FLAT], [x0, y0, 0, x1, y1, z1 * FLAT], [4, 8, 10]); },
+  },
+  // La Chose du gouffre (docs/maquettes/necropole-ennemis-planche-2.png): out of the chasm behind a bridge's edge (the
+  // sheet's soles row is the deck; what hangs below it behind the edge is the chasm's), facing the camera, never turning:
+  // its hands gripping the edge, the fingers flexing, the crown and eyes just over it (idle); the fingers clenched on the
+  // stone as the head rises (tele0), the head up and the jaw dropping (tele1), its right arm reared high (tele2); swept
+  // across the deck from its right to its left (swipe0-2), the hand lying flat there (rest); its hands torn back off the
+  // stone (hurt); sliding under (sink). It never dies: its « corpse » is the sink.
+  chose: {
+    FW: 280, FH: 220, SOLE: 150, WALK: 1, STEP, views: ['down'], rim: 4, exposure: 3.2, // drowned-white skin lit from behind: it would burn out
+    frames: [
+      ...[0.35, 0.5, 0.62, 0.5].map((curl, k) => [`idle${k}`, () => gouffre('idle', { solid: true, curl, rise: 0.03 * BREATH[k] })]),
+      ['walk0', () => gouffre('idle', { solid: true })],
+      ['tele0', () => gouffre('idle', { solid: true, curl: 0.95, rise: 0.3, open: 0.15 })],
+      ['tele1', () => gouffre('idle', { solid: true, curl: 1.05, rise: 0.75, open: 0.7 })],
+      ['tele2', () => gouffre('tele', { solid: true, curl: 1.05 })],
+      ...[0.12, 0.5, 0.88].map((k, i) => [`swipe${i}`, () => gouffre('tele', { solid: true, arm: 'swipe', k, curl: 1.05 })]),
+      ['rest', () => gouffre('tele', { solid: true, arm: 'swipe', k: 1, rise: 0.8, open: 0.5 })],
+      ['hurt', () => gouffre('tele', { solid: true, arm: 'recoil', rise: 0.55 })],
+      ['sink', () => gouffre('idle', { solid: true, sink: 0.4, curl: 0.95 })],
+    ],
+    corpse: () => gouffre('idle', { solid: true, sink: 0.4, curl: 0.95 }),
+  },
+  // Le Crocheteur (tools/art/maquettes/necropole/ordre.mjs, docs/maquettes/necropole-ennemis-planche-3.png): the net
+  // bundled at his hip, the boat-hook upright (idle, walk); the net whirled open over his head, its leads swinging round
+  // a notch a frame (spin0-3, the game speeds them up); the net flung off his hand (toss); the boat-hook raised overhead
+  // (hook); hauling on it, the hook far out ahead and low (drag0, drag1: leaning back harder).
+  crocheteur: {
+    FW: 290, FH: 236, SOLE: 182, WALK: 4, STEP,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => crocheteur('idle', (J) => breathe(J, b))]),
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => sway(crocheteur('idle', legs(k, 4)), -1.6 * Math.sin((Math.PI * k) / 2)), { bob: -0.8 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ...[0, 1, 2, 3].map((k) => [`spin${k}`, () => crocheteur('tele', {}, { spin: (k * Math.PI) / 8 })]),
+      ['toss', () => crocheteur('toss')], ['hook', () => crocheteur('hook')],
+      ['drag0', () => crocheteur('drag', (J) => lean(J, -0.12))], ['drag1', () => crocheteur('drag', (J) => lean(J, -0.24))],
+      ['hurt', () => crocheteur('idle', (J) => lean(J, -0.2))],
+    ],
+    // On his back, arms fallen open, the boat-hook by him.
+    corpse: () => lying(crocheteur('idle', { Er: [-12, 1, 64], Wr: [-17, 3, 50], Hr_: [-18, 4, 45], El: [12, 1, 64], Wl: [17, 3, 50], Hl_: [18, 4, 45] }), false),
   },
 };
 // The crossbowman's model has no light of its own to cast (his lantern glows, on his back).

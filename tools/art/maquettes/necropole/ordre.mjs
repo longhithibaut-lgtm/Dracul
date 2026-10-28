@@ -116,30 +116,41 @@ export function chaulier(pose = 'idle') {
 // ======================= 11. LE CROCHETEUR =======================
 // a netter: oiled leather, a broad hat, a weighted net, a long boat-hook for dragging what he catches to the pyre.
 // 'tele': the net whirled open over his head like a dark wheel, its leads swinging; the hook held low and ready.
-export function crocheteur(pose = 'idle') {
+// The game's sheet (tools/art/foes.gen.mjs) also asks: `over` (joints, or J => joints, as ../ennemis/foes.mjs), o.spin
+// (the whirling net turned by that angle), and the poses 'toss' (the net flung off his right hand, gone), 'hook' (the
+// boat-hook raised overhead in both hands) and 'drag' (hauling on it, the hook far out ahead and low).
+const BRACED = { Kl: [4.5, 8, 26], Al: [5, 7, 4], Tl: [5.5, 13, 1.2], Kr: [-4.5, -5, 26], Ar: [-5, -12, 5], Tr: [-5.5, -7, 1.2] }; // left foot forward
+const CROCH = {
+  idle: { Sr: [-8.5, 0, 78], Er: [-10, 1, 61], Wr: [-11, 5, 47], Hr_: [-11, 6, 44], Sl: [8.5, 0, 78], El: [11, 3, 62], Wl: [11, 9, 54], Hl_: [11, 10, 53] },
+  tele: { Sr: [-8.5, 0, 78], Er: [-12, 2, 92], Wr: [-7, 2, 105], Hr_: [-6, 2, 108], Sl: [8.5, 1, 78], El: [11, 8, 64], Wl: [8, 18, 58], Hl_: [7, 20, 58], ...BRACED },
+  toss: { Sr: [-8.5, 2, 78], Er: [-9, 11, 80], Wr: [-6, 23, 81], Hr_: [-5, 26, 80], Sl: [8.5, 0, 78], El: [11, 6, 63], Wl: [8, 16, 57], Hl_: [7, 18, 57], ...BRACED },
+  hook: { Sr: [-8.5, -1, 79], Er: [-11, -3, 92], Wr: [-3, -6, 103], Hr_: [-2, -5, 106], Sl: [8.5, -1, 79], El: [10, -3, 90], Wl: [2, -3, 97], Hl_: [1, -2, 100], ...BRACED },
+  drag: { Sr: [-8.5, 0, 78], Er: [-10, 6, 67], Wr: [-4, 13, 69], Hr_: [-3, 15, 69], Sl: [8.5, 0, 78], El: [10, 7, 66], Wl: [4, 21, 67], Hl_: [3, 23, 67], ...BRACED },
+};
+export function crocheteur(pose = 'idle', over = {}, o = {}) {
   const tele = pose === 'tele'; const b = B(); const J = clone(std); const { rc, el } = b;
-  Object.assign(J, tele ? {
-    Sr: [-8.5, 0, 78], Er: [-12, 2, 92], Wr: [-7, 2, 105], Hr_: [-6, 2, 108], Sl: [8.5, 1, 78], El: [11, 8, 64], Wl: [8, 18, 58], Hl_: [7, 20, 58],
-    Kl: [4.5, 8, 26], Al: [5, 7, 4], Tl: [5.5, 13, 1.2], Kr: [-4.5, -5, 26], Ar: [-5, -12, 5], Tr: [-5.5, -7, 1.2],
-  } : { Sr: [-8.5, 0, 78], Er: [-10, 1, 61], Wr: [-11, 5, 47], Hr_: [-11, 6, 44], Sl: [8.5, 0, 78], El: [11, 3, 62], Wl: [11, 9, 54], Hl_: [11, 10, 53] });
+  Object.assign(J, CROCH[pose]);
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   humanoid(J, b, { thin: 1.0, armM: 2, legM: 5, shinM: 6, footM: 6 });
   b.rev(0, 0.5, 18, 76, t => t < 0.5 ? lerp(13, 9, t / 0.5) : lerp(9, 8.4, (t - 0.5) / 0.5), 2, 1.2, 0.85, { fold: [8, 1.1] });
   hat(b, J.head, 12, 5, 3, 4);
   b.rcs(add(J.head, [0, 2.6, -2]), add(J.head, [0, 3.4, -6]), 4.6, 5.4, 3, 0.8, 0.9, { pri: 1 }); // the scarf
   b.tor([0, 0.5, 52], [0, 0, 1], 9.8, 1.0, 6, 0.3);
   // the boat-hook: a long pole, an iron spike and a curved hook
-  const p0 = tele ? [16, -10, 40] : [12, 10, 0], p1 = tele ? [6, 60, 62] : [13, 11, 124], d = nz(sub(p1, p0));
+  const [p0, p1] = { tele: [[16, -10, 40], [6, 60, 62]], toss: [[16, -10, 40], [6, 60, 62]], hook: [[-1, -26, 82], [2, 30, 150]], drag: [[-4, -4, 82], [1, 62, 38]] }[pose]
+    ?? [add(J.Hl_, [1, 0, -53]), add(J.Hl_, [2, 1, 71])], d = nz(sub(p1, p0)); // (at rest: upright in his left hand)
   rc(p0, p1, 1.1, 1.0, 42); rc(p1, add(p1, sc(d, 7)), 0.8, 0.1, 9);
   const side = nz(crs(d, [1, 0, 0])); let q = add(p1, sc(d, -1));
   for (let i = 0; i < 6; i++) { const a = i / 5 * Math.PI * 1.1, n = add(add(p1, sc(d, -1 - 4 * Math.sin(a))), sc(side, 4 * (1 - Math.cos(a)))); rc(q, n, 0.9, 0.8 - i * 0.1, 9); q = n; }
   // the net: a bundle at his hip at rest; whirled open over his head on the wind-up
-  if (!tele) { oelN(b, [-13, 4, 40], [0, 0, 1], [1, 0, 0], [12, 6, 7], 12, 1, 1.2, 0.6); for (let i = 0; i < 5; i++) el([-13 + (i - 2) * 2.4, 8, 28 - (i % 2) * 2], [1.2, 1.2, 1.2], 9); }
+  if (pose === 'toss') { /* flung: the game draws it flying */ }
+  else if (!tele) { oelN(b, [-13, 4, 40], [0, 0, 1], [1, 0, 0], [12, 6, 7], 12, 1, 1.2, 0.6); for (let i = 0; i < 5; i++) el([-13 + (i - 2) * 2.4, 8, 28 - (i % 2) * 2], [1.2, 1.2, 1.2], 9); }
   else {
-    const c = add(J.Hr_, [0, 0, 6]), n = nz([0.1, 0.25, 1]), u = nz(crs(n, [0, 1, 0])), v = crs(n, u), R = 30;
+    const c = add(J.Hr_, [0, 0, 6]), n = nz([0.1, 0.25, 1]), u = nz(crs(n, [0, 1, 0])), v = crs(n, u), R = 30, spin = o.spin ?? 0;
     b.f((x, y, z) => { const qq = sub([x, y, z], c), w = dot(qq, n), a = dot(qq, u), bb = dot(qq, v), r = Math.hypot(a, bb), sag = 3 * (r / R) ** 2;
-      const ang = Math.atan2(bb, a), rad = Math.abs(((ang / (Math.PI * 2) * 16) % 1 + 1) % 1 - 0.5) / 16 * Math.PI * 2 * r, ring = Math.abs(((r / 5) % 1) - 0.5) * 5;
+      const ang = Math.atan2(bb, a) - spin, rad = Math.abs(((ang / (Math.PI * 2) * 16) % 1 + 1) % 1 - 0.5) / 16 * Math.PI * 2 * r, ring = Math.abs(((r / 5) % 1) - 0.5) * 5;
       return Math.max(Math.hypot(Math.min(rad, ring), w + sag) - 0.45, r - R); }, [c[0] - R - 4, c[1] - R - 4, c[2] - R - 4, c[0] + R + 4, c[1] + R + 4, c[2] + R + 4], 12, 0);
-    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; el(add(c, add(add(sc(u, Math.cos(a) * R), sc(v, Math.sin(a) * R)), sc(n, -4))), [1.4, 1.4, 1.4], 9); }
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2 + spin; el(add(c, add(add(sc(u, Math.cos(a) * R), sc(v, Math.sin(a) * R)), sc(n, -4))), [1.4, 1.4, 1.4], 9); }
   }
   const mat = (m, x, y, z) => {
     const nn = fbm3(x * 0.4, y * 0.4, z * 0.4, 3, 131);
