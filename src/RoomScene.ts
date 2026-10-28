@@ -407,7 +407,7 @@ export class RoomScene extends Phaser.Scene {
    *  The basin takes the blood he carries (update()). */
   private home() {
     const B = Refuge.BASIN, S = this.room.exits[0], R = Refuge.RONGE, C = Refuge.CHEST;
-    this.labels.push({ at: B, l: Loot.label(this, B.x, B.y - 22, 'Bassin de sang') }, { at: { x: S.x, y: Refuge.STAIRS }, l: Loot.label(this, S.x, Refuge.STAIRS - 20, WORLD.necropolis.name) });
+    this.labels.push({ at: B, l: Loot.label(this, B.x - 12, B.y - 2, 'Bassin de sang') }, { at: { x: S.x, y: Refuge.STAIRS }, l: Loot.label(this, S.x, Refuge.STAIRS - 20, WORLD.necropolis.name) });
     this.ronge = Ronge.create(this, R.x, R.y);
     Satchel.chest(this, C.x, C.y);
     this.labels.push({ at: C, l: Loot.label(this, C.x, C.y - 24, 'Le coffre (F)') });
@@ -424,7 +424,7 @@ export class RoomScene extends Phaser.Scene {
       const k = this.lostItems, things = k ? `${k} objet${k > 1 ? 's' : ''}` : '';
       this.hud.title(this.lost && k ? `${this.lost} sang et ${things} perdus` : k ? `${things} perdu${k > 1 ? 's' : ''}` : `${this.lost} sang perdu`);
     }
-    this.labels.push({ at: R, l: Loot.label(this, R.x, R.y - 30, Shop.beast(Save.data) ? 'Il grogne' : 'Le Rongé (F)') });
+    this.labels.push({ at: R, l: Loot.label(this, R.x, R.y - 35, Shop.beast(Save.data) ? 'Il grogne' : 'Le Rongé (F)') });
     if (Save.data.vesna) { // freed: back at her shop, behind her stall
       const V = Refuge.VESNA;
       this.vesna = Vesna.create(this, V.x, V.y);
@@ -556,7 +556,7 @@ export class RoomScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     if (this.dead) return;
-    if (this.ronge) this.ronge.show(Shop.beast(Save.data) ? 'beast' : Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.notice ? 'look' : 'idle', time);
+    if (this.ronge) this.ronge.show(Shop.beast(Save.data) ? 'beast' : Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.notice ? 'look' : 'idle', time, this.hero.x);
     this.vesna?.show(this.stall || Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, this.vesna.s) < T.ronge.notice ? 'count' : 'idle', time);
     if (this.cut) { // a scene plays: he stands, the world waits, the zone streams round the camera
       this.hero.setVelocity(0);

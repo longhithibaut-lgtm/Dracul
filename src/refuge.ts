@@ -24,8 +24,9 @@ export const LOOK: Look = {
 export const STAIRS = D.STAIRS;
 // The basin of the great hall (its box in refuge.data.ts; the mockup's basin at world 1800, 1560), floor point.
 export const BASIN = { x: 840, y: 644 };
-// Le Rongé's corner, right of the basin, his floor point (he faces it): his body stops walkers.
-export const RONGE = { x: 896, y: 650 };
+// Le Rongé, perched on the basin's east rim (docs/maquettes/ronge-1-bassin-scene.png), the floor point under him; the
+// basin's box stops walkers, his body too where it hangs past it.
+export const RONGE = { x: 857, y: 645 };
 // Le coffre, left of the basin as le Rongé is right of it (floor point): the items brought back. Its body stops walkers.
 export const CHEST = { x: 762, y: 652 };
 // Vesna's place behind her stall, in her shop off the great hall (the mockup's): her floor point; her body stops walkers.
@@ -62,7 +63,7 @@ export function build(scene: Phaser.Scene): Room {
   const freed = Save.data.vesna;
   if (freed) layered(scene);
   const obstacles = freed ? Baked.draw(scene, 'refuge-vesna', V.OVER, V.BOXES) : Baked.draw(scene, 'refuge', D.OVER, D.BOXES);
-  obstacles.add(scene.add.zone(RONGE.x, RONGE.y, 44, 16));
+  obstacles.add(scene.add.zone(RONGE.x + 3, RONGE.y, 20, 16));
   if (freed) obstacles.add(scene.add.zone(VESNA.x, VESNA.y - 2, 28, 10));
   obstacles.add(scene.add.zone(CHEST.x, CHEST.y - 2, 28, 12));
   return {

@@ -5,7 +5,7 @@ import { FW, FH, SOLE, FRAMES } from './ronge.data.ts';
 import sheet from './ronge.png';
 import { WARE_TEXT, type Ware } from './shop.ts';
 
-// How le Rongé shows (docs/lore.md): crouched by the refuge's basin, his sheet rendered offline already lit
+// How le Rongé shows (docs/lore.md): perched on the refuge's basin's rim, his sheet rendered offline already lit
 // (tools/art/ronge.gen.mjs), drawn at half scale like the foes; and his wares, a panel of cards over the dimmed refuge in
 // the gift cards' style (frame, key badge, blood band). Gameplay (RoomScene, shop.ts) decides; this file only draws.
 
@@ -20,15 +20,15 @@ export function preload(scene: Scene) {
 }
 
 export type Pose = 'idle' | 'look' | 'beast';
-/** Him at floor point (x, y), facing down-left (toward the basin). show(): crouched breathing, reared with his head
- *  raised (the hero near), or gone beast, heaving. */
+/** Him on the basin's rim over floor point (x, y). show(): drinking from his cupped hands, facing down-left (the basin);
+ *  leaning out to speak (the hero near), or gone beast on hands and feet, heaving: both turned to the hero (at `heroX`). */
 export function create(scene: Scene, x: number, y: number) {
   const tex = scene.textures.get('ronge');
   FRAMES.forEach((n, i) => tex.has(n) || tex.add(n, 0, i * FW, 0, FW, FH));
   const s = scene.add.image(x, y, 'ronge', 'idle0').setOrigin(0.5, SOLE / FH).setScale(0.5).setFlipX(true).setDepth(y).setBlendMode(prelit(scene));
   return {
-    show(pose: Pose, now: number) {
-      s.setFrame(pose === 'beast' ? `beast${Math.floor(now / 140) % 2}` : `${pose}${Math.floor(now / (pose === 'look' ? 260 : 340)) % 4}`);
+    show(pose: Pose, now: number, heroX = x) {
+      s.setFlipX(pose === 'idle' || heroX < x).setFrame(pose === 'beast' ? `beast${Math.floor(now / 140) % 2}` : `${pose}${Math.floor(now / (pose === 'look' ? 260 : 340)) % 4}`);
     },
   };
 }
