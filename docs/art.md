@@ -63,6 +63,7 @@ les générateurs des maquettes archivées ont été retirés (2026-10-27), à r
 | `ennemis-*.png` | ennemis retenus (voir `docs/decisions.md`) |
 | `boss-catacombes-*.png` | trois pistes pour le gardien des catacombes ; la Nourrice des goules est retenue, à redessiner |
 | `boss-nourrice-*.png` | quatre variantes de la Nourrice (Araignée, Matrice, Sainte, Emmurée) ; **A, l'Araignée, retenue** (dans le jeu : `tools/art/nourrice.gen.mjs`) |
+| `hud-*.png` | trois pistes de HUD sur deux captures (exploration ; boss et vie basse) : 1 Relique, 2 Chair, 3 Gravure, `hud-planche.png` côte à côte ; à choisir (générateur `tools/art/maquettes/hud/`) |
 
 **À décider avec l'utilisateur** (aucune règle tant que ce n'est pas tranché) : palette commune des salles, HUD et
 police à 960×540.
