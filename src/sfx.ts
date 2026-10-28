@@ -1,10 +1,11 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
+import { mixer } from './ambience.ts';
 
 // Procedural combat sounds: Web Audio synthesis on Phaser's audio context, no audio files.
 // Phaser resumes its context on the first key or click (autoplay rules) and owns mute (`scene.sound.mute`).
 
 type Bus = { ctx: BaseAudioContext; dst: AudioNode; noise: AudioBuffer };
-type Play = Bus & { t: number; p: number; v: number }; // start time, pitch and volume variation of this one play
+export type Play = Bus & { t: number; p: number; v: number }; // start time, pitch and volume variation of this one play
 
 // One enveloped voice: an oscillator (or looped white noise) through an optional filter, both swept exponentially.
 type Voice = {
@@ -15,7 +16,7 @@ type Voice = {
   gain: number; attack?: number; dur: number; delay?: number;
 };
 
-function voice(o: Play, v: Voice) {
+export function voice(o: Play, v: Voice) {
   const { ctx } = o;
   const t = o.t + (v.delay ?? 0), end = t + v.dur;
   let src: AudioScheduledSourceNode;
@@ -338,6 +339,6 @@ export function play(scene: Phaser.Scene, name: SfxName, arg = 0) {
   const sm = scene.sound as Phaser.Sound.WebAudioSoundManager;
   // Nothing before the first user input: a locked context would replay its backlog all at once on unlock.
   if (sm.context?.state !== 'running') return;
-  if (live?.ctx !== sm.context) live = bus(sm.context, sm.destination);
+  if (live?.ctx !== sm.context) live = bus(sm.context, mixer(sm.context, sm.destination).fx); // the effects bus (ambience.ts)
   recipes[name](vary(live), arg);
 }

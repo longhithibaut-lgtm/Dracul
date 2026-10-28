@@ -51,6 +51,10 @@ const KNOBS = [
   ['Bourreau : préparation (ms)', 'bourreau', 'heaveMs', 300, 1500, 25],
   ['Aube (cloître) : grâce avant de brûler (ms)', 'dawn', 'graceMs', 0, 5000, 100],
   ['Aube (cloître) : une brûlure toutes les (ms)', 'dawn', 'burnEveryMs', 300, 3000, 50],
+  ['Son : volume général (dB)', 'audio', 'master', -40, 6, 1],
+  ['Son : ambiance (dB)', 'audio', 'ambience', -40, 6, 1],
+  ['Son : musique (dB)', 'audio', 'music', -40, 6, 1],
+  ['Son : effets (dB)', 'audio', 'effects', -40, 6, 1],
 ] as const;
 
 // Folded or not, the panel stays so across the training room's restarts.
