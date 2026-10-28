@@ -69,3 +69,27 @@ export function pick(s: Phaser.GameObjects.Sprite, look: HeroLook, now: number) 
   if (d < 20) w.phase += d / strideOn(c.stride, w.way, gait.squash); // more is a teleport, not a step
   return { ...at, walk: { ...v, frame: `${cycle}${Math.floor(w.phase * c.n) % c.n}` } };
 }
+
+/** The step of a timed action `ms` in: the last of `at` (ms from its start) reached. */
+export const stepOf = (at: number[], ms: number) => Math.max(0, at.findLastIndex((t) => ms >= t));
+
+/** The hurt a blow plays: `from`, the way it travels (radians, on screen; undefined: taken as from the front). Going
+ *  the way he faces it struck his back (hurtb), head-on his front (hurt), else his left or right side (hurtl, hurtr);
+ *  a mirrored view swaps his sides. */
+export function hurtOf(facing: number, from: number | undefined, flip: boolean): string {
+  if (from === undefined) return 'hurt';
+  const r = wrap(from - facing);
+  if (Math.abs(r) <= Math.PI / 4) return 'hurtb';
+  if (Math.abs(r) >= (3 * Math.PI) / 4) return 'hurt';
+  return r > 0 !== flip ? 'hurtl' : 'hurtr'; // y down: travelling to his right, it came from his left
+}
+
+const IDLE_AFTER = 2500, IDLE_EVERY = 6000, IDLE_MS = 1400;
+/** Standing still `ms`, once in a while a gesture (in turn: a glance aside, the lantern raised, a deep breath): its
+ *  frame, in and out through its first pose; else undefined (the plain idle). */
+export function idleVariant(ms: number): string | undefined {
+  const t = ms - IDLE_AFTER, u = t % IDLE_EVERY, what = ['glance', 'lift', 'breath'][Math.floor(t / IDLE_EVERY) % 3];
+  if (t < 0 || u >= IDLE_MS) return undefined;
+  if (what === 'breath') return u >= 300 && u < IDLE_MS - 300 ? 'breath-0' : undefined;
+  return `${what}-${u < 160 || u >= IDLE_MS - 160 ? 0 : 1}`;
+}
