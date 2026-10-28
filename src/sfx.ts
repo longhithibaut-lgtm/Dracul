@@ -1,5 +1,4 @@
 import type Phaser from 'phaser';
-import { mixer } from './ambience.ts';
 
 // Procedural combat sounds: Web Audio synthesis on Phaser's audio context, no audio files.
 // Phaser resumes its context on the first key or click (autoplay rules) and owns mute (`scene.sound.mute`).
@@ -386,6 +385,6 @@ export function play(scene: Phaser.Scene, name: SfxName, arg = 0) {
   const sm = scene.sound as Phaser.Sound.WebAudioSoundManager;
   // Nothing before the first user input: a locked context would replay its backlog all at once on unlock.
   if (sm.context?.state !== 'running') return;
-  if (live?.ctx !== sm.context) live = bus(sm.context, mixer(sm.context, sm.destination).fx); // the effects bus (ambience.ts)
+  if (live?.ctx !== sm.context) live = bus(sm.context, sm.destination);
   recipes[name](vary(live), arg);
 }
