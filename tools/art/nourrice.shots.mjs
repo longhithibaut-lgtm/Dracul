@@ -47,7 +47,7 @@ const health = () => run(() => window.game.scene.getScene('room').health);
 await page.keyboard.press('t');
 await page.waitForFunction(() => { const s = window.game.scene.getScene('room'); return s.training && s.layout === 'necropolis' && s.sys.isActive() && s.hero?.body && document.querySelector('#training'); });
 await page.waitForTimeout(2000); // its first chunks
-await page.click('#training [data-opt="god"]');
+await run(() => import('/src/training.ts').then((m) => void (m.opts.god = false))); // « Invincible ici » unticked (its box folded in the panel)
 await page.click('#training [data-spawn="nourrice"]');
 await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable && e.getData('kind') === 'nourrice'), null, { timeout: 120000 });
 await run(() => window.game.loop.sleep());
