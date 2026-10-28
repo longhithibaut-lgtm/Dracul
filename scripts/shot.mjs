@@ -512,7 +512,7 @@ check(Math.abs(outside.x - 760) < 20 && outside.y > 478 && outside.y < 540, `bac
 await keep(false);
 await page.waitForTimeout(700);
 await shot('hud-blood');
-await shot('hud', { x: 0, y: 0, width: 520, height: 260 });
+await shot('hud', { x: 0, y: 820, width: 1100, height: 260 }); // the HUD's bottom left: heart, vein, pouch, the bag
 await keep(true);
 // across: the field, the bridge, the middle, the breach, the far side
 const t0 = Date.now();
