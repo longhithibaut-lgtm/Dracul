@@ -1,6 +1,6 @@
 # Dracul : direction « extraction × ARPG » (document de travail)
 
-Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26) ; puis les objets et le sac (§6, 2026-10-26) ; puis les catacombes, deuxième zone ouverte (§4, 2026-10-27) ; puis la Nourrice, Vesna libérée et ses pouvoirs (§4, §6, 2026-10-27). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
+Statut : **direction validée dans ses grandes lignes ; personnages à écrire ensemble**. Prototype codé : passe 1 (la boucle : anneaux, ennemis placés, sang porté, bassin, sauvegarde) et passe 2 (la battue, le Rongé et sa boutique) ; `docs/decisions.md` 2026-10-23 ; puis la nécropole, première zone ouverte (§4, 2026-10-26) ; puis les objets et le sac (§6, 2026-10-26) ; puis les catacombes, deuxième zone ouverte (§4, 2026-10-27) ; puis la Nourrice, Vesna libérée et ses pouvoirs (§4, §6, 2026-10-27) ; puis la Matrice, gardienne des catacombes (§4, 2026-10-28). À jouer : protocole du §12. Les points marqués *(à valider)* touchent au
 lore (`docs/lore.md`) ou sont des choix ouverts.
 
 ## 1. L'idée en une phrase
@@ -163,10 +163,11 @@ l'Ordre, lune tombée par les puits, pourriture phosphorescente). Plan (x vers l
 - **La prison de Vesna** : une salle dallée de l'Ordre (médaillon gravé, piliers brisés, braseros), fermée au sud par un
   mur d'os où s'ouvre **une grille** (`GATES` id `prison`, `arena: true`) ; contre le mur de crânes du nord, **le
   reliquaire** (cage de fer sur une estrade, coffre doré scellé de cire rouge, chaînes en croix, le signe du Rat sur une
-  plaque d'argent) ; le secteur `prison` n'a aucun groupe. **Son gardien, la Nourrice des goules** (« l'Araignée »,
-  2026-10-27) : entrer dans l'arène fait tomber la grille derrière le héros (la battue reste dehors) et la Nourrice
-  descend de la voûte ; deux phases (détail et chiffres : `docs/decisions.md`, `T.nourrice`) ; morte, la grille se lève,
-  pour toujours (`Save.nourrice`). Mourir pendant le combat suit la règle de toujours (tout ce qui est porté est perdu).
+  plaque d'argent) ; le secteur `prison` n'a aucun groupe. **Son gardien, la Nourrice des goules** (« la Matrice »,
+  2026-10-28 ; l'Araignée, d'abord retenue, est gardée pour un autre boss) : entrer dans l'arène fait tomber la grille
+  derrière le héros (la battue reste dehors) et la roue de la Matrice descend de la voûte au milieu de la salle ; deux
+  phases (détail et chiffres : `docs/decisions.md`, `T.matrice`) ; morte, la grille se lève, pour toujours
+  (`Save.nourrice`). Mourir pendant le combat suit la règle de toujours (tout ce qui est porté est perdu).
   Puis **F au reliquaire libère Vesna** : une courte scène (ses yeux dans la fente, la cage s'ouvre, ses rats en
   sortent, elle se lève et parle), libérée pour toujours dès que la cage s'ouvre (`Save.vesna`), même si le héros meurt
   en rentrant ; elle rentre seule au refuge (en nuée de rats). Après : « Le reliquaire est vide. ».

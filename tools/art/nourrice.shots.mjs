@@ -40,7 +40,7 @@ const step = (ms) => run((ms) => { const g = window.game; for (let t = 0; t < ms
 const shot = (name) => page.screenshot({ path: `${out}/${name}.png` });
 const hero = (x, y) => run(([x, y]) => { const s = window.game.scene.getScene('room'); s.hero.body.reset(x, y); }, [x, y]);
 const boss = (k) => run(`${BOSS}?.getData('${k}')`);
-const set = (data) => run(`(() => { const e = ${BOSS}; e.setData(${JSON.stringify(data)}); e.setVelocity(0); })()`);
+const set = (data) => run(`(() => { const e = ${BOSS}; e.setData(${JSON.stringify(data, (k, v) => (v === Infinity ? 1e12 : v))}); e.setVelocity(0); })()`); // (JSON has no Infinity)
 const health = () => run(() => window.game.scene.getScene('room').health);
 
 // ---- the training room: « Invincible » unticked, her button ----
@@ -134,7 +134,7 @@ await shot('nourrice-wall');
 // her throws: debris at where he stands
 const hurl = (name, key) => play(name, [cx, cy - 20], [cx - 30, cy + 50], 'hurlT', [], key, async () => {
   await set({ state: 'wall', hurls: 1, nextHurl: 0, z: T.nourrice.wallZ });
-}, T.nourrice.flightMs + 150);
+}, T.nourrice.flightMs + 1500); // (the lump flies on tweens, on the wall clock: stepped fast, it needs more frames)
 // (play() puts her body at its point first: back on the wall's foot nearest him)
 const onWall = async () => run(`(() => { const s = ${S}, e = ${BOSS}; e.setData({ s: 600 }); })()`);
 await onWall();

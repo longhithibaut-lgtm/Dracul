@@ -283,8 +283,9 @@ export const T = {
     reloadMs: 1400, teleMs: 1000, trackMs: 200, back: 50, swingMs: 650, over: 40, arm: 230, radius: 24, damage: 2,
     lowMs: 2000, haulMs: 900,
     // Her cords: `cords` goules at most tethered to the sac, fed (+1 hp every `feedMs`, up to a ghoul's) and kept within
-    // `tether` (floor) of the pivot; one born every `birthMs` while fewer. A cord is cut by a claw across it or the
-    // goule's death. Each cut cord bares the sac: a blow on her deals its share of the cords cut (none cut: nothing).
+    // `tether` (floor) of the pivot; one born every `birthMs` while fewer. A cord is cut by a claw across its low part (by
+    // the goule; nearer her it hangs high) or the goule's death. Each cut cord bares the sac: a blow on her deals its
+    // share of the cords cut (none cut: nothing).
     cords: 3, tether: 100, feedMs: 1500, birthMs: 9000,
     // Phase 2, at half her blood: the chains snap, the wheel shudders and spins, the sac tears (`tearMs`), `burst` young
     // goules spill out (untethered), then one every `broodMs` while fewer than `brood` of hers live; the cords are gone and

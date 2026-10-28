@@ -53,7 +53,7 @@ const step = (ms) => run((ms) => { const g = window.game; for (let t = 0; t < ms
 const shot = (name) => page.screenshot({ path: `${out}/${name}.png` });
 const hero = (x, y) => run(([x, y]) => { const s = window.game.scene.getScene('room'); s.hero.body.reset(x, y); }, [x, y]);
 const boss = (k) => run(`${BOSS}?.getData('${k}')`);
-const set = (data) => run(`(() => { const e = ${BOSS}; e.setData(${JSON.stringify(data)}); e.setVelocity(0); })()`);
+const set = (data) => run(`(() => { const e = ${BOSS}; e.setData(${JSON.stringify(data, (k, v) => (v === Infinity ? 1e12 : v))}); e.setVelocity(0); })()`); // (JSON has no Infinity)
 const now = () => run(`${S}.time.now`);
 const health = () => run(() => window.game.scene.getScene('room').health);
 const heal = () => run(() => { const s = window.game.scene.getScene('room'); s.health = 10; s.invulnUntil = 0; s.hud.health(10, 10); });
@@ -119,10 +119,12 @@ fights['Balancier vers le bas, pas de côté'] = await play('swing down tell', [
 
 // ---- her cords: fed by all three, a blow does nothing; one cut, a third of it ----
 await rested();
-await set({ state: 'hang', readyAt: Infinity, birthAt: 0 });
+await set({ state: 'hang', readyAt: Infinity });
 await run(`${BOSS}.body.reset(${pv.x}, ${pv.y})`);
-await hero(pv.x, pv.y + 120);
-check(await until(`${S}.fed(${BOSS}).length === ${M.cords}`, 12000), `${M.cords} goules on their cords again`);
+await hero(pv.x - 100, pv.y + 30);
+await step(100);
+await run(`(() => { const s = ${S}, e = ${BOSS}; for (let i = 0; i < ${M.cords}; i++) s.birth(e, true); })()`); // (one is born every ${M.birthMs} ms: three at once here)
+check(await until(`${S}.fed(${BOSS}).length === ${M.cords}`, 8000), `${M.cords} goules born on their cords again`);
 await run(`${S}.fed(${BOSS}).forEach((g, i) => { g.setData('stunnedUntil', Infinity); g.setVelocity(0); g.body.reset(${pv.x} + 80, ${pv.y} - 70 + i * 70); })`); // still, east of her, apart, to aim at their cords
 await step(400);
 await shot('matrice-cords');

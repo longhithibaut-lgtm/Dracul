@@ -88,8 +88,10 @@ longtemps sans sang, il redevient bête un temps : boutique fermée, il grogne d
   inquisiteurs. Chaque menace doit avoir sa forme, sa couleur et son attaque, lisibles d'un coup d'œil.
 - **Les goules** des catacombes : des vampires affamés devenus bêtes (le serviteur de sang actuel).
 - **Mini-boss** : un gardien par région, devant le reliquaire du chef de maison. Celui des catacombes : **la Nourrice
-  des goules** (nom provisoire), une vampire affamée devenue géante que l'Ordre garde enchaînée devant Vesna, étirée
-  comme une araignée, des goules accrochées à elle.
+  des goules** (nom provisoire), « la Matrice » (version B, choix de l'utilisateur du 2026-10-28) : une vampire affamée que
+  l'Ordre a crucifiée sur une roue de supplice pendue à la voûte devant Vesna, le ventre un sac translucide où des
+  larves de goules se tordent, des cordons ombilicaux vers les goules qui rampent autour d'elle. (La version A,
+  l'Araignée, étirée, des goules accrochées à elle, est gardée pour un autre boss.)
 - **Boss final** : le Grand Inquisiteur, en haut du clocher.
 
 ## Mécaniques liées au lore

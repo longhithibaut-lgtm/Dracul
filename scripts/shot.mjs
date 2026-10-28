@@ -14,10 +14,10 @@
 // Expedition 2: the zone new, the shortcuts still open (saved), blood picked up, a new item taken and worn, then the bot
 // lets the foes kill him: he re-forms at his coffin with nothing carried, the new item lost, the acquired one still worn. Le Rongé's wares (ronge.png, shop.png). Hounds follow him through one
 // door, never a second. Headless FPS of every place, and of the zone walked across chunk borders. In the training room
-// a crossbowman clawed to his knees, then bitten. The whole zone's map: shots/necropolis-overview.png (its bake).
+// a crossbowman clawed to his knees, then bitten; its two bosses called in (la Matrice, l'Araignée: tools/art/nourrice.shots.mjs). The whole zone's map: shots/necropolis-overview.png (its bake).
 // Expedition 3, les catacombes: across the necropolis by its shortcuts, down the well (well-top, cata-well-bottom), a gallery,
 // a crossroads, la grille du caveau raised from below (cata-shortcut-before, -after; caveau-before from above), le nid, the
-// prison: its grille drops behind him, La Nourrice (cata-nourrice), put down (her fight: tools/art/nourrice.shots.mjs), the grille rises,
+// prison: its grille drops behind him, La Matrice (cata-matrice), put down (her fight: tools/art/matrice.shots.mjs), the grille rises,
 // F at the reliquary frees Vesna (cata-prison), the battue down there and up in the necropolis, back up le caveau (caveau-after), home: Vesna there.
 // Exit code 1 if the page logged an error or a step failed.
 import { mkdir, copyFile } from 'node:fs/promises';
@@ -251,11 +251,11 @@ async function catacombs() {
   await trek([[262, 215], [218, 320], [262, 420], [360, 470], [520, 560]], 'down the rat-run into le nid');
   await look('cata-nid', 610, 630);
   await trek([[800, 720], [880, 770], [1080, 880], [1380, 930], [1450, 950], [1700, 1004], [1950, 1014], [2180, 1012], [2350, 1000]], 'the low gallery to the prison');
-  // into the arena: its grille drops behind him, La Nourrice comes down (her fight is tools/art/nourrice.shots.mjs's: here she is put down)
+  // into the arena: its grille drops behind him, La Matrice comes down (her fight is tools/art/matrice.shots.mjs's: here she is put down)
   await walk(2350, 900, 8000, 6);
-  check(await until(() => !!window.game.scene.getScene('room').fight, null, 8000), 'into the prison: its grille shut behind him, La Nourrice comes down');
+  check(await until(() => !!window.game.scene.getScene('room').fight, null, 8000), 'into the prison: its grille shut behind him, La Matrice comes down');
   await page.waitForTimeout(2500);
-  await shot('cata-nourrice');
+  await shot('cata-matrice');
   await run(() => { const s = window.game.scene.getScene('room'), e = s.fight.boss; s.hurtEnemy(e, e.getData('hp')); });
   check(await until(() => { const s = window.game.scene.getScene('room'); return !s.fight && s.room.zone.gates.find((g) => g.arena).open; }, null, 8000) && (await save()).nourrice.dead, 'she dead: the grille rises, her death saved');
   await trek([[2360, 760], [2360, 728]], 'to her reliquary');
@@ -680,6 +680,12 @@ if (check(!!(await page.waitForSelector('#training', { timeout: 5000 }).catch(()
     return { knelt, hp, health: s.health, dead };
   });
   check(bit.knelt && bit.hp === 1 && bit.dead && bit.health > 3, `clawed to ${bit.hp} hp, he kneels (${bit.knelt}); bitten (${bit.dead ? 'dead' : 'alive'}): 3 -> ${bit.health} blood`);
+  await page.click('#training [data-spawn="matrice"]');
+  await page.click('#training [data-spawn="nourrice"]');
+  const bosses = await until(() => ['matrice', 'nourrice'].every((k) => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable && e.getData('kind') === k)), null, 10000);
+  await page.waitForTimeout(1500);
+  await shot('training-bosses');
+  check(bosses, 'the training room calls in la Matrice and l\'Araignée');
   await page.click('#training [data-opt="passive"]');
 }
 await end();

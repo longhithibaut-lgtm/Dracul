@@ -27,7 +27,15 @@ décision ou une maquette validée.
 mince, longs cheveux noirs, yeux de braise rouge, long manteau à doublure violette (sa signature), griffes nues,
 lanterne tenue bas ; sa brume est une vapeur de sang caillé. Gestes lourds,
 marche lente, les pieds tiennent au sol (course pilotée par la distance) ; 8 directions, recul et pas chassés quand
-il regarde ailleurs que là où il va (`src/gait.ts`). La Nourrice des goules, « l'Araignée » (`docs/maquettes/boss-nourrice-A-araignee.png`, gardée pour un futur boss ; le gardien des catacombes est la Matrice, `boss-nourrice-B-matrice.png`),
+il regarde ailleurs que là où il va (`src/gait.ts`). La Nourrice des goules, gardienne des catacombes, « la Matrice »
+(`docs/maquettes/boss-nourrice-B-matrice.png`), rendue hors ligne depuis le modèle de la maquette (`tools/art/matrice.gen.mjs`) :
+la roue de l'Ordre (bois cerclé de fer, pointes, huit rayons, petits sceaux d'or cloués sur la jante) vue de trois quarts, elle
+en croix dessus, le sac translucide éclairé de l'intérieur où les larves se tordent ; pendue, balancée, tirée en arrière (le
+sac s'embrase), à terre, frappée ; le sac déchiré (bave, chair à vif) et la roue qui tourne (douze angles, l'éclairage
+juste) ; tombée sur le dos ; environ deux fois la hauteur du héros ; ses deux chaînes jusqu'à la voûte et ses cordons
+ombilicaux (sombres, liseré rosé, tendus sur la préparation) sont dessinés par le jeu. Ce qui la lit dans le noir : le sac
+(une lumière de `dark.ts` qui s'embrase sur la préparation), les chaînes, les cordons. La Nourrice « l'Araignée »
+(`docs/maquettes/boss-nourrice-A-araignee.png`, gardée pour un autre boss, appelée par l'entraînement),
 rendue hors ligne depuis les pièces mêmes de la maquette (`tools/art/nourrice.gen.mjs`, posée par quelques nombres
 comme les ennemis) : trois vues (profil, face, dos ; miroir pour la gauche) et une au mur (dos à la caméra, tête en bas),
 à l'échelle des ennemis (environ trois fois la hauteur du héros) ; ses goules accrochées sont des calques à part, qui
@@ -62,7 +70,7 @@ les générateurs des maquettes archivées ont été retirés (2026-10-27), à r
 | `cloitre.png` | cloître validé (« plus clair dehors, moins d'arbres ») |
 | `ennemis-*.png` | ennemis retenus (voir `docs/decisions.md`) |
 | `boss-catacombes-*.png` | trois pistes pour le gardien des catacombes ; la Nourrice des goules est retenue, à redessiner |
-| `boss-nourrice-*.png` | quatre variantes de la Nourrice (Araignée, Matrice, Sainte, Emmurée) ; **B, la Matrice, retenue** pour les catacombes ; A, l'Araignée, gardée pour plus tard (`tools/art/nourrice.gen.mjs`) |
+| `boss-nourrice-*.png` | quatre variantes de la Nourrice (Araignée, Matrice, Sainte, Emmurée) ; **B, la Matrice, gardienne des catacombes** (`tools/art/matrice.gen.mjs`) ; A, l'Araignée, gardée pour un autre boss (`tools/art/nourrice.gen.mjs`) |
 | `hud-*.png` | trois pistes de HUD sur deux captures (exploration ; boss et vie basse) : 1 Relique, 2 Chair, 3 Gravure, `hud-planche.png` côte à côte ; à choisir (générateur `tools/art/maquettes/hud/`) |
 | `titre-*.png`, `pause-*.png`, `options*.png`, `menus-planche.png` | menus : trois écrans titre (1 cercueil, 2 lune, 3 gravure), deux pauses (Relique, Gravure), les options (piste Relique) ; à choisir (générateur `tools/art/maquettes/menus/`) |
 | `necropole-ennemis-*.png` | quinze ennemis proposés pour la nécropole (8 créatures, 7 hommes de l'Ordre), trois planches et deux écrans en situation, **à choisir** ; générateur `tools/art/maquettes/necropole/` (`make.mjs`) |
