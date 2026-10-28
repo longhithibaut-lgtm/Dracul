@@ -73,8 +73,8 @@ export function show(s: Sprite, now: number, flash: boolean, pivot: P | undefine
   for (const g of fed) {
     const to = { x: g.x, y: g.y - 3 }, sag = taut ? 2 : 10 + 0.08 * Math.hypot(to.x - sac.x, to.y - sac.y), n = 24;
     const pt = (t: number) => ({ x: Phaser.Math.Linear(sac.x, to.x, t), y: Phaser.Math.Linear(sac.y, to.y, t) + sag * 4 * t * (1 - t) + Math.sin(now / 180 + t * 9) * (taut ? 0.2 : 0.8) * t });
-    co.lineStyle(1.4, 0x4a1420, 1).strokePoints(Array.from({ length: n + 1 }, (_, i) => pt(i / n)) as Phaser.Math.Vector2[]);
-    co.lineStyle(0.6, 0x9a4a50, 0.8).strokePoints(Array.from({ length: n + 1 }, (_, i) => { const p = pt(i / n); return { x: p.x, y: p.y - 0.4 }; }) as Phaser.Math.Vector2[]);
+    co.lineStyle(2.4, 0x3a0e18, 1).strokePoints(Array.from({ length: n + 1 }, (_, i) => pt(i / n)) as Phaser.Math.Vector2[]);
+    co.lineStyle(1, 0xb06068, 0.9).strokePoints(Array.from({ length: n + 1 }, (_, i) => { const p = pt(i / n); return { x: p.x, y: p.y - 0.5 }; }) as Phaser.Math.Vector2[]);
   }
 }
 

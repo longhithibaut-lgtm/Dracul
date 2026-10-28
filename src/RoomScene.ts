@@ -1670,10 +1670,10 @@ export class RoomScene extends Phaser.Scene {
       killed ||= !e.body?.enable;
     }
     if (fin && killed && Math.random() < g.leech) this.heal(1); // Main de goule
-    for (const o of [...this.enemies.getChildren()] as Sprite[]) { // la Matrice's cords, from a goule's feet to under her sac
+    for (const o of [...this.enemies.getChildren()] as Sprite[]) { // la Matrice's cords: their low part, from a goule's feet toward her (nearer her they hang high)
       const m = o.getData('tether') as Sprite | undefined;
       if (!m?.body?.enable || !o.body?.enable) continue;
-      const top = Matrice.sac(m), along = Array.from({ length: 9 }, (_, i) => ({ x: Phaser.Math.Linear(o.x, top.x, i / 8), y: Phaser.Math.Linear(o.y, m.y, i / 8) }));
+      const top = Matrice.sac(m), along = Array.from({ length: 6 }, (_, i) => ({ x: Phaser.Math.Linear(o.x, top.x, i / 10), y: Phaser.Math.Linear(o.y, m.y, i / 10) }));
       const cut = along.find((p) => inArc(this.hero, angle, p, range, arc));
       if (!cut) continue;
       hits++;
