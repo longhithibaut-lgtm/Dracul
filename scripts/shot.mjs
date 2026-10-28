@@ -549,7 +549,7 @@ check((await save()).shortcuts.includes('galerie'), `F at its winch: the sealed 
 const scent = await run(async () => {
   const s = window.game.scene.getScene('room'), f = s.hero.body.center, warn = s.warn.bind(s), warned = [];
   s.warn = (inq) => (warned.push(inq), warn(inq));
-  s.addDrop({ x: f.x, y: f.y + 4, blood: 170 }); // two thresholds (or three) crossed at once
+  s.addDrop({ x: f.x, y: f.y + 4, blood: 400 }); // two thresholds or more crossed at once, even with a worn Flacon scellé (it raises them)
   await new Promise((r) => setTimeout(r, 1800));
   const packs = s.enemies.getChildren().filter((e) => e.body?.enable && e.getData('pack')).map((e) => ({ kind: e.getData('kind'), x: Math.round(e.x), y: Math.round(e.y), d: Math.round(Math.hypot(e.x - f.x, e.y - f.y)) }));
   return { carried: s.carried, loosed: s.exp.loosed, waiting: s.exp.packs, packs, warned };
