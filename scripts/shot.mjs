@@ -1,5 +1,5 @@
 // Plays the expeditions through la nécropole in headless Chromium (1920x1080 = native x4) and saves captures of the loop.
-// Usage: npm run shot [-- --out=shots --port=5199 --only=catacombs|fps|map]   (--only: expedition 3 alone, the frame rates alone, or la carte alone)
+// Usage: npm run shot [-- --out=shots --port=5199 --only=catacombs|fps|map --gpu]   (--only: expedition 3 alone, the frame rates alone, or la carte alone; --gpu on a PC with a graphics card)
 // A fresh save. Expedition 1: the bot walks from the coffin down the refuge's stairs into the zone (zone-refuge.png),
 // comes up unseen on a group at its post (group.png), fights the ghouls that hunt him, picks up their blood, goes into
 // the crypt by its door (zone-crypt-door.png), fights there, searches a cache that hides an item (item-glint.png: it lies
@@ -35,7 +35,9 @@ const port = Number(arg('port', 5199));
 const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' });
 await server.listen();
 // SwiftShader gives WebGL without a GPU (cloud containers); harmless on a desktop.
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+// --gpu: a machine with a real graphics card (the user's PC) renders with it; else WebGL in software (SwiftShader).
+const gpu = process.argv.includes('--gpu');
+const browser = await chromium.launch({ args: gpu ? ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=default'] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 const errors = [], failed = [], report = [];
 page.on('pageerror', (e) => errors.push(e.message));
