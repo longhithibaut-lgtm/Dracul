@@ -4,8 +4,9 @@ export const T = {
   width: 480,
   height: 270,
 
+  // maxHealth: his life in HP, every blow and heal below too (docs/decisions.md 2026-10-28: 50 HP, the old drops x10).
   // speed: the grand vampire walks heavily (his run frames follow the distance); bufferMs: how early a press may come, see press()
-  hero: { maxHealth: 5, speed: 66, hurtInvulnMs: 800, bufferMs: 150 },
+  hero: { maxHealth: 50, speed: 66, hurtInvulnMs: 800, bufferMs: 150 },
   dash: {
     speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22, // stopShort: halts this far from an enemy it'd end on
     // The dash strike: a slash pressed during the dash (it waits for the end) or this soon after it. The combo's first blow.
@@ -27,7 +28,7 @@ export const T = {
     lungeMs: 70, // the snap onto the prey
     hitStopMs: 60,
     drainMs: 450, // latched: neither the hero nor the prey can act
-    heal: 1,
+    heal: 10,
     whiffCooldownMs: 300, // a bite with no valid prey: a teeth snap in place
     kneelMs: 1500, // a human just weakened kneels this long: it can't act, move or die but by the bite
   },
@@ -57,7 +58,7 @@ export const T = {
     lungeMs: 200,
     recoverMs: 500,
     restMs: 700, // then it backs off to the ring before it may attack again
-    damage: 1,
+    damage: 10,
   },
 
   // The Order's crossbowman: keeps its distance and shoots dodgeable bolts; frail once the hero is on it.
@@ -72,11 +73,11 @@ export const T = {
     reloadMs: 1700, // from one shot to the next aim
     firstShotMs: 1200, // after it appears
     boltSpeed: 260,
-    damage: 1,
+    damage: 10,
   },
 
   // The grand foes (below) when their blow lands on the hero: the game freezes `hitStopMs` and he is
-  // thrown back at `knock` px/s for `knockMs`, both per point of blood lost, so a heavier blow lands harder. `poiseMs`:
+  // thrown back at `knock` px/s for `knockMs`, both per 10 HP lost, so a heavier blow lands harder. `poiseMs`:
   // struck out of an attack, a foe holds firm through the blows that follow this long (an attack begun meanwhile goes
   // on), so the claws cannot pin it down.
   foes: { hitStopMs: 45, knock: 110, knockMs: 90, poiseMs: 700 },
@@ -97,7 +98,7 @@ export const T = {
     recoverMs: 250,
     reloadMs: 1100, // from one jet to the next ignition
     firstMs: 700, // after he appears
-    damage: 2,
+    damage: 20,
     pilotLight: 3, // his pilot lighting the dark rooms (dark.ts) at the end of the tell; the jet, half as much again
   },
   // The Order's Prêtre: keeps behind, far from the hero; points his
@@ -112,7 +113,7 @@ export const T = {
     smiteMs: 350, // the light falls (it burns at its first instant)
     reloadMs: 1600,
     firstMs: 900,
-    damage: 1,
+    damage: 10,
     light: 2, // his monstrance's light in the dark rooms (dark.ts), rising to prayLight as he prays
     prayLight: 5,
   },
@@ -133,7 +134,7 @@ export const T = {
     staggerMs: 350, // the pack leaps in turn: a hound flattens no sooner than this after a packmate did
     shove: 170, shoveMs: 160, // the hero thrown along the leap
     firstMs: 600,
-    damage: 1,
+    damage: 10,
   },
   // The Order's Pénitent: cannon fodder in waves of six; drags his cross
   // straight at the hero and never backs off. The tell: he cocks his nailed scourge, his aim locked; then a short lash
@@ -151,7 +152,7 @@ export const T = {
     together: 3, // no more than this many lash at once,
     staggerMs: 200, // each one cocking no sooner than this after another
     firstMs: 500,
-    damage: 1,
+    damage: 10,
   },
   // The Order's Sonneur: support, deaf, keeps far behind the others. The
   // tell: he raises his mallet and his bell's rim lights up; then he strikes it and three rings of sound roll out along the
@@ -169,7 +170,7 @@ export const T = {
     recoverMs: 300,
     reloadMs: 2200,
     firstMs: 1100,
-    damage: 1,
+    damage: 10,
     haste: 1.5, hasteMs: 4000, hasteRange: 220, // the Order's men within `hasteRange` move this much faster this long
     light: 4, // his bell's rim in the dark rooms (dark.ts) at the end of the tell, the strike half as much again
   },
@@ -190,7 +191,7 @@ export const T = {
     recoverMs: 400,
     reloadMs: 1300,
     firstMs: 900,
-    damage: 2,
+    damage: 20,
     command: 1.6, commandRange: 160, // the Order's men within `commandRange` of him recover from their attacks this much faster
     light: 1.6, whirlLight: 3, // his censer's embers in the dark rooms, fanned by the whirl
   },
@@ -208,7 +209,7 @@ export const T = {
     sprawlMs: 800, // then it lies spread out, slow to gather itself again
     reloadMs: 1500,
     firstMs: 1000,
-    damage: 2,
+    damage: 20,
     thralls: 4, // torn-off ghouls of one Amas alive at once, at most
     thrallHp: 1, crawl: 0.6, // they have this much hp and go at this much of a ghoul's pace
   },
@@ -228,11 +229,11 @@ export const T = {
     wrenchMs: 1000, // the axe stuck: he tugs it free
     // With the hero still close in front (`ripRange`, floor) as the axe lands, he tears it out at him instead: tugging
     // hard (`ripMs`, the tell), then the axe rips up through the half circle before him (`swingMs`); he recovers longer.
-    ripRange: 36, ripMs: 450, swingMs: 140, ripDamage: 2, ripRecoverMs: 600,
+    ripRange: 36, ripMs: 450, swingMs: 140, ripDamage: 20, ripRecoverMs: 600,
     recoverMs: 200,
     reloadMs: 1100,
     firstMs: 900,
-    damage: 3,
+    damage: 30,
     light: 1.2, // his reliquary's faint gold in the dark rooms
   },
 
@@ -249,10 +250,10 @@ export const T = {
     // The drop: the body sinks, the fore-limbs rise very high, claws open, her joints crack one after another
     // (`teleMs`; she follows him with her eyes `trackMs`, then her aim is locked), then she leaps (`leapMs`) and slams
     // down where he stood: struck within `radius` (floor). Then she pulls herself up (`stuckMs`): the time to strike.
-    dropRange: 170, teleMs: 900, trackMs: 250, leapMs: 320, radius: 30, dropDamage: 2, stuckMs: 1400,
+    dropRange: 170, teleMs: 900, trackMs: 250, leapMs: 320, radius: 30, dropDamage: 20, stuckMs: 1400,
     // The rake: a fore-limb drawn back and up (`rakeTeleMs`, her aim locked), then swept low across her front
     // (`rakeMs`): struck between `rakeIn` and `rakeOut` (floor) within `rakeDeg` of her aim.
-    rakeRange: 56, rakeTeleMs: 800, rakeMs: 200, rakeIn: 12, rakeOut: 70, rakeDeg: 150, rakeDamage: 1, rakeRecoverMs: 600,
+    rakeRange: 56, rakeTeleMs: 800, rakeMs: 200, rakeIn: 12, rakeOut: 70, rakeDeg: 150, rakeDamage: 10, rakeRecoverMs: 600,
     reloadMs: 1100,
     // Phase 2, at half her blood: the Order's chains snap off her (`snapMs`, the tell: she rears, links fly), she
     // leaps onto the walls (`climbMs`) and crawls along the arena's edge `wallZ` px up (`wallSpeed`), out of reach.
@@ -262,7 +263,7 @@ export const T = {
     // `hurls` throws `hurlGapMs` apart; then she crosses the vault over him (`vaultZ` up, `vaultSpeed`, at most
     // `creepMs`), holds there (`holdMs`, locked: dust falls off her, her joints creak) and drops (`fallMs`), striking
     // within `radius`; down, she pulls herself up (`stuck2Ms`) and walks the floor `floorMs` before she climbs again.
-    hurlMs: 750, flightMs: 650, hurlRadius: 16, hurlDamage: 1, hurls: 2, hurlGapMs: 900,
+    hurlMs: 750, flightMs: 650, hurlRadius: 16, hurlDamage: 10, hurls: 2, hurlGapMs: 900,
     vaultZ: 110, vaultSpeed: 120, creepMs: 1800, holdMs: 750, fallMs: 220, stuck2Ms: 1800, floorMs: 6000,
     light: 1.2, teleLight: 2.6, // her seal's gold in the dark, flaring as she winds up
   },
@@ -280,7 +281,7 @@ export const T = {
     // locks. The swing (`swingMs`) sweeps from there through the pivot to `over` past where he stood (at most `arm` from
     // the pivot): whoever is within `radius` (floor) of the wheel as it passes low is struck for `damage`. It ends low,
     // grounded (`lowMs`: the time to strike her), then is hauled back up to the pivot (`haulMs`).
-    reloadMs: 1400, teleMs: 1000, trackMs: 200, back: 50, swingMs: 650, over: 40, arm: 230, radius: 24, damage: 2,
+    reloadMs: 1400, teleMs: 1000, trackMs: 200, back: 50, swingMs: 650, over: 40, arm: 230, radius: 24, damage: 20,
     lowMs: 2000, haulMs: 900,
     // Her cords: `cords` goules at most tethered to the sac, fed (+1 hp every `feedMs`, up to a ghoul's) and kept within
     // `tether` (floor) of the pivot; one born every `birthMs` while fewer. A cord is cut by a claw across its low part (by
@@ -295,8 +296,7 @@ export const T = {
     light: 1.4, teleLight: 3.4, // the sac's glow in the dark, blazing on the tell
   },
 
-  // ---- The necropolis' own fauna (docs/maquettes/necropole-ennemis-planche-1.png, names provisional). Their damage is
-  // in today's drops of life (T.hero.maxHealth 5): for the coming 50 HP pool, multiply it by 10. ----
+  // ---- The necropolis' own fauna (docs/maquettes/necropole-ennemis-planche-1.png, names provisional). ----
 
   // Les Corneilles (crows.ts): a flock of `birds` carrion crows pecking at the dead, sentinels. The hero within `notice`
   // of them (only `shade` while he keeps out of the light), or a fight within `noise` of them (a claw swung, a blow on
@@ -310,7 +310,7 @@ export const T = {
     notice: 90, shade: 50, noise: 150, alarm: 320, lookMs: 9000,
     burstMs: 700,
     stay: 150, height: 46, wheel: 24,
-    diveEveryMs: 1700, diveTellMs: 500, diveMs: 200, peckRadius: 10, damage: 1,
+    diveEveryMs: 1700, diveTellMs: 500, diveMs: 200, peckRadius: 10, damage: 5,
     backMs: 20000,
   },
   // L'Enterré (enterre.ts): a dead man half under his grave mound, only his fingers and his eyes above the earth; blows
@@ -322,7 +322,7 @@ export const T = {
   enterre: {
     hp: 6, speed: 0,
     trigger: 22, crackMs: 550, reach: 30,
-    damage: 1, tickMs: 1200, drag: 8,
+    damage: 10, tickMs: 1200, drag: 8,
     free: 6, blow: 2, key: 1,
     sinkMs: 1400, rearmMs: 1500,
     firstMs: 0,
@@ -330,7 +330,7 @@ export const T = {
   // Le Gavé (gave.ts): slow and heavy, blows never cut it short nor push it back. It eats the dead within `smell` (floor)
   // when it is not hunting, or when a body lies nearer than the hero: `eatMs` over it (struck meanwhile, it eats on),
   // then the body is gone and it grows (the k-th: `grow.scale` bigger, `grow.hp` more blood and `grow.heal` back, its
-  // blows `grow.damage` harder, rounded down), `max` bodies at most. Kill it before it feeds.
+  // blows `grow.damage` HP harder, rounded down), `max` bodies at most. Kill it before it feeds.
   // The slam: up on its legs, arms high (`slamTeleMs`, aim locked), then belly first `slamAhead` ahead: struck within
   // `slamRadius` of where it lands (floor); it lies there `sprawlMs`. The bile: reared back, the throat bulging, a reflux
   // (`bileTeleMs`, aim locked), then it pours black bile in a cone (`bileReach`, `bileHalfDeg`) for `spewMs`; the bile
@@ -339,9 +339,9 @@ export const T = {
     hp: 14, speed: 24,
     near: 20, far: 30,
     smell: 240, eatMs: 2400,
-    grow: { scale: 0.14, hp: 4, heal: 6, damage: 0.5 }, max: 3,
-    slamRange: 32, slamTeleMs: 750, slamAhead: 18, slamRadius: 24, slamDamage: 2, sprawlMs: 900,
-    bileRange: 70, bileTeleMs: 850, bileReach: 64, bileHalfDeg: 22, spewMs: 450, bileDamage: 1, poolMs: 1800, poolDamage: 1,
+    grow: { scale: 0.14, hp: 4, heal: 6, damage: 5 }, max: 3,
+    slamRange: 32, slamTeleMs: 750, slamAhead: 18, slamRadius: 24, slamDamage: 20, sprawlMs: 900,
+    bileRange: 70, bileTeleMs: 850, bileReach: 64, bileHalfDeg: 22, spewMs: 450, bileDamage: 10, poolMs: 1800, poolDamage: 5,
     recoverMs: 400, reloadMs: 1500, firstMs: 900,
   },
 
@@ -352,14 +352,14 @@ export const T = {
     squash: 0.72,
     graceMs: 400, // stepping into the light is free this long, then it burns
     burnEveryMs: 900,
-    damage: 1,
+    damage: 10,
     telegraphMs: 900,
     clear: 1.3, // never planted with the hero inside this much of its pool
   },
 
   // The Eternal Dawn over the cloister's garth: free for a few seconds (the hero sees the danger build), then it burns
   // on a steady beat until he is back in the shade.
-  dawn: { graceMs: 2500, burnEveryMs: 1000, damage: 1 },
+  dawn: { graceMs: 2500, burnEveryMs: 1000, damage: 10 },
 
   // The expeditions (world.ts): out of the refuge, deeper ring by ring, back on foot. A room's foes are placed on its
   // first entry in an expedition and stay dead until the hero is back at the refuge: `groups` groups by ring (the
@@ -424,13 +424,13 @@ export const T = {
 
   // Le Rongé, the refuge's merchant (docs/lore.md), crouched by the basin (refuge.ts RONGE): F within `talk` of him
   // opens his wares, paid with the blood banked; he raises his head at the hero within `notice`. Prices: the bite once,
-  // max life and the bag by ranks at `cost` x `mult` to the rank bought (40, 72, 130, 233; 60, 108, 194), the bag `size`
+  // max life (`hp` a rank) and the bag by ranks at `cost` x `mult` to the rank bought (40, 72, 130, 233; 60, 108, 194), the bag `size`
   // blood and one item (T.items.bag) bigger a rank. Back `hunger` times (returns or deaths) without pouring into the basin, he turns beast: wares
   // closed until blood is poured again.
   ronge: {
     talk: 40, notice: 90,
     bite: 80,
-    life: { cost: 40, mult: 1.8, ranks: 4 },
+    life: { cost: 40, mult: 1.8, ranks: 4, hp: 10 },
     bag: { cost: 60, mult: 1.8, ranks: 3, size: 100 },
     hunger: 3,
   },
@@ -456,10 +456,11 @@ export const T = {
     elites: ['inquisitor', 'amas', 'bourreau', 'nourrice', 'matrice'],
     pickup: 22,
     bleedMs: 2000, bleedTicks: 4,
+    leechHeal: 10,
     defs: {
       // Armes: the claws. claw: their damage; pace: their cooldown; finisher: added to the finisher's x2; knock: its
       // knockback; reach: px added to their range; arc: degrees added; bleed: hp bled (see bleedMs); leech: the chance a
-      // killing finisher gives back one life.
+      // killing finisher gives back `leechHeal` HP.
       acier: { claw: [0.25, 0.4, 0.6] },
       stylet: { pace: [-0.15, -0.22, -0.3] },
       fer: { finisher: [0.5, 1, 1.5], knock: [0.3, 0.5, 0.8], pace: [0.08, 0.08, 0.08] },
@@ -477,9 +478,9 @@ export const T = {
       outre: { purse: [60, 120, 200] },
       cor: { horn: [400, 600, 900] },
       fiole: { mist: [0.2, 0.35, 0.5] },
-      // Talismans. life: max life (drops); speed: his walk; dash: the dash's recharge; dmg: all his damage; grace: ms of
+      // Talismans. life: max life (HP); speed: his walk; dash: the dash's recharge; dmg: all his damage; grace: ms of
       // holy light before it burns.
-      chapelet: { life: [1, 1, 2] },
+      chapelet: { life: [10, 10, 20] },
       eperon: { speed: [0.06, 0.1, 0.15] },
       sablier: { dash: [-0.15, -0.25, -0.35] },
       croc: { dmg: [0.1, 0.15, 0.25] },
@@ -501,17 +502,17 @@ export const T = {
     nid: [3, 4, 5], nuee: [3, 4, 5], // Glyphe du nid, Brume aux rats: rats
     rongeur: [1, 1.5, 2], // extra damage of the combo's third blow
     fuite: [1.4, 1.6, 1.8], // the dash recharges this many times faster
-    morsure: [1, 2, 3], // extra blood a bite gives back
-    survivant: [1, 2, 3], // extra max health, healed once when taken
+    morsure: [10, 20, 30], // extra life (HP) a bite gives back
+    survivant: [10, 20, 30], // extra max life (HP), healed once when taken
     fievre: [1, 2, 3], // Fièvre: the plague strikes this many times more, plagueMs apart
     grouillement: [2, 3, 4], // Grouillement: bites of each rat
   },
   // Pactes de sang: Vesna's darker gifts, a strong gift with a cost (toggled in the training room for now).
   pacts: {
-    maigre: { mult: 1.5, maxBlood: 2 }, // every blow of the hero does `mult` times as much; max blood -maxBlood
+    maigre: { mult: 1.5, maxBlood: 20 }, // every blow of the hero does `mult` times as much; max blood -maxBlood
     noires: { mult: 2, burn: 2 }, // the claws do `mult` times as much; holy light burns `burn` times as fast
-    curee: { every: 3, heal: 1, bite: 1 }, // every `every` kills heal `heal`; a bite costs `bite` blood instead of healing
-    vermine: { rats: 2, toll: 1 }, // each kill releases `rats` rats; each new room costs `toll` blood (never the last)
+    curee: { every: 3, heal: 10, bite: 10 }, // every `every` kills heal `heal`; a bite costs `bite` blood instead of healing
+    vermine: { rats: 2, toll: 10 }, // each kill releases `rats` rats; each new room costs `toll` blood (never the last)
   },
   // La Nuée, the Rat house's form of the night: bought from Vesna (powers.ts), R turns the hero into a swarm of rats for
   // `durationMs`: fast (`speed` times his walk), untouchable by blows, it bites every enemy within `radius` (floor),

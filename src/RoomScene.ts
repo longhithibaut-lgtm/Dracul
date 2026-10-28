@@ -1714,7 +1714,7 @@ export class RoomScene extends Phaser.Scene {
       this.hitEnemy(e, angle, damage, knock, kind);
       killed ||= !e.body?.enable;
     }
-    if (fin && killed && Math.random() < g.leech) this.heal(1); // Main de goule
+    if (fin && killed && Math.random() < g.leech) this.heal(T.items.leechHeal); // Main de goule
     for (const o of [...this.enemies.getChildren()] as Sprite[]) { // la Matrice's cords: their low part, from a goule's feet toward her (nearer her they hang high)
       const m = o.getData('tether') as Sprite | undefined;
       if (!m?.body?.enable || !o.body?.enable) continue;
@@ -2295,7 +2295,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private maxHealth() {
-    return T.hero.maxHealth + Save.data.unlocks.life + this.gear.life + this.v('survivant') - (this.has('maigre') ? T.pacts.maigre.maxBlood : 0);
+    return T.hero.maxHealth + Save.data.unlocks.life * T.ronge.life.hp + this.gear.life + this.v('survivant') - (this.has('maigre') ? T.pacts.maigre.maxBlood : 0);
   }
 
   private dashCooldown() {
@@ -2413,13 +2413,14 @@ export class RoomScene extends Phaser.Scene {
     this.hurtFrom = from && Phaser.Math.Angle.BetweenPoints(from, this.hero.body!.center);
     this.health -= amount;
     this.hud.health(this.health, this.maxHealth());
-    Fx.hurt(this, from ? amount : 1);
+    const k = amount / 10; // the feel of a blow, per 10 HP (one drop of the old 5-drop life)
+    Fx.hurt(this, from ? k : 1);
     Sfx.play(this, 'hurt');
     Crows.din(this.ctx, this.hero.body!.center, now);
     if (from) {
-      const F = T.foes, a = Phaser.Math.Angle.BetweenPoints(from, this.hero.body!.center), stop = F.hitStopMs * amount;
-      Enemy.bleed(this, this.hero.x, this.hero.y, a, 6 * amount, 0.7, 0.8 + 0.3 * amount);
-      this.physics.velocityFromRotation(a, F.knock * amount, this.shove);
+      const F = T.foes, a = Phaser.Math.Angle.BetweenPoints(from, this.hero.body!.center), stop = F.hitStopMs * k;
+      Enemy.bleed(this, this.hero.x, this.hero.y, a, Math.round(6 * k), 0.7, 0.8 + 0.3 * k);
+      this.physics.velocityFromRotation(a, F.knock * k, this.shove);
       this.shoveUntil = now + stop + F.knockMs; // the freeze holds him; then he is thrown
       this.physics.pause();
       this.time.delayedCall(stop, () => this.physics.resume());

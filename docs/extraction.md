@@ -207,7 +207,7 @@ meute tous les 50 sang portés). Les ennemis tués **restent morts pendant l'exp
 ### Le sang
 - **La monnaie** : tuer, finir une quête, ouvrir un trésor donne du sang.
 - Le sang **porté** est perdu à la mort. Il n'est gagné que **versé au bassin** du refuge.
-- Le sang de vie (les gouttes du HUD) et le sang récolté sont **deux choses différentes** : on ne paie pas avec sa
+- Le sang de vie (50 PV, le cœur du HUD) et le sang récolté sont **deux choses différentes** : on ne paie pas avec sa
   vie *(validé)*.
 
 ### Les objets

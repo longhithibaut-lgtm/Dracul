@@ -42,7 +42,7 @@ check((await save()).banked === 1100, `Sang: +100, +1000 au bassin (${(await sav
 await click('[data-flag="bite"]');
 await page.selectOption('#training [data-ware="life"]', '2');
 let s = await save(), sc = await scene();
-check(s.unlocks.bite && s.unlocks.life === 2 && sc.max === sc.health && sc.max === 5 + 2, `Rongé: la morsure, vie max +2 (${JSON.stringify(s.unlocks)}, ${sc.health}/${sc.max})`);
+check(s.unlocks.bite && s.unlocks.life === 2 && sc.max === sc.health && sc.max === 50 + 2 * 10, `Rongé: la morsure, vie max +2 rangs (${JSON.stringify(s.unlocks)}, ${sc.health}/${sc.max})`);
 await click('[data-cheat="ronge"]');
 s = await save();
 check(s.unlocks.bite && s.unlocks.life === 4 && s.unlocks.bag === 3, `Rongé: tout au maximum (${JSON.stringify(s.unlocks)})`);

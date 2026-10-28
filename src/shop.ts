@@ -10,7 +10,7 @@ export const WARES: Ware[] = ['bite', 'life', 'bag'];
 /** Each ware's name and what it does, as his panel shows them. */
 export const WARE_TEXT: Record<Ware, { name: string; text: string }> = {
   bite: { name: 'La morsure', text: 'Mordre un humain affaibli, à genoux : boire son sang rend la vie.' },
-  life: { name: '+1 vie max', text: 'Une goutte de sang de plus, pour toujours.' },
+  life: { name: `+${T.ronge.life.hp} PV max`, text: 'Plus de vie, pour toujours.' },
   bag: { name: '+ taille du sac', text: `Porter ${T.ronge.bag.size} sang et un objet de plus.` },
 };
 

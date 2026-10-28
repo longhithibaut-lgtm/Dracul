@@ -640,7 +640,7 @@ await page.keyboard.press('Escape');
 await page.waitForTimeout(200);
 check((await save()).worn.some((w) => w?.n === 9000), `expedition 2: a new item (${fresh2.it.id}) taken and worn, not yet brought back`);
 await keep(false);
-await run(() => { const s = window.game.scene.getScene('room'); s.health = 1; s.hud.health(1, 5); });
+await run(() => { const s = window.game.scene.getScene('room'); s.health = 1; s.hud.health(1, s.maxHealth()); });
 for (const left = await timer(30000); (await state()).layout === 'necropolis' && await left();) {
   const s = await state();
   if (s.live) await fight(1500); else break;

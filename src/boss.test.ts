@@ -3,7 +3,7 @@ import { T } from './tuning.ts';
 import { bared, choose, edge, edgeLength, fightStarts, floor, nearestEdge, phaseOf, raked, shed, struck, swingPath } from './boss.ts';
 import { ARENA, GATES, OPENS, RELIQUARY } from './catacombs.data.ts';
 import { gateOpen } from './world.ts';
-import { parse } from './save.ts';
+import { parse, VERSION } from './save.ts';
 import { POWERS, LINES, NUEE, buy, price, swarm, wear, worn } from './powers.ts';
 import { GIFTS } from './gifts.ts';
 import { missing } from './font.ts';
@@ -105,13 +105,13 @@ describe('Vesna freed, and her powers', () => {
   });
 
   it('counts Vesna freed for an older save that killed her guardian (the Araignée), not for one that only fought her', () => {
-    expect(parse('{"v":3,"nourrice":{"tries":2,"dead":true},"vesna":false}')).toMatchObject({ v: 5, vesna: true, nourrice: { tries: 2, dead: true }, carte: {} });
+    expect(parse('{"v":3,"nourrice":{"tries":2,"dead":true},"vesna":false}')).toMatchObject({ v: VERSION, vesna: true, nourrice: { tries: 2, dead: true }, carte: {} });
     expect(parse('{"v":3,"nourrice":{"tries":2,"dead":false}}')).toMatchObject({ vesna: false, nourrice: { dead: false } });
     // the map's version 4 (it wrote `carte`): its guardian was still the Araignée; its map is kept
-    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":true},"vesna":false,"carte":{"necropolis":"AAAA"}}')).toMatchObject({ v: 5, vesna: true, carte: { necropolis: 'AAAA' } });
+    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":true},"vesna":false,"carte":{"necropolis":"AAAA"}}')).toMatchObject({ v: VERSION, vesna: true, carte: { necropolis: 'AAAA' } });
     expect(parse('{"v":4,"nourrice":{"tries":1,"dead":false},"carte":{}}').vesna).toBe(false);
     // the Matrice's version 4 (no `carte`): la Matrice killed, the reliquary still sealed
-    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":true},"vesna":false}')).toMatchObject({ v: 5, vesna: false, nourrice: { dead: true }, carte: {} });
+    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":true},"vesna":false}')).toMatchObject({ v: VERSION, vesna: false, nourrice: { dead: true }, carte: {} });
     // version 5: both, as they are
     const s5 = parse('{"v":5,"nourrice":{"tries":3,"dead":true},"vesna":false,"carte":{"catacombs":"AA=="}}');
     expect(s5).toMatchObject({ vesna: false, nourrice: { tries: 3, dead: true }, carte: { catacombs: 'AA==' } });

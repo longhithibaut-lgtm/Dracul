@@ -76,7 +76,7 @@ async function play(name, b, h, tell, attack, key, start, after = 150) {
   await set({ readyAt: Infinity, state: 'chase', until: 0 });
   await run(`(() => { const e = ${BOSS}; e.body.reset(${b[0]}, ${b[1]}); })()`);
   await hero(...h);
-  await run(() => { const s = window.game.scene.getScene('room'); s.health = 10; s.invulnUntil = 0; s.hud.health(10, 10); });
+  await run(() => { const s = window.game.scene.getScene('room'); s.health = 100; s.invulnUntil = 0; s.hud.health(100, 100); });
   await step(32);
   if (start) await start(); else await set({ readyAt: 0 });
   for (let t = 0; t < 2000 && (await boss('state')) !== tell; t += 16) await step(16);
@@ -87,7 +87,7 @@ async function play(name, b, h, tell, attack, key, start, after = 150) {
   for (let t = REACT; t < 5000 && [tell, ...attack].includes(await boss('state')); t += 16) await step(16);
   for (let t = 0; t < after; t += 50) { await step(50); await page.waitForTimeout(40); } // what lands just after (a lump in the air, on tweens: on the wall clock)
   if (key) await page.keyboard.up(key);
-  return 10 - (await health());
+  return 100 - (await health());
 }
 const fights = {};
 fights['Chute, immobile'] = await play('chute', [cx, cy - 20], [cx - 110, cy - 10], 'tele', ['spring'], null);

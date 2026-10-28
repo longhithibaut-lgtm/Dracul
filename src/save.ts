@@ -4,9 +4,9 @@
 import { ITEMS, SLOTS, type Item, type Worn } from './items.ts';
 import { isPower, slotOf, type Power, type Worn as Powers } from './powers.ts';
 
-export const VERSION = 5; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers; 4: the map's fog (carte), or (another branch's 4) the guardian is la Matrice; 5: both. An older save comes up without what it lacks
+export const VERSION = 6; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers; 4: the map's fog (carte), or (another branch's 4) the guardian is la Matrice; 5: both; 6: life in HP (50, was 5 drops). An older save comes up without what it lacks
 // unlocks: what the Rongé sold for banked blood (shop.ts): the bite, the ranks of max life (`life`) and of the bag (`bag`)
-// bought. dry: how many times in a row the hero came back (or re-formed) without pouring blood: the Rongé's hunger.
+// bought (ranks: each worth T.ronge.life.hp, so an older save's ranks hold as they are). dry: how many times in a row the hero came back (or re-formed) without pouring blood: the Rongé's hunger.
 // shortcuts: the zone's gates raised for good (necropolis.data.ts GATES ids). stash: the items brought back (the
 // refuge's chest, acquired for good); worn: what he wears, by slot (items.ts SLOTS; on an expedition it may hold items
 // not yet brought back: those are dropped when read back, as at death); next: the number the next item found takes.
@@ -48,8 +48,16 @@ export function parse(json: string | null): Save {
 
 const storage = () => { try { return localStorage; } catch { return undefined; } }; // a sandboxed frame throws on access
 
+const raw = (() => { try { return storage()?.getItem(KEY) ?? null; } catch { return null; } })();
 /** The save, loaded once; change it, then store(). */
-export const data: Save = parse((() => { try { return storage()?.getItem(KEY) ?? null; } catch { return null; } })());
+export const data: Save = parse(raw);
+
+/** Version 6: life went from 5 drops to 50 HP; the expedition log written before it (`life` left) is brought to HP. */
+export const lifeInHp = (log: Entry[]) => log.map((e) => ({ ...e, life: e.life * 10 }));
+if (raw && !(Number((() => { try { return JSON.parse(raw).v; } catch { return 0; } })()) >= 6)) {
+  try { storage()?.setItem(LOG, JSON.stringify(lifeInHp(JSON.parse(storage()?.getItem(LOG) ?? '[]')))); } catch { /* no log to convert */ }
+  store(); // once: the save now says 6
+}
 
 /** A new game: the save back to its start (the expedition log is kept). */
 export function reset() {

@@ -56,7 +56,7 @@ const boss = (k) => run(`${BOSS}?.getData('${k}')`);
 const set = (data) => run(`(() => { const e = ${BOSS}; e.setData(${JSON.stringify(data, (k, v) => (v === Infinity ? 1e12 : v))}); e.setVelocity(0); })()`); // (JSON has no Infinity)
 const now = () => run(`${S}.time.now`);
 const health = () => run(() => window.game.scene.getScene('room').health);
-const heal = () => run(() => { const s = window.game.scene.getScene('room'); s.health = 10; s.invulnUntil = 0; s.hud.health(10, 10); });
+const heal = () => run(() => { const s = window.game.scene.getScene('room'); s.health = 100; s.invulnUntil = 0; s.hud.health(100, 100); });
 const until = async (cond, ms = 6000) => { for (let t = 0; t < ms && !(await run(cond)); t += 50) await step(50); return run(cond); };
 // the zone's own foes out of the way: this is her fight
 await run(() => { const s = window.game.scene.getScene('room'); for (const e of s.enemies.getChildren()) e.disableBody(true, true); s.invulnUntil = 0; });
@@ -104,7 +104,7 @@ async function play(name, h, key, start, shots) {
   }
   await step(150);
   if (key) await page.keyboard.up(key);
-  return 10 - (await health());
+  return 100 - (await health());
 }
 const fights = {};
 const hang = async () => { await set({ state: 'hang', phase: 1, z: M.hangZ, readyAt: 0, path: undefined }); await run(`${BOSS}.body.reset(${pv.x}, ${pv.y})`); };

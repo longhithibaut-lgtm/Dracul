@@ -474,7 +474,7 @@ async function play(kind, dx, dy, key, tell, attack, then) {
   await hero(240, 330);
   await call([[kind, 240 - dx, 330 - dy]]);
   await still();
-  await run(() => { const s = window.game.scene.getScene('room'); s.health = 5; s.invulnUntil = s.dazedUntil = 0; s.bodies.length = 0; }); // (no meal to tempt a Gavé)
+  await run(() => { const s = window.game.scene.getScene('room'); s.health = 50; s.invulnUntil = s.dazedUntil = 0; s.bodies.length = 0; }); // (no meal to tempt a Gavé)
   await set(kind, { readyAt: 0, facing: Math.atan2(dy, dx) });
   const state = () => run(`${foe(kind)}.getData('state')`), busy = () => run(`!!${foe(kind)}.getData('rings')`); // a bell's rings still rolling
   for (let t = 0; t < 2000 && (await state()) !== tell; t += 16) await step(16);
@@ -483,7 +483,7 @@ async function play(kind, dx, dy, key, tell, attack, then) {
   for (let t = REACT; t < 4000 && ([tell, ...attack].includes(await state()) || (await busy())); t += 16) {
     await then?.(t);
     await step(16);
-    if (!struck.has(kind) && (await run(() => window.game.scene.getScene('room').health)) < 5) { // the blow as it lands: hit-stop, shake, blood
+    if (!struck.has(kind) && (await run(() => window.game.scene.getScene('room').health)) < 50) { // the blow as it lands: hit-stop, shake, blood
       struck.add(kind);
       const { x, y } = await run(() => { const s = window.game.scene.getScene('room'), c = s.cameras.main, k = 1920 / c.worldView.width; return { x: (s.hero.x - c.worldView.x) * k, y: (s.hero.y - c.worldView.y) * k }; });
       await page.screenshot({ path: `${out}/foes-hits-${kind}.png`, clip: { x: Math.min(Math.max(0, x - 380), 1920 - 760), y: Math.min(Math.max(0, y - 300), 1080 - 520), width: 760, height: 520 } });
@@ -491,7 +491,7 @@ async function play(kind, dx, dy, key, tell, attack, then) {
   }
   await step(700); // a bolt still in flight
   await keys([], ['w', 'a', 's', 'd']);
-  return 5 - (await run(() => window.game.scene.getScene('room').health));
+  return 50 - (await run(() => window.game.scene.getScene('room').health));
 }
 const keys = async (down, up = []) => { for (const k of up) await page.keyboard.up(k); for (const k of down) await page.keyboard.down(k); };
 // Misting through the rings: once the first is about to reach him (seen: the attack itself), a dash straight at the Sonneur.
@@ -554,14 +554,14 @@ async function peck(key) {
   await clear();
   await hero(240, 330);
   await call([['crows', 200, 330]]);
-  await run(() => { const s = window.game.scene.getScene('room'); s.health = 5; s.invulnUntil = 0; });
+  await run(() => { const s = window.game.scene.getScene('room'); s.health = 50; s.invulnUntil = 0; });
   for (let t = 0; t < 6000 && !(await run(`${foe('crows')}.getData('birds').some((b) => b.mode === 'tele')`)); t += 16) await step(16);
   await step(REACT);
   if (key) await page.keyboard.down(key);
   for (let t = REACT; t < 1500 && (await run(`${foe('crows')}.getData('birds').some((b) => b.mode !== 'fly')`)); t += 16) await step(16);
   await step(100);
   await keys([], ['w', 'a', 's', 'd']);
-  return 5 - (await run(() => window.game.scene.getScene('room').health));
+  return 50 - (await run(() => window.game.scene.getScene('room').health));
 }
 Object.assign(fights, {
   'Corneilles, immobile': await peck(null), 'Corneilles, s\'écarte': await peck('s'),

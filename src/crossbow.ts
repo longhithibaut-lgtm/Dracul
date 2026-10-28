@@ -89,7 +89,7 @@ export function boltHit(scene: Scene, b: Sprite) {
   }
 }
 
-// The tell of a human weak enough to bite: a blood drop over its head, like a drop of the hero's health, beating like
+// The tell of a human weak enough to bite: a blood drop over its head, beating like
 // a racing heart (lub-dub) and swelling to a bright, bigger drop on each beat. Blood red in a dark rim: never the gold
 // of the Order, nor a white hit flash. o rim, R r e blood dark to light, g glow, H glint.
 const MARK_PAL: Record<string, number> = { o: 0x0b0710, R: 0x5c0a1c, r: 0xa3122f, e: 0xe0284a, g: 0xff4f8b, H: 0xffe4ee };

@@ -36,7 +36,7 @@ describe('items: what they are', () => {
     const s = stats([item(1, 'acier', 2), null, item(2, 'croc', 0), item(3, 'croc', 1), item(4, 'chapelet', 2)]);
     expect(s.claw).toBe(T.items.defs.acier.claw[2]);
     expect(s.dmg).toBeCloseTo(T.items.defs.croc.dmg[0] + T.items.defs.croc.dmg[1]);
-    expect(s.life).toBe(2);
+    expect(s.life).toBe(T.items.defs.chapelet.life[2]);
     expect(s.pace).toBe(0);
     expect(stats([item(1, 'fer', 1)])).toMatchObject({ finisher: 1, knock: 0.5, pace: 0.08 });
   });
