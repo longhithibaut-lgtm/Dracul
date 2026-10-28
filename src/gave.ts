@@ -82,15 +82,17 @@ export function step(c: Ctx, e: Sprite, time: number) {
  *  reach, glistening, then soaks away over the rest of T.gave.poolMs. On the floor, lit by the dark like the blood. */
 function bile(scene: Phaser.Scene, p: Pool) {
   const G = T.gave, g = scene.add.graphics().setDepth(1.6), rnd = new Phaser.Math.RandomDataGenerator([`${p.x}${p.y}${p.at}`]);
-  const half = Phaser.Math.DegToRad(G.bileHalfDeg), blobs = Array.from({ length: 70 }, () => {
-    const r = 6 + Math.sqrt(rnd.frac()) * (G.bileReach - 6), a = p.aim + rnd.realInRange(-1, 1) * half * (0.6 + 0.4 * (r / G.bileReach));
-    return { x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r * SQ, r, w: rnd.realInRange(2, 5.5) * (1 - 0.3 * (r / G.bileReach)), shine: rnd.frac() };
+  // Puddles filling the cone (bigger toward its middle line), a dark wet rim round each, splashes beyond.
+  const half = Phaser.Math.DegToRad(G.bileHalfDeg), blobs = Array.from({ length: 150 }, () => {
+    const r = 5 + Math.sqrt(rnd.frac()) * (G.bileReach - 5), off = rnd.realInRange(-1, 1), a = p.aim + off * half * (0.7 + 0.3 * (r / G.bileReach));
+    return { x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r * SQ, r, w: rnd.realInRange(2.5, 6.5) * (1 - 0.45 * Math.abs(off)) * (1 - 0.25 * (r / G.bileReach)), shine: rnd.frac() };
   });
   run(scene, G.spewMs + G.poolMs, (t) => {
     const ms = t * 1000, reach = G.bileReach * Math.min(1, ms / G.spewMs), fade = 1 - Phaser.Math.Clamp((ms - G.spewMs - G.poolMs + 700) / 700, 0, 1);
     g.clear();
-    for (const b of blobs) if (b.r <= reach) g.fillStyle(0x0b0c07, 0.92 * fade).fillEllipse(b.x, b.y, 2 * b.w, 2 * b.w * SQ);
-    for (const b of blobs) if (b.r <= reach && b.shine > 0.55) // its wet sheen, a fleck of green-grey light
-      g.fillStyle(b.shine > 0.85 ? 0x9aa080 : 0x3e4430, fade).fillRect(Math.round(b.x - b.w * 0.3), Math.round(b.y - b.w * SQ * 0.4), 1, 1);
+    for (const b of blobs) if (b.r <= reach) g.fillStyle(0x23261a, 0.8 * fade).fillEllipse(b.x, b.y, 2 * b.w + 1.5, (2 * b.w + 1.5) * SQ);
+    for (const b of blobs) if (b.r <= reach) g.fillStyle(0x060704, 0.95 * fade).fillEllipse(b.x, b.y, 2 * b.w, 2 * b.w * SQ);
+    for (const b of blobs) if (b.r <= reach && b.shine > 0.8) // its wet sheen: a streak of green-grey light
+      g.fillStyle(b.shine > 0.95 ? 0x8a9070 : 0x3a4030, 0.9 * fade).fillRect(Math.round(b.x - b.w * 0.5), Math.round(b.y - b.w * SQ * 0.4), 2, 0.5);
   }, () => g.destroy());
 }

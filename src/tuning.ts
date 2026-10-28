@@ -280,7 +280,7 @@ export const T = {
     hp: 1, speed: 80, birds: 6,
     notice: 90, shade: 50, noise: 150, alarm: 320, lookMs: 9000,
     burstMs: 700,
-    stay: 150, height: 30, wheel: 22,
+    stay: 150, height: 46, wheel: 24,
     diveEveryMs: 1700, diveTellMs: 500, diveMs: 200, peckRadius: 10, damage: 1,
     backMs: 20000,
   },

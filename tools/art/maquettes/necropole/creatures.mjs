@@ -52,10 +52,10 @@ const crowMat = (m, x, y, z) => {
   return null;
 };
 // One carrion crow alone, for the game's sheet (tools/art/foes.gen.mjs): its body over the origin facing +y, k 1.3 as on
-// the card; mode as crow(), z: how high its body is (on the ground, its feet on the floor).
+// the card (o.k: its size); mode as crow(), z: how high its body is at k 1.3 (on the ground, its feet on the floor).
 export function corneille(mode = 'perch', o = {}) {
-  const b = B(), z = o.z ?? (mode === 'fly' ? 12 : 9);
-  crow(b, [0, 0, z], 0, mode, 1.3, o.wingUp ?? 0.7, o);
+  const k = o.k ?? 1.3, b = B(), z = (o.z ?? (mode === 'fly' ? 12 : 9)) * (k / 1.3);
+  crow(b, [0, 0, z], 0, mode, k, o.wingUp ?? 0.7, o);
   return done(b, (m, x, y, z) => crowMat(m, x, y, z) || kitMat(m, x, y, z) || { alb: [0.1, 0.1, 0.1] }, { rim: 0.35 });
 }
 export function corneilles(pose = 'idle') {
@@ -306,8 +306,13 @@ export function gave(pose = 'idle', o = {}) {
     const m0 = hp(0, 7, -8); for (const [dx, len] of [[-1.5, 30], [1, 46], [2.5, 22]]) b.chain([...Array(5)].map((_, i) => add(m0, [dx + Math.sin(i) * 0.6, 2 + i * 0.8, -i * len / 4])), 0.9 - 0.1 * dx, 44); }
   if (pose === 'spew') { // the bile pouring out of the unhinged jaw, down and ahead onto the floor
     const m0 = hp(0, 8, -9), R = mulberry32(7 + k);
-    for (let s = 0; s < 3; s++) b.chain([...Array(7)].map((_, i) => { const t = i / 6; return add(m0, [(s - 1) * (1 + 3 * t) + (R() - 0.5) * 1.2, 4 + t * (22 + 6 * k), -t * t * (m0[2] - 1.5)]); }), 2.2 - 0.4 * s, 44, 1.2);
-    for (let i = 0; i < 6; i++) b.el(add(m0, [(R() - 0.5) * 10, 10 + R() * 20, -8 - R() * 30]), [1 + R(), 1 + R(), 1.4 + R()], 44, 0); // gouts in the air
+    for (let i = 0; i <= 30; i++) { // a lumpy gush, thinning and breaking up as it falls
+      const t = i / 30, w = (2.8 - 1.4 * t) * (0.75 + 0.5 * R());
+      if (t > 0.75 && R() < 0.3) continue;
+      b.el(add(m0, [Math.sin(i * 1.7 + k) * 1.6 * t + (R() - 0.5), 3 + t * (24 + 6 * k), -t * t * (m0[2] - 2)]), [w * 1.1, w, w * 1.2], 44, 1.4);
+    }
+    for (let i = 0; i < 8; i++) b.el(add(m0, [(R() - 0.5) * 12, 8 + R() * 22, -6 - R() * (m0[2] - 10)]), [0.6 + R() * 0.7, 0.6 + R() * 0.7, 0.8 + R()], 44, 0); // flung drops
+    for (let i = 0; i < 4; i++) b.el([m0[0] + (R() - 0.5) * 8, m0[1] + 26 + 6 * k + (R() - 0.5) * 8, 0.5], [3 + R() * 2, 2.5 + R() * 2, 1], 44, 1.5); // splashing where it lands
   }
   if (pose === 'eat' && k && !card) b.chain([hp(0, 8, -8), add(hp(0, 8, -8), [1, 4, -6]), [2, 33, 1]], 0.9, 15, 0.4); // a strip torn off the dead
   if (pose === 'dead') { b.carve(add([3, -2, 13], [2, 18, 2]), 5, 1.5); for (let i = 0; i < 5; i++) b.el([3 + (i - 2) * 3, 18 + i * 2.2, 1], [3.2, 2.6, 1.2], 44, 1.5); } // burst, the bile run out

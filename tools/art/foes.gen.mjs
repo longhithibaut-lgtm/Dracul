@@ -30,6 +30,7 @@ import { lyingCorpse } from './maquettes/necropole/kit.mjs';
 const cam = camera(38 * Math.PI / 180);
 const VIEWS = { side: -Math.PI / 2, dside: -Math.PI / 4, down: 0, uside: -3 * Math.PI / 4, up: Math.PI }; // yaw: the model looks down +y
 const KNEEL = 18; // sheet px the kneeling frame sinks
+const CROW = 0.85; // a crow's size in the card's units (1.3 there)
 const add = (a, b) => a.map((v, i) => v + b[i]);
 
 // Two-bone IK (as grand-hero.gen.mjs): the knee from hip H toward ankle A, bent forward.
@@ -204,15 +205,15 @@ const FOES = {
   // The necropolis' own (tools/art/maquettes/necropole/creatures.mjs, docs/maquettes/necropole-ennemis-planche-1.png).
   // One carrion crow (the game draws a flock of them, src/crows.ts): pecking on the ground (idle), a wingbeat (walk),
   // hanging in the air shrieking, talons out (tele), the stoop at the hero (dive), tumbling (hurt). Never killed: its
-  // « corpse » is the carrion a flock feeds on, laid across.
+  // « corpse » is the carrion a flock feeds on, laid across. A crow smaller than on the card (k 1.3: an eagle beside him).
   crow: {
-    FW: 120, FH: 72, SOLE: 54, WALK: 4, STEP: 4,
+    FW: 120, FH: 72, SOLE: 54, WALK: 4, STEP: 4, rim: 3, // black feathers: its back light would silver them
     frames: [
-      ...[['peck', {}], ['perch', {}], ['peck', { pitch: -0.75 }], ['perch', { pitch: 0.2 }]].map(([m, o], k) => [`idle${k}`, () => corneille(m, o)]),
-      ...[1.0, 0.35, -0.4, 0.35].map((w, k) => [`walk${k}`, () => corneille('fly', { wingUp: w })]),
-      ['tele', () => corneille('fly', { pitch: 0.95, wingUp: 1.2, talons: true, z: 14 })],
-      ['dive', () => corneille('fly', { pitch: -0.55, wingUp: 0.55, sweep: 0.9, talons: true })],
-      ['hurt', () => corneille('fly', { pitch: 0.6, wing: [1.3, -0.6] })],
+      ...[['peck', {}], ['perch', {}], ['peck', { pitch: -0.75 }], ['perch', { pitch: 0.2 }]].map(([m, o], k) => [`idle${k}`, () => corneille(m, { k: CROW, ...o })]),
+      ...[1.0, 0.35, -0.4, 0.35].map((w, k) => [`walk${k}`, () => corneille('fly', { k: CROW, wingUp: w })]),
+      ['tele', () => corneille('fly', { k: CROW, pitch: 0.95, wingUp: 1.2, talons: true, z: 14 })],
+      ['dive', () => corneille('fly', { k: CROW, pitch: -0.55, wingUp: 0.55, sweep: 0.9, talons: true })],
+      ['hurt', () => corneille('fly', { k: CROW, pitch: 0.6, wing: [1.3, -0.6] })],
     ],
     corpse: () => ({ ...placed0(lyingCorpse(4, true), [0, 8, 0], Math.PI / 2 - 0.25), lights: [] }),
   },

@@ -318,18 +318,18 @@ export const recipes = {
   caw(o: Play, n: number) {
     for (let i = 0; i < Math.max(1, n); i++) {
       const delay = i * 0.09 + Math.random() * 0.12, f = 560 + Math.random() * 220;
-      voice(o, { src: 'sawtooth', f, f2: f * 0.72, filter: 'bandpass', ff: 1500, ff2: 1100, q: 2.5, trem: 38 + Math.random() * 12, gain: 0.5, attack: 0.015, dur: 0.24, delay });
-      voice(o, { src: 'sawtooth', f, f2: f * 0.7, filter: 'bandpass', ff: 1500, q: 2.5, trem: 41, gain: 0.35, attack: 0.015, dur: 0.18, delay: delay + 0.3 }); // its second call
+      voice(o, { src: 'sawtooth', f, f2: f * 0.72, filter: 'bandpass', ff: 1500, ff2: 1100, q: 2.5, trem: 38 + Math.random() * 12, gain: 2, attack: 0.015, dur: 0.24, delay });
+      voice(o, { src: 'sawtooth', f, f2: f * 0.7, filter: 'bandpass', ff: 1500, q: 2.5, trem: 41, gain: 1.4, attack: 0.015, dur: 0.18, delay: delay + 0.3 }); // its second call
     }
-    if (n > 1) bursts(o, Array.from({ length: 8 }, (_, i) => i * 0.06 + Math.random() * 0.03), { src: 'noise', filter: 'bandpass', ff: 700, q: 1.5, gain: 0.35, attack: 0.005, dur: 0.05 });
+    if (n > 1) bursts(o, Array.from({ length: 8 }, (_, i) => i * 0.06 + Math.random() * 0.03), { src: 'noise', filter: 'bandpass', ff: 700, q: 1.5, gain: 0.9, attack: 0.005, dur: 0.05 });
   },
   // The earth over a grave cracking open for `dur` s: clods splitting, a dry tearing crackle swelling, the scrape of
   // nails through dirt, a low shift of soil.
   crack(o: Play, dur: number) {
     const n = Math.max(4, Math.round(dur * 14));
-    bursts(o, Array.from({ length: n }, (_, i) => (i / n) * dur * (0.4 + 0.6 * (i / n)) + Math.random() * 0.02), { src: 'noise', filter: 'bandpass', ff: 1300, q: 2, gain: 0.9, attack: 0.001, dur: 0.03 });
-    voice(o, { src: 'noise', filter: 'bandpass', ff: 2600, ff2: 1400, q: 4, trem: 28, gain: 0.5, attack: dur * 0.6, dur });
-    voice(o, { src: 'noise', filter: 'lowpass', ff: 220, ff2: 140, trem: 9, gain: 0.8, attack: dur * 0.3, dur: dur + 0.15 });
+    bursts(o, Array.from({ length: n }, (_, i) => (i / n) * dur * (0.4 + 0.6 * (i / n)) + Math.random() * 0.02), { src: 'noise', filter: 'bandpass', ff: 1300, q: 2, gain: 2.2, attack: 0.001, dur: 0.03 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 2600, ff2: 1400, q: 4, trem: 28, gain: 1.2, attack: dur * 0.6, dur });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: 220, ff2: 140, trem: 9, gain: 1.6, attack: dur * 0.3, dur: dur + 0.15 });
   },
   // Le Gavé's gorge rising for `dur` s: a wet reflux gurgling up its throat, a swelling croak; with `dur` 0, the bile
   // pouring out: a heavy wet gush and spatter.

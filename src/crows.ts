@@ -5,6 +5,7 @@ import * as Foes from './foes.ts';
 import { prelit } from './dark.ts';
 import { SHEETS } from './foes.data.ts';
 import { alarmed, floor, pecked, startles } from './fauna.ts';
+import { inArc } from './logic.ts';
 import type { Ctx } from './foes.ts';
 
 // Les Corneilles (T.crows, fauna.ts; docs/maquettes/necropole-ennemis-planche-1.png): a flock of carrion crows, one foe
@@ -21,11 +22,13 @@ export function create(scene: Phaser.Scene, group: Phaser.Physics.Arcade.Group, 
   const e = Foes.create(scene, group, 'crow', x, y).setVisible(false);
   e.body!.checkCollision.none = true; // over their heads, round his: nothing bumps into a flock
   const birds: Bird[] = Array.from({ length: T.crows.birds }, (_, i) => {
-    const a = i * 2.4, r = 5 + (i % 3) * 6;
+    const u = i / (T.crows.birds - 1) - 0.5, a = (i % 2 ? 1 : -1) * (Math.PI / 2 + u); // along the body, on either side of it, facing it
     return { s: scene.add.image(x, y, 'crow', 'down-idle0').setScale(0.5).setOrigin(0.5, S.SOLE / S.FH).setBlendMode(prelit(scene)),
-      x, y, z: 0, a: a + Math.PI, gx: Math.cos(a) * r, gy: Math.sin(a) * r * SQ, phase: i * 977, mode: 'fly', at: 0 };
+      x, y, z: 0, a, gx: u * 34 + (i % 3) - 1, gy: (i % 2 ? -3 : 3) * SQ, phase: i * 977, mode: 'fly', at: 0 };
   });
-  return e.setData('birds', birds);
+  // the dead they peck at, on the floor (as foes.ts lays the dead)
+  const carrion = scene.add.image(x, y - 11, 'crow', 'corpse').setScale(0.5).setOrigin(0.5, (S.SOLE - 20) / S.FH).setDepth(1.5).setBlendMode(prelit(scene)).setTint(0xa0a0a0);
+  return e.setData({ birds, carrion });
 }
 
 export function step(c: Ctx, e: Sprite, time: number, delta: number) {
@@ -46,7 +49,7 @@ export function step(c: Ctx, e: Sprite, time: number, delta: number) {
     case 'feed': // pecking on their dead, turning now and then
       at(home.x, home.y);
       for (const b of birds) {
-        [b.x, b.y, b.z] = [home.x + b.gx, home.y + b.gy, 0];
+        [b.x, b.y, b.z] = [home.x + b.gx, home.y + b.gy, Math.abs(b.gx) < 12 ? 2 : 0]; // on the body, standing on it
         if ((time + b.phase) % 3100 < delta) b.a += Phaser.Math.FloatBetween(-2, 2);
       }
       frame = (b) => 'idle' + (Math.floor((time + b.phase) / (260 + (b.phase % 300))) % 4);
@@ -67,7 +70,7 @@ export function step(c: Ctx, e: Sprite, time: number, delta: number) {
       }
       birds.forEach((b, i) => {
         if (b.mode === 'tele') { // shrieking over the spot, talons out, its aim locked
-          fly(b, b.spot!.x, b.spot!.y, C.height * 0.8, C.speed * 1.5);
+          fly(b, b.spot!.x, b.spot!.y + 4, C.height * 0.75, C.speed * 1.5); // at his head, before him
           if (time - b.at < C.diveTellMs) return;
           Object.assign(b, { mode: 'dive', at: time, from: { x: b.x, y: b.y, z: b.z } });
         }
@@ -117,9 +120,13 @@ export function step(c: Ctx, e: Sprite, time: number, delta: number) {
   for (const b of birds) {
     const [view, flip] = Foes.viewOf(b.a);
     if (flip !== undefined) b.s.setFlipX(flip);
-    b.s.setFrame(`${view}-${frame(b)}`).setPosition(b.x, b.y - b.z).setDepth(b.y);
+    b.s.setFrame(`${view}-${frame(b)}`).setPosition(b.x, b.y - b.z).setDepth(b.y + b.z) // up in the air, over whoever is under it;
   }
 }
+
+/** A claw swung from `from` (a sprite's point, 10 px over its feet) toward `angle` reaches one of the flock's crows. */
+export const reached = (e: Sprite, from: { x: number; y: number }, angle: number, range: number, arcDeg: number) =>
+  (e.getData('birds') as Bird[]).some((b) => b.s.visible && b.s.alpha > 0.5 && inArc(from, angle, { x: b.x, y: b.y - 10 }, range + 6, arcDeg));
 
 /** A fight heard at floor point `p` (a claw swung, a blow on him, a death): the flocks on their dead near it take fright. */
 export function din(c: Ctx, p: { x: number; y: number }, time: number) {
@@ -153,7 +160,7 @@ export function scatter(c: Ctx, e: Sprite, time: number) {
 
 /** Gone for good (the room cleared): they fly off and are not seen again. */
 export function die(scene: Phaser.Scene, e: Sprite) {
-  for (const k of ['jet', 'markG']) e.getData(k)?.destroy();
+  for (const k of ['jet', 'markG', 'carrion']) e.getData(k)?.destroy();
   for (const b of e.getData('birds') as Bird[]) scene.tweens.add({ targets: b.s, y: b.s.y - 60, alpha: 0, duration: 700, onComplete: () => b.s.destroy() });
   e.destroy();
 }

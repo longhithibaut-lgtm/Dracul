@@ -1574,7 +1574,7 @@ export class RoomScene extends Phaser.Scene {
     if (fin && this.has('grouillantes')) this.releaseRats(this.hero.body!.center, this.v('grouillantes'));
     let hits = 0, killed = false;
     for (const e of [...this.enemies.getChildren()] as Sprite[]) { // not the ghouls this blow tears off an Amas
-      if (!e.body?.enable || this.aloft(e) || !inArc(this.hero, angle, e, range + (e.getData('kind') === 'nourrice' ? T.nourrice.reach : 0), arc)) continue; // her body is broad; up on the walls, out of reach
+      if (!e.body?.enable || this.aloft(e) || !(e.getData('kind') === 'crows' ? Crows.reached(e, this.hero, angle, range, arc) : inArc(this.hero, angle, e, range + (e.getData('kind') === 'nourrice' ? T.nourrice.reach : 0), arc))) continue; // her body is broad; up on the walls, out of reach; a flock, by any of its crows
       hits++;
       this.hitEnemy(e, angle, damage, knock, kind);
       killed ||= !e.body?.enable;
