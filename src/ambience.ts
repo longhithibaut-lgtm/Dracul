@@ -44,8 +44,8 @@ export function mixer(ctx: BaseAudioContext, dst: AudioNode): Mix {
   // Unity below 0.6, then a soft knee to 0.98: beds and music summed over a pile of effects bend instead of clipping.
   // The curve spans ±2 (`half` before it).
   clip.curve = Float32Array.from({ length: 2049 }, (_, i) => { const x = (i / 1024 - 1) * 2, a = Math.abs(x); return Math.sign(x) * (a < 0.6 ? a : 0.6 + 0.38 * Math.tanh((a - 0.6) / 0.38)); });
-  const rate = ctx.sampleRate, n = Math.round(rate * 2.2), ir = ctx.createBuffer(2, n, rate);
-  for (let c = 0; c < 2; c++) ir.getChannelData(c).forEach((_, i, a) => (a[i] = (Math.random() * 2 - 1) * Math.exp(-i / (rate * 0.45)))); // stone: a dense tail
+  const rate = ctx.sampleRate, n = Math.round(rate * 1.6), ir = ctx.createBuffer(2, n, rate); // short: a convolver's cost grows with it
+  for (let c = 0; c < 2; c++) ir.getChannelData(c).forEach((_, i, a) => (a[i] = (Math.random() * 2 - 1) * Math.exp(-i / (rate * 0.35)))); // stone: a dense tail
   verb.buffer = ir;
   amb.connect(hush);
   music.connect(hush);
@@ -89,7 +89,8 @@ function lfo(c: BaseAudioContext, hz: number, depth: number, param: AudioParam) 
   return o;
 }
 
-// Each layer is wired into `out` (its level, 0-1, set by tick()); its own levels make the mix at levels 1.
+// Each layer is wired into `out` (its level, 0-1, set by tick()); its own levels make the mix at levels 1. Few cutoffs
+// swayed by an LFO (the wind's, the chant's): a modulated filter recomputes itself every sample.
 const LAYERS = {
   // The refuge's and the crypts' low drone: two sines a hair apart, slowly beating, and their fifth, breathing.
   drone(c: BaseAudioContext, _m: Mix, out: AudioNode): Src[] {
@@ -108,7 +109,7 @@ const LAYERS = {
     const [s, f] = loop(c, m.white, 'bandpass', 420, 1.3), g = amp(c, 0.4), p = c.createStereoPanner();
     const [w, wf] = loop(c, m.white, 'bandpass', 1300, 9), wg = amp(c, 0.06);
     f.connect(g).connect(p).connect(out); wf.connect(wg).connect(out);
-    return [s, w, lfo(c, 0.045, 260, f.frequency), lfo(c, 0.11, 0.18, g.gain), lfo(c, 0.03, 0.6, p.pan), lfo(c, 0.07, 350, wf.frequency), lfo(c, 0.13, 0.05, wg.gain)];
+    return [s, w, lfo(c, 0.045, 260, f.frequency), lfo(c, 0.11, 0.18, g.gain), lfo(c, 0.03, 0.6, p.pan), lfo(c, 0.13, 0.05, wg.gain)];
   },
   // A brazier, a pyre: the fire's low roar and its fizz (its crackles: events).
   fire(c: BaseAudioContext, m: Mix, out: AudioNode): Src[] {
@@ -136,13 +137,13 @@ const LAYERS = {
     const vs = [146.8, 147.3, 174.6, 220, 219.4].map((f) => tone(c, 'sawtooth', f));
     for (const v of vs) v.connect(bp);
     bp.connect(lp).connect(g).connect(out);
-    return [...vs, lfo(c, 0.06, 140, bp.frequency), lfo(c, 0.08, 0.033, g.gain)];
+    return [...vs, lfo(c, 0.08, 0.033, g.gain)];
   },
   // The black lake: water lapping in slow swells.
   water(c: BaseAudioContext, m: Mix, out: AudioNode): Src[] {
     const [s, f] = loop(c, m.brown, 'bandpass', 380, 0.8), g = amp(c, 0.7);
     f.connect(g).connect(out);
-    return [s, lfo(c, 0.33, 0.6, g.gain), lfo(c, 0.21, 120, f.frequency)];
+    return [s, lfo(c, 0.33, 0.6, g.gain)];
   },
   // The Order's camp: men chanting low behind the tents, muffled, the syllables slow.
   voices(c: BaseAudioContext, _m: Mix, out: AudioNode): Src[] {
@@ -170,7 +171,7 @@ const LAYERS = {
     lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = 3;
     for (const v of vs) v.connect(lp);
     lp.connect(g).connect(out);
-    return [...vs, lfo(c, 0.09, 150, lp.frequency), lfo(c, 4.5, 0.013, g.gain)];
+    return [...vs, lfo(c, 4.5, 0.013, g.gain)];
   },
 };
 export type LayerId = keyof typeof LAYERS;
