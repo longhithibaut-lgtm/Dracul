@@ -38,11 +38,11 @@ type Sprite = Phaser.Physics.Arcade.Sprite;
  *  zone: out of its door i; the refuge: 0, up its stairs),
  *  none at the room's start; hounds: the hp of the hounds hunting him through the exit; bag: the items in his bag
  *  (`lostItems`: those he died with, and those worn not yet brought back). In the training room: gifts and
- *  their ranks (0 commun, 1 rare, 2 épique; none: commun). */
+ *  their ranks (0 commun, 1 rare, 2 épique; none: commun). at: where he stands at the start (the training panel's « Aller à »). */
 export type Run = {
   layout?: Room.LayoutId; health?: number; carried?: number; exp?: Expedition; entry?: number; hounds?: number[]; lost?: number;
   bag?: Items.Item[]; lostItems?: number;
-  gifts?: GiftId[]; ranks?: Ranks; training?: boolean;
+  gifts?: GiftId[]; ranks?: Ranks; training?: boolean; at?: { x: number; y: number };
 };
 type Ranks = Partial<Record<GiftId, number>>;
 type Rat = { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until: number; from?: 'dash' | 'jet'; dmg: number; bites: number; next: number; prey?: Sprite };
@@ -105,6 +105,7 @@ export class RoomScene extends Phaser.Scene {
   private walk = -1; // the way he walks on his own, coming in or going out: -1 up the screen, 1 down
   private exp?: Expedition;
   private entry?: number;
+  private at?: { x: number; y: number };
   private carried = 0; // blood in his bag
   private hounds: number[] = [];
   private lost = 0;
@@ -150,6 +151,7 @@ export class RoomScene extends Phaser.Scene {
     this.layout = data.layout ?? 'refuge';
     this.exp = data.exp;
     this.entry = data.entry;
+    this.at = data.at;
     this.carried = data.carried ?? 0;
     this.hounds = data.hounds ?? [];
     this.lost = data.lost ?? 0;
@@ -219,7 +221,7 @@ export class RoomScene extends Phaser.Scene {
 
     // Coming in: up the stairs (the refuge's, from below), or down from exit `entry`, from above the room's top.
     const door = this.zoneDoor(), start = door && this.phase === 'enter' ? { x: door.x, y: door.y - 8 } // out of a door of the zone
-      : this.phase !== 'enter' ? this.room.heroStart : this.walk < 0 ? this.room.stairs : { x: this.room.exits[this.entry!].x, y: this.room.bounds.top - 18 };
+      : this.phase !== 'enter' ? this.at ?? this.room.heroStart : this.walk < 0 ? this.room.stairs : { x: this.room.exits[this.entry!].x, y: this.room.bounds.top - 18 };
     this.hero = Hero.create(this, start.x, start.y);
     this.room.zone?.chunks.stream(new Phaser.Geom.Rectangle(start.x - 240, start.y - 135, 480, 270));
     this.frame();
@@ -342,6 +344,7 @@ export class RoomScene extends Phaser.Scene {
           this.health = this.maxHealth();
           this.hud.health(this.health, this.health);
         },
+        go: (layout, at, full, bag) => this.scene.restart({ layout, at, bag, carried: full ? this.bloodBag() : 0 } satisfies Run), // out of the training room, on an expedition of its own
         toggle: (id, on, rank) => this.gain(() => { // free: no one-per-slot rule here
           this.gifts = on ? [...this.gifts, id] : this.gifts.filter((g) => g !== id);
           this.ranks = { ...this.ranks, [id]: rank };
@@ -404,7 +407,7 @@ export class RoomScene extends Phaser.Scene {
   private enterRoom() {
     const W = WORLD[this.here], E = T.expedition, ring = W.ring, r = this.room, zone = this.room.zone, d = this.zoneDoor(), Z = zone && ZONES[zone.id];
     if (W.ahead.length && !zone) Room.raiseGate(this, 1); // open: he goes deeper when he pleases
-    const at = d ?? (this.entry === undefined ? r.heroStart : this.entry < 0 ? { x: r.stairs.x, y: r.bounds.bottom } : r.exits[this.entry]);
+    const at = this.at ?? d ?? (this.entry === undefined ? r.heroStart : this.entry < 0 ? { x: r.stairs.x, y: r.bounds.bottom } : r.exits[this.entry]);
     this.exp ??= expedition(ring); // a room opened directly (scripts, tools): an expedition of its own
     const pools = (zone?.id === 'catacombs' ? E.catacombs : E.pools) as readonly (readonly (readonly string[])[])[];
     const groups = (pool: number, n: number, spawns: { x: number; y: number }[]) => placeGroups(pools[pool], n, spawns, at, E.clear, zone ? E.zoneGap : E.gap, Math.random)
@@ -542,6 +545,7 @@ export class RoomScene extends Phaser.Scene {
     const posing = time < this.slashUntil || time < this.castUntil;
     if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
+    if (Training.opts.cool) this.dashReadyAt = Math.min(this.dashReadyAt, this.dashUntil), this.swarmReadyAt = Math.min(this.swarmReadyAt, this.swarmUntil), this.glyphReadyAt = 0; // the test panel's
     const wantsDash = time - this.dashPressedAt <= T.hero.bufferMs && !auto && !dazed; // buffered like the actions, see press()
     if (wantsDash && time >= this.dashReadyAt && !this.prey && time >= this.swarmUntil) {
       this.dashPressedAt = -1e9;
@@ -2201,7 +2205,7 @@ export class RoomScene extends Phaser.Scene {
   damageHero(amount: number, from?: Phaser.Types.Math.Vector2Like): boolean {
     const now = this.time.now;
     // Blows go through la Nuée; only holy light breaks it (update()).
-    if (this.dead || (this.training && Training.opts.god) || now < this.invulnUntil || now < this.dashUntil || now < this.swarmUntil) return false;
+    if (this.dead || (this.training ? Training.opts.god : Training.opts.out) || now < this.invulnUntil || now < this.dashUntil || now < this.swarmUntil) return false;
     this.invulnUntil = now + T.hero.hurtInvulnMs;
     this.hurtAt = now;
     this.health -= amount;
