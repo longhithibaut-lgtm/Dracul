@@ -90,9 +90,9 @@ function bile(scene: Phaser.Scene, p: Pool) {
   run(scene, G.spewMs + G.poolMs, (t) => {
     const ms = t * 1000, reach = G.bileReach * Math.min(1, ms / G.spewMs), fade = 1 - Phaser.Math.Clamp((ms - G.spewMs - G.poolMs + 700) / 700, 0, 1);
     g.clear();
-    for (const b of blobs) if (b.r <= reach) g.fillStyle(0x23261a, 0.8 * fade).fillEllipse(b.x, b.y, 2 * b.w + 1.5, (2 * b.w + 1.5) * SQ);
-    for (const b of blobs) if (b.r <= reach) g.fillStyle(0x060704, 0.95 * fade).fillEllipse(b.x, b.y, 2 * b.w, 2 * b.w * SQ);
-    for (const b of blobs) if (b.r <= reach && b.shine > 0.8) // its wet sheen: a streak of green-grey light
-      g.fillStyle(b.shine > 0.95 ? 0x8a9070 : 0x3a4030, 0.9 * fade).fillRect(Math.round(b.x - b.w * 0.5), Math.round(b.y - b.w * SQ * 0.4), 2, 0.5);
+    for (const b of blobs) if (b.r <= reach) g.fillStyle(0x323a1c, 0.85 * fade).fillEllipse(b.x, b.y, 2 * b.w + 1.5, (2 * b.w + 1.5) * SQ);
+    for (const b of blobs) if (b.r <= reach) g.fillStyle(0x10130a, 0.95 * fade).fillEllipse(b.x, b.y, 2 * b.w, 2 * b.w * SQ);
+    for (const b of blobs) if (b.r <= reach && b.shine > 0.6) // its wet sheen: a streak of green-grey light
+      g.fillStyle(b.shine > 0.85 ? 0xa8b080 : 0x56603a, 0.9 * fade).fillRect(Math.round(b.x - b.w * 0.5), Math.round(b.y - b.w * SQ * 0.4), 2, 0.5);
   }, () => g.destroy());
 }

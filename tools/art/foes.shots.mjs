@@ -394,6 +394,7 @@ const fauna = async () => {
   await call([['enterre', 240, 300]]);
   await step(300);
   await crop('enterre', 'enterre-idle', 360, 300, -4);
+  await set('enterre', { readyAt: 0 }); // (call() held it)
   await run(`(() => { const s = ${S}, m = ${foe('enterre')}.body.center, h = s.hero; h.body.reset(m.x + 16 + h.x - h.body.center.x, m.y + 2 + h.y - h.body.center.y); })()`); // on its edge, beside it (not hiding it)
   await step(T.enterre.crackMs * 0.6);
   if ((await S2('enterre')) !== 'crack') errors.push(`l'Enterré did not wake: ${await S2('enterre')}`);
