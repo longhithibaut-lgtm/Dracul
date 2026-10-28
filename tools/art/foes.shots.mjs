@@ -7,14 +7,15 @@
 // dodged by slipping into his back, whose claws land where his front parries them; the Amas sprawled and the Bourreau
 // wrenching his axe free are struck without being cut short, the Amas losing a ghoul to each blow); and the frame rate
 // empty, with the hound pack, six pénitents, a Sonneur, an Inquisiteur, an Amas and a Bourreau fighting.
-// Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=necropolis]
+// The necropolis' crows, Enterré and Gavé likewise (their alarm, grip and meals checked too).
+// Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=necropolis --only=fauna]
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
-const out = arg('out', 'shots'), port = Number(arg('port', 5209)), layout = arg('layout', 'necropolis');
-const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
+const out = arg('out', 'shots'), port = Number(arg('port', 5209)), layout = arg('layout', 'necropolis'), only = arg('only'); // only=fauna: the necropolis' own alone
+const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' }); // no hmr: an edit to src/ mid-run would reload the page under the bot
 await server.listen();
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
@@ -44,10 +45,13 @@ const empty = await fps();
 
 // The hound pack, a wave of six pénitents, a Sonneur, an Inquisiteur, an Amas and a Bourreau, called in by their
 // buttons, fighting the (invincible) hero.
+let crowd = 0;
+if (!only) {
 await run(() => { for (const s of ['hounds', 'penitents', 'ringer', 'inquisitor', 'amas', 'bourreau']) document.querySelector(`[data-spawn="${s}"]`).click(); });
 await page.waitForFunction(() => window.game.scene.getScene('room').enemies.getChildren().length >= 13);
-const crowd = await fps();
+crowd = await fps();
 await page.screenshot({ path: `${out}/foes-crowd-live.png` });
+}
 
 // From here the game is stepped by hand at 60 fps (headless it runs at a few fps).
 await run(() => window.game.loop.sleep());
@@ -78,6 +82,7 @@ const call = async (list) => {
 };
 const still = async () => { for (let i = 0; i < 20; i++) { await run(() => { for (const e of window.game.scene.getScene('room').enemies.getChildren()) e.body?.velocity.set(0); }); await step(16); } };
 
+if (!only) { // (--only=fauna: the necropolis' own alone, further down)
 // The pack and the wave held round the hero: a full frame to look at against the sheet.
 await hold();
 await still();
@@ -342,6 +347,120 @@ await step(1500);
 await crop('crossbow', 'crossbow-dead', 420, 440).catch(() => {});
 await page.screenshot({ path: `${out}/foes-dead4.png` });
 await clear();
+}
+
+// The necropolis' own. Les Corneilles: on their dead, the hero coming near (they burst up cawing), wheeling over him,
+// one hanging over him (the tell) and stooping (the attack), scattered by a claw. L'Enterré: under his mound, the earth
+// cracking (the tell), the hero caught by the ankle (the attack), struggling free with his keys, sinking back. Le Gavé:
+// waddling, eating a body the hero left (it grows), its slam (tell, attack) and its bile (tell, the pool).
+const fauna = async () => {
+  const S2 = (k) => run(`${foe(k)}.getData('state')`);
+  await hero(330, 330);
+  await call([['crows', 200, 330]]);
+  await step(400);
+  await crop('crows', 'crows-idle', 420, 300, -4);
+  await hero(240, 330); // 40 px off: they see him
+  await step(250);
+  await crop('crows', 'crows-burst', 520, 360, -10);
+  await step(T.crows.burstMs + 200);
+  for (let t = 0; t < 4000 && !(await run(`${foe('crows')}.getData('birds').some((b) => b.mode === 'tele')`)); t += 16) await step(16);
+  await step(T.crows.diveTellMs * 0.6);
+  await crop('crows', 'crows-tell', 520, 400, -12);
+  await step(T.crows.diveTellMs * 0.4 + T.crows.diveMs * 0.7);
+  await crop('crows', 'crows-attack', 520, 400, -12);
+  await page.screenshot({ path: `${out}/foes-crows-full.png` });
+  await run(`(() => { const s = ${S}, b = ${foe('crows')}.getData('birds')[0]; s.slashReadyAt = 0; s.slash(Math.atan2(b.y - 10 - s.hero.y, b.x - s.hero.x)); })()`); // at one of them
+  await step(300);
+  if ((await S2('crows')) !== 'scatter') errors.push(`a claw did not scatter the crows: ${await S2('crows')}`);
+  await crop('crows', 'crows-scatter', 620, 420, -12);
+  await clear();
+
+  // Their alarm: a fight heard near them (a claw swung), the ghoul 250 px off (out of the hero's sight) comes to look; the
+  // one 400 px off does not. Out of the training room's rule (everything hunts there) for this.
+  await hero(150, 330);
+  await run(`(() => { const s = ${S}; s.training = false; s.place({ x: 200, y: 330 }, 'crows'); s.place({ x: 450, y: 330 }, 'ghoul'); s.place({ x: 600, y: 330 }, 'ghoul'); })()`);
+  await step(300);
+  await run(`(() => { const s = ${S}; s.slashReadyAt = 0; s.slash(Math.PI); })()`);
+  await step(2500);
+  const looked = await run(`${S}.enemies.getChildren().filter((e) => e.body?.enable && !e.getData('kind')).map((e) => ({ x: Math.round(e.x), heard: !!e.getData('heard') }))`);
+  console.log('the crows\' alarm (ghouls placed at 450 and 600, the crows at 200):', JSON.stringify(looked));
+  if (!(looked[0].heard && looked[0].x < 420 && !looked[1].heard && looked[1].x === 600)) errors.push(`the crows' alarm went wrong: ${JSON.stringify(looked)}`);
+  await page.screenshot({ path: `${out}/foes-crows-alarm-full.png` });
+  await run(`${S}.training = true`);
+  await clear();
+
+  // L'Enterré.
+  await hero(330, 330);
+  await call([['enterre', 240, 300]]);
+  await step(300);
+  await crop('enterre', 'enterre-idle', 360, 300, -4);
+  await set('enterre', { readyAt: 0 }); // (call() held it)
+  await run(`(() => { const s = ${S}, m = ${foe('enterre')}.body.center, h = s.hero; h.body.reset(m.x + 16 + h.x - h.body.center.x, m.y + 2 + h.y - h.body.center.y); })()`); // on its edge, beside it (not hiding it)
+  await step(T.enterre.crackMs * 0.6);
+  if ((await S2('enterre')) !== 'crack') errors.push(`l'Enterré did not wake: ${await S2('enterre')}`);
+  await crop('enterre', 'enterre-tell', 420, 340, -4);
+  await step(T.enterre.crackMs * 0.4 + 200);
+  await crop('enterre', 'enterre-attack', 520, 380, -4);
+  await page.screenshot({ path: `${out}/foes-enterre-full.png` });
+  let presses = 0;
+  while ((await run(`!!${S}.heldBy`)) && presses < 20) { await page.keyboard.press(presses % 2 ? 'a' : 'd'); await step(60); presses++; }
+  console.log(`l'Enterré let go after ${presses} keys pressed anew`);
+  if (presses >= 20) errors.push('the hero never struggled free of l\'Enterré');
+  await step(200);
+  await crop('enterre', 'enterre-sink', 420, 340, -4);
+  await step(T.enterre.sinkMs);
+  await run(`(() => { ${S}.hurtEnemy(${foe('enterre')}, 1); })()`);
+  if ((await run(`${foe('enterre')}.getData('hp')`)) !== T.enterre.hp) errors.push('a blow reached l\'Enterré under the earth');
+  await clear();
+
+  // Le Gavé: walking, then a ghoul killed by it (the hero far): it goes and eats the body, and grows.
+  await hero(330, 330);
+  await call([['gave', 200, 330]]);
+  await crop('gave', 'gave-idle', 480, 400, -12);
+  await hero(330, 250);
+  await set('gave', { readyAt: 0, state: 'chase', until: 0 });
+  for (const k of [0, 1, 2]) { await step(140); await crop('gave', `gave-walk${k}`, 480, 400, -12); }
+  await hold();
+  await run(`(() => { const s = ${S}, e = ${foe('gave')}; e.body.reset(200, 330); s.bodies.length = 0; s.kill(s.place({ x: 236, y: 336 }, 'ghoul')); })()`);
+  await hero(330, 420);
+  await step(1200);
+  for (let t = 0; t < 4000 && (await S2('gave')) !== 'eat'; t += 16) await step(16);
+  await step(600);
+  await crop('gave', 'gave-eat', 480, 400, -12);
+  const before = await run(`${foe('gave')}.getData('hp')`);
+  await step(T.gave.eatMs);
+  const fed = await run(`(() => { const e = ${foe('gave')}; return { fed: e.getData('fed'), hp: e.getData('hp'), max: e.getData('max'), scale: +e.scaleX.toFixed(3), bodies: ${S}.bodies.length }; })()`);
+  console.log('the Gavé fed on a body (hp before', before, '):', JSON.stringify(fed));
+  if (fed.fed !== 1 || fed.scale <= 0.5 || fed.bodies !== 0) errors.push(`the Gavé did not feed: ${JSON.stringify(fed)}`);
+  await crop('gave', 'gave-fed', 480, 400, -12);
+  let at = await run(`(() => { const e = ${foe('gave')}; return { x: e.body.center.x, y: e.body.center.y }; })()`);
+  await hero(at.x + 26, at.y);
+  await still();
+  await set('gave', { readyAt: 0, state: 'chase', until: 0 });
+  await step(T.gave.slamTeleMs * 0.6);
+  await crop('gave', 'gave-tell', 520, 440, -14);
+  await step(T.gave.slamTeleMs * 0.4 + 60);
+  await crop('gave', 'gave-attack', 600, 440, -10);
+  await hold();
+  await step(1500);
+  at = await run(`(() => { const e = ${foe('gave')}; return { x: e.body.center.x, y: e.body.center.y }; })()`);
+  await hero(at.x + 50, at.y + 6);
+  await still();
+  await set('gave', { readyAt: 0, state: 'chase', until: 0 });
+  await step(T.gave.bileTeleMs * 0.6);
+  await crop('gave', 'gave-tell2', 520, 440, -14);
+  await step(T.gave.bileTeleMs * 0.4 + T.gave.spewMs * 0.7);
+  await crop('gave', 'gave-attack2', 640, 440, -10);
+  await step(T.gave.spewMs * 0.3 + 500);
+  await crop('gave', 'gave-pool', 640, 440, -10);
+  await page.screenshot({ path: `${out}/foes-gave-full.png` });
+  await hold();
+  await run(`${S}.kill(${foe('gave')})`);
+  await step(1500);
+  await page.screenshot({ path: `${out}/foes-dead5.png` });
+  await clear();
+};
+await fauna();
 
 // The bot plays each attack, the hero mortal and alone with the foe: standing still, then stepping out REACT ms after
 // the tell starts (holding a key: the hero walks at T.hero.speed). `then(t)`, if given, is what the bot does at each
@@ -355,7 +474,7 @@ async function play(kind, dx, dy, key, tell, attack, then) {
   await hero(240, 330);
   await call([[kind, 240 - dx, 330 - dy]]);
   await still();
-  await run(() => { const s = window.game.scene.getScene('room'); s.health = 5; s.invulnUntil = s.dazedUntil = 0; });
+  await run(() => { const s = window.game.scene.getScene('room'); s.health = 5; s.invulnUntil = s.dazedUntil = 0; s.bodies.length = 0; }); // (no meal to tempt a Gavé)
   await set(kind, { readyAt: 0, facing: Math.atan2(dy, dx) });
   const state = () => run(`${foe(kind)}.getData('state')`), busy = () => run(`!!${foe(kind)}.getData('rings')`); // a bell's rings still rolling
   for (let t = 0; t < 2000 && (await state()) !== tell; t += 16) await step(16);
@@ -403,7 +522,7 @@ const stay = (away) => {
     if (away && ripAt !== undefined && t - ripAt >= REACT && t - ripAt < REACT + 16) await keys(['d']); // released by play()
   };
 };
-const fights = {
+const fights = only ? {} : {
   'Purificateur, immobile': await play('purifier', 28, 4, null, 'ignite', ['fire']), 'Purificateur, pas de côté': await play('purifier', 28, 4, 's', 'ignite', ['fire']),
   'Prêtre, immobile': await play('priest', -90, 30, null, 'pray', []), 'Prêtre, s\'écarte': await play('priest', -90, 30, 'a', 'pray', []),
   'Arbalétrier, immobile': await play('crossbow', 100, 0, null, 'aim', []), 'Arbalétrier, pas de côté': await play('crossbow', 100, 0, 's', 'aim', []),
@@ -414,6 +533,7 @@ const fights = {
   'Inquisiteur, immobile': await play('inquisitor', -24, 0, null, 'whirl', ['sweep']), 'Inquisiteur, recule': await play('inquisitor', -24, 0, 'a', 'whirl', ['sweep']),
   'Inquisiteur, immobile (bis)': await play('inquisitor', -24, 0, null, 'whirl', ['sweep']), 'Inquisiteur, dans son dos': await play('inquisitor', -24, 0, null, 'whirl', ['sweep'], behind),
 };
+if (!only) {
 if (!misted) errors.push('the bot never misted through the rings');
 const back = await run(`(() => { const e = ${foe('inquisitor')}, c = ${S}.hero.body.center; return { dx: Math.round(c.x - e.body.center.x), dy: Math.round(c.y - e.body.center.y), aim: +e.getData('aim').toFixed(2) }; })()`);
 console.log('the hero once behind the Inquisiteur (from his feet, room px; his aim, rad):', JSON.stringify(back));
@@ -425,6 +545,29 @@ Object.assign(fights, {
   'Bourreau, immobile (loin)': await play('bourreau', 0, 70, null, 'heave', ['chop']), 'Bourreau, pas de côté (loin)': await play('bourreau', 0, 70, 'd', 'heave', ['chop']),
   'Bourreau, reste devant après la fente': await play('bourreau', 30, 0, 's', 'heave', ['chop', 'rip', 'swing'], stay(false)),
   'Bourreau, s\'éloigne de l\'arrachement': await play('bourreau', 30, 0, 's', 'heave', ['chop', 'rip', 'swing'], stay(true)),
+});
+}
+// The necropolis' own. A crow of the flock wheeling over him: it hangs over where he stands (the tell), then stoops on
+// that spot; he stands, or walks off REACT ms into the tell. L'Enterré: woken on his mound's edge, he stands or walks off;
+// caught, the bot's keys free him (checked above). Le Gavé: its slam close, its bile farther, its pool left behind.
+async function peck(key) {
+  await clear();
+  await hero(240, 330);
+  await call([['crows', 200, 330]]);
+  await run(() => { const s = window.game.scene.getScene('room'); s.health = 5; s.invulnUntil = 0; });
+  for (let t = 0; t < 6000 && !(await run(`${foe('crows')}.getData('birds').some((b) => b.mode === 'tele')`)); t += 16) await step(16);
+  await step(REACT);
+  if (key) await page.keyboard.down(key);
+  for (let t = REACT; t < 1500 && (await run(`${foe('crows')}.getData('birds').some((b) => b.mode !== 'fly')`)); t += 16) await step(16);
+  await step(100);
+  await keys([], ['w', 'a', 's', 'd']);
+  return 5 - (await run(() => window.game.scene.getScene('room').health));
+}
+Object.assign(fights, {
+  'Corneilles, immobile': await peck(null), 'Corneilles, s\'écarte': await peck('s'),
+  'Enterré, immobile': await play('enterre', 16, 0, null, 'crack', ['grab']), 'Enterré, s\'éloigne': await play('enterre', 16, 0, 'd', 'crack', ['grab']),
+  'Gavé, immobile (écrasement)': await play('gave', 26, 0, null, 'rear', ['flop']), 'Gavé, pas de côté (écrasement)': await play('gave', 26, 0, 's', 'rear', ['flop']),
+  'Gavé, immobile (bile)': await play('gave', 50, 0, null, 'gorge', ['spew']), 'Gavé, pas de côté (bile)': await play('gave', 50, 0, 's', 'gorge', ['spew']),
 });
 await run(() => document.querySelector('[data-opt="god"]').click());
 const names = Object.keys(fights), fair = names.every((n, i) => (i % 2 ? !fights[n] : fights[n] > 0));

@@ -35,7 +35,7 @@ const BROOD = `${S}.enemies.getChildren().filter((e) => e.body?.enable && e.getD
 
 await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
-await run(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 4, banked: 900, shortcuts: ['grille', 'galerie', 'caveau'] })));
+await run(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 5, banked: 900, shortcuts: ['grille', 'galerie', 'caveau'] })));
 await page.reload();
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 const T = await run(() => import('/src/tuning.ts').then((m) => m.T));

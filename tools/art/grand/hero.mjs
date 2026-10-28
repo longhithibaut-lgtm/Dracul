@@ -37,8 +37,8 @@ export function hero(pose = 'idle') {
   const el = (c, r, m, k = 0, extra = {}) => parts.push({ f: (x, y, z) => sdEll(x, y, z, c[0], c[1], c[2], r[0], r[1], r[2]), m, k, box: [c[0] - r[0] - 1, c[1] - r[1] - 1, c[2] - r[2] - 1, c[0] + r[0] + 1, c[1] + r[1] + 1, c[2] + r[2] + 1], ...extra });
 
   // ---- head (skull-like: cheek hollows, sockets, brow) ----
-  const H = P.head, t = P.tilt; // tilt: chin forward/down
-  const hp = (x, y, z) => [H[0] + x, H[1] + y * Math.cos(t) + z * Math.sin(t), H[2] + z * Math.cos(t) - y * Math.sin(t)];
+  const H = P.head, t = P.tilt, cw = Math.cos(P.yaw ?? 0), sw0 = Math.sin(P.yaw ?? 0); // tilt: chin forward/down; yaw: the head turned (> 0 to his left)
+  const hp = (x, y, z) => { const y1 = y * Math.cos(t) + z * Math.sin(t); return [H[0] + x * cw + y1 * sw0, H[1] + y1 * cw - x * sw0, H[2] + z * Math.cos(t) - y * Math.sin(t)]; };
   const headBox = [H[0] - 8, H[1] - 9, H[2] - 11, H[0] + 8, H[1] + 9, H[2] + 9];
   const hb = { box: headBox };
   el(hp(0, -0.6, 1.2), [4.1, 5.1, 5.4], M.SKIN, 0, hb);                 // cranium
@@ -62,7 +62,7 @@ export function hero(pose = 'idle') {
   const ct = Math.cos(t), st = Math.sin(t);
   parts.push({
     m: M.HAIR, k: 0.5, box: [H[0] - 10, H[1] - 11, H[2] - 24, H[0] + 10, H[1] + 9, H[2] + 9], f: (x, y, z) => {
-      const qx = x - H[0], qy = y - H[1], qz = z - H[2];
+      const qx0 = x - H[0], qy0 = y - H[1], qz = z - H[2], qx = qx0 * cw - qy0 * sw0, qy = qx0 * sw0 + qy0 * cw;
       const X = qx, Y = qy * ct - qz * st, Z = qy * st + qz * ct; // head-local
       let d = sdEll(X, Y, Z, 0, -1.0, 1.5, 4.75, 5.9, 5.9);
       d += 0.16 * Math.abs(Math.sin(Math.atan2(X, Z + 2) * 11 + vn(X, Y * 0.5, 6) * 2)) + 0.35 * Math.exp(-X * X * 2) * clamp(Z - 3);

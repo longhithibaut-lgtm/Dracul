@@ -618,3 +618,5 @@ export const finish = (img, x0, y0) => shafts(img, x0, y0, [...MOONH.map((o) => 
 export const PAL = [...CRYPT_PAL, ...[['#b8a466', '#d8c886', '#ece0a8', '#f8f0cc', '#fffbe8']].flatMap((s) => s.map((c) => hex(c).map((v) => v * 255)))];
 export const POST = { exposure: 3.3, vignette: 0.2, desat: 0.18, grain: 0.012, dither: 0.02 };
 export const GRAVE_COUNT = GRAVES.length;
+/** The floor's kind at room px (X, Y), for the map (tools/art/map.gen.mjs): 0 earth, 1 gravel, 2 paving, 3 the camp's mud. */
+export const floorKind = (X, Y) => kind[Math.floor(Y) * RW + Math.floor(X)] ?? 0;

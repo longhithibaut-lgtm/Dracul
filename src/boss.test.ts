@@ -105,9 +105,17 @@ describe('Vesna freed, and her powers', () => {
   });
 
   it('counts Vesna freed for an older save that killed her guardian (the Araignée), not for one that only fought her', () => {
-    expect(parse('{"v":3,"nourrice":{"tries":2,"dead":true},"vesna":false}')).toMatchObject({ v: 4, vesna: true, nourrice: { tries: 2, dead: true } });
+    expect(parse('{"v":3,"nourrice":{"tries":2,"dead":true},"vesna":false}')).toMatchObject({ v: 5, vesna: true, nourrice: { tries: 2, dead: true }, carte: {} });
     expect(parse('{"v":3,"nourrice":{"tries":2,"dead":false}}')).toMatchObject({ vesna: false, nourrice: { dead: false } });
-    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":true},"vesna":false}').vesna).toBe(false); // la Matrice killed, the reliquary still sealed
+    // the map's version 4 (it wrote `carte`): its guardian was still the Araignée; its map is kept
+    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":true},"vesna":false,"carte":{"necropolis":"AAAA"}}')).toMatchObject({ v: 5, vesna: true, carte: { necropolis: 'AAAA' } });
+    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":false},"carte":{}}').vesna).toBe(false);
+    // the Matrice's version 4 (no `carte`): la Matrice killed, the reliquary still sealed
+    expect(parse('{"v":4,"nourrice":{"tries":1,"dead":true},"vesna":false}')).toMatchObject({ v: 5, vesna: false, nourrice: { dead: true }, carte: {} });
+    // version 5: both, as they are
+    const s5 = parse('{"v":5,"nourrice":{"tries":3,"dead":true},"vesna":false,"carte":{"catacombs":"AA=="}}');
+    expect(s5).toMatchObject({ vesna: false, nourrice: { tries: 3, dead: true }, carte: { catacombs: 'AA==' } });
+    expect(parse(JSON.stringify(s5))).toEqual(s5);
   });
 
   it('sells the slot powers dearer with each one bought, la Nuée at its own price', () => {
