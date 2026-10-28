@@ -266,6 +266,56 @@ export const T = {
     light: 1.2, teleLight: 2.6, // her seal's gold in the dark, flaring as she winds up
   },
 
+  // ---- The necropolis' own fauna (docs/maquettes/necropole-ennemis-planche-1.png, names provisional). Their damage is
+  // in today's drops of life (T.hero.maxHealth 5): for the coming 50 HP pool, multiply it by 10. ----
+
+  // Les Corneilles (crows.ts): a flock of `birds` carrion crows pecking at the dead, sentinels. The hero within `notice`
+  // of them (only `shade` while he keeps out of the light), or a fight within `noise` of them (a claw swung, a blow on
+  // him, a death), and they burst up cawing (`burstMs`): every foe within `alarm` that is not hunting comes to look
+  // where they rose, at its pace (it gives up `lookMs` later). Up, they wheel `height` px over him while he stays within
+  // `stay` of where they rose; every `diveEveryMs` one hangs shrieking over him, talons out (`diveTellMs`, its aim locked
+  // on where he stood), then stoops on that spot (`diveMs`): struck within `peckRadius` (floor). Struck (claws, a shard,
+  // anything), they scatter cawing (the alarm again) and settle back on their dead `backMs` later. They cannot die.
+  crows: {
+    hp: 1, speed: 80, birds: 6,
+    notice: 90, shade: 50, noise: 150, alarm: 320, lookMs: 9000,
+    burstMs: 700,
+    stay: 150, height: 46, wheel: 24,
+    diveEveryMs: 1700, diveTellMs: 500, diveMs: 200, peckRadius: 10, damage: 1,
+    backMs: 20000,
+  },
+  // L'Enterré (enterre.ts): a dead man half under his grave mound, only his fingers and his eyes above the earth; blows
+  // do nothing to him there. The hero's feet within `trigger` of his middle (floor) and the earth cracks, a hand claws up
+  // (`crackMs`, the tell: the cracking is heard); still within `reach` at its end (no mist), he is caught by the ankle:
+  // `damage` at once and every `tickMs`, dragged toward the mound at `drag` px/s, until he struggles free: `free` points,
+  // a claw landing on him `blow`, a direction key pressed anew `key`. Then he sinks back (`sinkMs`, the time to strike him)
+  // and waits under `rearmMs` more. Never moves; others punish a hero held.
+  enterre: {
+    hp: 6, speed: 0,
+    trigger: 22, crackMs: 550, reach: 30,
+    damage: 1, tickMs: 1200, drag: 8,
+    free: 6, blow: 2, key: 1,
+    sinkMs: 1400, rearmMs: 1500,
+    firstMs: 0,
+  },
+  // Le Gavé (gave.ts): slow and heavy, blows never cut it short nor push it back. It eats the dead within `smell` (floor)
+  // when it is not hunting, or when a body lies nearer than the hero: `eatMs` over it (struck meanwhile, it eats on),
+  // then the body is gone and it grows (the k-th: `grow.scale` bigger, `grow.hp` more blood and `grow.heal` back, its
+  // blows `grow.damage` harder, rounded down), `max` bodies at most. Kill it before it feeds.
+  // The slam: up on its legs, arms high (`slamTeleMs`, aim locked), then belly first `slamAhead` ahead: struck within
+  // `slamRadius` of where it lands (floor); it lies there `sprawlMs`. The bile: reared back, the throat bulging, a reflux
+  // (`bileTeleMs`, aim locked), then it pours black bile in a cone (`bileReach`, `bileHalfDeg`) for `spewMs`; the bile
+  // lies there `poolMs`, a pool burning whoever stands in it `poolDamage` (each time his last wound has closed).
+  gave: {
+    hp: 14, speed: 24,
+    near: 20, far: 30,
+    smell: 240, eatMs: 2400,
+    grow: { scale: 0.14, hp: 4, heal: 6, damage: 0.5 }, max: 3,
+    slamRange: 32, slamTeleMs: 750, slamAhead: 18, slamRadius: 24, slamDamage: 2, sprawlMs: 900,
+    bileRange: 70, bileTeleMs: 850, bileReach: 64, bileHalfDeg: 22, spewMs: 450, bileDamage: 1, poolMs: 1800, poolDamage: 1,
+    recoverMs: 400, reloadMs: 1500, firstMs: 900,
+  },
+
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
   lantern: {
     hp: 3,
@@ -326,7 +376,7 @@ export const T = {
   // refuge's basin (within `basin`).
   blood: {
     ring: [0, 1, 3, 8, 20],
-    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20 },
+    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20, enterre: 3, gave: 8 }, // (a flock of crows never dies of a blow)
     cache: 5,
     pickup: 16, search: 24, bag: 400, basin: 52,
   },

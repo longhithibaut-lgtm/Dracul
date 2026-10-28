@@ -211,8 +211,10 @@ export function die(scene: Scene, s: Sprite) {
       const rt = stains(scene);
       pool(x, fy, 2 + 9 * k, 1 + 3 * k, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.mid, BLOOD.dark);
       rt.render();
-    }, () => {
-      stains(scene).stamp(key, 'heap', x, y, { originY: ORIGIN / SIZE, scaleX: flipX ? -1 : 1 }).render();
+    }, () => { // its heap on the floor, until a Gavé eats it (erased)
+      const lay = (blendMode?: number) => stains(scene).stamp(key, 'heap', x, y, { originY: ORIGIN / SIZE, scaleX: flipX ? -1 : 1, blendMode }).render();
+      lay();
+      scene.events.emit('corpse', { x, y: fy, eat: () => lay(Phaser.BlendModes.ERASE) });
       heap.destroy();
     });
     fly(scene, [{ o: image(scene, key, x, y, 'mask', flipX), x, y, z: 16, vx: Math.cos(away) * 28, vy: Math.sin(away) * 18, vz: 80, d: 0,
@@ -269,7 +271,7 @@ function image(scene: Scene, key: string, x: number, y: number, frame: string, f
 // drops; callers still give room pixels (fractions reach its finer ones).
 type Stains = {
   fill(c: number, a: number, x: number, y: number, w: number, h: number): Stains;
-  stamp(key: string, frame: string, x: number, y: number, o: { originY: number; scaleX: number }): Stains;
+  stamp(key: string, frame: string, x: number, y: number, o: { originY: number; scaleX: number; blendMode?: number }): Stains;
   render(): Stains;
 };
 export function stains(scene: Scene): Stains {

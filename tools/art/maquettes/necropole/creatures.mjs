@@ -12,9 +12,11 @@ const EMBER = [1.6, 0.16, 0.06]; // a vampire's eyes: red embers, like the hero'
 
 // ======================= 1. LES CORNEILLES =======================
 // a carrion crow at p facing angle a (0: +y), 'perch' / 'peck' / 'fly' (wings up, beak open); its feet 7k under p
-function crow(b, p, a, mode, k = 1, wingUp = 0.7) {
+// o (the game's sheet, tools/art/foes.gen.mjs): pitch (radians, nose up), wing (each wing's lift, [right, left]), sweep
+// (wings swept back), talons (legs thrown down and forward, for the strike), open (beak open on the ground too)
+function crow(b, p, a, mode, k = 1, wingUp = 0.7, o = {}) {
   const F = [Math.sin(a), Math.cos(a), 0], X = [Math.cos(a), -Math.sin(a), 0];
-  const pitch = mode === 'perch' ? 0.4 : mode === 'peck' ? -0.45 : 0.12;
+  const pitch = o.pitch ?? (mode === 'perch' ? 0.4 : mode === 'peck' ? -0.45 : 0.12);
   const f = nz(add(sc(F, Math.cos(pitch)), [0, 0, Math.sin(pitch)])), u = crs(X, f);
   const P = (fx, ux, xx = 0) => add(p, add(sc(f, fx * k), add(sc(u, ux * k), sc(X, xx * k))));
   oel(b, P(0, 0), f, X, [6.5 * k, 3.4 * k, 3.6 * k], 30, 1.2 * k);
@@ -22,22 +24,23 @@ function crow(b, p, a, mode, k = 1, wingUp = 0.7) {
   const H = P(7.4, 2.6);
   b.rc(P(4.5, 1), H, 2.3 * k, 1.6 * k, 30, 0.8 * k); // feathered neck
   b.el(H, [2.1 * k, 2.4 * k, 2.1 * k], 31, 0.6 * k); // bald, scabbed head
-  const open = mode === 'fly';
+  const open = mode === 'fly' || !!o.open;
   b.rc(P(8.8, 2.4), P(13.5, open ? 3.4 : 1.4), 1.15 * k, 0.15 * k, 32, 0.3 * k);
   if (open) b.rc(P(8.6, 1.6), P(12.5, -0.6), 0.9 * k, 0.12 * k, 32, 0.3 * k);
   for (const s of [-1, 1]) b.el(P(8.3, 3.1, s * 1.55), [0.55 * k, 0.55 * k, 0.55 * k], 33);
   // tail
   oel(b, P(-9.5, mode === 'perch' ? -1.6 : 0.4), nz(add(f, sc(u, mode === 'perch' ? -0.35 : 0.05))), X, [5 * k, (open ? 3.6 : 2.4) * k, 0.6 * k], 30, 0.6 * k);
-  if (!open) {
+  if (mode !== 'fly') {
     for (const s of [-1, 1]) { oel(b, P(-1.5, 1.2, s * 2.7), nz(add(f, sc(u, -0.15))), u, [7.8 * k, 2.6 * k, 0.9 * k], 30, 0.8 * k); // folded wings
       b.rc(P(0.5, -2.6, s * 1.2), add(P(0.5, -2.6, s * 1.4), [0, 0, -5 * k]), 0.45 * k, 0.4 * k, 32, 0.3 * k); }
   } else {
     for (const s of [-1, 1]) {
-      const S0 = P(1.5, 1, s * 2.4), w = nz(add(sc(X, s * Math.cos(wingUp)), sc(u, Math.sin(wingUp)))), wr = add(add(S0, sc(w, 9 * k)), sc(f, 1 * k));
+      const wu = o.wing ? o.wing[(s + 1) / 2] : wingUp, S0 = P(1.5, 1, s * 2.4), w = nz(add(add(sc(X, s * Math.cos(wu)), sc(u, Math.sin(wu))), sc(f, -(o.sweep ?? 0)))), wr = add(add(S0, sc(w, 9 * k)), sc(f, 1 * k));
       b.rc(S0, wr, 1.6 * k, 1.0 * k, 30, 0.6 * k);
       oel(b, add(lp(S0, wr, 0.55), sc(f, -3 * k)), w, f, [5.5 * k, 3.6 * k, 0.55 * k], 30, 0.6 * k);
       for (let i = 0; i < 6; i++) { const d = nz(add(w, sc(f, -0.16 * i - 0.05))); b.rc(add(wr, sc(d, 0.5)), add(wr, sc(d, (11 - i * 0.9) * k)), 1.0 * k, 0.15 * k, 30, 0.2 * k); }
-      b.rc(P(-1, -2.6, s * 1.2), P(-4.5, -4.2, s * 1.4), 0.45 * k, 0.35 * k, 32, 0.2 * k); // legs tucked
+      if (o.talons) { const ft = P(3, -7.5, s * 1.6); b.rc(P(-0.5, -2.6, s * 1.2), ft, 0.5 * k, 0.4 * k, 32, 0.2 * k); for (const d of [-0.5, 0, 0.5]) b.rc(ft, add(ft, add(sc(f, 2.6 * k), sc(X, d * 1.6 * k))), 0.3 * k, 0.12 * k, 32, 0.1 * k); } // talons thrown forward
+      else b.rc(P(-1, -2.6, s * 1.2), P(-4.5, -4.2, s * 1.4), 0.45 * k, 0.35 * k, 32, 0.2 * k); // legs tucked
     }
   }
 }
@@ -48,6 +51,13 @@ const crowMat = (m, x, y, z) => {
   if (m === 33) return { alb: L('#c8c4ae'), spec: 1.0, gloss: 80, emi: [0.05, 0.05, 0.04] }; // milky, blind-looking
   return null;
 };
+// One carrion crow alone, for the game's sheet (tools/art/foes.gen.mjs): its body over the origin facing +y, k 1.3 as on
+// the card (o.k: its size); mode as crow(), z: how high its body is at k 1.3 (on the ground, its feet on the floor).
+export function corneille(mode = 'perch', o = {}) {
+  const k = o.k ?? 1.3, b = B(), z = (o.z ?? (mode === 'fly' ? 12 : 9)) * (k / 1.3);
+  crow(b, [0, 0, z], 0, mode, k, o.wingUp ?? 0.7, o);
+  return done(b, (m, x, y, z) => crowMat(m, x, y, z) || kitMat(m, x, y, z) || { alb: [0.1, 0.1, 0.1] }, { rim: 0.35 });
+}
 export function corneilles(pose = 'idle') {
   const tele = pose === 'tele'; const b = B(); const p = B();
   // the props they feed on: a corpse in the grass, a leaning grave cross
@@ -65,7 +75,7 @@ export function corneilles(pose = 'idle') {
   r.subs = tele ? [] : [prop('cross', done(p, kitMat)), { name: 'corpse', model: { ...placed0(corpse, [4, 2, 0], 0.2), nomask: true } }];
   return r;
 }
-function placed0(m, pos, yaw) { // a model moved and turned about z
+export function placed0(m, pos, yaw) { // a model moved and turned about z
   const c = Math.cos(yaw), s = Math.sin(yaw), toL = (x, y, z) => { const dx = x - pos[0], dy = y - pos[1]; return [c * dx + s * dy, -s * dx + c * dy, z - pos[2]]; };
   const [x0, y0, z0, x1, y1, z1] = m.bounds, R = Math.hypot(Math.max(-x0, x1), Math.max(-y0, y1));
   return { sdf: (x, y, z) => { const q = toL(x, y, z); return m.sdf(q[0], q[1], q[2]); }, mat: (i, x, y, z, ...n) => { const q = toL(x, y, z); return m.mat(i, q[0], q[1], q[2], ...n); }, bounds: [pos[0] - R, pos[1] - R, z0 + pos[2], pos[0] + R, pos[1] + R, z1 + pos[2]], step: m.step };
@@ -74,40 +84,69 @@ function placed0(m, pos, yaw) { // a model moved and turned about z
 // ======================= 2. L'ENTERRÉ =======================
 // a dead man under his mound, only his face and his hands above the earth; 'tele': he tears up out of it from the waist,
 // arms flung forward low along the ground for the ankles, jaw open, clods falling off him.
-export function enterre(pose = 'idle') {
-  const tele = pose === 'tele'; const b = B(); const p = B();
+// The game's sheet (tools/art/foes.gen.mjs) also asks: 'idle' with o.curl (0..1, the fingers clawing at the earth),
+// 'crack' with o.open (0..1: the mound splits, a hand claws up out of it, the brow lifts), 'grab' (the card's 'tele')
+// with o.pull (0..1: the arms drawn back, dragging), 'sink' (half under again), 'dead' (slumped forward out of it),
+// o.lean (thrown back: struck); o.solid: the grave built into his model (the game draws them as one sprite), cut at the
+// floor.
+// a grave mound split by cracks running out from its middle, `open` 0..1 (none at 0)
+function crackedMound(b, c, rx, ry, h, open) {
+  const R = mulberry32(21), cuts = [...Array(6)].map((_, i) => { const a = i * 1.05 + R() * 0.6, l = 0.55 + R() * 0.45; return [Math.cos(a) * rx * l, Math.sin(a) * ry * l]; });
+  const seg = (x, y, [ex, ey]) => { const t = clamp((x * ex + y * ey) / (ex * ex + ey * ey)); return Math.hypot(x - ex * t, y - ey * t); };
+  b.f((x, y, z) => {
+    const d = sdEll(x, y, z, c[0], c[1], c[2], rx, ry, h) + 1.4 * (vn3(x * 0.35, y * 0.35, z * 0.35, 48) - 0.5);
+    if (open <= 0) return d;
+    const q = Math.min(...cuts.map((e) => seg(x - c[0], y - c[1], e))) + 0.6 * (vn(x * 0.7, y * 0.7, 23) - 0.5);
+    return Math.max(d, (0.4 + 1.9 * open) - q);
+  }, [c[0] - rx - 2, c[1] - ry - 2, c[2] - h - 2, c[0] + rx + 2, c[1] + ry + 2, c[2] + h + 2], 40, 2);
+}
+export function enterre(pose = 'idle', o = {}) {
+  if (pose === 'tele') pose = 'grab';
+  const b = B(), p = o.solid ? b : B(), open = pose === 'crack' ? o.open ?? 1 : 0, out = ['grab', 'sink', 'dead'].includes(pose);
   stele(p, [0, -24, 0], 13, 28, -0.16);
-  if (!tele) mound(p, [0, 0, 0], 13, 23, 5.5);
+  if (!out) crackedMound(p, [0, 0, 0], 13, 23, 5.5, open);
   else { mound(p, [-13, -4, 0], 8, 16, 5); mound(p, [13, 0, 0], 7, 13, 4.5); }
   let J;
-  if (!tele) {
-    // lying face up just under the earth: the face and both hands break through
-    const H = [0, -13, 5.2], hp = face(b, H, nz([0, 0.3, 1]), nz([0, -1, 0.3]), 0.72, 3.5, 0);
+  if (!out) {
+    // lying face up just under the earth: the face and both hands break through; cracking, the right hand claws up
+    // out of it (then the forearm), the brow lifts
+    const cu = o.curl ?? 0.5, H = [0, -13, 5.2 + 2.6 * open], hp = face(b, H, nz([0, 0.3 + 0.5 * open, 1]), nz([0, -1, 0.3 + open]), 0.72, 3.5 + 3 * open, 34);
     hair(b, hp, 5, 11, 31, 0.7);
-    b.rc([9, 0, 2], [11, 4, 7], 1.4, 1.1, 1, 0.6); claws(b, [11, 4, 7], [0.4, 1, -0.6], 1, 1, 2, 4.6, 1.0);
-    b.rc([-9, 4, 2], [-11, 8, 6.5], 1.4, 1.1, 1, 0.6); claws(b, [-11, 8, 6.5], [-0.4, 1, -0.7], -1, 1, 2, 4.4, 1.0);
+    const wr = [11, 4 + 2 * open, 7 + 12 * open], er = [9 + open, 0, 2 + 4 * open];
+    b.rc(er, wr, 1.4, 1.1, 1, 0.6); claws(b, wr, [0.4 - 0.2 * open, 1 - 0.6 * open, -0.6 + 1.4 * open - 0.5 * cu], 1, 1, 2, 4.2 + 1.2 * cu + 1.5 * open, 0.6 + 0.8 * cu);
+    b.rc([-9, 4, 2], [-11, 8, 6.5 + 2 * open], 1.4, 1.1, 1, 0.6); claws(b, [-11, 8, 6.5 + 2 * open], [-0.4, 1, -0.7 + 0.5 * cu], -1, 1, 2, 4 + 1.2 * (1 - cu), 1.2 - 0.6 * cu);
+    if (open) { const R = mulberry32(5); for (let i = 0; i < 9 * open; i++) b.el([8 + (R() - 0.5) * 12, 2 + (R() - 0.5) * 14, 5 + R() * 10 * open], [0.8 + R() * 0.7, 0.8 + R() * 0.7, 0.8 + R() * 0.7], 40, 0); } // clods thrown up
   } else {
     J = clone(std);
-    Object.assign(J, { pelvis: [0, 0, 2], chest: [0, 11, 20], neck: [0, 18, 27], head: [0, 23, 29],
-      Sr: [-8, 16, 25], Er: [-13, 28, 17], Wr: [-10, 42, 7], Hr_: [-9, 46, 4], Sl: [8, 16, 25], El: [14, 27, 15], Wl: [12, 40, 5], Hl_: [11, 44, 3],
-      Hr: [-3.6, 0, -2], Kr: [-4, 0, -20], Ar: [-4, 0, -40], Tr: [-4, 4, -42], Hl: [3.6, 0, -2], Kl: [4, 0, -20], Al: [4, 0, -40], Tl: [4, 4, -42] });
+    const k = o.pull ?? 0;
+    if (pose === 'dead') Object.assign(J, { pelvis: [0, 0, 1], chest: [0, 14, 6], neck: [0, 22, 5.5], head: [0, 27, 5],
+      Sr: [-8, 19, 6], Er: [-17, 26, 3], Wr: [-16, 37, 2], Hr_: [-15, 40, 1.5], Sl: [8, 19, 6], El: [16, 24, 3], Wl: [19, 33, 2], Hl_: [19, 36, 1.5] });
+    else if (pose === 'sink') Object.assign(J, { pelvis: [0, 0, -8], chest: [0, 6, 9], neck: [0, 12, 15], head: [0, 16, 17],
+      Sr: [-8, 10, 13], Er: [-17, 14, 6], Wr: [-20, 20, 3], Hr_: [-20, 23, 2.5], Sl: [8, 10, 13], El: [17, 13, 6], Wl: [20, 19, 3], Hl_: [20, 22, 2.5] });
+    else Object.assign(J, { pelvis: [0, 0, 2], chest: [0, 11 - 3 * k, 20], neck: [0, 18 - 4 * k, 27], head: [0, 23 - 5 * k, 29 - k],
+      Sr: [-8, 16 - 4 * k, 25], Er: [-13, 28 - 8 * k, 17 + 2 * k], Wr: [-10, 42 - 12 * k, 7], Hr_: [-9, 46 - 12 * k, 4], Sl: [8, 16 - 4 * k, 25], El: [14, 27 - 8 * k, 15 + 2 * k], Wl: [12, 40 - 12 * k, 5], Hl_: [11, 44 - 12 * k, 3] });
+    Object.assign(J, { Hr: [-3.6, 0, -2], Kr: [-4, 0, -20], Ar: [-4, 0, -40], Tr: [-4, 4, -42], Hl: [3.6, 0, -2], Kl: [4, 0, -20], Al: [4, 0, -40], Tl: [4, 4, -42] });
+    if (o.lean) for (const n of ['chest', 'neck', 'head', 'Sr', 'Sl', 'Er', 'El', 'Wr', 'Wl', 'Hr_', 'Hl_']) J[n] = add(J[n], [0, -o.lean * (J[n][2] - J.pelvis[2]) * 0.3, 0]);
     humanoid(J, b, { thin: 0.74 });
-    face(b, add(J.head, [0, 0.5, 1]), nz([0, 1, 0.1]), nz([0, -0.1, 1]), 0.7, 9, 0);
-    hair(b, (a, c, d) => add(J.head, [a * 0.7, c * 0.7 - 1.5, d * 0.7 + 1.5]), 12, 13, 31, 0.7);
+    const dead = pose === 'dead', F = dead ? nz([0, 0.4, -1]) : nz([0, 1, 0.1]), U = dead ? nz([0, 1, 0.4]) : nz([0, -0.1, 1]);
+    face(b, add(J.head, [0, 0.5, dead ? -1 : 1]), F, U, 0.7, dead ? 4 : 9, 34);
+    hair(b, (a, c, d) => add(J.head, [a * 0.7, c * 0.7 - 1.5, d * 0.7 + 1.5]), dead ? 5 : 12, 13, 31, 0.7);
     for (const [W, E, s] of [[J.Wr, J.Er, -1], [J.Wl, J.El, 1]]) claws(b, W, sub(W, E), s, 1, 2, 7, 1.3);
     // the shroud: torn strips hanging off his shoulders and arms; clods falling off him
-    for (const [a0, d] of [[add(J.Sr, [-1, -2, 0]), [-3, -6, -16]], [add(J.Sl, [1, -2, 0]), [3, -5, -15]], [lp(J.Er, J.Wr, 0.3), [-1, 0, -9]], [lp(J.El, J.Wl, 0.4), [1, 0, -7]], [add(J.chest, [0, -5, 2]), [0, -6, -14]]])
+    if (!dead) for (const [a0, d] of [[add(J.Sr, [-1, -2, 0]), [-3, -6, -16]], [add(J.Sl, [1, -2, 0]), [3, -5, -15]], [lp(J.Er, J.Wr, 0.3), [-1, 0, -9]], [lp(J.El, J.Wl, 0.4), [1, 0, -7]], [add(J.chest, [0, -5, 2]), [0, -6, -14]]])
       b.rcs(a0, add(a0, d), 2.4, 1.4, 43, 0.8, 0.5);
-    const R = mulberry32(9); for (let i = 0; i < 14; i++) { const c = add(J.chest, [(R() - 0.5) * 30, (R() - 0.5) * 22, -2 - R() * 16]); if (c[2] > 2) b.el(c, [0.9 + R(), 0.9 + R(), 0.9 + R()], 40, 0); }
+    const R = mulberry32(9); if (pose === 'grab') for (let i = 0; i < 14; i++) { const c = add(J.chest, [(R() - 0.5) * 30, (R() - 0.5) * 22, -2 - R() * 16]); if (c[2] > 2) b.el(c, [0.9 + R(), 0.9 + R(), 0.9 + R()], 40, 0); }
   }
   const mat = (m, x, y, z) => {
+    if (m === 34) return glow([0.55, 0.6, 0.42], 0.4); // the eyes: a faint glint in the earth
     const c0 = kitMat(m, x, y, z); if (c0) return c0;
     let c = skin(L('#8e8a6e'), L('#4e4a3a'), x, y, z, 21); // grave-grey, mottled
     c = mix(c, L('#2a2016'), clamp((vn3(x * 0.3, y * 0.3, z * 0.3, 22) - 0.4) * 2) * 0.7); // earth ground into him
     return { alb: c, sss: 0.35, wrap: 0.3, spec: 0.15, gloss: 25 };
   };
-  const r = tele ? ribbed(done(b, mat), J.chest, nz(sub(J.neck, J.pelvis)), 7) : done(b, mat);
-  r.subs = [prop('grave', done(p, kitMat))];
+  let r = J && pose !== 'dead' ? ribbed(done(b, mat), J.chest, nz(sub(J.neck, J.pelvis)), 7) : done(b, mat);
+  if (o.solid) { const sd = r.sdf; r = { ...r, sdf: (x, y, z) => Math.max(sd(x, y, z), -z), bounds: [r.bounds[0], r.bounds[1], 0, ...r.bounds.slice(3)] }; }
+  else r.subs = [prop('grave', done(p, kitMat))];
   return r;
 }
 
@@ -200,46 +239,103 @@ export function pecheuse(pose = 'idle') {
 // ======================= 5. LE GAVÉ =======================
 // a hairless corpse-eater squatting over the dead, its belly a sack stretched round what it swallowed; 'tele': it rears
 // back off its meal, the belly heaving, the throat bulging, the jaw unhinged: the black bile comes next.
-export function gave(pose = 'idle') {
-  const tele = pose === 'tele'; const b = B(); const { rc, el } = b;
-  const J = tele ? {
-    pelvis: [0, -10, 30], chest: [0, -4, 60], neck: [0, 0, 72], head: [0, 6, 80],
-    Sr: [-13, -2, 66], Er: [-25, 0, 52], Wr: [-20, 16, 40], Hr_: [-17, 19, 39], Sl: [13, -2, 66], El: [25, 0, 52], Wl: [20, 16, 42], Hl_: [17, 19, 41],
-    Hr: [-8, -10, 28], Kr: [-20, 6, 30], Ar: [-15, -6, 4], Tr: [-16, 2, 1.2], Hl: [8, -10, 28], Kl: [20, 6, 30], Al: [15, -6, 4], Tl: [16, 2, 1.2],
-  } : {
-    pelvis: [0, -14, 28], chest: [0, 6, 46], neck: [0, 16, 48], head: [0, 26, 30],
-    Sr: [-13, 10, 50], Er: [-22, 18, 32], Wr: [-11, 30, 9], Hr_: [-9, 32, 6], Sl: [13, 10, 50], El: [22, 18, 32], Wl: [11, 30, 9], Hl_: [9, 32, 6],
-    Hr: [-8, -14, 26], Kr: [-20, 2, 30], Ar: [-15, -10, 4], Tr: [-16, -2, 1.2], Hl: [8, -14, 26], Kl: [20, 2, 30], Al: [15, -10, 4], Tl: [16, -2, 1.2],
+// The game's sheet (tools/art/foes.gen.mjs) also asks (o.solid: no meal under it): 'idle' (o.breath 0..1), 'walk'
+// (o.gait: its waddle's phase, radians), 'eat' (o.k 0/1: the head down in the meal, then up tearing a strip), 'rear' (the
+// slam's tell: up on its legs, arms raised high), 'flop' (the slam: belly first on the floor), 'gorge' (the bile's tell,
+// the card's 'tele'), 'spew' (o.k 0/1: the head thrust out, the bile pouring), 'dead'; o.lean: thrown back (struck).
+// The belly: no ball but a lopsided sack, narrow under the ribs, sagging heavy between the knees onto the floor, creased
+// where it folds, what it swallowed pressing out of it (a skull, a hand).
+function belly(b, bc, o = {}) {
+  const lift = o.lift ?? 0, flat = o.flat ?? 0, ax = o.ax ?? [0, 1, 0];
+  oelN(b, add(bc, [0, 1, 9 + lift]), nz(add(ax, [0, 0, 0.6])), [1, 0, 0], [10, 11.5, 9], 20, 5, 1.4, 0.18); // the gut under the ribs
+  const sg = add(bc, [2.5, 5, -5 + lift * 0.5]), rz = 13 - flat * 5, zb = Math.max(0.6, sg[2] - rz * 0.8);
+  b.f((x, y, z) => smax(sdEll(x, y, z, sg[0], sg[1], sg[2], 15.5 + flat * 7, 14 + flat * 4, rz) + 2.4 * (vn3(x * 0.15, y * 0.15, z * 0.15, 76) - 0.5), zb - z, 3), // the sag, slumped flat where it rests
+    [sg[0] - 26, sg[1] - 22, zb - 2, sg[0] + 26, sg[1] + 22, sg[2] + rz + 3], 20, 5);
+  for (const [dx, dz, r] of [[-3, 5, 9], [2, 2, 11]]) oel(b, add(sg, [dx, 2, dz + rz * 0.35]), [1, 0, 0], [0, 1, 0.3], [r, 4.5, 2.4], 20, 1.6); // rolls where it folds
+  b.el(add(sg, [-9, 9.5, 3]), [3.6, 2.8, 4.4], 20, 1.8); // a skull pressing out
+  for (let f = 0; f < 4; f++) b.rc(add(sg, [6 + f * 1.8, 12, 5 - f * 0.4]), add(sg, [7 + f * 2.2, 12.6, -1 - f * 0.6]), 1.0, 0.8, 20, 1.2); // a hand's fingers
+  b.carve(add(bc, [0.5, 13.5, 4 + lift]), 1.1, 0.6); // the navel
+}
+export function gave(pose = 'idle', o = {}) {
+  const card = !o.solid;
+  if (card) pose = pose === 'tele' ? 'gorge' : 'eat';
+  const b = B(); const { rc, el } = b, k = o.k ?? 0, br = o.breath ?? 0;
+  const legs = { Hr: [-8, -14, 26], Kr: [-20, 2, 30], Ar: [-15, -10, 4], Tr: [-16, -2, 1.2], Hl: [8, -14, 26], Kl: [20, 2, 30], Al: [15, -10, 4], Tl: [16, -2, 1.2] };
+  const P = {
+    idle: { pelvis: [0, -12, 28], chest: [0, 4, 48 + br], neck: [0, 12, 55 + br], head: [0, 20, 54 + br * 0.6],
+      Sr: [-13, 6, 52 + br], Er: [-24, 12, 34], Wr: [-16, 24, 8], Hr_: [-14, 27, 4], Sl: [13, 6, 52 + br], El: [24, 12, 34], Wl: [16, 24, 8], Hl_: [14, 27, 4], ...legs },
+    eat: { pelvis: [0, -14, 28], chest: [0, 6, 46], neck: card ? [0, 16, 48] : [0, 18, 38 + 8 * k], head: card ? [0, 26, 30] : [k * 3, 27 - k * 3, 16 + 12 * k],
+      Sr: [-13, 10, 50], Er: [-22, 18, 32], Wr: [-11, 30, 9], Hr_: [-9, 32, 6], Sl: [13, 10, 50], El: [22, 18, 32], Wl: [11, 30, 9], Hl_: [9, 32, 6], ...legs },
+    rear: { pelvis: [0, -8, 38], chest: [0, -4, 64], neck: [0, -2, 76], head: [0, 3, 84],
+      Sr: [-14, -4, 70], Er: [-23, -3, 88], Wr: [-17, 4, 104], Hr_: [-15, 7, 108], Sl: [14, -4, 70], El: [23, -3, 88], Wl: [17, 4, 104], Hl_: [15, 7, 108],
+      Hr: [-8, -8, 36], Kr: [-17, 2, 22], Ar: [-14, -6, 4], Tr: [-15, 2, 1.2], Hl: [8, -8, 36], Kl: [17, 2, 22], Al: [14, -6, 4], Tl: [15, 2, 1.2] },
+    flop: { pelvis: [0, -6, 20], chest: [0, 16, 22], neck: [0, 26, 19], head: [0, 34, 12],
+      Sr: [-14, 20, 24], Er: [-27, 30, 10], Wr: [-25, 44, 3], Hr_: [-23, 48, 2], Sl: [14, 20, 24], El: [27, 30, 10], Wl: [25, 44, 3], Hl_: [23, 48, 2],
+      Hr: [-8, -6, 18], Kr: [-19, -12, 9], Ar: [-14, -24, 3], Tr: [-14, -28, 1.2], Hl: [8, -6, 18], Kl: [19, -12, 9], Al: [14, -24, 3], Tl: [14, -28, 1.2] },
+    gorge: { pelvis: [0, -10, 30], chest: [0, -4, 60], neck: [0, 0, 72], head: [0, 6, 80],
+      Sr: [-13, -2, 66], Er: [-25, 0, 52], Wr: [-20, 16, 40], Hr_: [-17, 19, 39], Sl: [13, -2, 66], El: [25, 0, 52], Wl: [20, 16, 42], Hl_: [17, 19, 41],
+      Hr: [-8, -10, 28], Kr: [-20, 6, 30], Ar: [-15, -6, 4], Tr: [-16, 2, 1.2], Hl: [8, -10, 28], Kl: [20, 6, 30], Al: [15, -6, 4], Tl: [16, 2, 1.2] },
+    spew: { pelvis: [0, -10, 30], chest: [0, 2, 56], neck: [0, 12, 63], head: [0, 22, 60 - 2 * k],
+      Sr: [-13, 4, 60], Er: [-24, 8, 44], Wr: [-19, 18, 30], Hr_: [-17, 21, 28], Sl: [13, 4, 60], El: [24, 8, 44], Wl: [19, 18, 30], Hl_: [17, 21, 28], ...legs },
+    dead: { pelvis: [2, -12, 9], chest: [4, 6, 12], neck: [6, 15, 9], head: [9, 22, 6],
+      Sr: [-8, 8, 14], Er: [-22, 10, 6], Wr: [-30, 20, 3], Hr_: [-31, 24, 2], Sl: [16, 6, 12], El: [26, 2, 5], Wl: [32, 12, 3], Hl_: [33, 16, 2],
+      Hr: [-5, -14, 8], Kr: [-18, -22, 10], Ar: [-12, -34, 3], Tr: [-14, -38, 1.5], Hl: [10, -14, 8], Kl: [22, -20, 9], Al: [20, -32, 3], Tl: [22, -36, 1.5] },
   };
+  const J = clone(P[pose === 'walk' || pose === 'hurt' ? 'idle' : pose]);
+  if (pose === 'walk') { // a waddle: a leg and the other side's knuckles forward in turn, the body rolling over them
+    const a = o.gait ?? 0;
+    for (const [s, ph] of [['r', 0], ['l', Math.PI]]) {
+      const f = Math.cos(a + ph), up = 4 * Math.max(0, -Math.sin(a + ph)), arm = Math.cos(a + ph + Math.PI), aup = 4 * Math.max(0, -Math.sin(a + ph + Math.PI));
+      J[`A${s}`] = add(J[`A${s}`], [0, 7 * f, up]); J[`T${s}`] = add(J[`T${s}`], [0, 7 * f, up]); J[`K${s}`] = add(J[`K${s}`], [0, 4 * f, up * 0.6]);
+      J[`W${s}`] = add(J[`W${s}`], [0, 7 * arm, aup]); J[`H${s}_`] = add(J[`H${s}_`], [0, 7 * arm, aup]); J[`E${s}`] = add(J[`E${s}`], [0, 3 * arm, aup * 0.5]);
+    }
+    const roll = 2 * Math.sin(a);
+    for (const n of ['pelvis', 'chest', 'neck', 'head', 'Sr', 'Sl', 'Er', 'El']) J[n] = add(J[n], [roll * (J[n][2] / 50), 0, -Math.abs(Math.sin(a))]);
+  }
+  if (pose === 'hurt' || o.lean) for (const n of ['chest', 'neck', 'head', 'Sr', 'Sl', 'Er', 'El', 'Wr', 'Wl', 'Hr_', 'Hl_']) J[n] = add(J[n], [0, -(o.lean ?? 0.25) * (J[n][2] - J.pelvis[2]) * 0.5, 0]);
   humanoid(J, b, { thin: 1.25 });
   for (const [S1, E, W] of [[J.Sr, J.Er, J.Wr], [J.Sl, J.El, J.Wl]]) { rc(S1, E, 4.2, 3, 1, 1.5); claws(b, W, sub(W, E), 1, 1, 2, 6, 1.2); }
   for (const [H1, K1, A1] of [[J.Hr, J.Kr, J.Ar], [J.Hl, J.Kl, J.Al]]) { rc(H1, K1, 6, 4, 1, 2); rc(K1, A1, 4, 2.6, 1, 1); }
-  // the belly: a stretched sack hanging between its knees, heaving forward when it rears
-  const bc = tele ? [0, 6, 36] : [0, 2, 24], br = tele ? [18, 17, 20] : [17, 16, 16];
-  oelN(b, bc, [0, 1, tele ? 0.2 : 0], [1, 0, 0], [br[1], br[0], br[2]], 20, 6, 2.6, 0.16);
-  oelN(b, add(bc, [0, 4, -12]), [0, 1, 0], [1, 0, 0], [br[1] * 1.05, br[0] * 1.1, br[2] * 0.75], 20, 6, 1.6, 0.18); // the sag of it
+  const up = ['gorge', 'rear'].includes(pose);
+  belly(b, pose === 'flop' ? [0, 10, 14] : pose === 'dead' ? [3, -2, 13] : up ? [0, 4, 34] : [0, 2, 24], { lift: up ? 4 : 0, flat: pose === 'flop' ? 1 : pose === 'dead' ? 0.7 : 0, ax: up ? [0, 1, 0.3] : [0, 1, 0] });
   for (let i = 0; i < 8; i++) el(add(lp(J.pelvis, J.neck, i / 7), [0, -6.5 - 2 * Math.sin(i / 7 * 3.1), 2]), [1.8, 1.8, 1.8], 1, 1.2); // spine
-  const F = tele ? nz([0, 0.75, 0.75]) : nz([0, 0.5, -1]), U = tele ? nz([0, -0.75, 0.75]) : nz([0, 1, 0.5]);
-  const hp = face(b, J.head, F, U, 1.3, tele ? 14 : 4, 17);
-  if (tele) { el(add(J.neck, [0, 3, -2]), [6.5, 6, 7], 20, 2); // the throat bulging
+  const dir = nz(sub(J.head, J.neck)), F = { gorge: nz([0, 0.75, 0.75]), eat: card ? nz([0, 0.5, -1]) : nz([0, 0.6 - 0.4 * k, -1 + 1.2 * k]), spew: nz([0, 1, -0.45]), flop: nz([0, 0.5, -1]), dead: nz([0.3, 0.2, -1]), rear: nz([0, 0.8, 0.5]) }[pose] ?? nz([0, 1, -0.2]);
+  const U = nz(sub(dir, sc(F, dot(dir, F)))), open = { gorge: 14, spew: 16, rear: 8, eat: 4 + 6 * k, dead: 6 }[pose] ?? 4;
+  const hp = face(b, J.head, F, Math.hypot(...U) > 0.1 ? U : [0, 0, 1], 1.3, open, 17);
+  if (pose === 'gorge') { el(add(J.neck, [0, 3, -2]), [6.5, 6, 7], 20, 2); // the throat bulging
     const m0 = hp(0, 7, -8); for (const [dx, len] of [[-1.5, 30], [1, 46], [2.5, 22]]) b.chain([...Array(5)].map((_, i) => add(m0, [dx + Math.sin(i) * 0.6, 2 + i * 0.8, -i * len / 4])), 0.9 - 0.1 * dx, 44); }
+  if (pose === 'spew') { // the bile pouring out of the unhinged jaw, down and ahead onto the floor
+    const m0 = hp(0, 8, -9), R = mulberry32(7 + k);
+    for (let i = 0; i <= 30; i++) { // a lumpy gush, thinning and breaking up as it falls
+      const t = i / 30, w = (2.8 - 1.4 * t) * (0.75 + 0.5 * R());
+      if (t > 0.75 && R() < 0.3) continue;
+      b.el(add(m0, [Math.sin(i * 1.7 + k) * 1.6 * t + (R() - 0.5), 3 + t * (24 + 6 * k), -t * t * (m0[2] - 2)]), [w * 1.1, w, w * 1.2], 44, 1.4);
+    }
+    for (let i = 0; i < 8; i++) b.el(add(m0, [(R() - 0.5) * 12, 8 + R() * 22, -6 - R() * (m0[2] - 10)]), [0.6 + R() * 0.7, 0.6 + R() * 0.7, 0.8 + R()], 44, 0); // flung drops
+    for (let i = 0; i < 4; i++) b.el([m0[0] + (R() - 0.5) * 8, m0[1] + 26 + 6 * k + (R() - 0.5) * 8, 0.5], [3 + R() * 2, 2.5 + R() * 2, 1], 44, 1.5); // splashing where it lands
+  }
+  if (pose === 'eat' && k && !card) b.chain([hp(0, 8, -8), add(hp(0, 8, -8), [1, 4, -6]), [2, 33, 1]], 0.9, 15, 0.4); // a strip torn off the dead
+  if (pose === 'dead') { b.carve(add([3, -2, 13], [2, 18, 2]), 5, 1.5); for (let i = 0; i < 5; i++) b.el([3 + (i - 2) * 3, 18 + i * 2.2, 1], [3.2, 2.6, 1.2], 44, 1.5); } // burst, the bile run out
   const mat = (m, x, y, z) => {
     const c0 = kitMat(m, x, y, z); if (c0) return c0;
-    if (m === 20) { // the belly: stretched yellow-grey skin, blue veins, the dark shapes of what is inside pressing on it
+    if (m === 20) { // the belly: stretched yellow-grey skin, blue veins, stretch marks, the dark shapes of what is inside pressing on it
       let c = mix(L('#9c8a70'), L('#5a4a3a'), vn3(x * 0.12, y * 0.12, z * 0.12, 71));
       if (Math.abs(vn3(x * 0.25, y * 0.25, z * 0.25, 72) - 0.5) < 0.035) c = mix(c, L('#3e3a52'), 0.75);
+      if (Math.abs(Math.sin(z * 1.7 + vn3(x * 0.2, y * 0.2, z * 0.1, 75) * 6)) > 0.93) c = mix(c, L('#c0ae94'), 0.5); // stretch marks
       const sh = vn3(x * 0.08, y * 0.08, z * 0.08, 73); if (sh > 0.6) c = mix(c, L('#3a2018'), clamp((sh - 0.6) * 3) * 0.75);
+      if (z < 6) c = mix(c, S.bloodD, 0.55); // dragged through the dead
       return { alb: c, sss: 0.45, wrap: 0.3, spec: 0.3, gloss: 45, rim: 0.5 };
     }
     let c = skin(L('#9a8c6c'), L('#5a4c3a'), x, y, z, 74);
-    const md = Math.hypot(x - J.head[0], y - J.head[1] - 6, z - J.head[2] + (tele ? -4 : 6)); if (md < 11) c = mix(c, S.blood, clamp((11 - md) / 5) * 0.85);
+    const md = Math.hypot(x - J.head[0], y - J.head[1] - 6, z - J.head[2] + (pose === 'gorge' ? -4 : 6)); if (md < 11) c = mix(c, S.blood, clamp((11 - md) / 5) * 0.85);
     if (z < 8) c = mix(c, S.bloodD, 0.5);
     return { alb: c, sss: 0.4, wrap: 0.3, spec: 0.3, gloss: 40 };
   };
   const r = ribbed(done(b, mat, { size: 1.3, rim: 0.7 }), J.chest, nz(sub(J.neck, J.pelvis)), 8);
-  r.subs = [{ name: 'meal', model: { ...placed0(lyingCorpse(8, true), tele ? [-4, 34, 0] : [0, 36, 0], tele ? 1.9 : 1.57), nomask: true } }];
+  if (card) r.subs = [{ name: 'meal', model: { ...placed0(lyingCorpse(8, true), pose === 'gorge' ? [-4, 34, 0] : [0, 36, 0], pose === 'gorge' ? 1.9 : 1.57), nomask: true } }];
   return r;
 }
+
 
 // ======================= 6. LE FOUISSEUR =======================
 // a spade-clawed mole of a ghoul, blind, its snout a star of naked feelers: it hunts by sound. At rest it waits half out
