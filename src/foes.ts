@@ -13,6 +13,9 @@ import inquisitorSheet from './inquisitor.png';
 import amasSheet from './amas.png';
 import bourreauSheet from './bourreau.png';
 import crossbowSheet from './crossbow.png';
+import crowSheet from './crow.png';
+import enterreSheet from './enterre.png';
+import gaveSheet from './gave.png';
 
 // How the Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur (docs/maquettes/ennemis-planche-1.png),
 // Inquisiteur and Bourreau, and the ghouls' Amas (ennemis-planche-2.png) look: the validated sheet's own models rendered offline, already lit, in five views (tools/art/foes.gen.mjs), drawn at half
@@ -21,32 +24,50 @@ import crossbowSheet from './crossbow.png';
 // bodies do (the pilot lit, the monstrance raised, the hound flattened, the scourge cocked, the bell's rim lit, the censer
 // whirled, the Amas gathered up with its arms raised, the axe raised), then the attack itself (the jet, the falling
 // light, the lash, the bell's rings rolling out, the sweep, the Amas' slam spreading over the floor, the crack).
-export type Kind = Exclude<Sheeted, 'crossbow'>; // the crossbowman's sheet is shown here too, but he is crossbow.ts's
+// The necropolis' Enterré and Gavé (necropole-ennemis-planche-1.png) too; their AI is enterre.ts's and gave.ts's.
+export type Kind = Exclude<Sheeted, 'crossbow' | 'crow'>; // the crossbowman's sheet is shown here too, but he is crossbow.ts's; a crow is a flock's (crows.ts)
 type Sheeted = keyof typeof SHEETS;
-export type FoeState = 'chase' | 'aim' | 'shoot' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'contract' | 'slam' | 'sprawl' | 'heave' | 'chop' | 'wrench' | 'rip' | 'swing' | 'held' | 'kneel';
+export type FoeState = 'chase' | 'aim' | 'shoot' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'contract' | 'slam' | 'sprawl' | 'heave' | 'chop' | 'wrench' | 'rip' | 'swing' | 'held' | 'kneel'
+  | 'buried' | 'crack' | 'grab' | 'sink' | 'eat' | 'rear' | 'flop' | 'gorge' | 'spew';
+/** What a foe's own AI module (enterre.ts, gave.ts, crows.ts) may ask of the room it is in (RoomScene). */
+export type Ctx = {
+  scene: Scene; hero: Sprite; enemies: Phaser.Physics.Arcade.Group;
+  lit(): boolean; // the hero stands in light: seen from farther
+  dodging(): boolean; // misting, or a swarm of rats: nothing takes hold of him
+  damageHero(amount: number, from?: Phaser.Types.Math.Vector2Like): boolean;
+  hunts(e: Sprite): boolean; // it has seen him and hunts him (T.sight)
+  idle(e: Sprite): void; // at its post, or walking back to it
+  way(e: Sprite): { angle: number; straight: boolean }; // toward him, round the pits
+  keepAt(e: Sprite, toHero: number, dist: number, near: number, far: number, speed: number): void;
+  hold(by?: Sprite): void; // the hero held where he stands by `by` (none: let go)
+  bodies: { x: number; y: number; eat(): void }[]; // the dead on the floor, where they lie
+};
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
 
-export const isFoe = (kind: unknown): kind is Kind => typeof kind === 'string' && kind in SHEETS && kind !== 'crossbow';
+export const isFoe = (kind: unknown): kind is Kind => typeof kind === 'string' && kind in SHEETS && kind !== 'crossbow' && kind !== 'crow';
 /** The eighth of a turn an angle points to: 0 right, 2 down, 4 left, 6 up. */
 export const octant = (a: number) => (((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8);
 export const DIRS = 64; // aims (logic.ts aimAt()) snap to this many directions
 // The sheet's view for each octant, and whether it is mirrored (down and up keep the last way they faced).
 const VIEW = ['side', 'dside', 'down', 'dside', 'side', 'uside', 'up', 'uside'];
 const FLIP = [false, false, undefined, true, true, true, undefined, false];
+/** The sheet's view for a heading (a floor angle), and whether it is mirrored (undefined: as it was). */
+export const viewOf = (a: number) => [VIEW[octant(a)], FLIP[octant(a)]] as const;
 const ORIGIN = 20; // sheet px from the soles up to the sprite's y: its feet 10 room px below it, like the crossbowman's
 const GROUND = ORIGIN / 2;
 const SQ = T.lantern.squash; // the floor seen at an angle
 const STRUCK = 0xff4a3a; // the hit flash: dyed with blood, never white (fx-blood.ts)
 // The states that face the aim locked at their start, and the pose each one holds.
-const LOCKED: FoeState[] = ['aim', 'shoot', 'ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench', 'rip', 'swing'];
-const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', shoot: 'shot', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk', slam: 'atk', sprawl: 'atk', heave: 'tele', chop: 'atk', swing: 'tele' }; // swing: the axe torn up
-const HEAD: Record<Sheeted, number> = { crossbow: 40, purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50, amas: 0, bourreau: 62 };
+const LOCKED: FoeState[] = ['aim', 'shoot', 'ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench', 'rip', 'swing', 'rear', 'flop', 'gorge', 'spew'];
+// (sprawl: the Gavé's after its slam too; sink: l'Enterré going back under)
+const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', shoot: 'shot', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk', slam: 'atk', sprawl: 'atk', heave: 'tele', chop: 'atk', swing: 'tele', sink: 'sink', rear: 'tele', flop: 'atk', gorge: 'gorge' }; // swing: the axe torn up
+const HEAD: Record<Sheeted, number> = { crossbow: 40, purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50, amas: 0, bourreau: 62, crow: 0, enterre: 0, gave: 0 };
 // Their feet on the floor, sheet px (half as many room px): a man's like the crossbowman's, the big ones' broader.
-const FEET: Partial<Record<Sheeted, [number, number]>> = { amas: [52, 22], bourreau: [36, 16] }; // the blood drop of the weak, over the feet
+const FEET: Partial<Record<Sheeted, [number, number]>> = { amas: [52, 22], bourreau: [36, 16], enterre: [44, 22], gave: [44, 20] }; // the blood drop of the weak, over the feet; the Enterré's: his mound
 
 export function preload(scene: Scene) {
-  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet], ['amas', amasSheet], ['bourreau', bourreauSheet], ['crossbow', crossbowSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
+  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet], ['amas', amasSheet], ['bourreau', bourreauSheet], ['crossbow', crossbowSheet], ['crow', crowSheet], ['enterre', enterreSheet], ['gave', gaveSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
 }
 
 export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: Sheeted, x: number, y: number): Sprite {
@@ -94,6 +115,10 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
   else if (state === 'whirl') f = 'whirl' + (Math.floor((t / 110) * (0.6 + (0.8 * t) / T.inquisitor.whirlMs)) % 4); // gathering speed
   else if (state === 'sweep') f = 'sweep' + Math.min(2, Math.floor((t * 3) / T.inquisitor.sweepMs));
   else if (state === 'contract') f = t < T.amas.contractMs * 0.45 ? 'tele0' : 'tele1'; // gathering itself, arms rising
+  else if (state === 'crack') f = t < T.enterre.crackMs * 0.45 ? 'tele0' : 'tele1'; // the mound splits, a hand claws up, then the brow
+  else if (state === 'grab') f = 'grab' + (Math.floor(t / 320) % 2); // dragging him by the ankle
+  else if (state === 'eat') f = 'eat' + (Math.floor(t / 420) % 2); // its head down in the body, then up tearing
+  else if (state === 'spew') f = 'spew' + (Math.floor(t / 90) % 2);
   else if (state === 'wrench' || state === 'rip') f = 'pull' + (Math.floor(t / (state === 'rip' ? 90 : 230)) % 2); // tugging the stuck axe; at the hero, hard
   else if (POSE[state]) f = POSE[state]!;
   else if (now - (s.getData('parryAt') ?? -1e9) < 300) f = 'parry';
@@ -251,22 +276,24 @@ export function parry(scene: Scene, x: number, y: number, angle: number) {
 
 export function die(scene: Scene, s: Sprite) {
   for (const k of ['jet', 'markG']) s.getData(k).destroy();
-  const key = s.texture.key, view = s.frame.name.split('-')[0], blend = s.blendMode;
+  const key = s.texture.key, view = s.frame.name.split('-')[0], blend = s.blendMode, size = s.scaleY; // a Gavé grown by its meals
   s.setTint(STRUCK);
   scene.time.delayedCall(70, () => {
     const { x, y, flipX, originY } = s, away = (s.getData('facing') ?? 0) + Math.PI;
     s.destroy();
     // They bleed: a red burst, a man sinks to his knees (a hound reels), falls, and a pool spreads under him.
     bleed(scene, x, y, away, key === 'amas' ? 40 : 20, 1.2, 1);
-    const body = scene.add.image(x, y, key, `${view}-${key === 'hound' || key === 'amas' ? 'hurt' : 'kneel'}`).setOrigin(0.5, originY).setScale(0.5).setFlipX(flipX).setDepth(y).setBlendMode(blend);
+    const body = scene.add.image(x, y, key, `${view}-${['hound', 'amas', 'enterre'].includes(key) ? 'hurt' : 'kneel'}`).setOrigin(0.5, originY).setScale(size).setFlipX(flipX).setDepth(y).setBlendMode(blend);
     scene.time.delayedCall(220, () => {
       body.setFrame('corpse').setDepth(1.5); // on the floor, over its blood, under everyone
       run(scene, 600, (t) => {
         const k = Phaser.Math.Easing.Quadratic.Out(t / 0.6), rt = stains(scene);
         pool(x, y + GROUND - 6, 4 + 24 * k, 2 + 8 * k, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.mid, BLOOD.dark);
         rt.render();
-      }, () => { // settled: into the floor's layer of the dead, which keeps them for the fight
-        corpses(scene).stamp(key, 'corpse', x * ZOOM, y * ZOOM, { originY, scaleX: (flipX ? -0.5 : 0.5) * ZOOM, scaleY: 0.5 * ZOOM }).render();
+      }, () => { // settled: into the floor's layer of the dead, which keeps them for the fight (or a Gavé eats it: erased)
+        const lay = (blendMode?: number) => corpses(scene).stamp(key, 'corpse', x * ZOOM, y * ZOOM, { originY, scaleX: (flipX ? -size : size) * ZOOM, scaleY: size * ZOOM, blendMode }).render();
+        lay();
+        scene.events.emit('corpse', { x, y: y + GROUND, eat: () => lay(Phaser.BlendModes.ERASE) });
         body.destroy();
       });
     });

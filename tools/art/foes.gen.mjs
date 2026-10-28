@@ -12,16 +12,20 @@
 // hit, kneeling (the idle sunk to the knees, cut at the floor); one bloodied corpse.
 // Writes src/<id>.png for each (purifier, priest, hound, penitent, ringer, inquisitor, amas, bourreau, crossbow) and
 // src/foes.data.ts.
+// The necropolis' crow (a flock's, src/crows.ts), Enterré and Gavé: tools/art/maquettes/necropole/creatures.mjs.
 // Usage: node tools/art/foes.gen.mjs (~30 s on 4 cores); ONLY=priest renders one of them to
-// shots/priest-preview.png (x2, on grey) instead, to try a pose.
+// shots/priest-preview.png (x2, on grey) instead, to try a pose; ONLY=crow,gave WRITE=1 renders those into src/ (their
+// sheets and their rows of foes.data.ts), the others left as they are.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { camera, render, post, haze, project, L, mix, vn3 } from './maquettes/ennemis/lib.mjs';
 import { writePNG } from './grand/lib.mjs'; // keeps the alpha channel
 import { purificateur, pretre, chien, penitent, sonneur, inquisiteur, amas, bourreau } from './maquettes/ennemis/foes.mjs';
 import { place } from './maquettes/ennemis/fx.mjs';
 import { std, crossbowman } from './maquettes/ennemis/cast.mjs';
+import { corneille, enterre, gave, placed0 } from './maquettes/necropole/creatures.mjs';
+import { lyingCorpse } from './maquettes/necropole/kit.mjs';
 
 const cam = camera(38 * Math.PI / 180);
 const VIEWS = { side: -Math.PI / 2, dside: -Math.PI / 4, down: 0, uside: -3 * Math.PI / 4, up: Math.PI }; // yaw: the model looks down +y
@@ -197,6 +201,52 @@ const FOES = {
     // On his back, arms fallen open, the crossbow by his side.
     corpse: () => lying(xbow('idle', { Er: [-12, 1, 64], Wr: [-17, 3, 50], Hr_: [-18, 4, 45], El: [12, 1, 64], Wl: [17, 3, 50], Hl_: [18, 4, 45] }), false),
   },
+  // The necropolis' own (tools/art/maquettes/necropole/creatures.mjs, docs/maquettes/necropole-ennemis-planche-1.png).
+  // One carrion crow (the game draws a flock of them, src/crows.ts): pecking on the ground (idle), a wingbeat (walk),
+  // hanging in the air shrieking, talons out (tele), the stoop at the hero (dive), tumbling (hurt). Never killed: its
+  // « corpse » is the carrion a flock feeds on, laid across.
+  crow: {
+    FW: 120, FH: 72, SOLE: 54, WALK: 4, STEP: 4,
+    frames: [
+      ...[['peck', {}], ['perch', {}], ['peck', { pitch: -0.75 }], ['perch', { pitch: 0.2 }]].map(([m, o], k) => [`idle${k}`, () => corneille(m, o)]),
+      ...[1.0, 0.35, -0.4, 0.35].map((w, k) => [`walk${k}`, () => corneille('fly', { wingUp: w })]),
+      ['tele', () => corneille('fly', { pitch: 0.95, wingUp: 1.2, talons: true, z: 14 })],
+      ['dive', () => corneille('fly', { pitch: -0.55, wingUp: 0.55, sweep: 0.9, talons: true })],
+      ['hurt', () => corneille('fly', { pitch: 0.6, wing: [1.3, -0.6] })],
+    ],
+    corpse: () => ({ ...placed0(lyingCorpse(4, true), [0, 8, 0], Math.PI / 2 - 0.25), lights: [] }),
+  },
+  // L'Enterré, one with his grave (mound and stele: never turns, the game shows him from the front): under the earth,
+  // the fingers clawing at it (idle); the mound cracks, a hand claws up out of it (tele0), the brow (tele1); torn up to
+  // the waist, arms flung low for the ankle (grab0), dragging (grab1); thrown back (hurt); half under again (sink);
+  // dead, slumped forward out of it.
+  enterre: {
+    FW: 110, FH: 96, SOLE: 62, WALK: 1, STEP, views: ['down'], rim: 2.5, exposure: 4.2, // dark earth: its back light would turn it to slate
+    frames: [
+      ...[0, 0.35, 1, 0.6].map((curl, k) => [`idle${k}`, () => enterre('idle', { solid: true, curl })]),
+      ['walk0', () => enterre('idle', { solid: true })],
+      ['tele0', () => enterre('crack', { solid: true, open: 0.45 })], ['tele1', () => enterre('crack', { solid: true, open: 1 })],
+      ['grab0', () => enterre('grab', { solid: true })], ['grab1', () => enterre('grab', { solid: true, pull: 1 })],
+      ['sink', () => enterre('sink', { solid: true })],
+      ['hurt', () => enterre('grab', { solid: true, lean: 0.7 })],
+    ],
+    corpse: () => enterre('dead', { solid: true }), // (fallen()'s blood would soak his whole mound)
+  },
+  // Le Gavé: squatting, the belly heaving (idle); a waddle on its legs and knuckles (walk); its head in a meal, then up
+  // tearing a strip off it (eat0, eat1); the slam: up on its legs, arms raised high (tele), then belly first on the floor
+  // (atk); the bile: reared back, the throat bulging (gorge), then the head thrust out, the bile pouring (spew0, spew1).
+  gave: {
+    FW: 180, FH: 132, SOLE: 94, WALK: 4, STEP: 7, rim: 5, exposure: 3.1, // pale flesh lit from behind: it would burn out
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => gave('idle', { solid: true, breath: 2 * b })]),
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => gave('walk', { solid: true, gait: (Math.PI * k) / 2 }), { bob: -1 * Math.abs(Math.sin((Math.PI * k) / 2)) }]),
+      ['eat0', () => gave('eat', { solid: true, k: 0 })], ['eat1', () => gave('eat', { solid: true, k: 1 })],
+      ['tele', () => gave('rear', { solid: true })], ['atk', () => gave('flop', { solid: true })],
+      ['gorge', () => gave('gorge', { solid: true })], ['spew0', () => gave('spew', { solid: true, k: 0 })], ['spew1', () => gave('spew', { solid: true, k: 1 })],
+      ['hurt', () => gave('hurt', { solid: true })],
+    ],
+    corpse: () => { const m = gave('dead', { solid: true }), [x0, y0, , x1, y1, z1] = m.bounds; return fallen(m, (X, Y, Z) => [X, Y, Z / FLAT], [x0, y0, 0, x1, y1, z1 * FLAT], [4, 8, 10]); },
+  },
 };
 // The crossbowman's model has no light of its own to cast (his lantern glows, on his back).
 const xbow = (...a) => ({ ...crossbowman(...a), lights: [] });
@@ -225,18 +275,18 @@ function fallen(m, to, bounds, gore) {
   };
 }
 
-const ONLY = process.env.ONLY?.split(',');
+const ONLY = process.env.ONLY?.split(','), WRITE = !!process.env.WRITE; // WRITE: the ONLY ones into the game's files, the others' kept
 const JOBS = Object.entries(FOES).filter(([id]) => !ONLY || ONLY.includes(id)).flatMap(([id, f]) => [
-  ...Object.keys(VIEWS).flatMap((view) => f.frames.map(([name], n) => ({ id, view, name, n }))),
+  ...(f.views ?? Object.keys(VIEWS)).flatMap((view) => f.frames.map(([name], n) => ({ id, view, name, n }))),
   { id, view: 'side', name: 'corpse', n: -1 },
 ]);
 
 // The enemy sheets' lighting, the foe standing at the cell's centre turned to `yaw`.
 function scene(job) {
-  const F = FOES[job.id], CX = F.FW / 2, dead = job.name === 'corpse', yaw = dead ? 0.25 : VIEWS[job.view];
+  const F = FOES[job.id], CX = F.FW / 2, dead = job.name === 'corpse', still = !!F.views, yaw = dead && !still ? 0.25 : VIEWS[still ? F.views[0] : job.view]; // one that never turns dies where it is
   const [, make, { bob = 0, layer } = {}] = dead ? [] : F.frames[job.n];
   const m = dead ? F.corpse() : make();
-  const P = { x: CX, y: dead ? -12 : 0, yaw }, objects = [];
+  const P = { x: CX, y: dead && !still ? -12 : 0, yaw }, objects = [];
   if (layer !== 'jet') objects.push({ name: 'foe', pos: [P.x, P.y, bob], yaw, sdf: m.sdf, mat: m.mat, bounds: m.bounds, id: 1, step: m.step });
   if (m.vfx && layer !== 'body') objects.push({ name: 'vfx', pos: [P.x, P.y, bob], yaw, sdf: m.vfx.sdf, mat: m.vfx.mat, bounds: m.vfx.bounds, id: 2, step: m.vfx.step, noShadow: true, noSelfAO: true });
   const lights = [
@@ -264,7 +314,7 @@ if (isMainThread) {
     if (ONLY && !ONLY.includes(id)) continue;
     // Cells: per view its frames then the kneel; the corpse last.
     const cells = [], frames = {};
-    for (const view of Object.keys(VIEWS)) {
+    for (const view of F.views ?? Object.keys(VIEWS)) {
       for (const [name] of F.frames) cells.push([`${view}-${name}`, all.find((j) => j.id === id && j.view === view && j.name === name)]);
       const idle = cells.find(([n]) => n === `${view}-idle0`)[1], px = new Uint8ClampedArray(idle.px.length);
       for (let y = 0; y + KNEEL <= F.SOLE; y++) px.set(idle.px.subarray(y * F.FW * 4, (y + 1) * F.FW * 4), (y + KNEEL) * F.FW * 4);
@@ -277,7 +327,7 @@ if (isMainThread) {
       for (let y = 0; y < F.FH; y++) rgba.set(c.px.subarray(y * F.FW * 4, (y + 1) * F.FW * 4), ((oy + y) * W + ox) * 4);
       frames[name] = { cell: i, lamp: c.lamp.map((v) => Math.round(v)) };
     });
-    if (ONLY) {
+    if (ONLY && !WRITE) {
       for (let p = 0; p < W * H; p++) if (!rgba[p * 4 + 3]) rgba.set([70, 70, 74, 255], p * 4);
       writePNG(`shots/${id}-preview.png`, rgba, W, H, 2);
       continue;
@@ -286,12 +336,13 @@ if (isMainThread) {
     data[id] = { FW: F.FW, FH: F.FH, COLS, SOLE: F.SOLE, WALK: F.WALK, STRIDE: 2 * F.STEP, FRAMES: frames };
     console.log(`src/${id}.png ${W}x${H}, ${cells.length} cells`);
   }
-  if (!ONLY) writeFileSync('src/foes.data.ts', `// Generated by tools/art/foes.gen.mjs: edit the models there (and in tools/art/maquettes/ennemis/foes.mjs), not this table.
+  if (WRITE) Object.assign(data, { ...JSON.parse(readFileSync('src/foes.data.ts', 'utf8').match(/SHEETS: .* = (\{.*\});\n/)[1]), ...data });
+  if (!ONLY || WRITE) writeFileSync('src/foes.data.ts', `// Generated by tools/art/foes.gen.mjs: edit the models there (and in tools/art/maquettes/ennemis/foes.mjs, ../necropole/creatures.mjs), not this table.
 // The foes' sheets (src/<kind>.png): FW x FH cells, COLS per row, soles on row SOLE, centred; WALK frames a walk cycle, which covers STRIDE room px of floor (screen rows / ${cam.s.toFixed(4)}); each frame's
 // cell and where its own light is (sheet px: the pilot light, the monstrance; for the jet, its pivot on the lance).
 export const FLOOR = ${cam.s.toFixed(4)}; // how much the sheets' floor is foreshortened up the screen
 export type Sheet = { FW: number; FH: number; COLS: number; SOLE: number; WALK: number; STRIDE: number; FRAMES: Record<string, { cell: number; lamp: [number, number] }> };
-export const SHEETS: Record<'purifier' | 'priest' | 'hound' | 'penitent' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau' | 'crossbow', Sheet> = ${JSON.stringify(data)};
+export const SHEETS: Record<${Object.keys(data).map((k) => `'${k}'`).join(' | ')}, Sheet> = ${JSON.stringify(data)};
 `);
   console.log(`${((Date.now() - t0) / 1000).toFixed(1)} s`);
 } else {
