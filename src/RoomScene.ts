@@ -2000,7 +2000,7 @@ export class RoomScene extends Phaser.Scene {
   /** Opens the items' panel: le sac (on an expedition the game pauses meanwhile), `ground` the item on the floor to take
    *  in place of one of the bag's; or le coffre at the refuge. */
   private openSatchel(mode: 'sac' | 'coffre', ground?: Lying) {
-    if (this.satchel || this.counter || this.training || this.dead || this.prey || this.phase !== 'play') return false;
+    if (this.satchel || this.carte || this.counter || this.training || this.dead || this.prey || this.phase !== 'play') return false;
     this.hero.setVelocity(0);
     this.physics.pause();
     this.tweens.pauseAll();
