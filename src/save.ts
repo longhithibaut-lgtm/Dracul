@@ -4,16 +4,17 @@
 import { ITEMS, SLOTS, type Item, type Worn } from './items.ts';
 import { isPower, slotOf, type Power, type Worn as Powers } from './powers.ts';
 
-export const VERSION = 3; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers. An older save comes up without what it lacks
+export const VERSION = 4; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers; 4: the map's fog. An older save comes up without what it lacks
 // unlocks: what the Rongé sold for banked blood (shop.ts): the bite, the ranks of max life (`life`) and of the bag (`bag`)
 // bought. dry: how many times in a row the hero came back (or re-formed) without pouring blood: the Rongé's hunger.
 // shortcuts: the zone's gates raised for good (necropolis.data.ts GATES ids). stash: the items brought back (the
 // refuge's chest, acquired for good); worn: what he wears, by slot (items.ts SLOTS; on an expedition it may hold items
 // not yet brought back: those are dropped when read back, as at death); next: the number the next item found takes.
 // nourrice: the catacombs' guardian, fights begun and her death (for good); vesna: freed (for good, even if he dies on
-// his way back); powers: the Rat house's powers bought from her, and those worn, one per slot (powers.ts).
+// his way back); powers: the Rat house's powers bought from her, and those worn, one per slot (powers.ts). carte: per
+// open zone, the map's cells he has seen, a bitmask in base64 (map.ts; one of another size is dropped there).
 export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number; shortcuts: string[]; stash: Item[]; worn: Worn; next: number;
-  nourrice: { tries: number; dead: boolean }; vesna: boolean; powers: { bought: Power[]; worn: Powers } };
+  nourrice: { tries: number; dead: boolean }; vesna: boolean; powers: { bought: Power[]; worn: Powers }; carte: Partial<Record<'necropolis' | 'catacombs', string>> };
 const KEY = 'dracul.save', LOG = 'dracul.log';
 
 /** A save read back from `json`, whatever it holds: brought up to this version, missing or broken fields to their
@@ -35,8 +36,10 @@ export function parse(json: string | null): Save {
   const next = Math.max(count(o.next), ...stash.map((i) => i.n + 1));
   const bought = Array.isArray(o.powers?.bought) ? [...new Set(o.powers.bought.filter(isPower))] : [], wearing: Powers = {};
   for (const id of bought) { const k = slotOf(id); if (k && o.powers?.worn?.[k] === id) wearing[k] = id as Powers[typeof k]; } // only what is bought, in its own slot
+  const carte: Save['carte'] = {};
+  for (const z of ['necropolis', 'catacombs'] as const) { const s = o.carte?.[z]; if (typeof s === 'string' && /^[A-Za-z0-9+/]*={0,2}$/.test(s)) carte[z] = s; }
   return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry), shortcuts, stash, worn, next,
-    nourrice: { tries: count(o.nourrice?.tries), dead: o.nourrice?.dead === true }, vesna: o.vesna === true, powers: { bought, worn: wearing } };
+    nourrice: { tries: count(o.nourrice?.tries), dead: o.nourrice?.dead === true }, vesna: o.vesna === true, powers: { bought, worn: wearing }, carte };
 }
 
 const storage = () => { try { return localStorage; } catch { return undefined; } }; // a sandboxed frame throws on access

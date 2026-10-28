@@ -316,6 +316,10 @@ export const T = {
   // saw him and walks back to its post at `homeSpeed` of its pace. None follows him through an exit but the hounds, once
   // (`followMs` after him), never a second room.
   sight: { range: 130, shade: 80, lit: 0.6, keep: 200, call: 90, giveUpMs: 4000, homeSpeed: 0.5, followMs: 1200 },
+  // La carte (key C, src/map.ts): an open zone's map shows only what he has seen, cells of `cell` px kept in the save for
+  // good: those within `dark` px of him (`lit`: in light, as for the foes above), his sight stopped by rock and walls but
+  // for their first `into` px (so the edges he faces are drawn).
+  carte: { cell: 32, dark: 120, lit: 190, into: 24 },
   // Blood carried, apart from life: the dead drop `drops` of their kind (an Amas' torn ghouls none), a cache holds
   // `cache`, both times the ring's multiplier `ring`. Picked up within `pickup` px of his feet, searched within
   // `search`; at most `bag` carried (to be raised at the refuge). All of it lost at death; banked by walking up to the
