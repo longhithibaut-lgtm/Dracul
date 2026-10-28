@@ -1,5 +1,9 @@
 # Third-party notices
 
+| Font | Source | Licence |
+|---|---|---|
+| `src/fell-italic.ttf` (IM FELL English Italic, unmodified): the HUD's words and the prompts over the floor | Igino Marini, via [Google Fonts](https://fonts.google.com/specimen/IM+Fell+English) | SIL Open Font License 1.1 — [licence](licenses/im-fell-english.OFL.txt) |
+
 Skills under `.claude/skills/` copied from other projects, unmodified unless stated.
 
 | Skills | Source | Licence |

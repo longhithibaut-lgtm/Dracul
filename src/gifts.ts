@@ -8,7 +8,7 @@ import { T } from './tuning.ts';
 // looks in rats.ts.
 
 export type Slot = 'griffes' | 'tir' | 'glyphe' | 'brume';
-/** What a card's band and the HUD show of a gift: its slot, talent or pact. In the HUD shelf's order. */
+/** What a card's band shows of a gift: its slot, talent or pact. */
 export type Kind = Slot | 'talent' | 'pacte';
 export const KINDS: Record<Kind, string> = { griffes: 'Griffes', tir: 'Tir', glyphe: 'Glyphe', brume: 'Brume', talent: 'Talent', pacte: 'Pacte' };
 export const RARITY = ['Commun', 'Rare', 'Épique'];
@@ -122,5 +122,3 @@ export const GIFT_IDS = Object.keys(GIFTS) as GiftId[];
 export const value = (id: GiftId, rank = 0) => (num[id] as readonly number[] | undefined)?.[rank] ?? 0;
 
 export const kind = (id: GiftId): Kind => (GIFTS[id].pact ? 'pacte' : GIFTS[id].slot ?? 'talent');
-/** The gifts held as the HUD shelves them: slot gifts in slot order, then talents in the order taken, then pacts. */
-export const shelf = (held: readonly GiftId[]) => [...held].sort((a, b) => Object.keys(KINDS).indexOf(kind(a)) - Object.keys(KINDS).indexOf(kind(b)));

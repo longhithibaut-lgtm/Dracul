@@ -221,3 +221,17 @@ export function runMask(runs: string, w: number, h: number): Uint8Array {
   });
   return m;
 }
+
+/** A power's turn as the HUD shows it (hud.ts): when it is back (`readyAt`, game time; undefined: locked) and when it was
+ *  spent (`spentAt`). */
+export type Turn = { readyAt: number | undefined; spentAt: number };
+/** `t` told, at `now`, that its power is back at `readyAt`: a power ready until now and back later was just spent. */
+export function turn(t: Turn, readyAt: number | undefined, now: number) {
+  if (readyAt !== undefined && readyAt > now && readyAt !== t.readyAt && (t.readyAt === undefined || now >= t.readyAt)) t.spentAt = now;
+  t.readyAt = readyAt;
+}
+/** The share of its turn still to run at `now`: 1 just spent, 0 ready (or locked). */
+export const left = (t: Turn, now: number) =>
+  t.readyAt === undefined || now >= t.readyAt ? 0 : Math.min(1, (t.readyAt - now) / Math.max(1, t.readyAt - t.spentAt));
+/** Which of `n` + 1 frames shows a share `k` (0..1) of something: the nearest. */
+export const frameOf = (k: number, n: number) => Math.round(Math.max(0, Math.min(1, k)) * n);

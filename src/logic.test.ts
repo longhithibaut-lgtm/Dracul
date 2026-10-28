@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { alertness, sightRange, biteTarget, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound } from './logic.ts';
-import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, shelf, value } from './gifts.ts';
+import { alertness, sightRange, biteTarget, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound, turn, left, frameOf, type Turn } from './logic.ts';
+import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, value } from './gifts.ts';
 import { T } from './tuning.ts';
 import { missing, width } from './font.ts';
 import * as Crypt from './crypt.data.ts';
@@ -139,9 +139,7 @@ describe('holy light', () => {
 });
 
 describe('gifts (training room)', () => {
-  it('shelves slot gifts in slot order, then talents as taken, then pacts', () => {
-    expect(shelf(['fuite', 'nuee', 'rongeur', 'griffes', 'nid'])).toEqual(['griffes', 'nid', 'nuee', 'fuite', 'rongeur']);
-    expect(shelf(['maigre', 'rongeur', 'jet'])).toEqual(['jet', 'rongeur', 'maigre']);
+  it('knows a pact from a slot gift', () => {
     expect(kind('maigre')).toBe('pacte');
   });
 
@@ -286,5 +284,26 @@ describe('edgePip', () => {
     expect(edgePip(100, 50, 480, 270, 6)).toBeUndefined();
     expect(edgePip(-40, 50, 480, 270, 6)).toEqual({ x: 6, y: 50, dx: -1, dy: 0 });
     expect(edgePip(600, 400, 480, 270, 6)).toEqual({ x: 474, y: 264, dx: 1, dy: 1 });
+  });
+});
+
+describe('the HUD Chair: what it shows of a power, the heart, the pouch', () => {
+  it('a brand scabs over when its power is spent, and opens back over its turn; a locked one shows nothing', () => {
+    const t: Turn = { readyAt: 0, spentAt: 0 };
+    turn(t, 0, 1000);
+    expect(left(t, 1000)).toBe(0); // ready
+    turn(t, 6000, 1000); // the glyph cast: back in 5 s
+    expect([left(t, 1000), left(t, 3500), left(t, 6000)]).toEqual([1, 0.5, 0]);
+    turn(t, 6000, 3500); // told again each frame: nothing changes
+    expect(t.spentAt).toBe(1000);
+    turn(t, 9000, 7000); // spent again once back
+    expect([t.spentAt, left(t, 8000)]).toEqual([7000, 0.5]);
+    turn(t, undefined, 8000);
+    expect(left(t, 8000)).toBe(0);
+  });
+
+  it('picks the nearest frame of a share, clamped: the heart by life (41 frames), the pouch by the bag', () => {
+    expect([38 / 50, 50 / 50, 0, 7 / 50, 1 / 50].map((k) => frameOf(k, 40))).toEqual([30, 40, 0, 6, 1]);
+    expect([frameOf(126 / 400, 20), frameOf(500 / 400, 20), frameOf(-1, 20)]).toEqual([6, 20, 0]);
   });
 });

@@ -75,18 +75,17 @@ les générateurs des maquettes archivées ont été retirés (2026-10-27), à r
 | `ennemis-*.png` | ennemis retenus (voir `docs/decisions.md`) |
 | `boss-catacombes-*.png` | trois pistes pour le gardien des catacombes ; la Nourrice des goules est retenue, à redessiner |
 | `boss-nourrice-*.png` | quatre variantes de la Nourrice (Araignée, Matrice, Sainte, Emmurée) ; **B, la Matrice, gardienne des catacombes** (`tools/art/matrice.gen.mjs`) ; A, l'Araignée, gardée pour un autre boss (`tools/art/nourrice.gen.mjs`) |
-| `hud-*.png` | trois pistes de HUD sur deux captures (exploration ; boss et vie basse) : 1 Relique, 2 Chair, 3 Gravure, `hud-planche.png` côte à côte ; à choisir (générateur `tools/art/maquettes/hud/`) |
+| `hud-*.png` | trois pistes de HUD sur deux captures (exploration ; boss et vie basse) : 1 Relique, 2 Chair, 3 Gravure, `hud-planche.png` côte à côte ; **2 « Chair » retenue** (`src/hud.ts`, pièces cuites par `tools/art/hud.gen.mjs` depuis `tools/art/maquettes/hud/chair.mjs`) ; Relique et Gravure gardées pour les menus à choisir |
 | `titre-*.png`, `pause-*.png`, `options*.png`, `menus-planche.png` | menus : trois écrans titre (1 cercueil, 2 lune, 3 gravure), deux pauses (Relique, Gravure), les options (piste Relique) ; à choisir (générateur `tools/art/maquettes/menus/`) |
 | `necropole-ennemis-*.png` | quinze ennemis proposés pour la nécropole (8 créatures, 7 hommes de l'Ordre), trois planches et deux écrans en situation, **à choisir** ; générateur `tools/art/maquettes/necropole/` (`make.mjs`) |
 | `ronge-*.png` | trois propositions pour redessiner le Rongé (un homme qui fut vampire, accroupi ou voûté, à moitié goule) : 1 accroupi au bassin, 2 colporteur, 3 dans sa niche ; une planche chacune (repos, parler, bête, échelle, répliques), une capture du refuge chacune (`-scene.png`, le jeu lui-même, sa texture remplacée à la volée), `ronge-planche.png` côte à côte ; **à choisir** ; générateur `tools/art/maquettes/ronge/` (`make.mjs`) |
 
-**À décider avec l'utilisateur** (aucune règle tant que ce n'est pas tranché) : palette commune des salles, HUD et
-police à 960×540.
+**À décider avec l'utilisateur** (aucune règle tant que ce n'est pas tranché) : palette commune des salles ; police des panneaux (le HUD et les mots au sol sont en IM Fell English italique, coupée au pixel de la vue).
 
 ## Archive : « Nuit de sang » (remplacée le 2026-10-21)
 
 La direction précédente (Hyper Light Drifter, 480×270 affiché ×4, palette violette, sol cobalt, abîme magenta) n'est
 plus celle d'aucune salle ni d'aucun personnage : salles peintes, ancien héros, goules en robe, arbalétrier et effets
-qui la suivaient ont été supprimés (`docs/decisions.md`, 2026-10-21). Restent à ses couleurs le HUD, la police
+qui la suivaient ont été supprimés (`docs/decisions.md`, 2026-10-21). Restent à ses couleurs la police des panneaux
 (`src/font.ts`), les icônes des Dons du Rat et le panneau d'entraînement ; sa palette et ses règles restent lisibles
 dans l'historique de ce fichier.

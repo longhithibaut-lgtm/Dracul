@@ -217,6 +217,7 @@ export class RoomScene extends Phaser.Scene {
 
   preload() {
     Hero.preload(this);
+    Hud.preload(this);
     Room.preload(this, this.layout, this.zoneDoor() ?? { x: 0, y: 0 });
     Foes.preload(this); // the training room calls them into any room
     if (this.layout === 'refuge') { Ronge.preload(this); Satchel.preloadChest(this); }
@@ -286,7 +287,6 @@ export class RoomScene extends Phaser.Scene {
       this.time.delayedCall(T.expedition.fadeMs, () => Fx.hurt(this, 1));
     }
     this.hud.health(this.health, this.maxHealth());
-    this.hud.gifts(this.gifts, this.ranks);
 
     this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,K,F,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
     // Left click slashes, right click shoots, both toward the pointer; J and K do the same toward where he faces. F bites,
@@ -459,7 +459,7 @@ export class RoomScene extends Phaser.Scene {
       items: [],
     });
     for (const f of st.foes) this.place(f, f.kind as Kind, f);
-    for (const c of st.caches) this.caches.push({ ...c, fx: Loot.cache(this, c.x, c.y), label: Loot.label(this, c.x, c.y - 26, 'Fouiller (F)') });
+    for (const c of st.caches) this.caches.push({ ...c, fx: Loot.cache(this, c.x, c.y), label: Loot.label(this, c.x, c.y - 26, 'fouiller (F)') });
     for (const d of st.drops) this.addDrop(d);
     for (const l of st.items) this.addLoot(l);
     this.loose(T.expedition.titleMs); // packs his scent called with nowhere to go, now that he is farther from the refuge
@@ -629,10 +629,12 @@ export class RoomScene extends Phaser.Scene {
     // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy;
     // biting, in front of his prey.
     this.hero.setDepth(this.hero.y + (time < this.slashUntil || this.prey ? 12 : 0));
-    this.hud.dashReady(time >= this.dashReadyAt, this.dashReadyAt);
-    this.hud.glyphReady(time >= this.glyphReadyAt, this.glyphReadyAt);
+    this.hud.cooldown('brume', this.dashReadyAt);
+    this.hud.cooldown('griffes', this.slashReadyAt);
+    this.hud.cooldown('tir', this.shotReadyAt);
+    this.hud.cooldown('glyphe', this.glyphReadyAt);
     // In the training room la Nuée is always at hand (see swarm()).
-    this.hud.swarm(this.swarmFx ? 'spent' : this.training ? 'ready' : !Powers.swarm(Save.data) ? 'locked' : time < this.swarmReadyAt ? 'spent' : 'ready');
+    this.hud.cooldown('nuee', this.training ? (this.swarmFx ? this.swarmUntil : 0) : Powers.swarm(Save.data) ? this.swarmReadyAt : undefined);
 
     const feet = this.hero.body!, b = this.room.bounds, near = (p: { x: number; y: number }, r: number) => Phaser.Math.Distance.BetweenPoints(feet.center, p) < r;
     const door = this.passage ?? this.zoneDoor(), zone = this.room.zone;
@@ -1496,7 +1498,6 @@ export class RoomScene extends Phaser.Scene {
     }
     Save.store();
     this.gifts = Powers.worn(S);
-    this.hud.gifts(this.gifts, this.ranks);
     this.showBlood();
     this.stall.set(this.powers(), S.banked, line);
   }
@@ -1945,7 +1946,6 @@ export class RoomScene extends Phaser.Scene {
     const max = this.maxHealth();
     this.health = Math.max(1, Math.min(max, this.health + Math.max(0, max - before)));
     this.hud.health(this.health, max);
-    this.hud.gifts(this.gifts, this.ranks);
   }
 
   /** Blood back (the bite, La curée), up to his max. */
@@ -2151,7 +2151,7 @@ export class RoomScene extends Phaser.Scene {
   /** An item lying at floor point (x, y): its glint, its name and « Ramasser (F) » as he comes near. */
   private addLoot(l: { x: number; y: number; item: Items.Item }) {
     const it = l.item;
-    this.loot.push({ ...l, fx: Loot.glint(this, l.x, l.y, Satchel.icon(this, it.id), Satchel.RARE[it.r]), label: Loot.label(this, l.x, l.y - 18, [Items.ITEMS[it.id].name, 'Ramasser (F)']) });
+    this.loot.push({ ...l, fx: Loot.glint(this, l.x, l.y, Satchel.icon(this, it.id), Satchel.RARE[it.r]), label: Loot.label(this, l.x, l.y - 18, [Items.ITEMS[it.id].name, 'ramasser (F)']) });
   }
 
   private dropLoot(l: Lying) {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import * as Font from './font.ts';
+import { words } from './hud.ts';
+import { ZOOM } from './dark.ts';
 import { blot } from './enemy.ts';
 import { loop, motes } from './rats.ts';
 
@@ -7,7 +8,7 @@ import { loop, motes } from './rats.ts';
 // prop worth searching, the words that appear as the hero comes near (where an exit leads, the basin, « fouiller »).
 // Drawn unlit over the dark rooms (dark.ts), so blood is found in the dark. Gameplay decides; this file only draws.
 
-const BLOOD = [0x5c0a1c, 0xa3122f, 0xe0284a], GLOW = 0xff4f8b, BONE = 0xe8dcc8, VOID = 0x0b0710;
+const BLOOD = [0x5c0a1c, 0xa3122f, 0xe0284a], GLOW = 0xff4f8b, BONE = 0xe8dcc8;
 const UNLIT = 7981; // over the lit world, under the marks over heads (dark.ts)
 
 /** A pool of light breathing at floor point (x, y), `rx` wide, in `c`, `k` strong. */
@@ -95,9 +96,10 @@ export function glint(scene: Phaser.Scene, x: number, y: number, key: string, co
 
 export type Label = { near(on: boolean): void; destroy(): void };
 
-/** Words over floor point (x, y) (a line, or several), shown while the hero is near (near(true)), fading in and out. */
+/** Words over floor point (x, y) (a line, or several), shown while the hero is near (near(true)), fading in and out; in
+ *  the HUD's italic, one of its pixels a pixel of the view (« F fouiller »: a line ending in « (F) » starts with the key). */
 export function label(scene: Phaser.Scene, x: number, y: number, text: string | string[]): Label {
-  const im = scene.add.image(x, y, Font.bake(scene, [text].flat(), BONE, VOID)).setOrigin(0.5, 1).setDepth(7985).setAlpha(0);
+  const im = scene.add.image(x, y, words(scene, [text].flat(), 17)).setOrigin(0.5, 1).setScale(1 / ZOOM).setDepth(7985).setAlpha(0);
   let close = false;
   const stop = loop(scene, () => im.setAlpha(Phaser.Math.Clamp(im.alpha + (close ? 0.1 : -0.1), 0, 1)), [im]);
   return { near: (on) => (close = on), destroy: stop };
