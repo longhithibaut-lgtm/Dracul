@@ -163,7 +163,7 @@ for (let t = 0; t < 2000 && (await boss('state')) !== 'tear'; t += 16) await ste
 check((await boss('state')) === 'tear' && (await boss('phase')) === 2, 'at half her blood: the chains snap, the sac tears, phase 2');
 await step(500);
 await shot('matrice-tear');
-check(await until(`${BOSS}.getData('state') === 'low'`, 4000) && (await run(`${BROOD}.length + ${BOSS}.getData('pending')`)) >= 1, 'torn, down to the bottom of its swing: a brood spills out');
+check(await until(`${BOSS}.getData('state') === 'low'`, 4000) && (await until(`${BROOD}.length + ${BOSS}.getData('pending') >= 1`, 3000)) /* (born a moment after it lands) */, 'torn, down to the bottom of its swing: a brood spills out');
 await step(800);
 await shot('matrice-spin');
 const lowFrom = async () => { await set({ state: 'low', phase: 2, z: 0, at: (await now()) - M.low2Ms + 50, path: undefined }); await run(`${BOSS}.body.reset(${pv.x}, ${pv.y})`); };
