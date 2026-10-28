@@ -57,7 +57,7 @@ export function chest(s: Save, r: number, ids: readonly ItemId[] = ITEM_IDS) {
   s.stash.push(...make(s, ids, r));
 }
 
-/** The save's on/off states, as the panel's boxes show and set them: the bite, la Nuée, Vesna freed, the Nourrice
+/** The save's on/off states, as the panel's boxes show and set them: the bite, la Nuée, Vesna freed, the catacombs' guardian (la Matrice)
  *  dead (unticked: to fight again), every shortcut raised (unticked: all shut again). */
 export const FLAGS: Record<'bite' | 'swarm' | 'vesna' | 'nourrice' | 'shortcuts', [(s: Save) => boolean, (s: Save, on: boolean) => void]> = {
   bite: [(s) => s.unlocks.bite, (s, on) => void (s.unlocks.bite = on)],

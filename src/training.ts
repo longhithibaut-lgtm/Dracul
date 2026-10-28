@@ -113,7 +113,7 @@ export function panel(api: {
     group('objets', `Objets <small>· ${S.stash.length} au coffre, ${kit.bag.length}/${itemSlots(S)} au sac</small>`, `${pick('data-item', 'Objet', [['', 'Un de chaque'], ...ITEM_IDS.map((id): [string, string] => [id, ITEMS[id].name])], item)}
       ${pick('data-rarity', 'Rareté', RARITY.map((r, i): [number, string] => [i, r]), rarity)}
       <div class="row"><button type="button" data-cheat="chest">Au coffre</button><button type="button" data-cheat="bag">Au sac <small>· Aller à</small></button><button type="button" data-cheat="all">Tout le coffre <small>· 3 raretés</small></button></div>`),
-    group('monde', 'Monde', `${flag('shortcuts', 'Tous les raccourcis ouverts')}${flag('nourrice', 'La Nourrice tuée <small>· décocher : la recombattre</small>')}`),
+    group('monde', 'Monde', `${flag('shortcuts', 'Tous les raccourcis ouverts')}${flag('nourrice', 'La Matrice tuée <small>· décocher : la recombattre</small>')}`),
     group('aller', 'Aller à <small>· en expédition, T revient ici</small>', `<div class="row">${Cheats.PLACES.map(([l], i) => `<button type="button" data-go="${i}">${l}</button>`).join('')}</div>`),
     group('heros', 'Héros', `${box('data-opt="god"', opts.god, 'Invincible ici')}${box('data-opt="out"', opts.out, 'Invincible en expédition aussi')}
       ${box('data-opt="cool"', opts.cool, 'Recharges instantanées <small>· brume, glyphe, Nuée</small>')}<div class="row"><button type="button" data-act="heal">Soigner</button></div>`),

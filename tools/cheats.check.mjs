@@ -73,7 +73,7 @@ check((await run(() => document.querySelector('#training [data-group="objets"] s
 await click('[data-flag="shortcuts"]');
 await click('[data-flag="nourrice"]');
 s = await save();
-check(s.shortcuts.join() === 'grille,galerie,caveau' && s.nourrice.dead, `Monde: raccourcis ouverts (${s.shortcuts}), la Nourrice tuée`);
+check(s.shortcuts.join() === 'grille,galerie,caveau' && s.nourrice.dead, `Monde: raccourcis ouverts (${s.shortcuts}), la Matrice tuée`);
 
 await click('[data-opt="out"]');
 await click('[data-opt="cool"]');
@@ -95,7 +95,7 @@ await page.waitForTimeout(1500);
 check(!(await run(() => window.game.scene.getScene('room').fight)), 'la Nourrice tuée: pas de combat dans la prison');
 await training();
 await click('[data-flag="nourrice"]');
-check(!(await save()).nourrice.dead, 'Monde: la Nourrice à recombattre');
+check(!(await save()).nourrice.dead, 'Monde: la Matrice à recombattre');
 await go('Catacombes : devant la prison');
 await arrived('catacombs', false);
 await run(() => window.game.scene.getScene('room').hero.body.reset(2350, 900));
