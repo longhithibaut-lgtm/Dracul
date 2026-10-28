@@ -1,5 +1,5 @@
 // Plays the expeditions through la nécropole in headless Chromium (1920x1080 = native x4) and saves captures of the loop.
-// Usage: npm run shot [-- --out=shots --port=5199 --only=catacombs|fps]   (--only: expedition 3 alone, or the frame rates alone)
+// Usage: npm run shot [-- --out=shots --port=5199 --only=catacombs|fps|map]   (--only: expedition 3 alone, the frame rates alone, or la carte alone)
 // A fresh save. Expedition 1: the bot walks from the coffin down the refuge's stairs into the zone (zone-refuge.png),
 // comes up unseen on a group at its post (group.png), fights the ghouls that hunt him, picks up their blood, goes into
 // the crypt by its door (zone-crypt-door.png), fights there, searches a cache that hides an item (item-glint.png: it lies
@@ -15,6 +15,8 @@
 // lets the foes kill him: he re-forms at his coffin with nothing carried, the new item lost, the acquired one still worn. Le Rongé's wares (ronge.png, shop.png). Hounds follow him through one
 // door, never a second. Headless FPS of every place, and of the zone walked across chunk borders. In the training room
 // a crossbowman clawed to his knees, then bitten. The whole zone's map: shots/necropolis-overview.png (its bake).
+// La carte (C): the necropolis' after the first fight (map-necropolis), the catacombs' at the great crossroads
+// (map-catacombs), both whole at the end (map-*-full, every cell revealed by map.ts's test hook).
 // Expedition 3, les catacombes: across the necropolis by its shortcuts, down the well (well-top, cata-well-bottom), a gallery,
 // a crossroads, la grille du caveau raised from below (cata-shortcut-before, -after; caveau-before from above), le nid, the
 // prison: its grille drops behind him, La Nourrice (cata-nourrice), put down (her fight: tools/art/nourrice.shots.mjs), the grille rises,
@@ -180,6 +182,30 @@ async function look(name, x, y) {
   await shot(name);
   await run(() => { const s = window.game.scene.getScene('room'); s.cameras.main.startFollow(s.hero, true, 0.08, 0.08); });
 }
+/** La carte (C) over the game, paused: captured (`name`.png), its cells seen counted (map.ts; `whole`: all of them
+ *  first, the test hook), then closed by C. */
+async function carte(name, whole = false) {
+  const z = (await state()).layout, M = (f, z) => run(([f, z]) => import('/src/map.ts').then((M) => M[f](z)), [f, z]);
+  if (whole) await M('revealAll', z);
+  await page.keyboard.press('c');
+  const open = await until(() => { const s = window.game.scene.getScene('room'); return !!s.carte && s.time.paused && s.physics.world.isPaused; }, null, 3000);
+  const seen = await M('seen', z), { cols, rows } = await M('grid', z);
+  check(open && seen > (whole ? cols * rows - 1 : 20), `C: la carte of ${z} over the game paused, ${seen} of ${cols * rows} cells seen (${name}.png)`);
+  await page.waitForTimeout(300);
+  await shot(name);
+  await page.keyboard.press('c');
+  check(await until(() => { const s = window.game.scene.getScene('room'); return !s.carte && !s.time.paused; }, null, 3000), 'C again: la carte closed, the game goes on');
+}
+/** Both zones' maps whole (the test hook: every cell seen), from their way in. */
+async function wholeMaps() {
+  for (const layout of ['necropolis', 'catacombs']) {
+    await run((layout) => window.game.scene.getScene('room').scene.restart({ layout }), layout);
+    await arrived(layout);
+    await until(() => !!window.game.scene.getScene('room').hero?.body, null, 5000);
+    await page.waitForTimeout(500);
+    await carte(`map-${layout}-full`, true);
+  }
+}
 /** F at a shortcut's winch until it is raised (a press mid-mist or mid-swing is not taken), then its rise. */
 async function winch(id) {
   for (let k = 0; k < 6 && !(await save()).shortcuts.includes(id); k++) { await page.keyboard.press('f'); await page.waitForTimeout(400); }
@@ -242,6 +268,7 @@ async function catacombs() {
   await look('cata-gallery', 1880, 200);
   await trek([[1640, 195], [1440, 300], [1400, 330]], 'along the ossuary gallery to the great crossroads');
   await look('cata-crossroads', 1400, 320);
+  await carte('map-catacombs');
   await trek([[1150, 245], [960, 210], [720, 200], [520, 180], [380, 175], [345, 160]], "the west gallery to le caveau's stairs");
   await walk(342, 154, 8000, 4);
   await look('cata-shortcut-before', 310, 150);
@@ -355,6 +382,21 @@ await page.reload();
 await arrived('refuge');
 await page.waitForTimeout(500);
 if (arg('only', '') === 'fps') { await measureFps(); await end(); } // the frame rates alone
+if (arg('only', '') === 'map') { // la carte alone: each zone's after a short walk, then whole
+  check(await walk(840, 846) || (await state()).layout === 'necropolis', 'down the stairs');
+  check(await arrived('necropolis'), 'in la nécropole');
+  await keep(true);
+  await trek([[330, 176], [700, 196], [1100, 232], [1100, 420], [800, 520]], 'a walk along the north path, into the field');
+  await carte('map-necropolis');
+  await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'catacombs' }));
+  await arrived('catacombs');
+  await until(() => !!window.game.scene.getScene('room').hero?.body, null, 5000); // the restart's init() already says 'play'
+  await keep(true);
+  await trek([[2400, 205], [2160, 215], [1960, 190], [1640, 195], [1440, 300]], 'from the well along the ossuary gallery');
+  await carte('map-catacombs');
+  await wholeMaps();
+  await end();
+}
 if (arg('only', '') === 'catacombs') { // the catacombs alone, from a save with the necropolis' shortcuts open
   await run(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 2, banked: 0, shortcuts: ['grille', 'galerie'] })));
   await catacombs();
@@ -397,6 +439,7 @@ check(await fight(60000, 260), 'near the refuge: the ghouls fought');
 check(await gather(20000, 300), 'their blood picked up');
 let carried = (await state()).carried;
 check(carried > 0, `blood carried: ${carried}`);
+await carte('map-necropolis'); // what he has seen of it so far
 // the crypt, an interior: in by its door, out by its stairs at the same door
 await route([[760, 540]]);
 await look('zone-crypt-door', 760, 470);
@@ -682,4 +725,5 @@ if (check(!!(await page.waitForSelector('#training', { timeout: 5000 }).catch(()
   check(bit.knelt && bit.hp === 1 && bit.dead && bit.health > 3, `clawed to ${bit.hp} hp, he kneels (${bit.knelt}); bitten (${bit.dead ? 'dead' : 'alive'}): 3 -> ${bit.health} blood`);
   await page.click('#training [data-opt="passive"]');
 }
+await wholeMaps();
 await end();

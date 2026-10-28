@@ -70,7 +70,7 @@ export const GATES = [
   { id: 'prison', name: 'La grille de la prison', x0: 2330, x1: 2370, y0: WALL_Y[0], y1: WALL_Y[1], side: 1, lever: null, arena: true },
 ];
 export const TUNNEL = [];
-const WALLS = [{ x0: 2088, y0: WALL_Y[0], x1: 2330, y1: WALL_Y[1], h: 80 }, { x0: 2370, y0: WALL_Y[0], x1: 2632, y1: WALL_Y[1], h: 80 }];
+export const WALLS = [{ x0: 2088, y0: WALL_Y[0], x1: 2330, y1: WALL_Y[1], h: 80 }, { x0: 2370, y0: WALL_Y[0], x1: 2632, y1: WALL_Y[1], h: 80 }];
 /** Vesna's reliquary: its feet line's middle; F within reach of `at` says it is sealed (the boss, later, opens it). */
 export const RELIQUARY = { x: 2360, y: 704, at: { x: 2360, y: 724 } };
 
@@ -835,3 +835,6 @@ export function opened(sc, id, t) { REL.o = t; }
 export const finish = (img, x0, y0) => shafts(img, x0, y0, MOONH.map((o) => [o[0], o[1], o[2], o[2], MOON, MOONC, 0.003]), VAULT);
 export const PAL = [...CRYPT_PAL, ...[['#1a2a24', '#2e4a3c', '#4e7a62', '#8ac0a0']].flatMap((s) => s.map((c) => hex(c).map((v) => v * 255)))];
 export const POST = { exposure: 3.3, vignette: 0.2, desat: 0.18, grain: 0.012, dither: 0.02 };
+/** The floor's kind at room px (X, Y), for the map (tools/art/map.gen.mjs): 0 bare, 1 flagstones, 2 black water, 3 its
+ *  mud, 4 the nest's filth, 5 the rats' straw. */
+export const floorKind = (X, Y) => kind[Math.floor(Y) * RW + Math.floor(X)] ?? 0;

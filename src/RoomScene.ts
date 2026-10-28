@@ -28,6 +28,7 @@ import * as Boss from './boss.ts';
 import * as Nourrice from './nourrice.ts';
 import * as Vesna from './vesna.ts';
 import * as Powers from './powers.ts';
+import * as Carte from './map.ts';
 import { WORLD, ZONES, areaAt, chokes, expedition, galleryOpen, go, homeward, isZone, lair, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState, type ZoneId } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
 
@@ -143,6 +144,7 @@ export class RoomScene extends Phaser.Scene {
   private cut = false; // a scene plays (Vesna freed): he stands, the world waits
   private vesna?: ReturnType<typeof Vesna.create>; // at the refuge, freed, behind her stall
   private stall?: Vesna.Stall; // her powers, open: the hero waits
+  private carte?: Carte.Carte; // the zone's map, open (key C): the game paused
 
   constructor() {
     super('room');
@@ -197,7 +199,7 @@ export class RoomScene extends Phaser.Scene {
     this.lostItems = data.lostItems ?? 0;
     this.loot = [];
     this.satchel = undefined;
-    this.fight = this.vesna = this.stall = undefined;
+    this.fight = this.vesna = this.stall = this.carte = undefined;
     this.cut = false;
   }
 
@@ -208,6 +210,7 @@ export class RoomScene extends Phaser.Scene {
     if (this.layout === 'refuge') { Ronge.preload(this); Satchel.preloadChest(this); }
     if (this.layout === 'refuge' || this.layout === 'catacombs') Vesna.preload(this);
     if (this.layout === 'catacombs') Nourrice.preload(this);
+    Carte.preload(this, this.layout);
   }
 
   create() {
@@ -266,6 +269,7 @@ export class RoomScene extends Phaser.Scene {
     const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (this.carte) return void this.closeMap();
       if (this.counter) { // a card buys, anywhere else leaves
         const i = this.counter.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM);
         return void (i < 0 ? this.closeShop() : this.sell(i));
@@ -293,7 +297,7 @@ export class RoomScene extends Phaser.Scene {
       if (i >= 0 && moved && i !== this.satchel!.view.cursor) this.showSatchel({ cursor: i });
     });
     ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'].forEach((k, i) => this.input.keyboard!.on(`keydown-${k}`, () => (this.counter ? this.sell(i) : this.stall ? this.trade(i) : this.satchel && i < 7 && this.act(Items.SLOTS.length + i))));
-    this.input.keyboard!.on('keydown-ESC', () => (this.satchel ? this.closeSatchel() : this.stall ? this.closeStall() : this.closeShop()));
+    this.input.keyboard!.on('keydown-ESC', () => (this.carte ? this.closeMap() : this.satchel ? this.closeSatchel() : this.stall ? this.closeStall() : this.closeShop()));
     // The items' panel: I (or Tab) opens le sac and closes it; the arrows (or ZQSD, WASD) move the cursor, Enter or
     // Space wears or takes off what it is on.
     this.input.keyboard!.addKeys('TAB,I,ENTER,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE'); // their Key objects: a key held, or a doubled keydown, acts once
@@ -302,7 +306,8 @@ export class RoomScene extends Phaser.Scene {
       for (const k of keys) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.showSatchel({ cursor: this.satchel.panel.next(this.satchel.view.cursor, dx, dy) }));
     for (const k of ['ENTER', 'SPACE']) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.act(this.satchel.view.cursor));
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
-    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => !this.satchel && (this.dashPressedAt = this.time.now));
+    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => !this.satchel && !this.carte && (this.dashPressedAt = this.time.now));
+    this.input.keyboard!.on('keydown-C', () => (this.carte ? this.closeMap() : this.openMap())); // la carte (M mutes)
     // Le Glyphe: E casts it at the pointer, L ahead of the hero (keyboard only).
     this.input.keyboard!.on('keydown-E', () => {
       const to = world(this.input.activePointer);
@@ -538,7 +543,7 @@ export class RoomScene extends Phaser.Scene {
       for (const l of this.labels) l.l.near(false);
       return void Hero.show(this.hero, { moving: false, dashing: false, slashing: false, combo: 0, throwing: false, biting: false, casting: false, hurt: false, dazed: false, invulnerable: false, facing: -Math.PI / 2, swarm: false });
     }
-    if (this.counter || this.satchel || this.stall) { // he stands before the Rongé's wares, Vesna's, or his items, the words over the room gone
+    if (this.counter || this.satchel || this.stall || this.carte) { // he stands before the Rongé's wares, Vesna's, or his items, the words over the room gone
       for (const l of this.labels) l.l.near(false);
       return void this.hero.setVelocity(0);
     }
@@ -646,6 +651,7 @@ export class RoomScene extends Phaser.Scene {
     const c = this.hero.body!.center, R = T.lantern.radius; // the planted lanterns' pools, the zone's on their poles
     const lamp = this.lanterns.some((l) => Lantern.lights(l, c)) || !!this.room.zone?.lamps.some((l) => ellipseDist(l, c, R, R * T.lantern.squash) <= 1);
     this.inLight = lamp || (this.room.light?.(c.x, c.y) ?? Infinity) >= T.sight.lit;
+    if (zone && !this.training) Carte.see(zone.id, c.x, c.y, this.inLight); // the map's fog
     let dawn = false;
     if (lamp || this.room.holy(c.x, c.y)) {
       if (this.swarmFx) this.unswarm();
@@ -1519,7 +1525,7 @@ export class RoomScene extends Phaser.Scene {
     // Pressed mid-dash, it is kept until the dash is over: a slash then becomes the dash strike.
     // Dazed by a bell, it waits for him to come to.
     const now = this.time.now;
-    if (this.counter || this.satchel) return;
+    if (this.counter || this.satchel || this.carte) return;
     if (now < this.dazedUntil || !act()) this.queued = { act, until: Math.max(now, this.dashUntil, this.dazedUntil) + T.hero.bufferMs };
   }
 
@@ -2000,7 +2006,7 @@ export class RoomScene extends Phaser.Scene {
   /** Opens the items' panel: le sac (on an expedition the game pauses meanwhile), `ground` the item on the floor to take
    *  in place of one of the bag's; or le coffre at the refuge. */
   private openSatchel(mode: 'sac' | 'coffre', ground?: Lying) {
-    if (this.satchel || this.counter || this.training || this.dead || this.prey || this.phase !== 'play') return false;
+    if (this.satchel || this.carte || this.counter || this.training || this.dead || this.prey || this.phase !== 'play') return false;
     this.hero.setVelocity(0);
     this.physics.pause();
     this.tweens.pauseAll();
@@ -2046,6 +2052,20 @@ export class RoomScene extends Phaser.Scene {
     } else if (list[k] && !Items.equip(worn, list, k)) return void this.showSatchel({ held: k, line: 'Remplacer lequel ?' });
     this.dress();
     this.showSatchel({ held: undefined, line });
+  }
+
+  /** Opens the zone's map over the game, paused (map.ts); elsewhere, or busy, nothing. */
+  private openMap() {
+    const z = this.room.zone?.id;
+    if (!z || this.satchel || this.counter || this.stall || this.dead || this.prey || this.cut || this.phase !== 'play') return;
+    this.hero.setVelocity(0);
+    this.carte = Carte.open(this, z, this.hero.body!.center, this.facing);
+    Sfx.play(this, 'snap');
+  }
+
+  private closeMap() {
+    this.carte?.close();
+    this.carte = undefined;
   }
 
   private closeSatchel() {
