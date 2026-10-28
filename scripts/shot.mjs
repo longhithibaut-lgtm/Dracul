@@ -256,7 +256,7 @@ async function catacombs() {
   check(await until(() => !!window.game.scene.getScene('room').fight, null, 8000), 'into the prison: its grille shut behind him, La Matrice comes down');
   await page.waitForTimeout(2500);
   await shot('cata-matrice');
-  await run(() => { const s = window.game.scene.getScene('room'), e = s.fight.boss; s.hurtEnemy(e, e.getData('hp')); });
+  await run(() => { const s = window.game.scene.getScene('room'), e = s.fight.boss; s.kill(e); }); // (a blow would sink into her sac while her cords feed her)
   check(await until(() => { const s = window.game.scene.getScene('room'); return !s.fight && s.room.zone.gates.find((g) => g.arena).open; }, null, 8000) && (await save()).nourrice.dead, 'she dead: the grille rises, her death saved');
   await trek([[2360, 760], [2360, 728]], 'to her reliquary');
   for (let k = 0; k < 4 && !(await run(() => window.game.scene.getScene('room').cut)); k++) { await page.keyboard.press('f'); await page.waitForTimeout(400); }
