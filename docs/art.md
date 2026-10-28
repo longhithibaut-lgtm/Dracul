@@ -27,7 +27,11 @@ décision ou une maquette validée.
 mince, longs cheveux noirs, yeux de braise rouge, long manteau à doublure violette (sa signature), griffes nues,
 lanterne tenue bas ; sa brume est une vapeur de sang caillé. Gestes lourds,
 marche lente, les pieds tiennent au sol (course pilotée par la distance) ; 8 directions, recul et pas chassés quand
-il regarde ailleurs que là où il va (`src/gait.ts`). La Nourrice des goules, « l'Araignée » (`docs/maquettes/boss-nourrice-A-araignee.png`, gardée pour un futur boss ; le gardien des catacombes est la Matrice, `boss-nourrice-B-matrice.png`),
+il regarde ailleurs que là où il va (`src/gait.ts`) ; au combat il marche dans ses coups (griffes, tir), le coup final pèse
+(un temps de reprise), la brume part d'une impulsion et se reforme à l'arrivée, la morsure se lit de profil (élan, crocs,
+boire, arracher), un coup reçu le jette selon son côté (face, dos, flancs), la cloche le fait tituber, il meurt à genoux
+et se dissout en vapeur de sang, sa lanterne restée allumée au sol ; au repos, de loin en loin, un regard de côté, la
+lanterne levée, un souffle. La Nourrice des goules, « l'Araignée » (`docs/maquettes/boss-nourrice-A-araignee.png`, gardée pour un futur boss ; le gardien des catacombes est la Matrice, `boss-nourrice-B-matrice.png`),
 rendue hors ligne depuis les pièces mêmes de la maquette (`tools/art/nourrice.gen.mjs`, posée par quelques nombres
 comme les ennemis) : trois vues (profil, face, dos ; miroir pour la gauche) et une au mur (dos à la caméra, tête en bas),
 à l'échelle des ennemis (environ trois fois la hauteur du héros) ; ses goules accrochées sont des calques à part, qui

@@ -86,6 +86,7 @@ export class RoomScene extends Phaser.Scene {
   private shotUntil = 0; // the throw: he moves at half speed, facing it
   private invulnUntil = 0;
   private hurtAt = -1e9;
+  private hurtFrom?: number; // the way the last blow travelled, when it came from a point (Hero.show: the side he reels from)
   private shoveUntil = 0; // thrown by a hound's leap: he goes along `shove` until then
   private shove = new Phaser.Math.Vector2();
   private dazedUntil = 0; // stunned by a bell's ring: no move, no dash, no blow until then
@@ -584,7 +585,7 @@ export class RoomScene extends Phaser.Scene {
     Hero.show(this.hero, {
       moving: (x || y) !== 0, dashing: time < this.dashUntil, slashing: time < this.slashUntil, combo: this.combo, throwing: time < this.shotUntil,
       biting: !!this.prey || time - this.biteAt < 130, casting: time < this.castUntil,
-      hurt: time - this.hurtAt < 120, dazed, invulnerable: time < this.invulnUntil, facing: this.facing, swarm: time < this.swarmUntil,
+      hurt: time - this.hurtAt < 120, hurtFrom: this.hurtFrom, dazed, invulnerable: time < this.invulnUntil, facing: this.facing, swarm: time < this.swarmUntil,
     });
     // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy;
     // biting, in front of his prey.
@@ -2208,6 +2209,7 @@ export class RoomScene extends Phaser.Scene {
     if (this.dead || (this.training ? Training.opts.god : Training.opts.out) || now < this.invulnUntil || now < this.dashUntil || now < this.swarmUntil) return false;
     this.invulnUntil = now + T.hero.hurtInvulnMs;
     this.hurtAt = now;
+    this.hurtFrom = from && Phaser.Math.Angle.BetweenPoints(from, this.hero.body!.center);
     this.health -= amount;
     this.hud.health(this.health, this.maxHealth());
     Fx.hurt(this, from ? amount : 1);
@@ -2224,6 +2226,7 @@ export class RoomScene extends Phaser.Scene {
     this.dead = true;
     Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
+    Hero.die(this.hero);
     // Back to the refuge, re-formed at his coffin, all the blood he carried lost and the world reset; or back to the
     // training room.
     let lostItems = 0;
