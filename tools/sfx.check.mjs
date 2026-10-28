@@ -1,11 +1,15 @@
 // Sound check in headless Chromium, since nobody here can listen: renders every sound of src/sfx.ts offline and
 // checks it is not silent, not NaN, of the expected length, and peaks below 0.9, alone and with many overlapping.
-// Then checks the game keeps silent before the first input, plays after it, and that M toggles mute.
-// Usage: node tools/sfx.check.mjs   (exit code 1 on a failure or a page error)
+// Then renders the ambience's beds and tension layers of src/ambience.ts (peak and RMS, no clipping, the death's silence)
+// and writes them as WAV previews to shots/audio/ to listen to. Then checks the game keeps silent before the first
+// input, plays after it (the ambience too), and that M toggles mute.
+// Usage: node tools/sfx.check.mjs [--port=5207]   (exit code 1 on a failure or a page error)
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
-const server = await createServer({ server: { port: 5207, strictPort: true }, logLevel: 'error' });
+const port = Number(process.argv.find((a) => a.startsWith('--port='))?.split('=')[1] ?? 5207);
+const server = await createServer({ server: { port, strictPort: true }, logLevel: 'error' });
 await server.listen();
 // Real browsers' autoplay rule, which headless Chromium does not apply by default.
 const browser = await chromium.launch({ args: ['--autoplay-policy=user-gesture-required', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -13,7 +17,7 @@ const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto('http://localhost:5207/');
+await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 
 // [name, arg, expected length to -60 dB, range in ms]
@@ -79,6 +83,61 @@ const [pile, pileRaw] = results.slice(sounds.length);
 console.log(`overlap  peak ${pile.peak.toFixed(2)} (raw ${pileRaw.toFixed(2)})`);
 if (pile.nan || pile.peak >= 0.9) fail(`overlap: peak ${pile.peak}`);
 
+// The ambience: each bed (and what is set in the world near the hero: `near`), each tension layer, the death; rendered
+// offline through the real mixer, the worst case over the full pile of effects above. [file, bed, near, hero, s, dead]
+const calm = { blood: 0, life: 1, combat: false, boss: false, battue: 1e9 };
+const beds = [['refuge', 'refuge', { breath: { g: 0.7, pan: 0.3 }, basin: { g: 0.7, pan: -0.3 } }, {}, 14],
+  ['necropolis', 'necropolis', {}, {}, 10], ['necropolis-camp', 'necropolis', { voices: { g: 0.9, pan: 0.2 }, fire: { g: 1, pan: -0.3 }, hum: { g: 0.5, pan: 0.6 } }, {}, 8],
+  ['necropolis-breach', 'necropolis', { burn: { g: 1, pan: 0.2 } }, {}, 8], ['catacombs', 'catacombs', {}, {}, 10], ['catacombs-lake', 'catacombs', { water: { g: 1, pan: -0.4 } }, {}, 8],
+  ['catacombs-nest', 'nest', {}, {}, 8], ['crypt', 'crypt', { fire: { g: 0.6, pan: 0.5 } }, {}, 8], ['chapel', 'chapel', { choir: { g: 0.9, pan: 0 } }, {}, 8],
+  ['cloister', 'cloister', { burn: { g: 1, pan: 0 } }, {}, 8], ['tension-blood', 'necropolis', {}, { blood: 1 }, 8], ['tension-battue', 'necropolis', {}, { battue: 0 }, 10],
+  ['tension-combat', 'catacombs', {}, { combat: true }, 8], ['tension-low-life', 'catacombs', {}, { combat: true, life: 0.2 }, 8],
+  ['boss', 'prison', {}, { combat: true, boss: true }, 8], ['death', 'necropolis', {}, {}, 6, true]];
+const amb = await page.evaluate(async ({ beds, calm, pile }) => {
+  const m = await import('/src/ambience.ts'), s = await import('/src/sfx.ts'), rate = 24000;
+  const rms = (d, a, b) => { let e = 0; for (let i = a; i < b; i++) e += d[i] * d[i]; return Math.sqrt(e / Math.max(1, b - a)); };
+  const out = [];
+  for (const [name, bed, near, hero, secs, dead] of beds) {
+    const ctx = new OfflineAudioContext(2, rate * secs, rate);
+    m.preview(ctx, bed, near, { ...calm, ...hero }, secs, dead);
+    const buf = await ctx.startRendering(), L = buf.getChannelData(0), R = buf.getChannelData(1), n = L.length;
+    let peak = 0, nan = false;
+    for (let i = 0; i < n; i++) { peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i])); nan ||= Number.isNaN(L[i] + R[i]); }
+    // 16-bit stereo WAV, base64
+    const v = new DataView(new ArrayBuffer(44 + n * 4)), str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 4, true); str(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 2, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 4, true); v.setUint16(32, 4, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 4, true);
+    for (let i = 0; i < n; i++) { v.setInt16(44 + i * 4, Math.max(-1, Math.min(1, L[i])) * 32767, true); v.setInt16(46 + i * 4, Math.max(-1, Math.min(1, R[i])) * 32767, true); }
+    const bytes = new Uint8Array(v.buffer);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    const both = (a, b) => Math.hypot(rms(L, a, b), rms(R, a, b)) / Math.SQRT2;
+    out.push({ name, peak, nan, rms: both(rate, n), cut: dead ? [both(0, rate * 0.5), both(rate * 0.85, rate * 1.1)] : undefined, wav: btoa(bin) }); // rms after the first second's fade in
+  }
+  // the loudest bed and tension under the pile of effects (the effects bus): the master's soft clipper holds
+  const ctx = new OfflineAudioContext(2, rate * 4, rate);
+  m.preview(ctx, 'prison', { fire: { g: 1, pan: 0 } }, { ...calm, combat: true, boss: true, life: 0.2, blood: 1, battue: 0 }, 4);
+  const b = s.bus(ctx, m.mixer(ctx, ctx.destination).fx);
+  for (const [name, arg, at] of pile) s.recipes[name]({ ...s.vary(b), t: 1 + at }, arg);
+  const d = (await ctx.startRendering()).getChannelData(0);
+  return { out, pile: d.reduce((p, x) => Math.max(p, Math.abs(x)), 0) };
+}, { beds, calm, pile: [['slash', 2, 0], ['hit', 2, 0], ['hit', 2, 0], ['kill', 0, 0], ['hurt', 0, 0.01], ['windup', 0, 0], ['spawn', 0, 0], ['spawn', 0, 0], ['death', 0, 0.02], ['clear', 0, 0], ['gate', 0, 0], ['glyph', 0, 0], ['slam', 1, 0], ['horn', 0, 0]] });
+await mkdir('shots/audio', { recursive: true });
+const db = (a) => (20 * Math.log10(Math.max(a, 1e-9))).toFixed(1);
+for (const r of amb.out) {
+  await writeFile(`shots/audio/${r.name}.wav`, Buffer.from(r.wav, 'base64'));
+  console.log(`${r.name.padEnd(18)} peak ${db(r.peak)} dBFS  rms ${db(r.rms)} dBFS${r.cut ? `  death: ${db(r.cut[0])} → ${db(r.cut[1])} dB` : ''}`);
+  if (r.nan) fail(`${r.name}: NaN`);
+  if (r.peak >= 0.9) fail(`${r.name}: peak ${r.peak}`);
+  if (r.rms < 0.001) fail(`${r.name}: nearly silent`); // -60 dB
+  if (r.rms > 0.1) fail(`${r.name}: rms ${db(r.rms)} dB, louder than an ambience`); // -20 dB
+  if (r.cut && r.cut[1] > r.cut[0] / 10) fail(`${r.name}: no silence after the fall`);
+}
+const rmsOf = (n) => amb.out.find((r) => r.name === n).rms;
+for (const [t, base] of [['tension-blood', 'necropolis'], ['tension-combat', 'catacombs'], ['boss', 'catacombs']]) if (rmsOf(t) <= rmsOf(base)) fail(`${t} no louder than ${base}`);
+console.log(`ambience under the effects' pile: peak ${amb.pile.toFixed(2)}; previews in shots/audio/`);
+if (amb.pile >= 1) fail(`master: peak ${amb.pile}`);
+
 // Live game. Headless Chromium starts audio unlocked whatever the flags, so the lock is simulated by suspending the
 // context: a locked context must get no sound at all (it would pile up and burst out on unlock).
 const nodes = (suspend) => page.evaluate(async (suspend) => {
@@ -92,7 +151,13 @@ const nodes = (suspend) => page.evaluate(async (suspend) => {
   delete ctx.createGain;
   return n;
 }, suspend);
-const locked = await nodes(true), unlocked = await nodes(false);
+const locked = await nodes(true);
+const ambLocked = await page.evaluate(async () => { const m = await import('/src/ambience.ts'), t = m.live()?.t; await new Promise((r) => setTimeout(r, 400)); return m.live()?.t === t; });
+const unlocked = await nodes(false);
+await page.waitForTimeout(400);
+const ambLive = await page.evaluate(async () => (await import('/src/ambience.ts')).live()?.layers ?? []);
+console.log(`ambience: still while locked ${ambLocked}, playing after: ${ambLive.join(', ')}`);
+if (!ambLocked || !ambLive.includes('drone')) fail('the ambience must keep still on a locked context and play the refuge after');
 const mute = () => page.evaluate(() => window.game.sound.mute);
 await page.keyboard.press('m');
 await page.waitForTimeout(100); // Phaser handles keys on its next step

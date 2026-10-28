@@ -9,6 +9,7 @@ import * as Room from './room.ts';
 import * as Fx from './fx.ts';
 import * as Hud from './hud.ts';
 import * as Sfx from './sfx.ts';
+import * as Ambience from './ambience.ts';
 import * as Lantern from './lantern.ts';
 import * as Glyph from './glyph.ts';
 import * as Rats from './rats.ts';
@@ -247,6 +248,7 @@ export class RoomScene extends Phaser.Scene {
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
 
     this.hud = Hud.create(this);
+    Ambience.enter(this.layout, this.room, this.layout === 'refuge' ? { breath: Refuge.RONGE, basin: Refuge.BASIN } : undefined);
     // Vermine's price: climbing into a new room, its rats take their due (never his last blood).
     if (this.phase === 'enter' && this.has('vermine') && this.health > 1) {
       this.health = Math.max(1, this.health - T.pacts.vermine.toll);
@@ -522,6 +524,8 @@ export class RoomScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     if (this.dead) return;
+    Ambience.update(this, this.hero.body!.center, { blood: this.carried / this.bloodBag(), life: this.health / this.maxHealth(), boss: !!this.fight,
+      combat: (this.enemies.getChildren() as Sprite[]).some((e) => e.body?.enable && (this.training || e.getData('alert'))) });
     if (this.ronge) this.ronge.show(Shop.beast(Save.data) ? 'beast' : Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.notice ? 'look' : 'idle', time);
     this.vesna?.show(this.stall || Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, this.vesna.s) < T.ronge.notice ? 'count' : 'idle', time);
     if (this.cut) { // a scene plays: he stands, the world waits, the zone streams round the camera
@@ -1906,6 +1910,7 @@ export class RoomScene extends Phaser.Scene {
   /** A pack of the battue is loosed: the horn far off, the hounds baying, a line. No mark on the map. */
   private warn(inquisitor: boolean) {
     Sfx.play(this, 'horn');
+    Ambience.battue();
     this.hud.title(inquisitor ? 'Un Inquisiteur lâche ses chiens.' : 'Les chiens ont flairé ton sang.');
   }
 
@@ -2219,6 +2224,7 @@ export class RoomScene extends Phaser.Scene {
     if (this.health > 0) return true;
     this.dead = true;
     Sfx.play(this, 'death');
+    Ambience.death();
     this.hero.disableBody(false, false);
     // Back to the refuge, re-formed at his coffin, all the blood he carried lost and the world reset; or back to the
     // training room.

@@ -434,4 +434,6 @@ export const T = {
   // `durationMs`: fast (`speed` times his walk), untouchable by blows, it bites every enemy within `radius` (floor),
   // each once every `tickMs`; no claws, shard, bite, glyph or dash. Holy light disperses it at once.
   swarm: { durationMs: 4000, cooldownMs: 18000, speed: 2, radius: 16, damage: 1, tickMs: 350, rats: 11 },
+  // The mix's buses in dB (src/ambience.ts), round the levels the sounds are made at; knobs of the training panel.
+  audio: { master: 0, ambience: 0, music: 0, effects: 0 },
 } as const;
