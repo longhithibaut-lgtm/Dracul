@@ -455,7 +455,7 @@ export const T = {
     up: 120, // from the catacombs, every other pack waits up in the necropolis, this far at least from the door he comes up by
   },
 
-  // Le Rongé, the refuge's merchant (docs/lore.md), crouched by the basin (refuge.ts RONGE): F within `talk` of him
+  // Le Rongé, the refuge's merchant (docs/lore.md), perched on the basin's rim (refuge.ts RONGE): F within `talk` of him
   // opens his wares, paid with the blood banked; he raises his head at the hero within `notice`. Prices: the bite once,
   // max life (`hp` a rank) and the bag by ranks at `cost` x `mult` to the rank bought (40, 72, 130, 233; 60, 108, 194), the bag `size`
   // blood and one item (T.items.bag) bigger a rank. Back `hunger` times (returns or deaths) without pouring into the basin, he turns beast: wares

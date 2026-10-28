@@ -102,8 +102,10 @@ const moved = (m, d) => ({ ...m, sdf: (x, y, z) => m.sdf(x - d[0], y - d[1], z -
 // Perched on the basin's rim like a gargoyle, knees up to his chest, the long arms folded, blood cupped in his hands at
 // his mouth; the coat's rags spread behind him over the stone. 'speak': he leans out toward the hero, one wet hand held
 // open, the other gripping the rim. 'beast': down on hands and feet on the rim, spine bowed, jaw hanging, eyes ablaze.
+// `k` (0-1), the game's frames (tools/art/ronge.gen.mjs): idle, he breathes and dips his mouth to his hands; speak, he
+// leans a little further, the jaw working; beast, he heaves.
 export const RIM = 25; // the basin's rim (../hub3/props3.mjs basin2): his feet are on it
-export function bassin(pose = 'idle') {
+export function bassin(pose = 'idle', k = 0) {
   const b = B(), J = clone(std);
   let F, U, o = {};
   if (pose === 'idle') {
@@ -124,6 +126,10 @@ export function bassin(pose = 'idle') {
       Hr: [-4, -10, 22], Kr: [-8, 0, 25], Ar: [-6, -12, 5], Tr: [-6, -7, 1.2], Hl: [4, -10, 22], Kl: [8, 1, 24], Al: [6, -12, 5], Tl: [6, -7, 1.2] });
     F = nz([0, 1, 0.15]); U = nz([0, -0.2, 1]); o = { jaw: 9, rage: true, ghoul: 0.4, hair: 12, claw: 5.5 };
   }
+  const mv = (keys, d) => { for (const n of keys.split(' ')) J[n] = add(J[n], sc(d, k)); };
+  if (pose === 'idle') { mv('chest neck Sr Sl Er El', [0, 0, 0.8]); mv('head', [0, 0.8, -0.6]); o.jaw += k; }
+  else if (pose === 'speak') { mv('chest neck head Sl', [0, 1.2, 0]); mv('El Wl Hl_', [0, 1.6, 0.8]); o.jaw += 2 * k; }
+  else { mv('chest neck Sr Sl', [0, 0, 1.4]); mv('head', [0, 0.6, 0.8]); o.jaw += 2 * k; }
   man(b, J, F, U, o);
   sleeve(b, J.Sr, J.Er); sleeve(b, J.Sl, J.El);
   if (pose === 'beast') coat(b, add(J.neck, [0, -4, 3]), [0, -20, 2], [0, 1, 0], 9, 13, { open: 1.4, seed: 5, collar: 0.1 });

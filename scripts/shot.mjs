@@ -662,7 +662,7 @@ await run(() => { const s = JSON.parse(localStorage.getItem('dracul.save')); s.b
 await page.reload();
 await arrived('refuge');
 const banked = (await save()).banked;
-check(await walk(896, 678, 15000, 6), 'walked up to le Rongé');
+check(await walk(864, 670, 15000, 10), 'walked up to le Rongé'); // within T.ronge.talk of him anywhere in that circle
 await page.waitForTimeout(700);
 await shot('ronge');
 await page.keyboard.press('f');
