@@ -344,6 +344,39 @@ export const T = {
     bileRange: 70, bileTeleMs: 850, bileReach: 64, bileHalfDeg: 22, spewMs: 450, bileDamage: 10, poolMs: 1800, poolDamage: 5,
     recoverMs: 400, reloadMs: 1500, firstMs: 900,
   },
+  // La Chose du gouffre (chose.ts): two huge hands gripping a bridge's edge (fauna.ts decks()), its head just over it. It
+  // never dies. The hero's feet on the deck within `span` + `notice` along the edge and `reach` from it: its fingers dig
+  // into the stone, the bridge creaks, grit falls off the deck's face, the head rises and an arm rears high (`teleMs`).
+  // Then the arm sweeps the deck from its right to its left in `sweepMs` (`span` either side of its middle): whoever the
+  // hand passes within `hand` of (along the edge; within `reach` of it) is struck for `damage` and flung `throw` px off
+  // the deck (away from the edge, `slant` of it along the sweep) in `throwMs`: landing in the chasm is the fall, death
+  // (the expedition lost, as any death). The arm lies there `restMs`, then it waits `reloadMs`. A claw on its fingers
+  // (not a shard, nor rats) and it tears its hands back (`recoilMs`), sinks (`sinkMs`), stays under `underMs` and climbs
+  // back over the edge (`riseMs`); under, nothing reaches it. `grasp`: how much farther the claws reach its broad hands.
+  chose: {
+    hp: 1, speed: 0,
+    span: 46, notice: 30, reach: 50, teleMs: 1300, sweepMs: 300, hand: 14, damage: 20, throw: 60, slant: 0.5, throwMs: 320,
+    restMs: 1000, reloadMs: 1600, recoilMs: 350, sinkMs: 600, underMs: 6000, riseMs: 900, grasp: 16,
+    firstMs: 0,
+  },
+
+  // ---- The Order's men of the necropolis (docs/maquettes/necropole-ennemis-planche-3.png, names provisional). ----
+
+  // Le Crocheteur (crocheteur.ts): keeps between `near` and `far` of the hero, backing off at `fleeSpeed` when he comes
+  // within `flee`. The net: he whirls it open over his head (`netTeleMs`, a whoosh speeding up), his aim on the hero until
+  // `netLockMs` before it leaves, then it flies straight at `netSpeed` up to `netRange`: the hero within `netRadius` of it
+  // (floor) is netted: `netDamage`, then for `netMs` at most no mist, claws, shard nor bite, walking at `slow`; he tears
+  // free at `free` points (a direction key pressed anew `key`, a claw at the mesh `blow`; la Nuée slips out at once). The
+  // hero netted, he comes within `gaffReach` and raises his boat-hook (`hookTeleMs`): still netted and in reach, the hook
+  // takes the net (`hookDamage`) and he hauls him at `dragSpeed` toward the nearest other foe or lantern within
+  // `dragRange` of him (else his own post) for `dragMs` at most, `gaff` px ahead of him, until he is there or free.
+  crocheteur: {
+    hp: 4, speed: 40, near: 60, far: 95, flee: 36, fleeSpeed: 52,
+    netRange: 100, netTeleMs: 1000, netLockMs: 300, netSpeed: 190, netRadius: 13, netDamage: 5,
+    netMs: 4500, slow: 0.4, free: 6, key: 1, blow: 2,
+    gaffReach: 40, hookTeleMs: 650, hookDamage: 5, dragSpeed: 34, dragMs: 3500, dragRange: 220, gaff: 30,
+    recoverMs: 300, reloadMs: 2200, firstMs: 900,
+  },
 
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
   lantern: {
@@ -405,7 +438,7 @@ export const T = {
   // refuge's basin (within `basin`).
   blood: {
     ring: [0, 1, 3, 8, 20],
-    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20, matrice: 20, enterre: 3, gave: 8 }, // (a flock of crows never dies of a blow),
+    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20, matrice: 20, enterre: 3, gave: 8, crocheteur: 3 }, // (a flock of crows, la Chose du gouffre never die of a blow),
     cache: 5,
     pickup: 16, search: 24, bag: 400, basin: 52,
   },

@@ -367,7 +367,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
       let sh = shades.get(s);
       if (!sh) shades.set(s, (sh = scene.add.image(0, 0, s.texture.key).setTintMode(Phaser.TintModes.FILL).setTint(0)));
       const dx = s.x - lx, dy = s.body!.bottom - feet, d = Math.hypot(dx, dy);
-      sh.setVisible(s.visible && d > 6 && d < 150);
+      sh.setVisible(s.visible && d > 6 && d < 150 && !s.getData('unshaded')); // (la Chose du gouffre: out of the chasm, no floor to lay one on)
       if (!sh.visible) continue;
       // A half-scale sheet (foes.ts) casts at its scale.
       sh.setTexture(s.texture.key, s.frame.name).setPosition(s.x, s.body!.bottom)

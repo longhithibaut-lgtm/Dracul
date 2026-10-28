@@ -32,6 +32,9 @@ import * as Carte from './map.ts';
 import * as Crows from './crows.ts';
 import * as Enterre from './enterre.ts';
 import * as Gave from './gave.ts';
+import * as Chose from './chose.ts';
+import * as Crocheteur from './crocheteur.ts';
+import { decks, nearestEdge, struggle } from './fauna.ts';
 import { WORLD, ZONES, areaAt, chokes, expedition, galleryOpen, go, homeward, isZone, lair, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState, type ZoneId } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
 
@@ -60,8 +63,8 @@ type Lying = { x: number; y: number; item: Items.Item; fx: Loot.Glint; label: Lo
 const NAV = 8; // walk grid cell, px
 type Kind = 'ghoul' | 'crossbow' | 'nourrice' | 'matrice' | 'crows' | Foes.Kind;
 const BOSS: Record<string, string> = { nourrice: 'La Nourrice', matrice: 'La Matrice' }; // their names, on their blood bar
-/** The necropolis' creatures with their own AI module (crows.ts, enterre.ts, gave.ts): neither the Order nor human. */
-const FAUNA: readonly string[] = ['crows', 'enterre', 'gave'];
+/** The necropolis' creatures with their own AI module (crows.ts, enterre.ts, gave.ts, chose.ts): neither the Order nor human. */
+const FAUNA: readonly string[] = ['crows', 'enterre', 'gave', 'chose'];
 /** A kind's hp and pace. */
 const stats = (kind: string): { hp: number; speed: number } => (kind === 'ghoul' ? T.enemy : T[kind as Exclude<Kind, 'ghoul'>]);
 
@@ -151,7 +154,12 @@ export class RoomScene extends Phaser.Scene {
   private vesna?: ReturnType<typeof Vesna.create>; // at the refuge, freed, behind her stall
   private stall?: Vesna.Stall; // her powers, open: the hero waits
   private carte?: Carte.Carte; // the zone's map, open (key C): the game paused
-  private heldBy?: Sprite; // l'Enterré holding him by the ankle: he stands, dragged, until he struggles free
+  private heldBy?: Sprite; // l'Enterré holding him by the ankle, a Crocheteur's hook in his net: he stands, dragged, until he struggles free
+  private pull?: { x: number; y: number; speed: number }; // where the hold drags him (none: toward who holds him)
+  private netUntil = 0; // under a Crocheteur's net until then, or until he tears free (netPoints)
+  private netPoints = 0;
+  private netG?: Phaser.GameObjects.Graphics;
+  private fly?: { x: number; y: number; dx: number; dy: number; at: number; into: boolean }; // flung by la Chose du gouffre
   private bodies: Foes.Ctx['bodies'] = []; // the dead lying on the floor (a Gavé eats them)
   private ctx!: Foes.Ctx; // what the foes' own AI modules may ask of this room
 
@@ -210,7 +218,8 @@ export class RoomScene extends Phaser.Scene {
     this.satchel = undefined;
     this.fight = this.vesna = this.stall = this.carte = undefined;
     this.cut = false;
-    this.heldBy = undefined;
+    this.heldBy = this.pull = this.netG = this.fly = undefined;
+    this.netUntil = this.netPoints = 0;
     this.bodies = [];
   }
 
@@ -269,14 +278,19 @@ export class RoomScene extends Phaser.Scene {
       lit: () => this.inLight, dodging: () => this.time.now < this.dashUntil || this.time.now < this.swarmUntil,
       damageHero: (a, from) => this.damageHero(a, from), hunts: (e) => this.hunts(e, this.time.now), idle: (e) => this.idle(e),
       way: (e) => this.wayToHero(e), keepAt: (...a) => this.keepAt(...a),
-      hold: (by) => { this.heldBy = by; if (by) this.hero.setVelocity(0); },
+      hold: (by, pull) => { [this.heldBy, this.pull] = [by, pull]; if (by) this.hero.setVelocity(0); }, heldBy: () => this.heldBy,
+      pits: this.room.pits.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody),
+      fling: (dx, dy, into) => this.fling(dx, dy, into),
+      netted: () => this.netted(), net: () => { [this.netUntil, this.netPoints] = [this.time.now + T.crocheteur.netMs, 0]; },
+      marks: (e) => [...(this.enemies.getChildren() as Sprite[]).filter((o) => o !== e && o.body?.enable && !this.aloft(o) && !['crows', 'chose', 'enterre'].includes(o.getData('kind'))).map((o) => o.body!.center),
+        ...this.lanterns.filter((l) => l.lit), ...(this.room.zone?.lamps ?? [])],
     };
     // The dead as they settle on the floor (foes.ts, enemy.ts): food for a Gavé.
     const lie = (b: Foes.Ctx['bodies'][number]) => this.bodies.push(b);
     this.events.on('corpse', lie);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off('corpse', lie));
-    // Held by l'Enterré: each direction key pressed anew is a struggle.
-    this.input.keyboard!.on('keydown', (ev: KeyboardEvent) => this.heldBy && !ev.repeat && /^(Key[WASDZQ]|Arrow)/.test(ev.code) && Enterre.struggled(this.ctx, this.heldBy, 'key', this.time.now));
+    // Held by l'Enterré, or netted: each direction key pressed anew is a struggle.
+    this.input.keyboard!.on('keydown', (ev: KeyboardEvent) => !ev.repeat && /^(Key[WASDZQ]|Arrow)/.test(ev.code) && this.struggle('key'));
 
     this.hud = Hud.create(this);
     // Vermine's price: climbing into a new room, its rats take their due (never his last blood).
@@ -355,6 +369,10 @@ export class RoomScene extends Phaser.Scene {
         gifts: this.gifts,
         spawn: (k) => {
           if (k === 'lantern') return void this.addLantern();
+          if (k === 'chose') { // at the chasm's nearest deck (the bridge, the causeway); elsewhere at a spawn point, over a placeholder edge
+            const edge = nearestEdge(decks(this.ctx.pits), this.hero.body!.center), view = this.cameras.main.worldView;
+            return void this.spawn(edge ?? this.room.spawns.find((p) => view.contains(p.x, p.y) && Phaser.Math.Distance.BetweenPoints(p, this.hero) > 50) ?? this.room.spawns[0], 'chose');
+          }
           // Each call takes the next spawn point on screen and not on top of the hero, so two calls never stack two enemies.
           // A pack of hounds, a wave of pénitents: several calls at once.
           const view = this.cameras.main.worldView;
@@ -577,8 +595,9 @@ export class RoomScene extends Phaser.Scene {
     if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
     if (Training.opts.cool) this.dashReadyAt = Math.min(this.dashReadyAt, this.dashUntil), this.swarmReadyAt = Math.min(this.swarmReadyAt, this.swarmUntil), this.glyphReadyAt = 0; // the test panel's
-    if (this.heldBy && !this.heldBy.body?.enable) this.heldBy = undefined; // he died holding him
-    const wantsDash = time - this.dashPressedAt <= T.hero.bufferMs && !auto && !dazed && !this.heldBy; // buffered like the actions, see press()
+    if (this.heldBy && (!this.heldBy.body?.enable || (this.heldBy.getData('kind') === 'crocheteur' && this.heldBy.getData('state') !== 'drag'))) this.heldBy = undefined; // he died holding him, or was cut short
+    if (this.netUntil && time >= this.netUntil) this.unnet();
+    const wantsDash = time - this.dashPressedAt <= T.hero.bufferMs && !auto && !dazed && !this.heldBy && !this.fly && !this.netted(); // buffered like the actions, see press()
     if (wantsDash && time >= this.dashReadyAt && !this.prey && time >= this.swarmUntil) {
       this.dashPressedAt = -1e9;
       if (x || y) this.facing = Math.atan2(y, x); // the way he walks, even mid-swing; else the way he faces
@@ -596,7 +615,7 @@ export class RoomScene extends Phaser.Scene {
       const b = this.hero.body!, left = Math.max(0, this.dashUntil - time) / 1000, miasma = this.has('miasme');
       if (miasma) for (const e of this.enemies.getChildren() as Sprite[])
         if (e.body?.enable && Phaser.Math.Distance.BetweenPoints(b.center, e.body.center) < T.dash.stopShort) this.infect(e, this.v('miasme'));
-      const e = !miasma && (this.enemies.getChildren() as Sprite[]).find((e) => e.body?.enable && e.getData('state') !== 'lunge'
+      const e = !miasma && (this.enemies.getChildren() as Sprite[]).find((e) => e.body?.enable && e.getData('state') !== 'lunge' && e.getData('kind') !== 'chose' // (over the chasm: nothing to stop on)
         && dashStopsAt(b.center, b.velocity, left, e.body.center, T.dash.stopShort));
       if (e) {
         // Back out to exact contact; physics moves the sprite to its body after update().
@@ -606,21 +625,31 @@ export class RoomScene extends Phaser.Scene {
         this.dashReadyAt = time + this.dashCooldown();
       }
     }
-    if (this.heldBy) { // held by the ankle: dragged toward the dead man's mound
-      const m = this.heldBy.body!.center, f = this.hero.body!.center, d = Phaser.Math.Distance.BetweenPoints(f, m);
+    if (this.fly) { // flung off the deck: through the air, no say in it; landing in the chasm, the fall
+      const f = this.fly, k = Math.min(1, (time - f.at) / T.chose.throwMs);
+      this.hero.setVelocity(0).body!.reset(f.x + f.dx * k, f.y + f.dy * k - Math.sin(k * Math.PI) * 8);
+      if (k === 1 && f.into) this.fall();
+      else if (k === 1) [this.fly, this.hero.body!.checkCollision.none] = [undefined, false];
+    } else if (this.heldBy) { // held by the ankle: dragged toward the dead man's mound; hooked by the net: toward where he is hauled
+      const m = this.pull ?? this.heldBy.body!.center, f = this.hero.body!.center, d = Phaser.Math.Distance.BetweenPoints(f, m);
       this.hero.setVelocity(0);
-      if (d > 8) this.physics.velocityFromRotation(Phaser.Math.Angle.BetweenPoints(f, m), T.enterre.drag, this.hero.body!.velocity);
+      if (d > 8) this.physics.velocityFromRotation(Phaser.Math.Angle.BetweenPoints(f, m), this.pull?.speed ?? T.enterre.drag, this.hero.body!.velocity);
     } else if (time < this.shoveUntil && time >= this.dashUntil && !this.prey) this.hero.setVelocity(this.shove.x, this.shove.y);
     else if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      this.hero.body!.velocity.normalize().scale(T.hero.speed * (1 + this.gear.speed) * (time < this.swarmUntil ? T.swarm.speed : posing ? 0.3 : time < this.shotUntil ? 0.5 : 1));
+      this.hero.body!.velocity.normalize().scale(T.hero.speed * (1 + this.gear.speed) * (time < this.swarmUntil ? T.swarm.speed : posing ? 0.3 : time < this.shotUntil ? 0.5 : 1) * (this.netted() ? T.crocheteur.slow : 1));
+    }
+    if (this.netted()) { // the net over him, shaken as he struggles
+      this.netG ??= this.add.graphics();
+      this.netG.clear().setDepth(this.hero.depth + 13);
+      Crocheteur.drawNetted(this.netG, this.hero.x, this.hero.y, Math.sin(time / 40) * Math.min(1.5, this.netPoints * 0.4));
     }
 
     if (this.queued && (time > this.queued.until || (!dazed && this.queued.act()))) this.queued = undefined;
     Hero.show(this.hero, {
-      moving: (x || y) !== 0 && !this.heldBy, dashing: time < this.dashUntil, slashing: time < this.slashUntil, combo: this.combo, throwing: time < this.shotUntil,
+      moving: (x || y) !== 0 && !this.heldBy && !this.fly, dashing: time < this.dashUntil, slashing: time < this.slashUntil, combo: this.combo, throwing: time < this.shotUntil,
       biting: !!this.prey || time - this.biteAt < 130, casting: time < this.castUntil,
-      hurt: time - this.hurtAt < 120, hurtFrom: this.hurtFrom, dazed, invulnerable: time < this.invulnUntil, facing: this.facing, swarm: time < this.swarmUntil,
+      hurt: time - this.hurtAt < 120 || !!this.fly, hurtFrom: this.hurtFrom, dazed, invulnerable: time < this.invulnUntil, facing: this.facing, swarm: time < this.swarmUntil,
     });
     // Mid-swing the hero stands in front of what he strikes, so a dash-in never buries him inside a flashing enemy;
     // biting, in front of his prey.
@@ -720,7 +749,7 @@ export class RoomScene extends Phaser.Scene {
       const kind = e.getData('kind'), bow = kind === 'crossbow';
       // Bound by the glyph, it stops dead, its lunge or aim cancelled, and cannot be shoved; it resumes once let go. A
       // prey in the hero's jaws is held by the bite instead.
-      const boss = kind === 'nourrice' || kind === 'matrice', bound = !!this.glyph && !boss && kind !== 'crows' && kind !== 'enterre' && Glyph.binds(this.glyph, e.body.center, time); // the glyph cannot hold her, a flock, nor what lies in the earth
+      const boss = kind === 'nourrice' || kind === 'matrice', bound = !!this.glyph && !boss && kind !== 'crows' && kind !== 'enterre' && kind !== 'chose' && Glyph.binds(this.glyph, e.body.center, time); // the glyph cannot hold her, a flock, nor what lies in the earth
       const kneeling = this.kneeling(e); // a human just weakened, down on its knees: see hurtEnemy()
       e.setImmovable(bound || e === this.prey || kneeling || boss); // her brood never shoves her
       if (bound && e !== this.prey) {
@@ -735,6 +764,8 @@ export class RoomScene extends Phaser.Scene {
         else if (kind === 'crows') Crows.step(this.ctx, e, time, delta); // the necropolis' own watch and hunt their own way
         else if (kind === 'enterre') Enterre.step(this.ctx, e, time);
         else if (kind === 'gave') Gave.step(this.ctx, e, time);
+        else if (kind === 'chose') Chose.step(this.ctx, e, time);
+        else if (kind === 'crocheteur') Crocheteur.step(this.ctx, e, time);
         else if (!this.hunts(e, time)) this.idle(e);
         else if (bow) this.stepCrossbow(e, time);
         else if (kind === 'purifier') this.stepPurifier(e, time);
@@ -755,7 +786,8 @@ export class RoomScene extends Phaser.Scene {
         e.setData('readyAt', e.getData('readyAt') - delta * (T.inquisitor.command - 1));
       const prey = Save.data.unlocks.bite && e.getData('hp') <= T.bite.weakAt; // its beating drop: it can be bitten
       if (kind === 'crows') continue; // its birds drawn by its step
-      if (kind === 'nourrice') Nourrice.show(e, time, time < e.getData('flashUntil'));
+      if (kind === 'chose') Chose.show(e, time);
+      else if (kind === 'nourrice') Nourrice.show(e, time, time < e.getData('flashUntil'));
       else if (kind === 'matrice') Matrice.show(e, time, time < e.getData('flashUntil'), e.getData('pivot'), this.fed(e).map((g) => ({ x: g.x, y: g.y })), e.getData('state') === 'pull');
       else if (Foes.isFoe(kind)) Foes.show(e, kneeling ? 'kneel' : e.getData('state'), time < e.getData('flashUntil'), e.getData('human') && prey);
       else if (bow) Crossbow.show(e, kneeling ? 'kneel' : e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'), prey);
@@ -1102,7 +1134,7 @@ export class RoomScene extends Phaser.Scene {
   /** Off the floor (on the walls, under the vault, in the air), or under it (l'Enterré buried): out of the claws',
    *  shards' and rats' reach. */
   private aloft(e: Sprite) {
-    return (e.getData('z') ?? 0) > 6 || (e.getData('kind') === 'enterre' && Enterre.under(e));
+    return (e.getData('z') ?? 0) > 6 || (e.getData('kind') === 'enterre' && Enterre.under(e)) || (e.getData('kind') === 'chose' && Chose.under(e));
   }
 
   /** Into the arena, she alive: its grille drops behind him, the battue left outside; her wheel comes down from the vault. */
@@ -1688,6 +1720,10 @@ export class RoomScene extends Phaser.Scene {
   private slash(angle: number) {
     const now = this.time.now, S = T.slash, D = T.dash;
     if (this.dead || this.prey || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.slashReadyAt || now < this.dashUntil) return false;
+    if (this.netted()) { // netted: the claws tear at the mesh instead, a swing's time each
+      this.slashReadyAt = now + S.cooldownMs;
+      return this.struggle('blow');
+    }
     const dash = dashStrikes(now, this.dashUntil, this.lastSlashAt, D.strikeWindowMs);
     this.combo = dash ? 0 : nextCombo(this.combo, now - this.lastSlashAt, S.comboWindowMs);
     const fin = !dash && this.combo === 2, kind = dash ? 3 : this.combo; // kind 3: the dash strike, for effects and sounds
@@ -1706,7 +1742,7 @@ export class RoomScene extends Phaser.Scene {
     if (fin && this.has('grouillantes')) this.releaseRats(this.hero.body!.center, this.v('grouillantes'));
     let hits = 0, killed = false;
     for (const e of [...this.enemies.getChildren()] as Sprite[]) { // not the ghouls this blow tears off an Amas
-      if (!e.body?.enable || this.aloft(e) || !(e.getData('kind') === 'crows' ? Crows.reached(e, this.hero, angle, range, arc) : inArc(this.hero, angle, e, range + (e.getData('kind') === 'nourrice' ? T.nourrice.reach : e.getData('kind') === 'matrice' ? T.matrice.reach : 0), arc))) continue; // their bodies are broad; up on the walls, hanging, out of reach; a flock, by any of its crows
+      if (!e.body?.enable || this.aloft(e) || !(e.getData('kind') === 'crows' ? Crows.reached(e, this.hero, angle, range, arc) : inArc(this.hero, angle, e, range + (e.getData('kind') === 'nourrice' ? T.nourrice.reach : e.getData('kind') === 'matrice' ? T.matrice.reach : e.getData('kind') === 'chose' ? T.chose.grasp : 0), arc))) continue; // their bodies are broad; up on the walls, hanging, out of reach; a flock, by any of its crows
       hits++;
       this.hitEnemy(e, angle, damage, knock, kind);
       killed ||= !e.body?.enable;
@@ -1738,7 +1774,7 @@ export class RoomScene extends Phaser.Scene {
    *  thrown with. */
   private shoot(angle: number) {
     const now = this.time.now, S = T.shot;
-    if (this.dead || this.prey || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
+    if (this.dead || this.prey || this.netted() || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
     if (this.has('jet') && this.rats.filter((r) => r.from === 'jet').length >= T.gifts.jetRats) return false; // the thrown rats still running
     this.shotReadyAt = now + S.cooldownMs;
     this.shotUntil = now + S.throwMs;
@@ -1786,6 +1822,11 @@ export class RoomScene extends Phaser.Scene {
   /** A claw lands: `kind` is the slash's (combo step 0-2, 3 the dash strike). */
   private hitEnemy(e: Sprite, angle: number, damage: number, knock: number, kind: number) {
     const now = this.time.now;
+    if (e.getData('kind') === 'chose') { // a claw on its fingers: it lets go and sinks a while (it never dies)
+      Fx.hit(this, e.x, e.y + 8, angle);
+      Sfx.play(this, 'hit', kind);
+      return Chose.struck(this.ctx, e, now);
+    }
     if (this.parried(e, this.hero.body!.center)) { // his arm jars back
       this.physics.velocityFromRotation(angle + Math.PI, 110, this.shove);
       this.shoveUntil = now + 90;
@@ -1830,6 +1871,7 @@ export class RoomScene extends Phaser.Scene {
     const kind = e.getData('kind');
     if (kind === 'crows') return Crows.scatter(this.ctx, e, this.time.now); // struck, a flock scatters: it never dies of it
     if (kind === 'enterre' && Enterre.under(e)) return; // into the earth
+    if (kind === 'chose') return; // only a claw on its fingers moves it (hitEnemy)
     if (kind === 'enterre') Enterre.struggled(this.ctx, e, 'blow', this.time.now); // a claw on the hand that holds him
     if (kind === 'matrice' && !(amount *= Boss.bared(this.fed(e).length, e.getData('phase')))) return void Sfx.play(this, 'thunk'); // fed by every cord: the blow sinks into the sac
     amount *= (this.has('maigre') ? T.pacts.maigre.mult : 1) * (1 + this.gear.dmg);
@@ -1848,10 +1890,11 @@ export class RoomScene extends Phaser.Scene {
     const c = { ...e.body.center };
     e.disableBody(false, false);
     const kind = e.getData('kind');
-    (kind === 'crossbow' ? Crossbow : Foes.isFoe(kind) ? Foes : kind === 'nourrice' ? Nourrice : kind === 'matrice' ? Matrice : kind === 'crows' ? Crows : Enemy).die(this, e);
+    if (kind === 'chose') Chose.die(e); // the room cleared: gone, no body
+    else (kind === 'crossbow' ? Crossbow : Foes.isFoe(kind) ? Foes : kind === 'nourrice' ? Nourrice : kind === 'matrice' ? Matrice : kind === 'crows' ? Crows : Enemy).die(this, e);
     if (kind === 'nourrice' || kind === 'matrice') this.won(e);
     if (this.heldBy === e) this.heldBy = undefined; // the hand lets go
-    if (kind === 'crows') return; // a flock gone off: no blood, no din
+    if (kind === 'crows' || kind === 'chose') return; // a flock gone off, the Chose: no blood, no din
     Sfx.play(this, 'kill');
     Crows.din(this.ctx, c, this.time.now);
     // Contagion: a sick enemy's plague leaps onto those around it.
@@ -1862,7 +1905,7 @@ export class RoomScene extends Phaser.Scene {
     if (this.has('vermine')) this.releaseRats(e, T.pacts.vermine.rats);
     if (this.has('curee') && ++this.kills % T.pacts.curee.every === 0) this.heal(T.pacts.curee.heal);
     if (!this.exp || e.getData('torn')) return;
-    this.addDrop({ x: c.x, y: c.y, blood: Math.round(T.blood.drops[(kind ?? 'ghoul') as Exclude<Kind, 'crows'>] * T.blood.ring[this.ring(c)] * (1 + this.gear.spoils)) });
+    this.addDrop({ x: c.x, y: c.y, blood: Math.round(T.blood.drops[(kind ?? 'ghoul') as Exclude<Kind, 'crows' | 'chose'>] * T.blood.ring[this.ring(c)] * (1 + this.gear.spoils)) });
     if ((T.items.elites as readonly string[]).includes(kind)) this.addLoot({ x: c.x + 12, y: c.y + 4, item: this.found(this.ring(c), true)! }); // an elite's
   }
 
@@ -1873,7 +1916,7 @@ export class RoomScene extends Phaser.Scene {
    */
   private bite() {
     const now = this.time.now, B = T.bite;
-    if (this.dead || this.prey || this.heldBy || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
+    if (this.dead || this.prey || this.heldBy || this.netted() || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
     const live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable), fangs = Save.data.unlocks.bite;
     const prey = fangs ? biteTarget(this.hero, this.facing, live.map((e) => ({ x: e.x, y: e.y, hp: e.getData('hp'), human: !!e.getData('human'), e })),
       B.range, B.arcDeg, B.weakAt)?.e : undefined;
@@ -2340,7 +2383,8 @@ export class RoomScene extends Phaser.Scene {
     const f = this.hero.body!.center;
     this.swarmFx = Rats.swarm(this, f.x, f.y + 4, T.swarm.rats, T.swarm.radius);
     Sfx.play(this, 'dash');
-    if (this.heldBy) Enterre.letGo(this.ctx, this.heldBy, now); // rats slip out of any grip
+    if (this.heldBy) (this.heldBy.getData('kind') === 'crocheteur' ? Crocheteur : Enterre).letGo(this.ctx, this.heldBy, now); // rats slip out of any grip, and any net
+    this.unnet();
     return true;
   }
 
@@ -2421,10 +2465,36 @@ export class RoomScene extends Phaser.Scene {
       this.time.delayedCall(stop, () => this.physics.resume());
     }
     if (this.health > 0) return true;
+    this.perish();
+    return true;
+  }
+
+  /** Thrown `dx`, `dy` through the air (la Chose du gouffre's sweep): over the chasm's edge, nothing stops him; landing
+   *  `into` it, the fall (update()). */
+  private fling(dx: number, dy: number, into: boolean) {
+    if (this.dead) return;
+    this.heldBy = undefined;
+    this.hero.body!.checkCollision.none = true;
+    this.fly = { x: this.hero.x, y: this.hero.y, dx, dy, at: this.time.now, into };
+  }
+
+  /** Into the chasm: he drops out of sight, his cry going down, and the expedition ends as any death does. */
+  private fall() {
+    this.fly = undefined;
+    this.unnet();
+    Sfx.play(this, 'fall');
+    this.hud.health(0, this.maxHealth());
+    this.tweens.add({ targets: this.hero, y: this.hero.y + 60, scale: this.hero.scale * 0.3, alpha: 0, duration: 1100, ease: 'Quad.easeIn' });
+    this.perish(true);
+  }
+
+  /** The hero's death (`fell`: into the chasm, no body left to dissolve). */
+  private perish(fell = false) {
+    this.health = Math.min(this.health, 0);
     this.dead = true;
     Sfx.play(this, 'death');
     this.hero.disableBody(false, false);
-    Hero.die(this.hero);
+    if (!fell) Hero.die(this.hero);
     // Back to the refuge, re-formed at his coffin, all the blood he carried lost and the world reset; or back to the
     // training room.
     let lostItems = 0;
@@ -2434,7 +2504,34 @@ export class RoomScene extends Phaser.Scene {
       lostItems = this.bag.filter((it) => !Items.acquired(Save.data, it)).length + Items.die(Save.data); // the bag, and what he wore not yet brought back
       Save.store();
     }
-    this.time.delayedCall(1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, ranks: this.ranks, layout: this.layout } : { lost: this.carried, lostItems }) satisfies Run));
+    this.time.delayedCall(fell ? 1800 : 1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, ranks: this.ranks, layout: this.layout } : { lost: this.carried, lostItems }) satisfies Run));
+  }
+
+  /** Under a Crocheteur's net. */
+  private netted() {
+    return this.time.now < this.netUntil;
+  }
+
+  /** The net off him (torn, slipped out of as rats, or its time up). */
+  private unnet() {
+    this.netUntil = this.netPoints = 0;
+    this.netG?.clear();
+  }
+
+  /** Netted, or held by l'Enterré: a direction key pressed anew (`key`) or a claw (`blow`, on the net or the hand that
+   *  holds him) counts toward getting free. True when it counted. */
+  private struggle(how: 'blow' | 'key') {
+    if (this.netted()) {
+      const s = struggle(this.netPoints, how, T.crocheteur);
+      this.netPoints = s.points;
+      if (s.free) {
+        this.unnet();
+        Sfx.play(this, 'snap');
+      }
+      return true;
+    }
+    if (this.heldBy?.getData('kind') !== 'enterre' || how === 'blow') return false; // (a claw on him: hurtEnemy())
+    Enterre.struggled(this.ctx, this.heldBy, 'key', this.time.now);
     return true;
   }
 
@@ -2487,7 +2584,9 @@ export class RoomScene extends Phaser.Scene {
    *  the hero (never a second one). */
   private place(p: { x: number; y: number }, kind: Kind, o: Placed = {}) {
     const bow = kind === 'crossbow', now = this.time.now;
-    const e = (Foes.isFoe(kind) ? Foes.create(this, this.enemies, kind, p.x, p.y) : kind === 'nourrice' ? Nourrice.create(this, this.enemies, p.x, p.y) : kind === 'matrice' ? Matrice.create(this, this.enemies, p.x, p.y)
+    const edge = kind === 'chose' ? nearestEdge(decks(this.ctx.pits), p) : undefined, gripped = !!edge && Phaser.Math.Distance.BetweenPoints(edge, p) < 40; // a deck's edge: the chasm's
+    const e = (kind === 'chose' ? Chose.create(this, this.enemies, gripped ? edge! : { x: p.x, y: p.y, span: T.chose.span, depth: 40 }, !gripped)
+      : Foes.isFoe(kind) ? Foes.create(this, this.enemies, kind, p.x, p.y) : kind === 'nourrice' ? Nourrice.create(this, this.enemies, p.x, p.y) : kind === 'matrice' ? Matrice.create(this, this.enemies, p.x, p.y)
       : kind === 'crows' ? Crows.create(this, this.enemies, p.x, p.y) : (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y)).setCollideWorldBounds(true);
     const common = { state: 'chase', until: 0, stunnedUntil: 0, flashUntil: 0, facing: Math.PI / 2, side: Math.random() < 0.5 ? -1 : 1, steadyUntil: 0, kneelUntil: 0,
       hp: o.hp ?? stats(kind).hp, home: o.home ?? { x: p.x, y: p.y }, alert: !!o.alert, seenAt: o.alert ? now : -1e9, followed: !!o.followed, pack: o.pack ?? 0 };
