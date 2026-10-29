@@ -35,6 +35,23 @@ export function dashStrikes(now: number, dashUntil: number, lastSlashAt: number,
   return dashUntil > 0 && lastSlashAt < dashUntil && now - dashUntil <= windowMs;
 }
 
+/** The input buffer: a press at `at` the hero could not act on yet is still wanted at `now`, until `bufferMs` after he
+ *  may try again (`waitUntil`: the end of a dash or a daze it waits out; else the press itself). */
+export const buffered = (now: number, at: number, waitUntil: number, bufferMs: number) => now <= Math.max(at, waitUntil) + bufferMs;
+
+/** The mist may cut short what the hero is doing (the recovery after a blow, a throw, a cast) but never an action's
+ *  committed frames (until `commitUntil`), and only once it is back (`readyAt`). */
+export const dashFree = (now: number, readyAt: number, commitUntil: number) => now >= readyAt && now >= commitUntil;
+
+/** Poise: a foe of `poise` (Infinity: it never staggers) that had taken `taken` by its blow at `lastAt`, struck at `now`
+ *  by a blow of `weight`. What it took drains away `regenMs` after a blow; still steady from its last stagger (until
+ *  `steadyUntil`) it takes nothing. What it has taken then, and whether it breaks (then it has taken nothing). */
+export function poiseHit(p: { taken: number; lastAt: number; steadyUntil: number }, now: number, weight: number, poise: number, regenMs: number) {
+  if (now < p.steadyUntil || !Number.isFinite(poise)) return { taken: 0, breaks: false };
+  const taken = (now - p.lastAt < regenMs ? p.taken : 0) + weight;
+  return taken >= poise ? { taken: 0, breaks: true } : { taken, breaks: false };
+}
+
 /**
  * A blow of `amount` on an enemy with `hp`. A human it leaves weakened (`weakAt` or less, but alive) drops to its knees;
  * while it kneels, blows can't take its hp below what it knelt with, so it is left for the bite. Only a human already

@@ -165,7 +165,7 @@ export function show(s: Sprite, state: EnemyState, facing: number, flash: boolea
   const hurt = now - (s.getData('hitAt') ?? -1e9);
   const age = now - s.getData('born');
   let f: string;
-  if (hurt < 220) f = 'hurt';
+  if (hurt < 220 || now < (s.getData('staggerUntil') ?? 0)) f = 'hurt'; // struck; its poise broken, it reels (RoomScene.hitEnemy)
   else if (age < RISE_MS) f = 'rise' + Math.floor((age * 3) / RISE_MS);
   else if (state === 'windup') {
     // coil back, then cock one claw behind the head and aim the other at the hero, trembling; the eyes flare just before the lunge
@@ -176,7 +176,19 @@ export function show(s: Sprite, state: EnemyState, facing: number, flash: boolea
   } else if (state === 'recover') f = t > 200 && Math.floor(t / 180) % 2 ? 'recover1' : 'recover0';
   else f = s.body!.velocity.lengthSq() > 25 ? 'walk' + (Math.floor((now + s.getData('phase')) / 120) % 4) : 'idle';
   if (Math.sin(facing) < -0.5 && BACKS.has(f)) f += 'b';
-  s.setFrame(flash && hurt > 0 && hurt < 50 ? f + '!' : f); // impact frame in colour, then a white-rim pop for a few frames
+  s.setFrame(flash && hurt > 0 && hurt < 50 ? f + '!' : f).setTint(wounded(s, now)); // impact frame in colour, then a white-rim pop for a few frames
+}
+
+/** A foe's wounds as its blood runs out (no bar, T.feel): the tint it takes, darker and redder, and now and then a drop
+ *  of blood falling off it (a trail on the floor). */
+export function wounded(s: Sprite, now: number): number {
+  const F = T.feel, hp0 = s.getData('hp0'), w = hp0 ? Phaser.Math.Clamp(1 - s.getData('hp') / hp0, 0, 1) : 0;
+  if (w >= F.dripFrom && now >= (s.getData('dripAt') ?? 0)) {
+    s.setData('dripAt', now + Phaser.Math.Linear(F.dripMs[0], F.dripMs[1], (w - F.dripFrom) / (1 - F.dripFrom)) * Phaser.Math.FloatBetween(0.6, 1.4));
+    bleed(s.scene, s.x + Phaser.Math.Between(-4, 4), s.y, Math.PI / 2, w > 0.6 ? 2 : 1, 0.6, 0.15, Phaser.Math.Between(6, 16));
+  }
+  const g = Math.round(255 * (1 - F.tint * w));
+  return Phaser.Display.Color.GetColor(Math.round(255 * (1 - 0.3 * F.tint * w)), g, Math.round(g * 0.85)); // blood, darker, not fire: the blue goes first
 }
 
 // After-images left behind during the lunge.
@@ -191,12 +203,16 @@ export function die(scene: Scene, s: Sprite) {
   const key = s.texture.key;
   s.setFrame('hurt!');
   scene.time.delayedCall(70, () => {
-    const { x, y, flipX } = s;
-    const away = (s.getData('facing') ?? 0) + Math.PI;
-    const fy = y + GROUND;
+    const { flipX } = s, fling = s.getData('fling') as { angle: number; d: number } | undefined, gored = s.getData('gored');
+    const away = fling?.angle ?? (s.getData('facing') ?? 0) + Math.PI;
+    // Thrown along its death blow (RoomScene.kill), it bursts where it lands.
+    const x = s.x + (fling ? Math.cos(fling.angle) * fling.d : 0), y = s.y + (fling ? Math.sin(fling.angle) * fling.d : 0);
+    const fy = y + GROUND, heap = image(scene, key, s.x, s.y, 'slump', flipX).setDepth(y);
+    if (fling) scene.tweens.add({ targets: heap, x, y, duration: T.feel.flingMs * 0.5, ease: 'Cubic.easeOut' });
     s.destroy();
-    // It bursts: blood everywhere, ash drifting up, the empty robe drops into a spreading pool and the mask flies off.
-    bleed(scene, x, y, away, 24, 1.4, 1);
+    // It bursts: blood everywhere (unless its death blow tore it open already), ash drifting up, the empty robe drops into
+    // a spreading pool and the mask flies off.
+    if (!gored) bleed(scene, x, y, away, 24, 1.4, 1);
     bleed(scene, x, y, away, 7, 1.8, 0.7, 10, SHREDS, 1);
     for (let i = 0; i < 18; i++) {
       const a = scene.add.rectangle(x + Phaser.Math.Between(-7, 7), y + Phaser.Math.Between(-10, 8), 1, 1,
@@ -204,7 +220,6 @@ export function die(scene: Scene, s: Sprite) {
       scene.tweens.add({ targets: a, y: a.y - Phaser.Math.Between(14, 30), x: a.x + Phaser.Math.Between(-6, 6), alpha: 0,
         duration: Phaser.Math.Between(700, 1400), ease: 'Sine.easeOut', onComplete: () => a.destroy() });
     }
-    const heap = image(scene, key, x, y, 'slump', flipX).setDepth(y);
     scene.time.delayedCall(90, () => heap.setFrame('heap'));
     run(scene, 360, (t) => {
       const k = Phaser.Math.Easing.Quadratic.Out(t / 0.36);

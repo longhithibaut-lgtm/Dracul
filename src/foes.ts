@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { ZOOM, prelit } from './dark.ts';
-import { BLOOD, bleed, pool, run, stains } from './enemy.ts';
+import { BLOOD, bleed, pool, run, stains, wounded } from './enemy.ts';
 import { mark } from './crossbow.ts';
 import { SHEETS, FLOOR } from './foes.data.ts';
 import purifierSheet from './purifier.png';
@@ -134,12 +134,13 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
   else if (state === 'wrench' || state === 'rip') f = 'pull' + (Math.floor(t / (state === 'rip' ? 90 : 230)) % 2); // tugging the stuck axe; at the hero, hard
   else if (POSE[state]) f = POSE[state]!;
   else if (now - (s.getData('parryAt') ?? -1e9) < 300) f = 'parry';
-  else if (state !== 'held' && hurt < 200) f = 'hurt'; // struck: he reels back (the blow's knockback carries him)
+  else if (state !== 'held' && (hurt < 200 || now < (s.getData('staggerUntil') ?? 0))) f = 'hurt'; // struck: he reels back (the blow's knockback carries him), held while his poise is broken
   else if (state !== 'held' && s.body!.velocity.lengthSq() > 25) f = 'walk' + (Math.floor((walked / S.STRIDE) * S.WALK) % S.WALK);
   s.setFrame(`${VIEW[o]}-${f}`);
+  const wound = wounded(s, now); // its blood running out: darker, redder, dripping
   if (hurt < 120 && flash) s.setTint(STRUCK);
   else if (haste) s.setTint(Phaser.Display.Color.GetColor(255, 236 - 14 * Math.abs(Math.sin(now / 160)), 214 - 26 * Math.abs(Math.sin(now / 160))));
-  else s.clearTint();
+  else s.setTint(wound);
 
   // The jet leaves the lance and runs along his real aim: its view's frame, turned on the lance from the way it points in
   // that view (the sheets' foreshortened floor) to the aim on the game's floor.
@@ -291,12 +292,18 @@ export function die(scene: Scene, s: Sprite) {
   const key = s.texture.key, view = s.frame.name.split('-')[0], blend = s.blendMode, size = s.scaleY; // a Gavé grown by its meals
   s.setTint(STRUCK);
   scene.time.delayedCall(70, () => {
-    const { x, y, flipX, originY } = s, away = (s.getData('facing') ?? 0) + Math.PI;
+    const { flipX, originY } = s, gored = s.getData('gored'), fling = s.getData('fling') as { angle: number; d: number } | undefined, away = fling?.angle ?? (s.getData('facing') ?? 0) + Math.PI;
+    let { x, y } = s;
     s.destroy();
-    // They bleed: a red burst, a man sinks to his knees (a hound reels), falls, and a pool spreads under him.
-    bleed(scene, x, y, away, key === 'amas' ? 40 : 20, 1.2, 1);
+    // They bleed (a red burst, unless their death blow tore them open: RoomScene.kill), a man sinks to his knees (a hound
+    // reels), thrown back along the blow, falls, and a pool spreads under him.
+    if (!gored) bleed(scene, x, y, away, key === 'amas' ? 40 : 20, 1.2, 1);
     const body = scene.add.image(x, y, key, `${view}-${['hound', 'amas', 'enterre'].includes(key) ? 'hurt' : 'kneel'}`).setOrigin(0.5, originY).setScale(size).setFlipX(flipX).setDepth(y).setBlendMode(blend);
-    scene.time.delayedCall(220, () => {
+    if (fling) {
+      [x, y] = [x + Math.cos(fling.angle) * fling.d, y + Math.sin(fling.angle) * fling.d];
+      scene.tweens.add({ targets: body, x, y, duration: T.feel.flingMs, ease: 'Cubic.easeOut' });
+    }
+    scene.time.delayedCall(Math.max(220, fling ? T.feel.flingMs : 0), () => {
       body.setFrame('corpse').setDepth(1.5); // on the floor, over its blood, under everyone
       run(scene, 600, (t) => {
         const k = Phaser.Math.Easing.Quadratic.Out(t / 0.6), rt = stains(scene);

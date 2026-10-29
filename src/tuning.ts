@@ -7,20 +7,29 @@ export const T = {
   // maxHealth: his life in HP, every blow and heal below too (docs/decisions.md 2026-10-28: 50 HP, the old drops x10).
   // speed: the grand vampire walks heavily (his run frames follow the distance); bufferMs: how early a press may come, see press()
   hero: { maxHealth: 50, speed: 66, hurtInvulnMs: 800, bufferMs: 150 },
+  // The camera looks ahead (RoomScene.update): toward the pointer while the mouse aims (`mouse`: the share of its offset
+  // from the screen's middle), else along his walk; at most `look` px across and `lookY` up and down (the hero always
+  // well inside the view), easing there in about `lookMs`. Never in the boss arena (its own framing).
+  camera: { look: 36, lookY: 22, mouse: 0.3, lookMs: 260 },
   dash: {
     speed: 330, durationMs: 130, cooldownMs: 380, stopShort: 22, // stopShort: halts this far from an enemy it'd end on
     // The dash strike: a slash pressed during the dash (it waits for the end) or this soon after it. The combo's first blow.
     strikeWindowMs: 120, strikeBonus: 1, strikeArcDeg: 180, strikeKnock: 1.5, // strikeKnock: x slash.knockback
+    strikeHitStopMs: 20, // added to the claws' hit-stop
   },
   slash: {
     range: 30, arcDeg: 130, damage: 1, cooldownMs: 210, comboWindowMs: 450, knockback: 140, hitStopMs: 40,
     // The combo's third blow, the finisher: heavier, wider and longer, but the next slash waits `finisherRecoveryMs` more.
     finisherMult: 2, finisherRange: 36, finisherArcDeg: 170, finisherKnock: 1.6, finisherHitStopMs: 40, finisherRecoveryMs: 150,
+    // The swing's committed frames (the arc sweeping, fx.ts): the mist cannot cut them short, only the recovery after
+    // them (a mist pressed meanwhile waits, buffered, and the claws are ready again as it ends).
+    commitMs: 60, finisherCommitMs: 80,
   },
   // Le Tir: a shard of blood flicked straight ahead, without limit; weaker and slower than the claws. It flies until the
   // first enemy, lantern, prop or wall in its way.
   // throwMs: the flick, at half speed. stunMs: a short flinch that never cancels a windup or an aim, so the tir can't pin.
-  shot: { damage: 0.5, cooldownMs: 400, speed: 240, knockback: 40, throwMs: 120, stunMs: 80 },
+  // commitMs: the flick's committed frames, as the claws'.
+  shot: { damage: 0.5, cooldownMs: 400, speed: 240, knockback: 40, throwMs: 120, stunMs: 80, commitMs: 50 },
   // La Morsure: the only heal. On a weakened human only; the hero is held at its throat, open to every blow, while it drains.
   bite: {
     weakAt: 1, // a human with this much hp or less can be bitten
@@ -42,13 +51,13 @@ export const T = {
     holdMs: 2500, // then it binds, this long
     cooldownMs: 5000, // from one cast to the next
     castMs: 220, // the hero's cast pose
+    commitMs: 140, // its committed frames, as the claws' (the sigil drawn); the rest of the pose the mist cuts short
   },
 
   enemy: {
     hp: 3,
     speed: 42,
     spacing: 56, // packmates closer than this push apart, so a wave surrounds the hero instead of stacking
-    stunMs: 200,
     spawnTelegraphMs: 700,
     // Attack: stop and telegraph (windup), then lunge. Only the lunge hurts, so it can be dodged.
     lungeRange: 38,
@@ -77,10 +86,28 @@ export const T = {
   },
 
   // The grand foes (below) when their blow lands on the hero: the game freezes `hitStopMs` and he is
-  // thrown back at `knock` px/s for `knockMs`, both per 10 HP lost, so a heavier blow lands harder. `poiseMs`:
-  // struck out of an attack, a foe holds firm through the blows that follow this long (an attack begun meanwhile goes
-  // on), so the claws cannot pin it down.
-  foes: { hitStopMs: 45, knock: 110, knockMs: 90, poiseMs: 700 },
+  // thrown back at `knock` px/s for `knockMs`, both per 10 HP lost, so a heavier blow lands harder.
+  foes: { hitStopMs: 45, knock: 110, knockMs: 90 },
+  // Poise (RoomScene.hitEnemy, logic.ts poiseHit): each claw wears a foe's poise (`of`, by kind) down by its weight
+  // (`claw`, the `finisher`, the `dash` strike; shards wear nothing: they never cut an attack short). Worn through, it
+  // breaks: the foe staggers `staggerMs` (cut short in whatever it was doing, its wind-up too), thrown back along the
+  // blow, the hit-stop `breakStopMs` longer. Holding, it only flinches `flinchMs`, pushed back `flinchKnock` of the
+  // blow, when walking or recovering; mid-attack it holds firm. What it took drains away `regenMs` after its last blow;
+  // staggered, it holds firm `steadyMs` from the break (the claws cannot pin it down). A kind not listed never staggers
+  // nor is pushed back (the Amas, the Bourreau, the bosses, the necropolis' own).
+  poise: {
+    of: { ghoul: 1, crossbow: 1, priest: 1, penitent: 1, hound: 2, ringer: 2, crocheteur: 2, purifier: 3, inquisitor: 4 } as Record<string, number>,
+    claw: 1, finisher: 3, dash: 2,
+    staggerMs: 300, flinchMs: 120, flinchKnock: 0.5, breakStopMs: 30, regenMs: 1500, steadyMs: 800,
+    slideMs: 200, // thrown back (staggered or flinching), its pace eases off this fast (time constant): about 22 px for a claw
+  },
+  // How a fight looks as it goes. A foe's last blow tears it open (fx-blood.ts gore, `gore` big, `goreHeavy` from a
+  // finisher, a dash strike or a broken poise) and throws its body `fling` px along the blow per x1 of the claws'
+  // knockback (stopped short of props and walls); the last foe of a fight down, the world's clocks (its death, its blood)
+  // run at `slow` of their pace, easing back over `slowMs`, once the blow's hit-stop is over. Wounded, a foe darkens to
+  // red (`tint`: the share of its green and blue gone at death's door) and drips blood every `dripMs` (from its first
+  // wound to its last breath), once it has lost `dripFrom` of its blood. No bar over the common foes.
+  feel: { gore: 1.8, goreHeavy: 2.6, fling: 10, flingMs: 240, slow: 0.25, slowMs: 700, tint: 0.6, dripFrom: 0.3, dripMs: [900, 240] },
 
   // The Order's Purificateur: a heavy flamethrower. He walks into range,
   // turns to the hero and lights his pilot, flaring (the tell, his aim locked: stepping aside dodges), then burns along
