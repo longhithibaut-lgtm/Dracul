@@ -194,6 +194,11 @@ ses chiens) se met en chasse et vient se placer **entre le héros et le refuge**
 retour devient la partie la plus tendue, au lieu d'une marche vide. Seuils et composition dans `T` (premier jet : une
 meute tous les 50 sang portés). Les ennemis tués **restent morts pendant l'expédition** ; seule la battue revient.
 
+**Le sang porté pèse** (codé 2026-10-29, `T.blood.weight`) : plus le sac est rempli, plus le héros marche lentement
+(jusqu'à −20 % plein), plus sa brume revient lentement (jusqu'à +25 %) et plus on le remarque de loin (jusqu'à +35 %,
+l'ombre aide toujours) ; il laisse une traînée de gouttes. Un plus grand sac (Rongé, Outre de peau) pèse moins pour le
+même sang ; le Flacon scellé fait moins goutter. Courbe et chiffres : `docs/decisions.md`.
+
 - Chaque ennemi a un **niveau** qui n'est **jamais affiché**. On le devine à sa zone, à sa tenue, à son comportement.
 - Le niveau change les PV, les dégâts, la vitesse de réaction et parfois une variante (un pénitent aguerri porte
   une croix cloutée).

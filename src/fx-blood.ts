@@ -358,8 +358,8 @@ export function drain(scene: Phaser.Scene, from: P, mouth: P, ms: number) {
 
 /** A drop off his full bag at floor point (x, y): a dark speck on the floor that soaks away over `ms` (his trail). */
 export function drip(scene: Phaser.Scene, x: number, y: number, ms: number) {
-  const g = take(scene, 2, 0), fx = Math.round((x + rnd(-3, 3)) * Z), fy = Math.round((y + rnd(-1, 2)) * Z), w = pick([2, 3, 3, 4]);
-  g.fillStyle(B[1]).fillRect(fx - 1, fy, w + 1, 2).fillStyle(B[3]).fillRect(fx, fy, w - 1, 1);
+  const g = take(scene, 2, 0), fx = Math.round((x + rnd(-3, 3)) * Z), fy = Math.round((y + rnd(-1, 2)) * Z), w = pick([3, 4, 4, 5]);
+  g.fillStyle(B[2]).fillRect(fx - 1, fy - 1, w, 3).fillRect(fx - 2, fy, w + 2, 1).fillStyle(B[4]).fillRect(fx, fy - 1, w - 2, 2);
   scene.tweens.add({ targets: g, alpha: 0, delay: ms * 0.4, duration: ms * 0.6, onComplete: () => give(g) });
 }
 
