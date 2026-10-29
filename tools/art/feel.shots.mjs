@@ -7,7 +7,8 @@
 // along the walk and toward the pointer. Part 2, the predator's tools: a predator strike from the dark (one claw kills an
 // unaware ghoul, its packmate stays unaware; he darkens before), a bot reacting to a pénitent's and a ghoul's tell with a
 // parry (X) then the riposte (J), a missed parry leaving him open, the charged claw (J held: rears back, full, released;
-// before full; cancelled by the mist; a mist after its committed frames). Exits 1 on a failed check or a page error.
+// before full; cancelled by the mist; a mist after its committed frames); then on an expedition, the watch: unseen behind
+// a ghoul, seen in front only after its beat. Exits 1 on a failed check or a page error.
 // Usage: node tools/art/feel.shots.mjs [--out=shots/feel --port=5213 --only=tools]
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -303,6 +304,30 @@ if (!only || only === 'tools') { // part 2: the predator's tools
   console.log('charge released early, cancelled by the mist (blood taken):', half, cancelled);
   check(half === T.slash.damage + C.damage[0] && cancelled === T.slash.damage, `released before full: ${C.damage[0]}; a mist in the charge lets it go unstruck`);
   await opt('passive');
+  // ---- The watch, out of the training room (an expedition in the necropolis, at the dark spot): a ghoul at its post
+  // looking right (its turning pinned). He stands behind it, 24 px off: unseen. In front, 58 px off in the dark (down to
+  // its right): it turns
+  // to him at once, but hunts only after its beat (T.sight.noticeMs).
+  await run(([x, y]) => window.game.scene.getScene('room').scene.restart({ layout: 'necropolis', at: { x, y } }), [dark.x - 24, dark.y]);
+  for (let i = 0; i < 200 && !(await run(() => { const s = window.game.scene.getScene('room'); return s.sys.isActive() && !s.training && !!s.hero?.body && s.enemies?.scene === s; })); i++) { await page.waitForTimeout(50); await play(50); } // the zone loads
+  await play(1500);
+  const watch = (dx, dy = 0) => run(([x, y, dx, dy]) => {
+    const s = window.game.scene.getScene('room'), e = s.enemies.getChildren().find((o) => o.getData('home')?.x === x && o.body?.enable);
+    if (dx != null) { s.hero.body.reset(x + dx, y + dy); s.hero.setVelocity(0); }
+    return e && { alert: e.getData('alert'), spot: e.getData('spotAt') > 0, facing: +e.getData('facing').toFixed(2), lit: s.inLight };
+  }, [dark.x, dark.y, dx, dy]);
+  await run(([x, y]) => window.game.scene.getScene('room').place({ x, y }, 'ghoul').setData({ facing: 0, turnAt: Infinity }), [dark.x, dark.y]);
+  await watch(-24);
+  await play(600);
+  const back = await watch();
+  await watch(50, 30);
+  await play(T.sight.noticeMs / 2);
+  const beat = await watch();
+  await play(T.sight.noticeMs);
+  const known = await watch();
+  console.log('the watch (behind, in the beat, after it):', JSON.stringify({ back, beat, known }));
+  check(back && !back.lit && back.alert === false && !back.spot, `behind a ghoul on the watch, 24 px off in the dark: unseen (it sees ${T.sight.back} px behind)`);
+  check(beat?.alert === false && beat.spot && beat.facing > 0.3 && !beat.lit && known?.alert === true, `in front, 58 px off in the dark: it turns to him at once, hunts only after ${T.sight.noticeMs} ms`);
 }
 console.log(`strips: ${rows.map((r) => `${out}/feel-${r}.png`).join(' ')}`);
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
