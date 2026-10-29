@@ -46,7 +46,7 @@ function vn(x: number, y: number, s: number) {
 // Graphics are kept and handed out again (hidden meanwhile): a fight throws dozens of effects a second.
 const spare: G[] = [];
 function take(scene: Phaser.Scene, depth: number, blend: number) {
-  for (let g = spare.pop(); g; g = spare.pop()) if (g.scene === scene) return g.clear().setDepth(depth).setBlendMode(blend).setVisible(true);
+  for (let g = spare.pop(); g; g = spare.pop()) if (g.scene === scene) return g.clear().setDepth(depth).setBlendMode(blend).setVisible(true).setAlpha(1); // (a drip fades its own)
   return scene.add.graphics().setScale(1 / Z).setDepth(depth).setBlendMode(blend);
 }
 const give = (g: G) => g.scene && spare.push(g.clear().setVisible(false));
@@ -354,6 +354,13 @@ export function drain(scene: Phaser.Scene, from: P, mouth: P, ms: number) {
       seg(g, p.x, p.y, q.x, q.y, k < 0.4 ? B[1] : B[2], k < 0.4 ? B[2] : k < 0.75 ? B[3] : B[5]);
     }
   }, prelit(scene));
+}
+
+/** A drop off his full bag at floor point (x, y): a dark speck on the floor that soaks away over `ms` (his trail). */
+export function drip(scene: Phaser.Scene, x: number, y: number, ms: number) {
+  const g = take(scene, 2, 0), fx = Math.round((x + rnd(-3, 3)) * Z), fy = Math.round((y + rnd(-1, 2)) * Z), w = pick([2, 3, 3, 4]);
+  g.fillStyle(B[1]).fillRect(fx - 1, fy, w + 1, 2).fillStyle(B[3]).fillRect(fx, fy, w - 1, 1);
+  scene.tweens.add({ targets: g, alpha: 0, delay: ms * 0.4, duration: ms * 0.6, onComplete: () => give(g) });
 }
 
 /** Blood regained: he darkens with it a moment, a ring spreads at his feet and drops rise off him. */

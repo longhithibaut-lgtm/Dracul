@@ -37,6 +37,7 @@ export type FoeState = 'chase' | 'aim' | 'shoot' | 'ignite' | 'fire' | 'recover'
 export type Ctx = {
   scene: Scene; hero: Sprite; enemies: Phaser.Physics.Arcade.Group;
   lit(): boolean; // the hero stands in light: seen from farther
+  loud(): number; // how much farther he is noticed for the blood he drips (RoomScene.weight())
   dodging(): boolean; // misting, or a swarm of rats: nothing takes hold of him
   damageHero(amount: number, from?: Phaser.Types.Math.Vector2Like): boolean;
   hunts(e: Sprite): boolean; // it has seen him and hunts him (T.sight)

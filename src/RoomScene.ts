@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { aimAt, alertness, biteTarget, burnsAfter, carry, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, onLine, pickSpot, placeGroups, rayDistance, scent, sightRange, stepsFrom, walkCells, wound } from './logic.ts';
+import { aimAt, alertness, biteTarget, burden, burnsAfter, carry, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, onLine, pickSpot, placeGroups, rayDistance, scent, sightRange, stepsFrom, walkCells, wound } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -119,6 +119,7 @@ export class RoomScene extends Phaser.Scene {
   private entry?: number;
   private at?: { x: number; y: number };
   private carried = 0; // blood in his bag
+  private dripAt = 0; // when his bag drips next (weight())
   private hounds: number[] = [];
   private lost = 0;
   private drops: (Blood & { fx: Loot.Drop })[] = [];
@@ -275,7 +276,7 @@ export class RoomScene extends Phaser.Scene {
     this.physics.add.overlap(this.shards, this.enemies, (b, e) => this.shardHit(b as Phaser.GameObjects.Zone, e as Sprite));
     this.ctx = {
       scene: this, hero: this.hero, enemies: this.enemies, bodies: this.bodies,
-      lit: () => this.inLight, dodging: () => this.time.now < this.dashUntil || this.time.now < this.swarmUntil,
+      lit: () => this.inLight, loud: () => this.weight().notice, dodging: () => this.time.now < this.dashUntil || this.time.now < this.swarmUntil,
       damageHero: (a, from) => this.damageHero(a, from), hunts: (e) => this.hunts(e, this.time.now), idle: (e) => this.idle(e),
       way: (e) => this.wayToHero(e), keepAt: (...a) => this.keepAt(...a),
       hold: (by, pull) => { [this.heldBy, this.pull] = [by, pull]; if (by) this.hero.setVelocity(0); }, heldBy: () => this.heldBy,
@@ -637,7 +638,12 @@ export class RoomScene extends Phaser.Scene {
     } else if (time < this.shoveUntil && time >= this.dashUntil && !this.prey) this.hero.setVelocity(this.shove.x, this.shove.y);
     else if (time >= this.dashUntil && !this.prey) { // latched, the bite moves him
       this.hero.setVelocity(x, y);
-      this.hero.body!.velocity.normalize().scale(T.hero.speed * (1 + this.gear.speed) * (time < this.swarmUntil ? T.swarm.speed : posing ? 0.3 : time < this.shotUntil ? 0.5 : 1) * (this.netted() ? T.crocheteur.slow : 1));
+      this.hero.body!.velocity.normalize().scale(T.hero.speed * (1 + this.gear.speed) * (time < this.swarmUntil ? T.swarm.speed : posing ? 0.3 : time < this.shotUntil ? 0.5 : 1) * (this.netted() ? T.crocheteur.slow : 1) * this.weight().walk);
+    }
+    const W = T.blood.weight, fill = this.weight().fill; // the bag well filled drips behind him as he walks
+    if (fill >= W.dripFrom && time >= this.dripAt && time >= this.dashUntil && this.hero.body!.velocity.lengthSq() > 1) {
+      this.dripAt = time + W.dripMs / fill;
+      Fx.drip(this, this.hero.body!.center.x, this.hero.body!.center.y, W.dripMs * 10);
     }
     if (this.netted()) { // the net over him, shaken as he struggles
       this.netG ??= this.add.graphics();
@@ -2092,6 +2098,11 @@ export class RoomScene extends Phaser.Scene {
     return Shop.bagSize(Save.data) + this.gear.purse;
   }
 
+  /** What the blood he carries weighs (logic.ts burden()): slower, the mist slower back, noticed from farther. */
+  private weight() {
+    return burden(this.carried, this.bloodBag(), this.gear.scent, T.blood.weight);
+  }
+
   // ---- The battue (the blood's scent) and le Rongé's wares. ----
 
   /** Lays the packs his scent has called in wait across the zone, on his way back from where he is (in a room, from
@@ -2337,7 +2348,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private dashCooldown() {
-    return (T.dash.cooldownMs / (this.v('fuite') || 1)) * (1 + this.gear.dash);
+    return (T.dash.cooldownMs / (this.v('fuite') || 1)) * (1 + this.gear.dash) * this.weight().mist;
   }
 
   /** `n` rats let loose at floor point `at`, by any gift: `from` the mist (Brume aux rats, which keeps count of
@@ -2541,7 +2552,7 @@ export class RoomScene extends Phaser.Scene {
   private hunts(e: Sprite, time: number) {
     if (this.training) return true;
     const from = e.body!.center, to = this.hero.body!.center, d = Phaser.Math.Distance.BetweenPoints(from, to), was = !!e.getData('alert');
-    const S = this.gear.shade ? { ...T.sight, shade: T.sight.shade * (1 + this.gear.shade) } : T.sight; // a Linceul noir
+    const k = this.weight().notice, S = { ...T.sight, range: T.sight.range * k, shade: T.sight.shade * (1 + this.gear.shade) * k }; // the blood he drips; a Linceul noir
     const sees = d <= sightRange(S, was, this.inLight) && this.boltReach(from, Phaser.Math.Angle.BetweenPoints(from, to)) >= d;
     const s = alertness({ alert: was, seenAt: e.getData('seenAt') }, sees, time, T.sight.giveUpMs);
     e.setData(s);

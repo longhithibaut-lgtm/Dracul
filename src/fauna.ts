@@ -6,9 +6,10 @@ type P = { x: number; y: number };
 /** Distance along the floor from a to b (the screen's y is the floor's squashed). */
 export const floor = (a: P, b: P) => Math.hypot(b.x - a.x, (b.y - a.y) / T.lantern.squash);
 
-/** A flock on its dead takes fright: the hero within its sight (nearer out of the light), or a din (a fight) near it. */
-export const startles = (flock: P, hero: P, lit: boolean, din?: P) =>
-  floor(flock, hero) <= (lit ? T.crows.notice : T.crows.shade) || (!!din && floor(flock, din) <= T.crows.noise);
+/** A flock on its dead takes fright: the hero within its sight (nearer out of the light; `loud` times farther for the
+ *  blood he drips), or a din (a fight) near it. */
+export const startles = (flock: P, hero: P, lit: boolean, din?: P, loud = 1) =>
+  floor(flock, hero) <= (lit ? T.crows.notice : T.crows.shade) * loud || (!!din && floor(flock, din) <= T.crows.noise);
 
 /** The foes a flock's cawing calls to where it rose: those within T.crows.alarm not already hunting. */
 export const alarmed = <F extends P & { hunting: boolean }>(flock: P, foes: F[]) =>

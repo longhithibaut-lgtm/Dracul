@@ -13,6 +13,7 @@ describe('Les Corneilles', () => {
     expect(startles(flock, { x: C.shade - 1, y: 0 }, false)).toBe(true);
     expect(startles(flock, { x: 400, y: 0 }, false, { x: C.noise - 5, y: 0 })).toBe(true);
     expect(startles(flock, { x: 400, y: 0 }, false, { x: C.noise + 5, y: 0 })).toBe(false);
+    expect(startles(flock, { x: C.shade + 5, y: 0 }, false, undefined, 1 + T.blood.weight.notice)).toBe(true); // his full bag drips
   });
   it('call every foe within the alarm radius not already hunting, the floor foreshortened', () => {
     const foes = [{ x: C.alarm - 1, y: 0, hunting: false }, { x: C.alarm + 1, y: 0, hunting: false }, { x: 10, y: 0, hunting: true },

@@ -441,6 +441,12 @@ export const T = {
     drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20, matrice: 20, enterre: 3, gave: 8, crocheteur: 3 }, // (a flock of crows, la Chose du gouffre never die of a blow),
     cache: 5,
     pickup: 16, search: 24, bag: 400, basin: 52,
+    // The blood carried weighs (logic.ts burden(), docs/decisions.md 2026-10-29): f, the share of the bag filled (so a
+    // bigger bag, le Rongé's or an Outre, weighs less for the same blood), w = f^`curve` (light at first, heavy near
+    // full). He walks `walk` x w slower, the mist recharges `mist` x w longer, the foes on the watch and the crows notice
+    // him `notice` x w farther (shade still nearer; a Flacon scellé divides that by 1 + its scent). Filled `dripFrom` and
+    // up, walking, he drips a drop every `dripMs` / f, gone `dripMs` x 10 later (his trail, nothing more).
+    weight: { curve: 1.5, walk: 0.2, mist: 0.25, notice: 0.35, dripFrom: 0.25, dripMs: 300 },
   },
   // The blood's scent (docs/extraction.md §5): every `every` blood carried (picked up) looses a pack of the battue, with
   // a distant horn and a line. It lies in wait across the zone on his way back to the refuge (world.ts loose()), the

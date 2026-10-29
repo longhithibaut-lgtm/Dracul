@@ -134,6 +134,13 @@ export function carry(carried: number, amount: number, bag: number) {
   return { carried: carried + took, left: amount - took };
 }
 
+/** What `carried` blood weighs in a bag of `bag` (W: T.blood.weight): `fill`, the share filled; factors on his walk's
+ *  speed, the mist's recharge and how far the foes notice him (`scent`: a Flacon scellé's, it drips less). */
+export function burden(carried: number, bag: number, scent: number, W: { curve: number; walk: number; mist: number; notice: number }) {
+  const fill = bag > 0 ? Math.min(1, Math.max(0, carried / bag)) : 0, w = fill ** W.curve;
+  return { fill, walk: 1 - W.walk * w, mist: 1 + W.mist * w, notice: 1 + (W.notice * w) / (1 + scent) };
+}
+
 /** How many of the battue's thresholds (one every `every` blood carried) a pick-up from `before` to `after` crosses. */
 export const scent = (before: number, after: number, every: number) => Math.floor(after / every) - Math.floor(before / every);
 

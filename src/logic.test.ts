@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { alertness, sightRange, biteTarget, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound, turn, left, frameOf, type Turn } from './logic.ts';
+import { alertness, sightRange, biteTarget, burden, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound, turn, left, frameOf, type Turn } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, value } from './gifts.ts';
 import { T } from './tuning.ts';
+import { numbers } from './items.ts';
 import { missing, width } from './font.ts';
 import * as Crypt from './crypt.data.ts';
 
@@ -218,6 +219,28 @@ describe('expedition', () => {
     expect(carry(0, 12, 400)).toEqual({ carried: 12, left: 0 });
     expect(carry(395, 12, 400)).toEqual({ carried: 400, left: 7 });
     expect(carry(400, 12, 400)).toEqual({ carried: 400, left: 12 });
+  });
+
+  it('the blood carried weighs: slower, the mist slower back, noticed farther, smoothly up to the full bag', () => {
+    const W = T.blood.weight, bag = T.blood.bag, b = (c: number, size: number = bag, scent = 0) => burden(c, size, scent, W);
+    expect(b(0)).toEqual({ fill: 0, walk: 1, mist: 1, notice: 1 }); // empty: nothing
+    expect(b(bag)).toEqual({ fill: 1, walk: 1 - W.walk, mist: 1 + W.mist, notice: 1 + W.notice }); // full: the most
+    expect(b(bag * 2)).toEqual(b(bag)); // never past full
+    const steps = [0.25, 0.5, 0.75, 1].map((f) => b(bag * f));
+    for (let i = 1; i < steps.length; i++) { // the heavier the bag, the worse, and more so near full (the curve's power)
+      expect(steps[i].walk).toBeLessThan(steps[i - 1].walk);
+      expect(steps[i - 1].walk - steps[i].walk).toBeGreaterThan(i > 1 ? steps[i - 2].walk - steps[i - 1].walk : 0);
+    }
+    expect(steps[1].walk).toBeGreaterThan(0.9); // half full: under a tenth slower
+    expect(T.hero.speed * b(bag).walk).toBeGreaterThan(T.enemy.speed); // full, he still outwalks a ghoul
+    // A bigger bag (le Rongé's, an Outre de peau) weighs less for the same blood; a Flacon scellé drips less.
+    const outre = numbers('outre', 2).purse, flacon = numbers('flacon', 2).scent;
+    expect(b(bag, bag + T.ronge.bag.size).walk).toBeGreaterThan(b(bag).walk);
+    expect(b(bag, bag + outre).notice).toBeLessThan(b(bag).notice);
+    expect(b(bag, bag, flacon).notice - 1).toBeCloseTo(W.notice / (1 + flacon));
+    expect(b(bag, bag, flacon).walk).toBe(b(bag).walk); // (it does not lighten the bag)
+    // Full, still nearer in the shade (a Linceul noir too) than in the light empty.
+    expect(T.sight.shade * b(bag).notice).toBeLessThan(T.sight.range);
   });
 
   it("the blood's scent calls a pack of the battue at each threshold crossed", () => {

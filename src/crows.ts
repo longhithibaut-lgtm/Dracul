@@ -53,7 +53,7 @@ export function step(c: Ctx, e: Sprite, time: number, delta: number) {
         if ((time + b.phase) % 3100 < delta) b.a += Phaser.Math.FloatBetween(-2, 2);
       }
       frame = (b) => 'idle' + (Math.floor((time + b.phase) / (260 + (b.phase % 300))) % 4);
-      if (startles(home, hero, c.lit())) startle(c, e, time);
+      if (startles(home, hero, c.lit(), undefined, c.loud())) startle(c, e, time);
       break;
     case 'burst': // up off the dead, wings beating hard
       at(home.x, home.y);
@@ -131,7 +131,7 @@ export const reached = (e: Sprite, from: { x: number; y: number }, angle: number
 /** A fight heard at floor point `p` (a claw swung, a blow on him, a death): the flocks on their dead near it take fright. */
 export function din(c: Ctx, p: { x: number; y: number }, time: number) {
   for (const e of c.enemies.getChildren() as Sprite[])
-    if (e.body?.enable && e.getData('kind') === 'crows' && e.getData('state') === 'feed' && startles(e.getData('home'), c.hero.body!.center, c.lit(), p)) startle(c, e, time);
+    if (e.body?.enable && e.getData('kind') === 'crows' && e.getData('state') === 'feed' && startles(e.getData('home'), c.hero.body!.center, c.lit(), p, c.loud())) startle(c, e, time);
 }
 
 /** Up off their dead, cawing: every foe around comes to look. */
