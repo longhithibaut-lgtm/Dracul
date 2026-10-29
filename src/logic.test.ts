@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertness, sightRange, biteTarget, burden, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound, turn, left, frameOf, type Turn } from './logic.ts';
+import { alertness, sightRange, biteTarget, buffered, dashFree, poiseHit, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound, turn, left, frameOf, type Turn, burden } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, value } from './gifts.ts';
 import { T } from './tuning.ts';
 import { numbers } from './items.ts';
@@ -172,6 +172,59 @@ describe('dashStrikes', () => {
 
   it('once per dash: the next slash in the window is an ordinary one', () => {
     expect(dashStrikes(1200, 1100, 1100, 120)).toBe(false);
+  });
+});
+
+describe('input buffer and the mist cancel', () => {
+  const B = T.hero.bufferMs, S = T.slash;
+  it('a press up to bufferMs before the hero can act fires as soon as he can, not one earlier', () => {
+    expect(buffered(1000, 1000 - B, 0, B)).toBe(true);
+    expect(buffered(1000, 999 - B, 0, B)).toBe(false);
+    expect(buffered(1300, 1000, 1200, B)).toBe(true); // pressed mid-dash (it ends at 1200): kept bufferMs past its end
+    expect(buffered(1200 + B + 1, 1000, 1200, B)).toBe(false);
+  });
+
+  it('the mist never cuts a blow\'s committed frames, then cuts its recovery at once', () => {
+    const at = 1000, commit = at + S.commitMs; // a claw at 1000; its recovery runs to at + cooldownMs
+    expect(dashFree(at + 10, 0, commit)).toBe(false);
+    expect(dashFree(commit, 0, commit)).toBe(true);
+    expect(commit).toBeLessThan(at + S.cooldownMs);
+    expect(dashFree(commit, commit + 1, commit)).toBe(false); // the mist itself not back yet
+  });
+
+  it('a mist pressed during the committed frames fires the frame they end (the buffer outlasts them)', () => {
+    const at = 1000, pressed = at + 10, commit = at + Math.max(S.commitMs, S.finisherCommitMs, T.shot.commitMs, T.glyph.commitMs);
+    let fired = -1;
+    for (let t = at; t < at + 400 && fired < 0; t += 1) if (buffered(t, pressed, 0, T.hero.bufferMs) && dashFree(t, 0, commit)) fired = t;
+    expect(fired).toBe(commit);
+  });
+});
+
+describe('poiseHit', () => {
+  const P = T.poise, p0 = { taken: 0, lastAt: -1e9, steadyUntil: 0 };
+  it('claws wear a foe down to its poise, then it breaks and starts afresh', () => {
+    expect(poiseHit(p0, 0, P.claw, P.of.ghoul, P.regenMs)).toEqual({ taken: 0, breaks: true });
+    const one = poiseHit(p0, 0, P.claw, P.of.inquisitor, P.regenMs);
+    expect(one).toEqual({ taken: 1, breaks: false });
+    expect(poiseHit({ ...p0, taken: one.taken, lastAt: 0 }, 200, P.finisher, P.of.inquisitor, P.regenMs).breaks).toBe(true); // claw + finisher
+  });
+
+  it('the finisher and the dash strike weigh more than a claw', () => {
+    expect(P.finisher).toBeGreaterThan(P.dash);
+    expect(P.dash).toBeGreaterThan(P.claw);
+    expect(poiseHit(p0, 0, P.finisher, P.of.purifier, P.regenMs).breaks).toBe(true);
+    expect(poiseHit(p0, 0, P.claw, P.of.purifier, P.regenMs).breaks).toBe(false);
+  });
+
+  it('what it took drains away regenMs after its last blow; just staggered, it takes nothing', () => {
+    expect(poiseHit({ taken: 1, lastAt: 0, steadyUntil: 0 }, P.regenMs, P.claw, P.of.hound, P.regenMs)).toEqual({ taken: 1, breaks: false });
+    expect(poiseHit({ taken: 1, lastAt: 0, steadyUntil: 0 }, P.regenMs - 1, P.claw, P.of.hound, P.regenMs).breaks).toBe(true);
+    expect(poiseHit({ taken: 0, lastAt: 0, steadyUntil: 500 }, 100, P.finisher, P.of.ghoul, P.regenMs)).toEqual({ taken: 0, breaks: false });
+  });
+
+  it('the heavy ones never break', () => {
+    expect(P.of.amas).toBeUndefined();
+    expect(poiseHit(p0, 0, 99, Infinity, P.regenMs).breaks).toBe(false);
   });
 });
 

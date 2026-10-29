@@ -15,13 +15,14 @@ export function slash(scene: Phaser.Scene, x: number, y: number, angle: number, 
   Blood.slash(scene, x, y, angle, combo);
 }
 
-export function hit(scene: Phaser.Scene, x: number, y: number, angle: number) {
+/** A claw lands on an enemy at (x, y); `broke`: it broke its poise (RoomScene.hitEnemy), a harder jolt. */
+export function hit(scene: Phaser.Scene, x: number, y: number, angle: number, broke = false) {
   const { heavy, mist } = swing;
   const cos = Math.cos(angle), sin = Math.sin(angle);
-  // Small, sharp shake, mostly along the blow; the finisher's is the hardest of the claws.
-  const cam = scene.cameras.main, kick = heavy ? 4 : mist ? 3 : 2;
-  cam.shake(heavy ? 150 : mist ? 90 : 70, new Phaser.Math.Vector2((0.6 + kick * Math.abs(cos)) / cam.width, (0.6 + kick * Math.abs(sin)) / cam.height));
-  Blood.hit(scene, x, y, angle, heavy);
+  // Small, sharp shake, mostly along the blow; the finisher's is the hardest of the claws, a broken poise harder still.
+  const cam = scene.cameras.main, kick = (heavy ? 4 : mist ? 3 : 2) + (broke ? 1.5 : 0);
+  cam.shake((heavy ? 150 : mist ? 90 : 70) + (broke ? 40 : 0), new Phaser.Math.Vector2((0.6 + kick * Math.abs(cos)) / cam.width, (0.6 + kick * Math.abs(sin)) / cam.height));
+  Blood.hit(scene, x, y, angle, heavy || broke);
 }
 
 /** The fangs sink in at the throat (x, y): a short shake, and the blood. */
@@ -31,7 +32,7 @@ export function bite(scene: Phaser.Scene, x: number, y: number) {
   Blood.bite(scene, x, y);
 }
 
-export const { dash, shard, splat, snap, drain, heal, drip } = Blood;
+export const { dash, shard, splat, snap, drain, heal, gore, drip } = Blood;
 
 /** Clears and redraws a Graphics every frame with the elapsed ms, for `ms`, then destroys it. */
 function animate(scene: Phaser.Scene, depth: number, ms: number, draw: (g: Phaser.GameObjects.Graphics, t: number) => void) {

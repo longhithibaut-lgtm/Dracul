@@ -209,6 +209,14 @@ export function hit(scene: Phaser.Scene, x: number, y: number, angle: number, he
   burst(scene, Math.round((x - Math.cos(angle) * 5) * Z), Math.round((y - Math.sin(angle) * 5) * Z), Math.round((y + 9) * Z), angle, heavy ? 1.4 : 1);
 }
 
+/** A body torn open by its death blow at (x, y), thrown along `angle` (`k`: how hard, T.feel): a great burst all
+ *  round the wound, running down it, and a jet along the blow. */
+export function gore(scene: Phaser.Scene, x: number, y: number, angle: number, k: number) {
+  const ix = Math.round((x - Math.cos(angle) * 3) * Z), iy = Math.round((y - 2) * Z), fy = Math.round((y + 9) * Z);
+  burst(scene, ix, iy, fy, angle, k, 0.9, true);
+  burst(scene, ix, iy - Z, fy, angle, k * 0.6, 0.22);
+}
+
 /**
  * The mist dash, clotted: a puff of red-black vapour where he leaves, a plume along his way thick at his heels and
  * breaking up behind, clots dripping from it to the floor, dark afterimages crumbling from the feet, and the vapour
