@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertness, sightRange, biteTarget, buffered, dashFree, poiseHit, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound, turn, left, frameOf, type Turn, burden } from './logic.ts';
+import { alertness, sightRange, biteTarget, buffered, dashFree, poiseHit, carry, scent, edgePip, viewSize, burnsAfter, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, pickSpot, placeGroups, rayDistance, stepsFrom, wound, turn, left, frameOf, type Turn, burden, behind, notice, predatory, parries, charging, chargeOf } from './logic.ts';
 import { GIFTS, GIFT_IDS, KINDS, RARITY, kind, value } from './gifts.ts';
 import { T } from './tuning.ts';
 import { numbers } from './items.ts';
@@ -266,6 +266,62 @@ describe('expedition', () => {
     expect(sightRange(S, false, true)).toBe(S.range); // in the light: as before
     expect(sightRange(S, false, false)).toBeGreaterThan(T.lantern.radius); // not blind: he cannot walk up to them unseen
     expect([sightRange(S, true, false), sightRange(S, true, true)]).toEqual([S.keep, S.keep]);
+  });
+
+  it('the predator: behind a foe on the watch he walks up into the claws\' reach; seeing him, it takes a beat to know him', () => {
+    const S = T.sight, o = { x: 0, y: 0 };
+    expect(behind(o, 0, { x: -10, y: 2 })).toBe(true); // it looks right, he is on its left
+    expect(behind(o, 0, { x: 10, y: -30 })).toBe(false);
+    expect(sightRange(S, false, true, true)).toBe(S.back);
+    expect(S.back * (1 + T.blood.weight.notice)).toBeLessThan(T.slash.range); // even dripping a full bag, the claws reach first
+    expect(sightRange(S, true, true, true)).toBe(S.keep); // hunting: all round
+    let n = notice(0, true, 1000, S.noticeMs);
+    expect(n).toEqual({ spotAt: 1000, knows: false }); // it turns to him
+    expect(notice(n.spotAt, true, 1000 + S.noticeMs - 1, S.noticeMs).knows).toBe(false); // still unaware: a predator strike
+    expect(notice(n.spotAt, true, 1000 + S.noticeMs, S.noticeMs).knows).toBe(true);
+    n = notice(n.spotAt, false, 1200, S.noticeMs);
+    expect(n).toEqual({ spotAt: 0, knows: false }); // lost him in the beat: it forgets
+    // From the shade's edge, a mist and a claw land within the beat (the dash strike: the press waits out the mist).
+    const dash = (T.dash.speed * T.dash.durationMs) / 1000;
+    expect(S.shade - dash).toBeLessThanOrEqual(T.slash.range + 8);
+    expect(T.dash.durationMs + 1000 / 60).toBeLessThan(S.noticeMs);
+  });
+
+  it('a predator strike: an unaware foe but the immune; it kills the common foes outright', () => {
+    const P = T.predator;
+    expect(predatory('ghoul', false, P.immune)).toBe(true);
+    expect(predatory('ghoul', true, P.immune)).toBe(false); // hunting him: a plain blow
+    expect(predatory('matrice', false, P.immune) || predatory('crows', false, P.immune) || predatory('enterre', false, P.immune)).toBe(false);
+    for (const k of ['ghoul', 'crossbow', 'purifier', 'priest', 'hound', 'penitent', 'ringer', 'crocheteur'] as const)
+      expect(k === 'ghoul' ? T.enemy.hp : T[k].hp).toBeLessThanOrEqual(P.damage);
+    for (const k of ['amas', 'bourreau', 'gave'] as const) expect(T[k].hp).toBeGreaterThan(P.damage); // the heavy: a big chunk
+  });
+
+  it('the parry: its window, the blows it turns aside, from in front only', () => {
+    const P = T.parry;
+    expect(parries(1000, 1000, 'ghoul', 0, P)).toBe(true);
+    expect(parries(1000 + P.windowMs - 1, 1000, 'penitent', 1, P)).toBe(true);
+    expect(parries(1000 + P.windowMs, 1000, 'ghoul', 0, P)).toBe(false); // too late
+    expect(parries(999, 1000, 'ghoul', 0, P)).toBe(false); // before he raised it
+    expect(parries(1000, 1000, 'ghoul', Math.PI * 0.9, P)).toBe(false); // from behind
+    for (const k of ['crossbow', 'purifier', 'priest', 'ringer', 'amas', 'bourreau', 'matrice', 'gave', 'crocheteur']) expect(parries(1000, 1000, k, 0, P)).toBe(false);
+    expect(P.windowMs).toBeGreaterThanOrEqual(150); // ~150-200 ms
+    expect(P.windowMs).toBeLessThanOrEqual(200);
+    expect(P.recoverMs).toBeGreaterThan(P.windowMs); // a miss is punished
+    expect(P.riposte).toBeGreaterThanOrEqual(T.enemy.hp); // a riposte kills a ghoul
+  });
+
+  it('the charge: held past its start it rears back, full after its time; heavier than the finisher', () => {
+    const C = T.charge;
+    expect(charging(0, 5000, C.startMs)).toBe(false); // not held
+    expect(charging(1000, 1000 + C.startMs - 1, C.startMs)).toBe(false); // a tap: a plain claw
+    expect(charging(1000, 1000 + C.startMs, C.startMs)).toBe(true);
+    expect(chargeOf(2000, 2000 + C.fullMs / 2, C.fullMs)).toBe(0.5);
+    expect(chargeOf(2000, 2000 + C.fullMs * 3, C.fullMs)).toBe(1);
+    expect(C.damage[1]).toBeGreaterThan(T.slash.damage * T.slash.finisherMult);
+    expect(C.poise[1]).toBeGreaterThan(T.poise.finisher);
+    expect(C.range).toBeGreaterThan(T.slash.finisherRange);
+    expect(C.commitMs).toBeLessThan(C.strikeMs); // the mist may cut it short after its committed frames
   });
 
   it('carries blood up to the bag, leaving the rest behind', () => {

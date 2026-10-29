@@ -108,6 +108,28 @@ export const T = {
   // red (`tint`: the share of its green and blue gone at death's door) and drips blood every `dripMs` (from its first
   // wound to its last breath), once it has lost `dripFrom` of its blood. No bar over the common foes.
   feel: { gore: 1.8, goreHeavy: 2.6, fling: 10, flingMs: 240, slow: 0.25, slowMs: 700, tint: 0.6, dripFrom: 0.3, dripMs: [900, 240] },
+  // L'attaque dans l'ombre (RoomScene.hitEnemy, logic.ts predatory): a claw on a foe that has not noticed him (not
+  // hunting: on the watch, or still in its beat of noticing, T.sight.noticeMs) is a predator strike: at least `damage` (a
+  // human dies outright, it never kneels for the bite), the hit-stop `hitStopMs`, he lunges `lunge` px onto it in his mist,
+  // its body torn open (`gore`). Killed, its pack is not roused (others may still see him; the crows hear any fight).
+  // Alive (the heavy ones), it rouses them as any blow. The `immune` take a plain blow. An unaware foe within `near` of
+  // him (so he is unseen), he darkens (`tint`, multiplied): the predator's cue, no mark on screen.
+  predator: { damage: 5, hitStopMs: 130, lunge: 10, gore: 3.4, near: 40, tint: 0x5a4a58, immune: ['nourrice', 'matrice', 'crows', 'chose', 'enterre'] },
+  // La parade (X, or the mouse's middle button; RoomScene.parry, logic.ts parries): turned to where he aims for
+  // `windowMs`, a blow from within `arcDeg` of it, of a kind in `of`, does him no harm: a clang, sparks, the hit-stop
+  // `hitStopMs`; the foe's poise broken: it reels `staggerMs`, thrown back at `knock` px/s, and his next claw within
+  // `riposteMs` that reaches it is a riposte: at least `riposte` damage, the finisher's frames, the hit-stop
+  // `riposteStopMs`. `of`, the blows at arm's length from a body or a hand weapon: the ghoul's lunge, the hound's leap, the
+  // pénitent's lash, the inquisiteur's censer; never a bolt, fire, holy light, a bell's rings, a slam, an axe, a net or a
+  // hook, nor the bosses' blows. Missed, he stands open `recoverMs` (no claw, mist, shard, glyph nor parry; he walks
+  // slowly); landed, he is free `holdMs` later.
+  parry: { windowMs: 180, recoverMs: 420, holdMs: 120, arcDeg: 180, hitStopMs: 90, staggerMs: 1100, knock: 60, riposteMs: 1100, riposte: 5, riposteStopMs: 110, of: ['ghoul', 'hound', 'penitent', 'inquisitor'] },
+  // Le coup chargé (RoomScene.release, logic.ts chargeOf): the claws held on `startMs` after their press (the press itself
+  // strikes as ever), he rears back, the coat drawn, walking slowly; full `fullMs` later (a dark glint, a sound). Let go,
+  // a heavy claw, [released before full, full]: `damage`, its poise weight `poise`, `range`, `arcDeg`, knockback `knock` x
+  // the claws', hit-stop `hitStopMs`. Its committed frames `commitMs` (then the mist may cut it short), its pose
+  // `strikeMs`, the claws back `recoverMs` after it. The mist, a blow taken, a daze or a net cancel the charge.
+  charge: { startMs: 260, fullMs: 600, damage: [2, 4], poise: [3, 5], range: 40, arcDeg: 150, knock: 2, hitStopMs: [60, 100], commitMs: 120, strikeMs: 300, recoverMs: 480 },
 
   // The Order's Purificateur: a heavy flamethrower. He walks into range,
   // turns to the hero and lights his pilot, flaring (the tell, his aim locked: stepping aside dodges), then burns along
@@ -454,7 +476,10 @@ export const T = {
   // its pack within `call` hunt with it. Hunting, it keeps him in sight within `keep`, gives up `giveUpMs` after it last
   // saw him and walks back to its post at `homeSpeed` of its pace. None follows him through an exit but the hounds, once
   // (`followMs` after him), never a second room.
-  sight: { range: 130, shade: 80, lit: 0.6, keep: 200, call: 90, giveUpMs: 4000, homeSpeed: 0.5, followMs: 1200 },
+  // On the watch it sees only the half it faces: behind it, within `back` (light or shade alike; the claws reach farther).
+  // It looks the other way now and then at its post (`turnMs`, a random wait between). Seeing him, it first turns to him:
+  // only after `noticeMs` of keeping him in sight does it hunt (and call its pack); until then it is still unaware.
+  sight: { range: 130, shade: 80, lit: 0.6, keep: 200, call: 90, giveUpMs: 4000, homeSpeed: 0.5, followMs: 1200, back: 18, noticeMs: 400, turnMs: [2500, 6000] },
   // La carte (key C, src/map.ts): an open zone's map shows only what he has seen, cells of `cell` px kept in the save for
   // good: those within `dark` px of him (`lit`: in light, as for the foes above), his sight stopped by rock and walls but
   // for their first `into` px (so the edges he faces are drawn).

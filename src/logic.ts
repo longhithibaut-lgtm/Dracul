@@ -142,8 +142,33 @@ export function alertness(s: { alert: boolean; seenAt: number }, sees: boolean, 
 }
 
 /** How far a foe sees the hero (`s`: T.sight): on the watch, within `range` while he stands in light (`lit`), `shade`
- *  while he keeps out of it; hunting, within `keep`. */
-export const sightRange = (s: { range: number; shade: number; keep: number }, hunting: boolean, lit: boolean) => (hunting ? s.keep : lit ? s.range : s.shade);
+ *  while he keeps out of it, `back` when he is `behind` it (out of the half it faces); hunting, within `keep`. */
+export const sightRange = (s: { range: number; shade: number; keep: number; back: number }, hunting: boolean, lit: boolean, behind = false) =>
+  hunting ? s.keep : behind ? s.back : lit ? s.range : s.shade;
+
+/** True when `p` lies behind a foe at `at` facing `facing` (radians): out of the half circle it faces. */
+export const behind = (at: P, facing: number, p: P) => Math.cos(Math.atan2(p.y - at.y, p.x - at.x) - facing) < 0;
+
+/** The beat of noticing: a foe on the watch that `sees` the hero first turns to him (`spotAt`, when it did; 0: nothing
+ *  seen); only once it has kept him in sight `ms` does it know him. Losing him meanwhile, it forgets. */
+export function notice(spotAt: number, sees: boolean, now: number, ms: number) {
+  const at = sees ? spotAt || now : 0;
+  return { spotAt: at, knows: sees && now - at >= ms };
+}
+
+/** A claw on a foe of `kind` that has not noticed him (`alert` false) is a predator strike, unless the kind is `immune`. */
+export const predatory = (kind: string, alert: boolean, immune: readonly string[]) => !alert && !immune.includes(kind);
+
+/** A parry raised at `at` (P: T.parry): true when, at `now`, it turns aside a blow of `kind` coming from `off` radians
+ *  off where he faces: still in its window, a parryable kind, from in front of him. */
+export function parries(now: number, at: number, kind: string, off: number, P: { windowMs: number; arcDeg: number; of: readonly string[] }) {
+  return now >= at && now < at + P.windowMs && P.of.includes(kind) && Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= (P.arcDeg * Math.PI) / 360;
+}
+
+/** Le coup chargé: the claws pressed at `downAt` (0: not held) and still held at `now` start the charge `startMs` after
+ *  the press; the charge begun at `from`, its share of a full charge (`fullMs`) at `now`, 0 to 1. */
+export const charging = (downAt: number, now: number, startMs: number) => downAt > 0 && now - downAt >= startMs;
+export const chargeOf = (from: number, now: number, fullMs: number) => Math.min(1, Math.max(0, (now - from) / fullMs));
 
 /** `amount` blood picked up, `carried` already in a bag holding `bag`: what is carried then, and what is left behind. */
 export function carry(carried: number, amount: number, bag: number) {

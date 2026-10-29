@@ -326,6 +326,22 @@ export const recipes = {
     for (const [f, gain, dur] of [[1870, 0.3, 0.45], [2960, 0.18, 0.3], [4410, 0.1, 0.2]]) voice(o, { src: 'triangle', f, gain, attack: 0.001, dur });
     voice(o, { src: 'square', f: 220, f2: 180, filter: 'lowpass', ff: 1200, gain: 0.3, attack: 0.001, dur: 0.08 });
   },
+  // L'attaque dans l'ombre: a breath drawn in through the teeth, then a deep wet tearing and a heavy thud. Short.
+  predator(o: Play) {
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 2400, ff2: 5200, q: 2, gain: 0.35, attack: 0.03, dur: 0.07 });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: 1600, ff2: 180, q: 7, gain: 1, attack: 0.002, dur: 0.22, delay: 0.06 });
+    voice(o, { src: 'sine', f: 120, f2: 32, gain: 0.85, attack: 0.002, dur: 0.26, delay: 0.06 });
+    bursts(o, [0.07, 0.085, 0.11], { src: 'noise', filter: 'highpass', ff: 2200, q: 0.7, gain: 0.4, attack: 0.001, dur: 0.025 });
+  },
+  // Le coup chargé: drawing back (0), the coat's heavy rustle and a low breath rising; full (1), a dark ring, low and short.
+  charge(o: Play, full: number) {
+    if (full) {
+      voice(o, { src: 'triangle', f: 220, f2: 205, gain: 0.5, attack: 0.002, dur: 0.3 });
+      return voice(o, { src: 'sawtooth', f: 110, f2: 104, filter: 'lowpass', ff: 700, ff2: 300, q: 4, gain: 0.25, attack: 0.002, dur: 0.28 });
+    }
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 320, ff2: 800, q: 1.5, trem: 18, gain: 1.3, attack: 0.08, dur: 0.4 });
+    voice(o, { src: 'sawtooth', f: 55, f2: 80, filter: 'lowpass', ff: 300, ff2: 500, gain: 0.5, attack: 0.2, dur: 0.5 });
+  },
   // Carrion crows: `n` harsh rasping « kraa » calls (one at least), ragged and overlapping, wings clapping under them as
   // the flock bursts up.
   caw(o: Play, n: number) {

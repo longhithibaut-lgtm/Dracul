@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { aimAt, alertness, biteTarget, buffered, burnsAfter, carry, dashFree, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, onLine, pickSpot, placeGroups, poiseHit, rayDistance, scent, sightRange, stepsFrom, walkCells, wound, burden } from './logic.ts';
+import { aimAt, alertness, behind, biteTarget, chargeOf, charging, notice, parries, predatory, buffered, burnsAfter, carry, dashFree, dashStopsAt, dashStrikes, ellipseDist, glyphSpot, inArc, keepDistance, nextCombo, onLine, pickSpot, placeGroups, poiseHit, rayDistance, scent, sightRange, stepsFrom, walkCells, wound, burden } from './logic.ts';
 import * as Hero from './hero.ts';
 import * as Enemy from './enemy.ts';
 import * as Crossbow from './crossbow.ts';
@@ -107,6 +107,13 @@ export class RoomScene extends Phaser.Scene {
   private aimMouse = false; // the mouse aims (moved or clicked last), else the keys (J, K, L pressed last): see create()
   private look = new Phaser.Math.Vector2(); // the camera's look ahead (T.camera), room px
   private slowAt = -1e9; // the last foe of a fight down: the world's clocks run slow from then (T.feel, update())
+  private parryAt = -1e9; // la parade raised (T.parry): its window from then
+  private openUntil = 0; // the parry's pose, and after a miss its recovery: no blow, mist, shard, glyph nor parry until then
+  private parriedAt = -1e9; // the last blow he turned aside
+  private clawDownAt = 0; // the claws held since (the button or J; 0: let go), for le coup chargé (T.charge)
+  private clawMouse = false; // held on the mouse: the charge aims at the pointer, else where he faces
+  private chargeAt = 0; // charging since (0: not)
+  private chargeFull = false; // its full charge already told (the glint)
   private dead = false;
   private lanterns: Lantern.Lantern[] = [];
   private litMs = 0; // time the hero has stood in holy light, back to 0 when he steps out
@@ -312,6 +319,9 @@ export class RoomScene extends Phaser.Scene {
     // Left click slashes, right click shoots, both toward the pointer; J and K do the same toward where he faces. F bites,
     // unaimed, or searches what is at hand. The aim: the mouse once moved or clicked, the keys once J, K or L is pressed;
     // E casts the glyph at the pointer or, the keys aiming, ahead of him like L (no blow aims at a pointer left aside).
+    // The claws held on (the left button, J) charge a heavy blow, let go to strike (T.charge). X or the middle button
+    // parries (T.parry), toward the pointer while the mouse aims, else where he faces: X is X on AZERTY and QWERTY alike,
+    // under the left hand, and free.
     const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
@@ -330,10 +340,20 @@ export class RoomScene extends Phaser.Scene {
       }
       this.aimMouse = true;
       const w = world(p), a = Math.atan2(w.y - this.hero.y, w.x - this.hero.x);
-      if (p.button === 0) this.press(() => this.slash(a));
+      if (p.button === 0) {
+        [this.clawDownAt, this.clawMouse] = [this.time.now, true];
+        this.press(() => this.slash(a));
+      } else if (p.button === 1) this.press(() => this.parry(a));
       else if (p.button === 2) this.press(() => this.shoot(a));
     });
-    this.keys.J.on('down', () => { const a = this.facing; this.aimMouse = false; this.press(() => this.slash(a)); });
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => p.button === 0 && this.clawMouse && this.release());
+    this.keys.J.on('down', () => {
+      const a = this.facing;
+      [this.aimMouse, this.clawDownAt, this.clawMouse] = [false, this.time.now, false];
+      this.press(() => this.slash(a));
+    });
+    this.keys.J.on('up', () => !this.clawMouse && this.release());
+    this.input.keyboard!.on('keydown-X', (ev: KeyboardEvent) => { if (ev.repeat) return; const a = this.aimMouse ? Phaser.Math.Angle.BetweenPoints(this.hero, world(this.input.activePointer)) : this.facing; this.press(() => this.parry(a)); });
     this.keys.K.on('down', () => { const a = this.facing; this.aimMouse = false; this.press(() => this.shoot(a)); });
     this.keys.F.on('down', () => (this.counter ? this.closeShop() : this.stall ? this.closeStall() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
     // Le Rongé's wares: hovered, bought by their key or a click, left with Escape (or F).
@@ -603,7 +623,20 @@ export class RoomScene extends Phaser.Scene {
     const auto = this.phase === 'enter' || this.phase === 'leave', dazed = time < this.dazedUntil;
     const x = auto || dazed ? 0 : Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
     const y = dazed ? 0 : auto ? this.walk : Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
-    const posing = time < this.slashUntil || time < this.castUntil;
+    // Le coup chargé: the claws held on past their press, he rears back (T.charge); a daze, a hold or a net cancel it.
+    if (this.chargeAt && (dazed || this.heldBy || this.fly || this.netted() || this.prey)) this.clawDownAt = this.chargeAt = 0;
+    else if (!this.chargeAt && charging(this.clawDownAt, time, T.charge.startMs) && !auto && !this.dead && time >= this.slashReadyAt && time >= this.dashUntil
+      && time >= this.openUntil && time >= this.castUntil && time >= this.shotUntil && time >= this.swarmUntil && !this.queued) {
+      [this.chargeAt, this.chargeFull] = [time, false];
+      Sfx.play(this, 'charge', 0);
+    }
+    if (this.chargeAt && this.clawMouse) this.facing = Phaser.Math.Angle.BetweenPoints(this.hero, this.cameras.main.getWorldPoint(this.input.activePointer.x, this.input.activePointer.y));
+    if (this.chargeAt && !this.chargeFull && time - this.chargeAt >= T.charge.fullMs) {
+      this.chargeFull = true;
+      Fx.glint(this, this.hero.x + Math.cos(this.facing) * 5, this.hero.y - 18 + Math.sin(this.facing) * 3); // at the claw drawn high
+      Sfx.play(this, 'charge', 1);
+    }
+    const posing = time < this.slashUntil || time < this.castUntil || time < this.openUntil || !!this.chargeAt;
     if ((x || y) && !posing && time >= this.shotUntil && !this.prey) this.facing = Math.atan2(y, x);
 
     if (Training.opts.cool) this.dashReadyAt = Math.min(this.dashReadyAt, this.dashUntil), this.swarmReadyAt = Math.min(this.swarmReadyAt, this.swarmUntil), this.glyphReadyAt = 0; // the test panel's
@@ -612,6 +645,7 @@ export class RoomScene extends Phaser.Scene {
     const wantsDash = buffered(time, this.dashPressedAt, 0, T.hero.bufferMs) && !auto && !dazed && !this.heldBy && !this.fly && !this.netted(); // buffered like the actions, see press()
     if (wantsDash && dashFree(time, this.dashReadyAt, this.commitUntil) && !this.prey && time >= this.swarmUntil) {
       this.dashPressedAt = -1e9;
+      this.clawDownAt = this.chargeAt = 0; // the mist lets a charge go, unstruck
       if (x || y) this.facing = Math.atan2(y, x); // the way he walks, even mid-swing; else the way he faces
       // It cuts short the recovery of a blow, a throw or a cast: the claws are ready again (the dash strike as it ends).
       this.slashUntil = Math.min(this.slashUntil, time);
@@ -668,7 +702,12 @@ export class RoomScene extends Phaser.Scene {
     }
 
     if (this.queued && (!buffered(time, this.queued.at, this.queued.wait, T.hero.bufferMs) || (!dazed && this.queued.act()))) this.queued = undefined;
+    // The predator's cue: a foe that has not noticed him within reach, he darkens (T.predator).
+    const stalking = !this.dead && (this.enemies.getChildren() as Sprite[]).some((e) => e.body?.enable && !this.aloft(e) && predatory(e.getData('kind') ?? 'ghoul', !!e.getData('alert'), T.predator.immune)
+      && Phaser.Math.Distance.BetweenPoints(e.body.center, this.hero.body!.center) < T.predator.near);
+    const P = T.parry, guard = time < this.parryAt + P.windowMs || time - this.parriedAt < P.holdMs + 60;
     Hero.show(this.hero, {
+      parry: time - this.parriedAt < 70 ? 'clang' : guard ? 'guard' : time < this.openUntil ? 'open' : undefined, charge: this.chargeAt ? chargeOf(this.chargeAt, time, T.charge.fullMs) : undefined, stalking,
       moving: (x || y) !== 0 && !this.heldBy && !this.fly, dashing: time < this.dashUntil, slashing: time < this.slashUntil, combo: this.combo, throwing: time < this.shotUntil,
       biting: !!this.prey || time - this.biteAt < 130, casting: time < this.castUntil,
       hurt: time - this.hurtAt < 120 || !!this.fly, hurtFrom: this.hurtFrom, dazed, invulnerable: time < this.invulnUntil, facing: this.facing, swarm: time < this.swarmUntil,
@@ -1075,7 +1114,7 @@ export class RoomScene extends Phaser.Scene {
         Sfx.play(this, 'lunge');
         return;
       case 'lash':
-        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, P.reach, 2 * P.halfDeg)) this.damageHero(P.damage, from);
+        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, P.reach, 2 * P.halfDeg) && !this.damageHero(P.damage, from, e) && e.getData('state') !== 'lash') return; // parried: he reels
         if (time < e.getData('fireUntil')) return;
         if (!e.getData('again')) return cock(P.recockMs, true); // the backhand
         e.setVelocity(0).setData({ state: 'recover', until: time + P.recoverMs, readyAt: time + P.reloadMs });
@@ -1144,7 +1183,7 @@ export class RoomScene extends Phaser.Scene {
         Sfx.play(this, 'lunge');
         return;
       case 'sweep':
-        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, I.reach, 180)) this.damageHero(I.damage, from);
+        if (inArc({ x: 0, y: 0 }, e.getData('aim'), { x: to.x - from.x, y: (to.y - from.y) / T.lantern.squash }, I.reach, 180) && !this.damageHero(I.damage, from, e) && e.getData('state') !== 'sweep') return; // parried: he reels
         if (time >= e.getData('fireUntil')) e.setVelocity(0).setData({ state: 'recover', until: time + I.recoverMs, readyAt: time + I.reloadMs });
         return;
     }
@@ -1661,7 +1700,7 @@ export class RoomScene extends Phaser.Scene {
    *  gauntlet, a ringing clang, and nothing else: no wound, no flinch. True when he did. */
   private parried(e: Sprite, from: { x: number; y: number }) {
     const c = e.body!.center;
-    if (e.getData('kind') !== 'inquisitor' || this.kneeling(e) || e === this.prey || !inArc(c, e.getData('facing'), from, Infinity, 2 * T.inquisitor.parryDeg)) return false;
+    if (e.getData('kind') !== 'inquisitor' || this.kneeling(e) || e === this.prey || !e.getData('alert') || this.time.now < (e.getData('staggerUntil') ?? 0) || !inArc(c, e.getData('facing'), from, Infinity, 2 * T.inquisitor.parryDeg)) return false;
     const a = Phaser.Math.Angle.Between(from.x, from.y, c.x, c.y);
     e.setData('parryAt', this.time.now);
     Foes.parry(this, c.x - Math.cos(a) * 6, c.y - Math.sin(a) * 6, a);
@@ -1745,37 +1784,83 @@ export class RoomScene extends Phaser.Scene {
     if (now < this.dazedUntil || !act()) this.queued = { act, at: now, wait: Math.max(this.dashUntil, this.dazedUntil) };
   }
 
+  /** La parade (T.parry): turned to `angle`, his guard up a short window; the blow it turns aside, deflect(). Missed, he
+   *  stands open a while (openUntil). */
+  private parry(angle: number) {
+    const now = this.time.now, P = T.parry;
+    if (this.dead || this.prey || this.heldBy || this.fly || this.netted() || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.dashUntil
+      || now < this.slashUntil || now < this.castUntil || now < this.shotUntil || now < this.openUntil) return false;
+    this.clawDownAt = this.chargeAt = 0;
+    [this.facing, this.parryAt, this.openUntil] = [angle, now, now + P.windowMs + P.recoverMs];
+    this.commitUntil = Math.max(this.commitUntil, this.openUntil); // no mist out of a missed parry
+    Sfx.play(this, 'dash');
+    return true;
+  }
+
+  /** A blow of `e`'s meets his parry: turned aside (true), or not. Its poise broken, it reels, open to the riposte. */
+  private deflect(e: Sprite) {
+    const now = this.time.now, P = T.parry, f = this.hero.body!.center, c = e.body!.center, a = Phaser.Math.Angle.BetweenPoints(c, f);
+    if (!parries(now, this.parryAt, e.getData('kind') ?? 'ghoul', a + Math.PI - this.facing, P)) return false;
+    [this.parriedAt, this.parryAt] = [now, -1e9];
+    this.openUntil = this.commitUntil = now + P.holdMs; // free again at once: the riposte
+    e.setVelocity(0).setData({ state: 'chase', until: 0, struck: true, stunnedUntil: now + P.staggerMs, staggerUntil: now + P.staggerMs, poiseUntil: now + P.staggerMs, poiseTaken: 0, riposteUntil: now + P.riposteMs });
+    this.physics.velocityFromRotation(a + Math.PI, P.knock, e.body!.velocity);
+    Foes.parry(this, f.x - Math.cos(a) * 6, f.y - Math.sin(a) * 6 + 4, a);
+    Sfx.play(this, 'parry');
+    const cam = this.cameras.main;
+    cam.shake(110, new Phaser.Math.Vector2(3 / cam.width, 2 / cam.height));
+    this.physics.pause();
+    this.time.delayedCall(P.hitStopMs, () => this.physics.resume());
+    return true;
+  }
+
+  /** The claws let go: charged past its start, le coup chargé strikes (T.charge), toward the pointer or where he faces. */
+  private release() {
+    const at = this.chargeAt, now = this.time.now;
+    this.clawDownAt = this.chargeAt = 0;
+    if (!at) return;
+    const p = this.input.activePointer, angle = this.clawMouse ? Phaser.Math.Angle.BetweenPoints(this.hero, this.cameras.main.getWorldPoint(p.x, p.y)) : this.facing;
+    this.slash(angle, chargeOf(at, now, T.charge.fullMs));
+  }
+
   /** The claws. Swipe, back-swipe, then the finisher (heavier, wider, longer, slower to recover from); a slash pressed
    *  during the mist or just after it is the dash strike instead, which opens the combo. */
-  private slash(angle: number) {
-    const now = this.time.now, S = T.slash, D = T.dash;
-    if (this.dead || this.prey || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.slashReadyAt || now < this.dashUntil) return false;
+  private slash(angle: number, charge?: number) {
+    const now = this.time.now, S = T.slash, D = T.dash, C = T.charge, P = T.poise;
+    if (this.dead || this.prey || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.slashReadyAt || now < this.dashUntil || now < this.openUntil) return false;
     if (this.netted()) { // netted: the claws tear at the mesh instead, a swing's time each
       this.slashReadyAt = now + S.cooldownMs;
       return this.struggle('blow');
     }
-    const dash = dashStrikes(now, this.dashUntil, this.lastSlashAt, D.strikeWindowMs);
-    this.combo = dash ? 0 : nextCombo(this.combo, now - this.lastSlashAt, S.comboWindowMs);
+    const g = this.gear, pace = 1 + g.pace; // the weapon worn (items.ts): its pace, reach, arc, blows
+    const heavy = charge !== undefined, full = Number(heavy && charge >= 1);
+    const ripe = (e: Sprite) => now < (e.getData('riposteUntil') ?? 0) && !!e.body?.enable && inArc(this.hero, angle, e, S.finisherRange + g.reach, S.finisherArcDeg + g.arc);
+    const riposte = !heavy && (this.enemies.getChildren() as Sprite[]).some(ripe);
+    const dash = !heavy && !riposte && dashStrikes(now, this.dashUntil, this.lastSlashAt, D.strikeWindowMs);
+    this.combo = heavy || riposte ? 2 : dash ? 0 : nextCombo(this.combo, now - this.lastSlashAt, S.comboWindowMs);
     const fin = !dash && this.combo === 2, kind = dash ? 3 : this.combo; // kind 3: the dash strike, for effects and sounds
     this.lastSlashAt = now;
-    const g = this.gear, pace = 1 + g.pace; // the weapon worn (items.ts): its pace, reach, arc, blows
-    this.slashReadyAt = now + (S.cooldownMs + (fin ? S.finisherRecoveryMs : 0)) * pace;
-    this.slashUntil = now + S.cooldownMs * pace;
-    this.commitUntil = now + (fin ? S.finisherCommitMs : S.commitMs);
+    this.slashReadyAt = now + (heavy ? C.recoverMs : (S.cooldownMs + (fin ? S.finisherRecoveryMs : 0)) * pace);
+    this.slashUntil = now + (heavy ? C.strikeMs : S.cooldownMs * pace);
+    this.commitUntil = now + (heavy ? C.commitMs : fin ? S.finisherCommitMs : S.commitMs);
     this.facing = angle;
     Fx.slash(this, this.hero.x, this.hero.y, angle, kind);
     Sfx.play(this, 'slash', kind);
     Crows.din(this.ctx, this.hero.body!.center, now); // a fight is heard
 
-    const range = (fin ? S.finisherRange : S.range) + g.reach, arc = (dash ? D.strikeArcDeg : fin ? S.finisherArcDeg : S.arcDeg) + g.arc;
-    const damage = (dash ? S.damage + D.strikeBonus : fin ? S.damage * (S.finisherMult + g.finisher) + this.v('rongeur') : S.damage) * (this.has('noires') ? T.pacts.noires.mult : 1) * (1 + g.claw);
-    const knock = S.knockback * (dash ? D.strikeKnock : fin ? S.finisherKnock * (1 + g.knock) : 1);
+    const range = (heavy ? C.range : fin ? S.finisherRange : S.range) + g.reach, arc = (heavy ? C.arcDeg : dash ? D.strikeArcDeg : fin ? S.finisherArcDeg : S.arcDeg) + g.arc;
+    const mult = (this.has('noires') ? T.pacts.noires.mult : 1) * (1 + g.claw);
+    const damage = (heavy ? C.damage[full] : dash ? S.damage + D.strikeBonus : fin ? S.damage * (S.finisherMult + g.finisher) + this.v('rongeur') : S.damage) * mult;
+    const knock = S.knockback * (heavy ? C.knock : dash ? D.strikeKnock : fin ? S.finisherKnock * (1 + g.knock) : 1);
+    const weight = heavy ? C.poise[full] : kind === 2 ? P.finisher : kind === 3 ? P.dash : P.claw;
     if (fin && this.has('grouillantes')) this.releaseRats(this.hero.body!.center, this.v('grouillantes'));
-    let hits = 0, killed = false, broke = false;
+    let hits = 0, killed = false, extra = 0;
     for (const e of [...this.enemies.getChildren()] as Sprite[]) { // not the ghouls this blow tears off an Amas
       if (!e.body?.enable || this.aloft(e) || !(e.getData('kind') === 'crows' ? Crows.reached(e, this.hero, angle, range, arc) : inArc(this.hero, angle, e, range + (e.getData('kind') === 'nourrice' ? T.nourrice.reach : e.getData('kind') === 'matrice' ? T.matrice.reach : e.getData('kind') === 'chose' ? T.chose.grasp : 0), arc))) continue; // their bodies are broad; up on the walls, hanging, out of reach; a flock, by any of its crows
       hits++;
-      broke = this.hitEnemy(e, angle, damage, knock, kind) || broke;
+      const rip = riposte && ripe(e);
+      if (rip) e.setData('riposteUntil', 0);
+      extra = Math.max(extra, this.hitEnemy(e, angle, rip ? Math.max(damage, T.parry.riposte * mult) : damage, knock, kind, rip ? Infinity : weight, rip));
       killed ||= !e.body?.enable;
     }
     if (fin && killed && Math.random() < g.leech) this.heal(T.items.leechHeal); // Main de goule
@@ -1796,7 +1881,7 @@ export class RoomScene extends Phaser.Scene {
     if (!hits) return true;
     // Hit-stop: freeze physics briefly so the impact reads, longer the heavier the blow; tweens and timers keep running.
     // The last foe of a fight down (kill()), the slow motion starts after it.
-    const stop = S.hitStopMs + (fin ? S.finisherHitStopMs : 0) + (dash ? D.strikeHitStopMs : 0) + (broke ? T.poise.breakStopMs : 0);
+    const stop = (heavy ? C.hitStopMs[full] : S.hitStopMs + (fin ? S.finisherHitStopMs : 0) + (dash ? D.strikeHitStopMs : 0)) + extra;
     if (this.slowAt === now) this.slowAt += stop;
     this.physics.pause();
     this.time.delayedCall(stop, () => this.physics.resume());
@@ -1808,7 +1893,7 @@ export class RoomScene extends Phaser.Scene {
    *  thrown with. */
   private shoot(angle: number) {
     const now = this.time.now, S = T.shot;
-    if (this.dead || this.prey || this.netted() || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
+    if (this.dead || this.prey || this.netted() || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.shotReadyAt || now < this.dashUntil || now < this.slashUntil || now < this.openUntil || this.chargeAt) return false;
     if (this.has('jet') && this.rats.filter((r) => r.from === 'jet').length >= T.gifts.jetRats) return false; // the thrown rats still running
     this.shotReadyAt = now + S.cooldownMs;
     this.shotUntil = now + S.throwMs;
@@ -1854,25 +1939,40 @@ export class RoomScene extends Phaser.Scene {
     this.hurtEnemy(e, T.shot.damage);
   }
 
-  /** A claw lands: `kind` is the slash's (combo step 0-2, 3 the dash strike). True when it broke the foe's poise. */
-  private hitEnemy(e: Sprite, angle: number, damage: number, knock: number, kind: number) {
+  /** A claw lands: `kind` is the slash's (combo step 0-2, 3 the dash strike), `weight` its poise weight (T.poise),
+   *  `riposte` on a foe reeling from a parry. On a foe that has not noticed him, the predator strike (T.predator). The
+   *  hit-stop it adds to the blow's: a broken poise's, a predator strike's or a riposte's. */
+  private hitEnemy(e: Sprite, angle: number, damage: number, knock: number, kind: number, weight: number, riposte = false) {
     const now = this.time.now;
     if (e.getData('kind') === 'chose') { // a claw on its fingers: it lets go and sinks a while (it never dies)
       Fx.hit(this, e.x, e.y + 8, angle);
       Sfx.play(this, 'hit', kind);
       Chose.struck(this.ctx, e, now);
-      return false;
+      return 0;
     }
     if (this.parried(e, this.hero.body!.center)) { // his arm jars back
       this.physics.velocityFromRotation(angle + Math.PI, 110, this.shove);
       this.shoveUntil = now + 90;
-      return false;
+      return 0;
+    }
+    // L'attaque dans l'ombre: it never saw him coming. A dark lunge onto it in his mist, its blood bursting.
+    const prey = predatory(e.getData('kind') ?? 'ghoul', !!e.getData('alert'), T.predator.immune) && !this.kneeling(e) && e !== this.prey;
+    if (prey) {
+      const f = this.hero.body!.center, d = Math.max(0, Math.min(T.predator.lunge, Phaser.Math.Distance.BetweenPoints(e.body!.center, f) - 14));
+      [damage, weight] = [Math.max(damage, T.predator.damage), Infinity];
+      Fx.dash(this, f, angle);
+      this.tweens.add({ targets: this.hero, x: this.hero.x + Math.cos(angle) * d, y: this.hero.y + Math.sin(angle) * d, duration: 60, ease: 'Quad.easeOut' });
+      Fx.gore(this, e.x, e.y, angle, T.predator.gore);
+      Sfx.play(this, 'predator');
+    } else if (riposte) {
+      Fx.gore(this, e.x, e.y, angle, T.feel.goreHeavy);
+      Sfx.play(this, 'kill');
     }
     // Its poise worn through (T.poise), it staggers, cut short in whatever it was doing, a wind-up too: aggression is
     // rewarded. Holding, it flinches walking or recovering, and holds firm mid-attack; the heavy ones never budge.
     const P = T.poise, state = e.getData('state'), heavy = this.heavy(e);
     const { taken, breaks } = poiseHit({ taken: e.getData('poiseTaken') ?? 0, lastAt: e.getData('poiseAt') ?? -1e9, steadyUntil: e.getData('poiseUntil') ?? 0 },
-      now, kind === 2 ? P.finisher : kind === 3 ? P.dash : P.claw, heavy ? Infinity : P.of[e.getData('kind') ?? 'ghoul'] ?? Infinity, P.regenMs);
+      now, weight, heavy ? Infinity : P.of[e.getData('kind') ?? 'ghoul'] ?? Infinity, P.regenMs);
     const firm = heavy || this.kneeling(e) || (!breaks && !['chase', 'recover'].includes(state));
     e.setData({ poiseTaken: taken, poiseAt: now, blow: { angle, at: now, force: knock / T.slash.knockback } });
     if (breaks) e.setData({ state: 'chase', until: 0, stunnedUntil: now + P.staggerMs, staggerUntil: now + P.staggerMs, poiseUntil: now + P.steadyMs });
@@ -1883,8 +1983,8 @@ export class RoomScene extends Phaser.Scene {
     if (this.has('griffes')) this.infect(e, this.v('griffes'));
     if (this.gear.bleed) e.setData({ bleedLeft: T.items.bleedTicks, bleedAt: now + T.items.bleedMs / T.items.bleedTicks, bleedDmg: this.gear.bleed / T.items.bleedTicks });
     if (e.getData('kind') === 'nourrice') this.shake(e, damage);
-    this.hurtEnemy(e, damage);
-    return breaks;
+    this.hurtEnemy(e, damage, prey);
+    return prey ? T.predator.hitStopMs : riposte ? T.parry.riposteStopMs : breaks ? P.breakStopMs : 0;
   }
 
   /** Those without poise (T.poise.of): the Amas and the Bourreau, the bosses and the necropolis' own. Blows never cut
@@ -1909,7 +2009,7 @@ export class RoomScene extends Phaser.Scene {
   /** Damage to an enemy from any source (claws, shards, plague, rats): it flashes, hunts the hero, and dies through
    *  kill(). Once the bite is unlocked, a human it weakens drops to its knees for T.bite.kneelMs, cut short in whatever
    *  it was doing; nothing but the bite kills it meanwhile, so it is never killed by accident before the hero can drink. */
-  private hurtEnemy(e: Sprite, amount: number) {
+  private hurtEnemy(e: Sprite, amount: number, predator = false) {
     if (!e.body?.enable) return;
     const kind = e.getData('kind');
     if (kind === 'crows') return Crows.scatter(this.ctx, e, this.time.now); // struck, a flock scatters: it never dies of it
@@ -1919,8 +2019,9 @@ export class RoomScene extends Phaser.Scene {
     if (kind === 'matrice' && !(amount *= Boss.bared(this.fed(e).length, e.getData('phase')))) return void Sfx.play(this, 'thunk'); // fed by every cord: the blow sinks into the sac
     amount *= (this.has('maigre') ? T.pacts.maigre.mult : 1) * (1 + this.gear.dmg);
     // Until the bite is unlocked, a human is wounded like any foe: weakened, it dies (it kneels only for the bite).
-    const now = this.time.now, { hp, kneels } = wound(e.getData('hp'), amount, !!e.getData('human') && Save.data.unlocks.bite, T.bite.weakAt, this.kneeling(e));
-    if (!e.getData('alert')) this.rouse(e);
+    // A predator strike kills a human outright (no kneeling), and its clean kill rouses no one.
+    const now = this.time.now, { hp, kneels } = wound(e.getData('hp'), amount, !!e.getData('human') && Save.data.unlocks.bite && !predator, T.bite.weakAt, this.kneeling(e));
+    if (!e.getData('alert') && !(predator && hp <= 0)) this.rouse(e);
     e.setData({ hp, flashUntil: now + 70 });
     if (kneels) e.setVelocity(0).setData({ state: 'chase', until: 0, kneelUntil: now + T.bite.kneelMs });
     if (hp <= 0) this.kill(e);
@@ -1968,7 +2069,7 @@ export class RoomScene extends Phaser.Scene {
    */
   private bite() {
     const now = this.time.now, B = T.bite;
-    if (this.dead || this.prey || this.heldBy || this.netted() || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil) return false;
+    if (this.dead || this.prey || this.heldBy || this.netted() || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.biteReadyAt || now < this.dashUntil || now < this.slashUntil || now < this.openUntil) return false;
     const live = (this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable), fangs = Save.data.unlocks.bite;
     const prey = fangs ? biteTarget(this.hero, this.facing, live.map((e) => ({ x: e.x, y: e.y, hp: e.getData('hp'), human: !!e.getData('human'), e })),
       B.range, B.arcDeg, B.weakAt)?.e : undefined;
@@ -2017,7 +2118,7 @@ export class RoomScene extends Phaser.Scene {
    *  every enemy standing in it for a while. One at a time: a new one replaces the last. */
   private cast(to: { x: number; y: number }) {
     const now = this.time.now, G = T.glyph;
-    if (this.dead || this.prey || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.glyphReadyAt || now < this.dashUntil) return false;
+    if (this.dead || this.prey || this.phase === 'enter' || this.phase === 'leave' || now < this.swarmUntil || now < this.glyphReadyAt || now < this.dashUntil || now < this.openUntil || this.chargeAt) return false;
     const feet = this.hero.body!.center, b = this.room.bounds, rx = G.radius, ry = rx * T.lantern.squash;
     const at = glyphSpot(feet, to, G.range, { x: b.x + rx, y: b.y + ry, width: b.width - 2 * rx, height: b.height - 2 * ry });
     this.glyph?.end();
@@ -2488,11 +2589,12 @@ export class RoomScene extends Phaser.Scene {
   private hurt(e: Sprite) {
     if (this.time.now < this.swarmUntil) return; // through la Nuée: no blow, no shove
     const state = e.getData('state');
-    if (state === 'lunge') this.damageHero(T.enemy.damage);
-    // A hound's leap strikes once and throws him along it, unless he mists through.
+    if (state === 'lunge') this.damageHero(T.enemy.damage, undefined, e);
+    // A hound's leap strikes once and throws him along it, unless he mists through (or turns it aside).
     else if (state === 'leap' && !e.getData('struck') && this.time.now >= this.dashUntil) {
       e.setData('struck', true);
-      this.damageHero(T.hound.damage, e.body!.center);
+      this.damageHero(T.hound.damage, e.body!.center, e);
+      if (e.getData('state') !== 'leap') return; // parried
       this.physics.velocityFromRotation(e.getData('facing'), T.hound.shove, this.shove);
       this.shoveUntil = this.time.now + T.hound.shoveMs;
     }
@@ -2500,11 +2602,13 @@ export class RoomScene extends Phaser.Scene {
 
   /** Every source of harm to the hero goes through here (lunges, bolts, holy light): invulnerability, the mist dash,
    *  HUD, feedback and death are handled once. A grand foe's blow comes `from` a floor point: it lands harder (hit-stop,
-   *  shake and knockback scaled to the blood lost, blood flung off him). Returns false when the hit didn't land. */
-  damageHero(amount: number, from?: Phaser.Types.Math.Vector2Like): boolean {
+   *  shake and knockback scaled to the blood lost, blood flung off him). A foe's own blow (`by`) may meet his parry
+   *  (deflect()). Returns false when the hit didn't land. */
+  damageHero(amount: number, from?: Phaser.Types.Math.Vector2Like, by?: Sprite): boolean {
     const now = this.time.now;
     // Blows go through la Nuée; only holy light breaks it (update()).
-    if (this.dead || (this.training ? Training.opts.god : Training.opts.out) || now < this.invulnUntil || now < this.dashUntil || now < this.swarmUntil) return false;
+    if (this.dead || (by && now >= this.dashUntil && now >= this.swarmUntil && this.deflect(by)) || (this.training ? Training.opts.god : Training.opts.out) || now < this.invulnUntil || now < this.dashUntil || now < this.swarmUntil) return false;
+    this.clawDownAt = this.chargeAt = 0; // a blow taken lets a charge go
     this.invulnUntil = now + T.hero.hurtInvulnMs;
     this.hurtAt = now;
     this.hurtFrom = from && Phaser.Math.Angle.BetweenPoints(from, this.hero.body!.center);
@@ -2599,10 +2703,14 @@ export class RoomScene extends Phaser.Scene {
   private hunts(e: Sprite, time: number) {
     if (this.training) return true;
     const from = e.body!.center, to = this.hero.body!.center, d = Phaser.Math.Distance.BetweenPoints(from, to), was = !!e.getData('alert');
-    const k = this.weight().notice, S = { ...T.sight, range: T.sight.range * k, shade: T.sight.shade * (1 + this.gear.shade) * k }; // the blood he drips; a Linceul noir
-    const sees = d <= sightRange(S, was, this.inLight) && this.boltReach(from, Phaser.Math.Angle.BetweenPoints(from, to)) >= d;
-    const s = alertness({ alert: was, seenAt: e.getData('seenAt') }, sees, time, T.sight.giveUpMs);
-    e.setData(s);
+    const k = this.weight().notice, S = { ...T.sight, range: T.sight.range * k, shade: T.sight.shade * (1 + this.gear.shade) * k, back: T.sight.back * k }; // the blood he drips; a Linceul noir
+    const way = Phaser.Math.Angle.BetweenPoints(from, to), back = !was && behind(from, e.getData('facing') ?? 0, to); // on the watch it sees the half it faces
+    const sees = d <= sightRange(S, was, this.inLight, back) && this.boltReach(from, way) >= d;
+    // Seeing him on the watch, it first turns to him; it hunts only once it has kept him in sight a beat (unaware till then).
+    const n = was ? { spotAt: 0, knows: sees } : notice(e.getData('spotAt') ?? 0, sees, time, T.sight.noticeMs);
+    if (n.spotAt) e.setData('facing', way);
+    const s = alertness({ alert: was, seenAt: e.getData('seenAt') }, n.knows, time, T.sight.giveUpMs);
+    e.setData({ ...s, spotAt: n.spotAt });
     if (s.alert && !was) this.rouse(e);
     return s.alert;
   }
@@ -2626,6 +2734,10 @@ export class RoomScene extends Phaser.Scene {
     if (d < 4) e.setVelocity(0);
     else this.physics.velocityFromRotation(a, stats(e.getData('kind') ?? 'ghoul').speed * T.sight.homeSpeed, e.body!.velocity);
     e.setData({ state: 'chase', ...(d < 4 ? {} : { facing: a }) });
+    // At its post it looks the other way now and then (its back the way in, T.sight), not while it turns to him.
+    const now = this.time.now, [lo, hi] = T.sight.turnMs;
+    if (d < 4 && !e.getData('spotAt') && now >= (e.getData('turnAt') ?? 0))
+      e.setData({ facing: Phaser.Math.Angle.Wrap((e.getData('facing') ?? 0) + Math.PI + Phaser.Math.FloatBetween(-0.6, 0.6)), turnAt: now + Phaser.Math.Between(lo, hi) });
   }
 
   /** The training room calls an enemy in at `p`: it rises after its telegraph, hunting (`hp` to start it weakened). */

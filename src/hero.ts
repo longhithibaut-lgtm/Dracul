@@ -10,7 +10,9 @@ import grandSheet from './grand-hero.png';
 // ZOOM) so each of his pixels is a screen pixel. Each of his frames carries the lantern glass centre (customData.lamp).
 // Gameplay calls create() once, show() every frame and die() when he falls; everything visual lives here. hurtFrom: the
 // way the last blow travelled (radians), for the side he reels from.
-export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; hurtFrom?: number; dazed?: boolean; invulnerable: boolean; facing: number; swarm?: boolean }; // swarm: turned into la Nuée (rats.ts draws it)
+// parry: his guard up (la parade), struck (clang: a blow just turned aside, a flash), or open after a missed one; charge: le coup chargé, its share of a full charge;
+// stalking: a foe that has not noticed him is within reach (T.predator), he darkens.
+export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; hurtFrom?: number; dazed?: boolean; invulnerable: boolean; facing: number; swarm?: boolean; parry?: 'guard' | 'clang' | 'open'; charge?: number; stalking?: boolean }; // swarm: turned into la Nuée (rats.ts draws it)
 
 /** Where the hero stands to bite: this far beside the prey's sprite centre, so his mouth lands on its neck. */
 export const BITE_REACH = 8;
@@ -32,6 +34,11 @@ const TEAR_MS = 160; // torn away from the prey, after the drink
 // Dying (die()): the knees give, on his knees, slumped, then the body breaks into vapour (RoomScene restarts at 1200 ms).
 const DEATH = [0, 110, 300, 560, 720, 880];
 const states = new WeakMap<Phaser.Physics.Arcade.Sprite, State>();
+// A multiply tint from none (0) to the predator's dark (1).
+const darken = (k: number) => {
+  const c = T.predator.tint, ch = (sh: number) => Math.round(255 + (((c >> sh) & 255) - 255) * k);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+};
 
 export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physics.Arcade.Sprite {
   const tex = scene.textures.get('hero');
@@ -89,6 +96,10 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   // The body turns to mist during the dash (after the push-off) and re-forms just after (fx.ts ghosts the intact run
   // pose instead).
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
+  // La parade: the forearm raised before him (his flinch's first frame); missed, stooped forward, open (the finisher's weight).
+  else if (look.parry && has('hurt-0')) frame = look.parry === 'open' ? 'fin-0' : 'hurt-0';
+  // Le coup chargé: reared back on his back foot, the claw drawn high (the finisher's anticipation), held.
+  else if (look.charge !== undefined && has('claw2-0')) frame = 'claw2-0';
   // 70: T.bite.lungeMs; latched side-on, he drinks, then tears away.
   else if (look.biting && (view === 'side' || has('bite-0'))) frame = step('bite', st.biteAt, [0, 70, 200], 'bite');
   else if (look.casting) frame = step('cast', st.castAt, [0, 60, 140], 'cast');
@@ -110,6 +121,10 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   s.setFrame(`${view}-${frame}`).setFlipX(flip);
 
   if (look.hurt) s.setTint(now - st.hurtAt < 60 ? 0xffffff : 0xe0284a).setTintMode(Phaser.TintModes.FILL);
+  else if (look.parry === 'clang') s.setTint(0xffe8c8).setTintMode(Phaser.TintModes.FILL); // the blow turned aside: a pale flash
+  // Charging, he sinks into the dark as it grows, throbbing once full; stalking an unaware foe, he darkens.
+  else if (look.charge !== undefined) s.clearTint().setTint(darken(look.charge < 1 ? look.charge * 0.7 : 0.8 + 0.2 * Math.sin(now / 45)));
+  else if (look.stalking) s.clearTint().setTint(T.predator.tint);
   else s.clearTint();
   const blink = look.invulnerable && !look.hurt && Math.floor(now / 70) % 2 === 1;
   s.setAlpha(look.swarm ? 0 : look.dashing ? 0.85 : blink ? 0.25 : 1);

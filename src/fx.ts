@@ -41,6 +41,16 @@ function animate(scene: Phaser.Scene, depth: number, ms: number, draw: (g: Phase
   scene.tweens.addCounter({ from: 0, to: ms, duration: ms, onUpdate: (tw) => draw(g.clear(), tw.getValue() ?? 0), onComplete: () => g.destroy() });
 }
 
+/** Le coup chargé full: a dark glint at his drawn claw (x, y): a black-red star, its white heart a blink. */
+export function glint(scene: Phaser.Scene, x: number, y: number) {
+  animate(scene, 9000, 220, (g, t) => {
+    const k = t / 220, r = Math.round(1 + 5 * Math.sin(k * Math.PI)), cx = Math.round(x), cy = Math.round(y);
+    g.fillStyle(DRIED, 1 - k).fillRect(cx - r, cy, 2 * r + 1, 1).fillRect(cx, cy - r, 1, 2 * r + 1);
+    g.fillStyle(BLOOD, 1 - k).fillRect(cx - 1, cy - 1, 3, 3);
+    if (k < 0.3) g.fillStyle(0xffffff, 1).fillRect(cx, cy, 1, 1);
+  });
+}
+
 /** The hero is hurt; `k`: how hard the blow was (blood lost), for the shake. */
 export function hurt(scene: Phaser.Scene, k = 1) {
   const cam = scene.cameras.main, w = cam.width / cam.zoom, h = cam.height / cam.zoom;
