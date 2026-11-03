@@ -96,7 +96,7 @@ export function create(scene: Phaser.Scene, host: Host) {
     const s = figure(scene, 'mirelle', at, walled ? 'wall0' : 'broken');
     block(at, 44, 12);
     let eyesUntil = 0;
-    add({ at: { x: at.x, y: at.y + 6 }, s, lift: 50, r: 30,
+    add({ at: { x: at.x, y: at.y + 6 }, s, lift: 50,
       name: () => (m.s === 'new' ? 'Le mausolée muré (F)' : walled ? 'Mirelle (F)' : 'Le mur est cassé'),
       show: (time, close) => { if (q.mirelle.s === 'new' || q.mirelle.s === 'open') s.setFrame(close || time < eyesUntil ? 'eyes' : `wall${Math.floor(time / 900) % 2}`); },
       talk: () => {
@@ -324,6 +324,7 @@ export function create(scene: Phaser.Scene, host: Host) {
     hover: (x: number, y: number) => box?.hover(x, y),
     click: (x: number, y: number) => box?.click(x, y),
     close: () => box?.close(),
+    line: () => box?.line(), // (the headless checks')
     /** Every frame: their poses, their words near, Odo's walk after the hero and the blows he takes. */
     step(time: number, delta: number) {
       for (const n of npcs) {

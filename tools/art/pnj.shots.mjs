@@ -37,7 +37,7 @@ const go = async (layout, x, y, carried = 0) => {
 };
 const busy = () => run(() => !!window.game.scene.getScene('room').pnj?.busy());
 const key = async (k, n = 1) => { for (let i = 0; i < n; i++) { await page.keyboard.press(k); await wait(160); } };
-const talk = async () => { await key('f'); await wait(200); return busy(); };
+const talk = async () => { await key('f'); return page.waitForFunction(() => !!window.game.scene.getScene('room').pnj?.busy(), null, { timeout: 4000 }).then(() => true, () => false); }; // (a title, not a box: false after a wait)
 const P = { mirelle: [402, 604], ilse: [1194, 600], odo: [3102, 888], ledger: [3282, 816], greffier: [1870, 158], rMirelle: [726, 300], rGreffier: [690, 573], rOdo: [990, 588] };
 const by = (p, dx = -24, dy = 16) => [p[0] + dx, p[1] + dy];
 const kill = (quest) => run((q) => { const s = window.game.scene.getScene('room'), e = s.enemies.getChildren().find((o) => o.getData('quest') === q && o.body?.enable); if (e) s.kill(e); return !!e; }, quest);
@@ -124,7 +124,10 @@ check((await quests()).greffier.s === 'done', 'the ledger brought up: le Greffie
 await go('refuge', ...by(P.rGreffier, 0, 22));
 await shot('refuge-greffier');
 check(await talk(), 'F by le Greffier at the refuge: no dialogue');
+const l0 = await run(() => window.game.scene.getScene('room').pnj.line());
 await key('f');
+const l1 = await run(() => window.game.scene.getScene('room').pnj.line());
+check(l0 === 0 && l1 === 1, `le Greffier's lines: ${l0} then ${l1}, expected 0 then 1`);
 await shot('greffier-reveal');
 await key('f', 3);
 const sv = await save();

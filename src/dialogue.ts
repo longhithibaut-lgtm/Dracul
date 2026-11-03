@@ -16,6 +16,7 @@ export type Box = {
   hover(x: number, y: number): void; // the pointer, in game px
   click(x: number, y: number): void;
   close(): void; // Escape: leave, nothing chosen
+  line(): number; // the line shown (0: the first)
 };
 
 const BONE = '#c4b697', BONE_DIM = '#8a7c63', FRESH = '#d01a12', VOID = 0x090806, SMEAR = 0x5c0a10;
@@ -97,6 +98,7 @@ export function open(scene: Phaser.Scene, t: Talk, done: () => void): Box {
       if (!t.choices?.length) close();
     },
     pick: choose,
+    line: () => line,
     hover(_x, y) {
       const i = at(y);
       if (i !== hot) { hot = i; draw(); }
