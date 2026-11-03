@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import * as Font from './font.ts';
+import { binds, label as keyLabel } from './keys.ts';
 import * as Save from './save.ts';
 import { T } from './tuning.ts';
 import { runMask } from './logic.ts';
@@ -188,7 +189,7 @@ export function open(scene: Phaser.Scene, z: ZoneId, hero: P, facing: number) {
     const label = (s: string, cx: number, y: number, color: string) => text(s, Math.round(Math.min(Math.max(cx - (Font.width(s) * k) / 2, x0), x0 + w - Font.width(s) * k)), y, color);
     const title = WORLD[z].name.toUpperCase();
     text(title, Math.round((W - Font.width(title, 2) * k) / 2), y0 - 14 * k, BONE, 2); // centred: the HUD holds the corner
-    const hint = 'C ou Échap : fermer';
+    const hint = `${[...binds.map.flat().map(keyLabel), 'Échap'].join(' ou ')} : fermer`;
     text(hint, x0 + w - Font.width(hint) * k, y0 + h + 5 * k, DIM);
     icon(ICONS.shut, x0 + 3 * k, y0 + h + 10 * k, RED);
     text('fermé', x0 + 8 * k, y0 + h + 5 * k, DIM);

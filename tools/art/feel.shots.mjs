@@ -28,7 +28,7 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const run = (f, a) => page.evaluate(f, a);
 const check = (ok, what) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) errors.push(what); };
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 await run(() => window.game.scene.getScene('room').scene.restart({ training: true, layout: 'necropolis' }));
 await page.waitForFunction(() => window.game.scene.getScene('room').layout === 'necropolis' && window.game.scene.getScene('room').hero?.body);

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
 import { viewSize } from './logic.ts';
+import * as Settings from './settings.ts';
 
 // The rooms' light, as the mockup's engine lights it. The world camera draws what everything reflects (its albedo, in
 // sRGB); one screen shader (FilterDark) lights it: the static lights baked offline with their shadows, haze and rims
@@ -85,6 +86,7 @@ uniform vec3 uAmb;
 uniform vec3 uLampR;
 uniform vec4 uPost;
 uniform vec4 uVig;
+uniform float uGamma;
 varying vec2 outTexCoord;
 // Textures other than the camera's are bottom-up: v = 1 - row / height.
 
@@ -180,7 +182,8 @@ void main() {
   // Drawn already lit (prelit(): alpha cleared): its own colour, only vignetted, warmed a little by the torches' baked
   // light where he stands (it reads the floor behind him: a hint, not a relight).
   vec3 warm = sqrt(min(T, vec3(1.0)));
-  gl_FragColor = vec4(mix(src.rgb * pow(vig, 0.45) * (1.0 + uKeep.y * warm) + warm * vec3(0.0625, 0.044, 0.025) * uKeep.y, lit, src.a), 1.0);
+  // The player's brightness (settings.ts): an exponent on the final image.
+  gl_FragColor = vec4(pow(mix(src.rgb * pow(vig, 0.45) * (1.0 + uKeep.y * warm) + warm * vec3(0.0625, 0.044, 0.025) * uKeep.y, lit, src.a), vec3(uGamma)), 1.0);
 }`;
 function vec(c: number[]) { return `vec3(${c.map((v) => v.toFixed(5)).join(', ')})`; }
 
@@ -238,7 +241,8 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
     pm.setUniform('uKeep', [k.albedo ? k.sprites ?? 0 : 0, k.warm ?? 0.8]);
     pm.setUniform('uAmb', L(k.amb).map((v) => v * 0.9));
     pm.setUniform('uLampR', [k.lamp[1], k.lamp[2], k.ys]);
-    pm.setUniform('uPost', k.post);
+    pm.setUniform('uPost', [k.post[0], k.post[1], k.post[2], Settings.data.grain ? k.post[3] : 0]); // the grain, unless turned off
+    pm.setUniform('uGamma', Settings.gamma(Settings.data.bright));
     pm.setUniform('uVig', k.vig);
   }
 }
@@ -332,7 +336,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   const pre = over.preRender.bind(over);
   over.preRender = () => {
     // Origin 0: what is pinned to the screen (scroll factor 0: cards, flashes) lands at its place times the zoom.
-    over.setOrigin(0).setZoom(main.zoom).setScroll(main.worldView.x, main.worldView.y).setSize(main.width, main.height).setAlpha(1 - (main.fadeEffect as unknown as { alpha: number }).alpha);
+    over.setOrigin(0).setZoom(main.zoom).setScroll(main.worldView.x, main.worldView.y).setSize(main.width, main.height).setAlpha(main.alpha * (1 - (main.fadeEffect as unknown as { alpha: number }).alpha)); // dimmed with it (the pause)
     pre();
   };
   const sort = () => { // every object to one of the two (the HUD's own camera keeps its own)

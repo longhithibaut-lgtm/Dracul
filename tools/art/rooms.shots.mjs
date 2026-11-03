@@ -44,7 +44,7 @@ const fps = async () => {
   }));
 };
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.getScene('room')?.hero?.body && window.game.scene.isActive('room'));
 const rates = {};
 for (const id of only) {

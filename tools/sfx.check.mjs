@@ -15,7 +15,7 @@ const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 
 // [name, arg, expected length to -60 dB, range in ms]

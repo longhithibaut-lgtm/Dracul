@@ -19,7 +19,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 
 await mkdir(out, { recursive: true });
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.getScene('room')?.hero?.body);
 // The game starts in the refuge: a run, room 1 in the crypt.
 await page.evaluate(() => window.game.scene.getScene('room').scene.restart({ layout: 'hall' }));

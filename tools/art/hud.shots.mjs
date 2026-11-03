@@ -22,7 +22,7 @@ await mkdir(out, { recursive: true });
 const run = (f, a) => page.evaluate(f, a);
 const check = (ok, what) => (ok ? console.log(`ok: ${what}`) : (failed.push(what), console.log(`FAILED: ${what}`)), ok);
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 await run(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 6, banked: 900, shortcuts: ['grille', 'galerie', 'caveau'], powers: { bought: ['swarm'], worn: {} } })));
 await page.reload();

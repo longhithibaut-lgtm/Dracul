@@ -34,6 +34,8 @@ import * as Enterre from './enterre.ts';
 import * as Gave from './gave.ts';
 import * as Chose from './chose.ts';
 import * as Crocheteur from './crocheteur.ts';
+import * as Keys from './keys.ts';
+import * as Settings from './settings.ts';
 import { decks, nearestEdge, struggle } from './fauna.ts';
 import { WORLD, ZONES, areaAt, chokes, expedition, galleryOpen, go, homeward, isZone, lair, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState, type ZoneId } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
@@ -46,11 +48,12 @@ type Sprite = Phaser.Physics.Arcade.Sprite;
  *  zone: out of its door i; the refuge: 0, up its stairs),
  *  none at the room's start; hounds: the hp of the hounds hunting him through the exit; bag: the items in his bag
  *  (`lostItems`: those he died with, and those worn not yet brought back). In the training room: gifts and
- *  their ranks (0 commun, 1 rare, 2 épique; none: commun). at: where he stands at the start (the training panel's « Aller à »). */
+ *  their ranks (0 commun, 1 rare, 2 épique; none: commun). at: where he stands at the start (the training panel's « Aller à »).
+ *  title: the title screen (title.ts) over the refuge's crypt, his coffin empty: no hero, no HUD, no input here. */
 export type Run = {
   layout?: Room.LayoutId; health?: number; carried?: number; exp?: Expedition; entry?: number; hounds?: number[]; lost?: number;
   bag?: Items.Item[]; lostItems?: number;
-  gifts?: GiftId[]; ranks?: Ranks; training?: boolean; at?: { x: number; y: number };
+  gifts?: GiftId[]; ranks?: Ranks; training?: boolean; at?: { x: number; y: number }; title?: boolean;
 };
 type Ranks = Partial<Record<GiftId, number>>;
 type Rat = { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until: number; from?: 'dash' | 'jet'; dmg: number; bites: number; next: number; prey?: Sprite };
@@ -85,7 +88,6 @@ export class RoomScene extends Phaser.Scene {
   private nav: number[] = [];
   private pitBoxes: { x: number; y: number; width: number; height: number }[] = [];
   private hud!: Hud.Hud;
-  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private facing = Math.PI / 2;
   private dashUntil = 0;
   private dashReadyAt = 0;
@@ -148,6 +150,7 @@ export class RoomScene extends Phaser.Scene {
   private swarmFx?: Rats.Swarm;
   private gnawAt = new Map<Sprite, number>();
   private training = false; // the training room (key T): no expedition, enemies on demand, see training.ts
+  private titled = false; // under the title screen (Run.title)
   private glyph?: Glyph.Glyph; // the blood sigil on the floor, from its cast until it has crumbled
   private glyphReadyAt = 0;
   private castUntil = 0; // the hero's cast pose
@@ -177,6 +180,17 @@ export class RoomScene extends Phaser.Scene {
 
   constructor() {
     super('room');
+    // The scene's clock leaves out the time it stands still (a panel open: time.paused; the pause menu: the scene
+    // paused; the page hidden): the foes' wind-ups, the cooldowns, every `time.now` stamp go on where they were.
+    let off = 0, last = -1;
+    const step = this.sys.step.bind(this.sys);
+    this.sys.step = (time: number, delta: number) => {
+      const gap = last < 0 ? 0 : time - last;
+      if (this.time?.paused) off += gap;
+      else if (gap > 250) off += gap - delta;
+      last = time;
+      step(time - off, delta);
+    };
   }
 
   init(data: Run) {
@@ -196,6 +210,7 @@ export class RoomScene extends Phaser.Scene {
     this.passedAt = -1e9;
     this.navFrom = -1;
     this.training = !!data.training;
+    this.titled = !!data.title;
     // the training room's gifts, toggled; out there, the Rat house's powers worn (bought from Vesna, at their commun rarity)
     this.gifts = data.training ? [...(data.gifts ?? [])] : Powers.worn(Save.data);
     this.ranks = data.training ? { ...data.ranks } : {};
@@ -304,8 +319,6 @@ export class RoomScene extends Phaser.Scene {
     const lie = (b: Foes.Ctx['bodies'][number]) => this.bodies.push(b);
     this.events.on('corpse', lie);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off('corpse', lie));
-    // Held by l'Enterré, or netted: each direction key pressed anew is a struggle.
-    this.input.keyboard!.on('keydown', (ev: KeyboardEvent) => !ev.repeat && /^(Key[WASDZQ]|Arrow)/.test(ev.code) && this.struggle('key'));
 
     this.hud = Hud.create(this);
     // Vermine's price: climbing into a new room, its rats take their due (never his last blood).
@@ -315,14 +328,8 @@ export class RoomScene extends Phaser.Scene {
     }
     this.hud.health(this.health, this.maxHealth());
 
-    this.keys = this.input.keyboard!.addKeys('W,Z,UP,A,Q,LEFT,S,DOWN,D,RIGHT,J,K,F,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
-    // Left click slashes, right click shoots, both toward the pointer; J and K do the same toward where he faces. F bites,
-    // unaimed, or searches what is at hand. The aim: the mouse once moved or clicked, the keys once J, K or L is pressed;
-    // E casts the glyph at the pointer or, the keys aiming, ahead of him like L (no blow aims at a pointer left aside).
-    // The claws held on (the left button, J) charge a heavy blow, let go to strike (T.charge). X or the middle button
-    // parries (T.parry), toward the pointer while the mouse aims, else where he faces: X is X on AZERTY and QWERTY alike,
-    // under the left hand, and free.
-    const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
+    // Every key and button by its action (keys.ts, rebound in the options): keyDown(), command(). The left button
+    // slashes, the right shoots, both toward the pointer; their keys toward where he faces.
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.carte) return void this.closeMap();
@@ -339,23 +346,13 @@ export class RoomScene extends Phaser.Scene {
         return void (i < 0 ? this.closeSatchel() : this.act(i));
       }
       this.aimMouse = true;
-      const w = world(p), a = Math.atan2(w.y - this.hero.y, w.x - this.hero.x);
-      if (p.button === 0) {
-        [this.clawDownAt, this.clawMouse] = [this.time.now, true];
-        this.press(() => this.slash(a));
-      } else if (p.button === 1) this.press(() => this.parry(a));
-      else if (p.button === 2) this.press(() => this.shoot(a));
+      for (const h of Keys.lookup(Keys.binds, `Mouse${p.button}`)) this.command(h.action, h.slot, true);
     });
-    this.input.on('pointerup', (p: Phaser.Input.Pointer) => p.button === 0 && this.clawMouse && this.release());
-    this.keys.J.on('down', () => {
-      const a = this.facing;
-      [this.aimMouse, this.clawDownAt, this.clawMouse] = [false, this.time.now, false];
-      this.press(() => this.slash(a));
-    });
-    this.keys.J.on('up', () => !this.clawMouse && this.release());
-    this.input.keyboard!.on('keydown-X', (ev: KeyboardEvent) => { if (ev.repeat) return; const a = this.aimMouse ? Phaser.Math.Angle.BetweenPoints(this.hero, world(this.input.activePointer)) : this.facing; this.press(() => this.parry(a)); });
-    this.keys.K.on('down', () => { const a = this.facing; this.aimMouse = false; this.press(() => this.shoot(a)); });
-    this.keys.F.on('down', () => (this.counter ? this.closeShop() : this.stall ? this.closeStall() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
+    const claws = (b: string) => Keys.lookup(Keys.binds, b).some((h) => h.action === 'claw');
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => claws(`Mouse${p.button}`) && this.clawMouse && this.release());
+    // Key events, not polling: a tap shorter than one frame would otherwise be lost. A key held repeats: it acts once.
+    this.input.keyboard!.on('keydown', (ev: KeyboardEvent) => !ev.repeat && this.keyDown(ev));
+    this.input.keyboard!.on('keyup', (ev: KeyboardEvent) => claws(Keys.name(ev)) && !this.clawMouse && this.release());
     // Le Rongé's wares: hovered, bought by their key or a click, left with Escape (or F).
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.aimMouse = true;
@@ -364,33 +361,12 @@ export class RoomScene extends Phaser.Scene {
       const i = this.satchel?.panel.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM) ?? -1, moved = p.x !== p.prevPosition.x || p.y !== p.prevPosition.y; // a still mouse leaves the keys' cursor be
       if (i >= 0 && moved && i !== this.satchel!.view.cursor) this.showSatchel({ cursor: i });
     });
-    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'].forEach((k, i) => this.input.keyboard!.on(`keydown-${k}`, () => (this.counter ? this.sell(i) : this.stall ? this.trade(i) : this.satchel && i < 7 && this.act(Items.SLOTS.length + i))));
-    this.input.keyboard!.on('keydown-ESC', () => (this.carte ? this.closeMap() : this.satchel ? this.closeSatchel() : this.stall ? this.closeStall() : this.closeShop()));
-    // The items' panel: I (or Tab) opens le sac and closes it; the arrows (or ZQSD, WASD) move the cursor, Enter or
-    // Space wears or takes off what it is on.
-    this.input.keyboard!.addKeys('TAB,I,ENTER,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE'); // their Key objects: a key held, or a doubled keydown, acts once
-    for (const k of ['I', 'TAB']) this.input.keyboard!.on(`keydown-${k}`, () => (this.satchel ? this.closeSatchel() : this.openSatchel('sac')));
-    for (const [keys, dx, dy] of [[['LEFT', 'Q', 'A'], -1, 0], [['RIGHT', 'D'], 1, 0], [['UP', 'Z', 'W'], 0, -1], [['DOWN', 'S'], 0, 1]] as const)
-      for (const k of keys) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.showSatchel({ cursor: this.satchel.panel.next(this.satchel.view.cursor, dx, dy) }));
-    for (const k of ['ENTER', 'SPACE']) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.act(this.satchel.view.cursor));
-    // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
-    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => !this.satchel && !this.carte && (this.dashPressedAt = this.time.now));
-    this.input.keyboard!.on('keydown-C', () => (this.carte ? this.closeMap() : this.openMap())); // la carte (M mutes)
-    // Le Glyphe: E casts it at the pointer (the mouse aiming), L ahead of the hero.
-    const castAt = (to: { x: number; y: number }) => this.press(() => this.cast(to));
-    const ahead = () => {
-      const f = this.hero.body!.center;
-      return { x: f.x + Math.cos(this.facing) * T.glyph.near, y: f.y + Math.sin(this.facing) * T.glyph.near };
-    };
-    this.input.keyboard!.on('keydown-E', () => castAt(this.aimMouse ? world(this.input.activePointer) : ahead()));
-    this.input.keyboard!.on('keydown-L', () => { this.aimMouse = false; castAt(ahead()); });
-    this.input.keyboard!.on('keydown-R', () => this.press(() => this.swarm(this.training))); // la Nuée
-    this.input.keyboard!.on('keydown-M', () => (this.sound.mute = !this.sound.mute));
-    // P: full screen in and out (the whole page, so the training panel comes along); refused: nothing happens.
-    this.input.keyboard!.on('keydown-P', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}));
-
-    const toggleTraining = () => this.scene.restart((this.training ? {} : { training: true, layout: 'necropolis' }) satisfies Run); // at the necropolis' stairs up, spawn points all round; its panel picks another room
-    this.input.keyboard!.on('keydown-T', toggleTraining);
+    this.input.enabled = this.input.keyboard!.enabled = !this.titled;
+    if (this.titled) {
+      this.hero.setVisible(false).disableBody(false, false); // his coffin empty; his lamp out with him (dark.ts)
+      for (const c of this.cameras.cameras) if (c !== this.cameras.main && c.name !== 'dark-over') c.setVisible(false); // the HUD's
+      this.scene.launch('title');
+    }
     if (this.training) {
       this.hud.title('Entraînement');
       let calls = 0;
@@ -601,8 +577,99 @@ export class RoomScene extends Phaser.Scene {
       .startFollow(this.hero, true, 0.08, 0.08);
   }
 
+  /** A key pressed (keys.ts names it): an open panel takes what it uses (its cursor, its choice, Échap, its own key and F
+   *  close it; the sound and the full screen go on), else each action bound to it. */
+  private keyDown(ev: KeyboardEvent) {
+    const n = Keys.name(ev), hits = Keys.lookup(Keys.binds, n), on = (a: Keys.Action) => hits.some((h) => h.action === a);
+    const digit = /^(?:Digit|Numpad)([1-9])$/.exec(ev.code), i = digit ? Number(digit[1]) - 1 : -1;
+    for (const a of ['mute', 'fullscreen'] as const) if (on(a)) this.command(a, 0, false);
+    if (this.satchel) { // the arrows (or the move keys) move its cursor, Enter or Space wears or takes off what it is on
+      const d = hits.find((h) => h.action === 'move')?.index ?? Keys.DEFAULTS.move[2].indexOf(n);
+      if (d >= 0) this.showSatchel({ cursor: this.satchel.panel.next(this.satchel.view.cursor, [0, -1, 0, 1][d], [-1, 0, 1, 0][d]) });
+      else if (n === 'Enter' || n === 'Space') this.act(this.satchel.view.cursor);
+      else if (i >= 0 && i < 7) this.act(Items.SLOTS.length + i);
+      else if (on('pause') || on('satchel') || on('bite')) this.closeSatchel();
+      return;
+    }
+    if (this.carte) return void ((on('pause') || on('map')) && this.closeMap());
+    if (this.counter || this.stall) {
+      if (i >= 0) return void (this.counter ? this.sell(i) : this.trade(i));
+      return void ((on('pause') || on('bite')) && (this.counter ? this.closeShop() : this.closeStall()));
+    }
+    for (const h of hits) if (h.action !== 'mute' && h.action !== 'fullscreen') this.command(h.action, h.slot, false);
+  }
+
+  /** Action `a` set off by slot `slot` of its bindings; `mouse`: by a button, which aims at the pointer. The aim: the
+   *  mouse once moved or clicked, the keys once the claws', the shot's or the glyph's first key is pressed; the glyph's
+   *  other key (E) casts it at the pointer or, the keys aiming, ahead of him like its first (L). The claws held on charge
+   *  a heavy blow, let go to strike (T.charge). The parry (X, the middle button) goes toward the pointer while the mouse
+   *  aims, else where he faces (T.parry). */
+  private command(a: Keys.Action, slot: number, mouse: boolean) {
+    const pointer = () => this.cameras.main.getWorldPoint(this.input.activePointer.x, this.input.activePointer.y);
+    const ahead = () => { const f = this.hero.body!.center; return { x: f.x + Math.cos(this.facing) * T.glyph.near, y: f.y + Math.sin(this.facing) * T.glyph.near }; };
+    const at = mouse ? Phaser.Math.Angle.BetweenPoints(this.hero, pointer()) : this.facing;
+    switch (a) {
+      case 'move': return void this.struggle('key'); // held by l'Enterré, or netted: each one pressed anew is a struggle
+      case 'claw':
+        [this.aimMouse, this.clawDownAt, this.clawMouse] = [mouse, this.time.now, mouse];
+        return void this.press(() => this.slash(at));
+      case 'shot':
+        this.aimMouse = mouse;
+        return void this.press(() => this.shoot(at));
+      case 'parry': {
+        const to = this.aimMouse ? Phaser.Math.Angle.BetweenPoints(this.hero, pointer()) : this.facing;
+        return void this.press(() => this.parry(to));
+      }
+      case 'glyph': {
+        if (slot === 0 && !mouse) this.aimMouse = false;
+        const to = this.aimMouse ? pointer() : ahead();
+        return void this.press(() => this.cast(to));
+      }
+      case 'dash': return void (this.dashPressedAt = this.time.now);
+      case 'bite': return void this.press(() => this.bite());
+      case 'satchel': return void this.openSatchel('sac');
+      case 'swarm': return void this.press(() => this.swarm(this.training)); // la Nuée
+      case 'map': return this.openMap();
+      case 'mute': return Settings.set(this.game, { mute: !Settings.data.mute });
+      case 'fullscreen': return Settings.fullscreen();
+      case 'pause': return this.pause();
+      case 'training': return void this.scene.restart((this.training ? {} : { training: true, layout: 'necropolis' }) satisfies Run); // at the necropolis' stairs up, spawn points all round; its panel picks another room
+    }
+  }
+
+  /** Échap: the game stands still (the scene paused) under the pause menu (pause.ts), the world dimmed, the HUD lit. */
+  private pause() {
+    if (this.dead || this.titled) return;
+    const lost = this.exp ? [...this.bag, ...Save.data.worn.filter((w): w is Items.Item => !!w && !Items.acquired(Save.data, w))] : [];
+    this.scene.pause();
+    this.scene.launch('pause', { place: this.training ? 'Entraînement' : WORLD[this.here].name, exp: !!this.exp, carried: this.carried, lost });
+  }
+
+  /** From the pause menu: le sac opened as I would (the game goes on, paused by it). */
+  sac() {
+    this.openSatchel('sac');
+  }
+
+  /** From the pause menu: the expedition given up as at a death (what he carries lost, then at his coffin), or the game
+   *  left for the title screen (on an expedition, the same loss). */
+  abandon(title: boolean) {
+    const lostItems = this.exp ? this.lose('abandon') : 0;
+    this.scene.restart((title ? { title: true } : { lost: this.carried, lostItems }) satisfies Run);
+  }
+
+  /** The expedition ends without him home (a death, given up): logged, le Rongé hungers, what he carried lost; returns
+   *  the number of items lost (the bag, and what he wore not yet brought back). */
+  private lose(end: 'mort' | 'abandon') {
+    const e = this.exp!;
+    Save.log({ end, deepest: e.deepest, blood: this.carried, life: Math.max(0, this.health), s: Math.round((Date.now() - e.startedAt) / 1000), loosed: e.loosed, met: e.met, boss: e.boss });
+    Save.data.dry++; // re-formed empty-handed: le Rongé hungers
+    const lostItems = this.bag.filter((it) => !Items.acquired(Save.data, it)).length + Items.die(Save.data);
+    Save.store();
+    return lostItems;
+  }
+
   update(time: number, delta: number) {
-    if (this.dead) return;
+    if (this.dead || this.titled) return;
     // The last foe of a fight down (kill()): the clocks of tweens and timers (its death, its blood) run slow, easing back.
     const slow = time - this.slowAt;
     this.time.timeScale = this.tweens.timeScale = slow >= 0 && slow < T.feel.slowMs ? Phaser.Math.Linear(T.feel.slow, 1, (slow / T.feel.slowMs) ** 2) : 1;
@@ -618,11 +685,10 @@ export class RoomScene extends Phaser.Scene {
       for (const l of this.labels) l.l.near(false);
       return void this.hero.setVelocity(0);
     }
-    const k = this.keys;
     // Coming in or going out by an exit, the hero walks on his own.
-    const auto = this.phase === 'enter' || this.phase === 'leave', dazed = time < this.dazedUntil;
-    const x = auto || dazed ? 0 : Number(k.D.isDown || k.RIGHT.isDown) - Number(k.A.isDown || k.Q.isDown || k.LEFT.isDown);
-    const y = dazed ? 0 : auto ? this.walk : Number(k.S.isDown || k.DOWN.isDown) - Number(k.W.isDown || k.Z.isDown || k.UP.isDown);
+    const auto = this.phase === 'enter' || this.phase === 'leave', dazed = time < this.dazedUntil, k = Keys.axis();
+    const x = auto || dazed ? 0 : k.x;
+    const y = dazed ? 0 : auto ? this.walk : k.y;
     // Le coup chargé: the claws held on past their press, he rears back (T.charge); a daze, a hold or a net cancel it.
     if (this.chargeAt && (dazed || this.heldBy || this.fly || this.netted() || this.prey)) this.clawDownAt = this.chargeAt = 0;
     else if (!this.chargeAt && charging(this.clawDownAt, time, T.charge.startMs) && !auto && !this.dead && time >= this.slashReadyAt && time >= this.dashUntil
@@ -2365,7 +2431,7 @@ export class RoomScene extends Phaser.Scene {
     this.dropLoot(l);
     this.castUntil = this.time.now + T.glyph.castMs;
     Sfx.play(this, 'gift', 1);
-    this.hud.title(`${Items.ITEMS[l.item.id].name} : dans le sac (I)`);
+    this.hud.title(`${Items.ITEMS[l.item.id].name} : dans le sac (${Keys.label(Keys.binds.satchel[0][0] ?? Keys.binds.satchel[1][0] ?? '')})`);
     this.showBlood();
     return true;
   }
@@ -2659,13 +2725,7 @@ export class RoomScene extends Phaser.Scene {
     if (!fell) Hero.die(this.hero);
     // Back to the refuge, re-formed at his coffin, all the blood he carried lost and the world reset; or back to the
     // training room.
-    let lostItems = 0;
-    if (this.exp) {
-      Save.log({ end: 'mort', deepest: this.exp.deepest, blood: this.carried, life: 0, s: Math.round((Date.now() - this.exp.startedAt) / 1000), loosed: this.exp.loosed, met: this.exp.met, boss: this.exp.boss });
-      Save.data.dry++; // re-formed empty-handed: le Rongé hungers
-      lostItems = this.bag.filter((it) => !Items.acquired(Save.data, it)).length + Items.die(Save.data); // the bag, and what he wore not yet brought back
-      Save.store();
-    }
+    const lostItems = this.exp ? this.lose('mort') : 0;
     this.time.delayedCall(fell ? 1800 : 1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, ranks: this.ranks, layout: this.layout } : { lost: this.carried, lostItems }) satisfies Run));
   }
 

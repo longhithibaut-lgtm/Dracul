@@ -33,7 +33,7 @@ const frame = (hx, hy, x, y) => run(([hx, hy, x, y]) => {
   s.cameras.main.stopFollow().setScroll(x - s.cameras.main.width / 2 + s.cameras.main.worldView.width / 2, y - s.cameras.main.height / 2 + s.cameras.main.worldView.height / 2);
 }, [hx, hy, x, y]);
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.getScene('room')?.hero?.body && window.game.scene.isActive('room'));
 if ((await layout()) !== 'refuge') errors.push(`the game starts in ${await layout()}, not the refuge`);
 await page.waitForTimeout(1200); // its fade in
