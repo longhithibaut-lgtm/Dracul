@@ -653,8 +653,7 @@ const batch3 = async () => {
   await hero(222, 330); // before him
   let rings = 0;
   for (; rings < 8 && !(await m()).bare; rings++) {
-    await hero(222, 330); // (each ring jars his arm back)
-    await run(`(() => { const s = ${S}; s.slashReadyAt = 0; s.combo = 0; s.lastSlashAt = -1e9; s.slash(Math.PI); ${foe('miroitier')}.setData('facing', 0); })()`);
+    await run(`(() => { const s = ${S}, e = ${foe('miroitier')}; s.hero.body.reset(222, 330); e.body.reset(200, 330); e.setData('facing', 0); s.slashReadyAt = 0; s.combo = 0; s.lastSlashAt = -1e9; s.slash(Math.PI); })()`); // (each ring jars his arm back)
     await step(rings ? 340 : 60);
     if (!rings) await crop('miroitier', 'miroitier-guard', 480, 440, -16);
   }
