@@ -80,7 +80,7 @@ export const NECROPOLIS = { guard: { dx: 4, dy: 76 }, lantern: { dx: -26, dy: 80
  *  chauve-souris), floor points in front of each; his own coffin, open; the baked light turned down (its candles dead). */
 export const REFUGE = {
   coffins: [{ x: 704, y: 320 }, { x: 704, y: 384 }, { x: 976, y: 320 }, { x: 976, y: 384 }] as P[],
-  sign: { x: 704, y: 290 }, // the rat's sign, on its lid
+  sign: { x: 704, y: 278 }, // the rat's sign, on its lid
   mine: { x: 838, y: 262 }, bed: { x: 838, y: 238 },
   torch: 0.12,
 };
