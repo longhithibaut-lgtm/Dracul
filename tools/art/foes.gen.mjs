@@ -13,7 +13,7 @@
 // Writes src/<id>.png for each (purifier, priest, hound, penitent, ringer, inquisitor, amas, bourreau, crossbow) and
 // src/foes.data.ts.
 // The necropolis' crow (a flock's, src/crows.ts), Enterré, Gavé and Chose du gouffre: tools/art/maquettes/necropole/creatures.mjs;
-// its Crocheteur: ../necropole/ordre.mjs.
+// its Crocheteur, Tireur du mausolée and Miroitier: ../necropole/ordre.mjs.
 // Usage: node tools/art/foes.gen.mjs (~30 s on 4 cores); ONLY=priest renders one of them to
 // shots/priest-preview.png (x2, on grey) instead, to try a pose; ONLY=crow,gave WRITE=1 renders those into src/ (their
 // sheets and their rows of foes.data.ts), the others left as they are.
@@ -27,7 +27,7 @@ import { place } from './maquettes/ennemis/fx.mjs';
 import { std, crossbowman } from './maquettes/ennemis/cast.mjs';
 import { corneille, enterre, gave, gouffre, placed0 } from './maquettes/necropole/creatures.mjs';
 import { lyingCorpse } from './maquettes/necropole/kit.mjs';
-import { crocheteur } from './maquettes/necropole/ordre.mjs';
+import { crocheteur, tireur, miroitier } from './maquettes/necropole/ordre.mjs';
 
 const cam = camera(38 * Math.PI / 180);
 const VIEWS = { side: -Math.PI / 2, dside: -Math.PI / 4, down: 0, uside: -3 * Math.PI / 4, up: Math.PI }; // yaw: the model looks down +y
@@ -288,6 +288,39 @@ const FOES = {
     // On his back, arms fallen open, the boat-hook by him.
     corpse: () => lying(crocheteur('idle', { Er: [-12, 1, 64], Wr: [-17, 3, 50], Hr_: [-18, 4, 45], El: [12, 1, 64], Wl: [17, 3, 50], Hl_: [18, 4, 45] }), false),
   },
+  // Le Tireur du mausolée (ordre.mjs, necropole-ennemis-planche-3.png): the arquebus shouldered, the fork in his left
+  // hand, the slow match's ember at his wrist (idle, walk; the game climbs his ladder with the walk seen from behind);
+  // knelt at the fork, cheek to the stock, the ember dull (aim), blown bright (blow); the shot kicks him back, the ember
+  // spent (shot); standing, the gun upright, ramming the ball home, the ramrod up and down (reload0, reload1). Its lamp:
+  // the ember (where the game lights its glow, and the tracer leaves from the muzzle ahead of it).
+  tireur: {
+    FW: 200, FH: 200, SOLE: 130, WALK: 4, STEP,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => tireur('idle', (J) => breathe(J, b))]),
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => sway(tireur('idle', legs(k, 4)), -1.8 * Math.sin((Math.PI * k) / 2)), { bob: -0.8 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ['aim', () => tireur('aim')], ['blow', () => tireur('tele')], ['shot', () => tireur('shot', (J) => lean(J, -0.14))],
+      ['reload0', () => tireur('reload')], ['reload1', () => tireur('reload', { Er: [-9, 8, 80], Wr: [-2, 12, 86], Hr_: [-0.5, 12, 88] })],
+      ['hurt', () => tireur('idle', (J) => lean(J, -0.2))],
+    ],
+    corpse: () => lying(tireur('idle', { Er: [-12, 1, 64], Wr: [-17, 3, 50], Hr_: [-18, 4, 45], El: [12, 1, 64], Wl: [17, 3, 50], Hl_: [18, 4, 45] }), false),
+  },
+  // Le Miroitier (ordre.mjs): the great bronze mirror resting on its foot at his side, his lantern at his hip (idle,
+  // walk); the mirror coming up (raise), up over his head and tilted, catching the light (glare), flaring, the beam
+  // thrown (beam); shattered, empty-handed (bidle, bwalk, bhurt). Its lamp: the mirror's middle (where the beam leaves).
+  miroitier: {
+    FW: 160, FH: 180, SOLE: 140, WALK: 4, STEP,
+    frames: [
+      ...BREATH.map((b, k) => [`idle${k}`, () => miroitier('idle', (J) => breathe(J, b), { lantern: true })]),
+      ...[0, 1, 2, 3].map((k) => [`walk${k}`, () => sway(miroitier('idle', legs(k, 4), { lantern: true }), -2 * Math.sin((Math.PI * k) / 2)), { bob: -0.8 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ['raise', () => miroitier('idle', {}, { lantern: true, lift: 0.5, flare: 0.2 })], ['glare', () => miroitier('tele', {}, { lantern: true, flare: 0.7 })],
+      ['beam', () => miroitier('tele', {}, { lantern: true, flare: 1.4 })],
+      ['hurt', () => miroitier('idle', (J) => lean(J, -0.2), { lantern: true })],
+      ['bidle', () => miroitier('idle', {}, { lantern: true, bare: true })],
+      ...[0, 1, 2, 3].map((k) => [`bwalk${k}`, () => sway(miroitier('idle', legs(k, 4), { lantern: true, bare: true }), -2 * Math.sin((Math.PI * k) / 2)), { bob: -0.8 * Math.abs(Math.cos((Math.PI * k) / 2)) }]),
+      ['bhurt', () => miroitier('idle', (J) => lean(J, -0.2), { lantern: true, bare: true })],
+    ],
+    corpse: () => lying(miroitier('idle', { Er: [-12, 1, 64], Wr: [-17, 3, 50], Hr_: [-18, 4, 45], El: [12, 1, 64], Wl: [17, 3, 50], Hl_: [18, 4, 45] }, { bare: true }), false),
+  },
 };
 // The crossbowman's model has no light of its own to cast (his lantern glows, on his back).
 const xbow = (...a) => ({ ...crossbowman(...a), lights: [] });
@@ -338,7 +371,7 @@ function scene(job) {
     ...m.lights.filter((l) => !l.noShadow).map((l) => ({ soft: 5, R: 200, ...l, p: add(place(P, l.p), [0, 0, bob]) })),
   ];
   // Where its own light is (the jet: where it leaves the lance, its pivot in the game).
-  const at = layer === 'jet' ? m.tip : m.lights[0]?.p, own = at ? project(cam, ...add(place(P, at), [0, 0, bob]), -F.SOLE) : [CX, 0];
+  const at = layer === 'jet' ? m.tip : m.lamp ?? m.lights[0]?.p, own = at ? project(cam, ...add(place(P, at), [0, 0, bob]), -F.SOLE) : [CX, 0];
   return { sc: { W: F.FW, H: F.FH, cam, off: -F.SOLE, objects, lights, env: null, ambient: L('#1a1c1e').map((v) => v * 0.6) }, lamp: own };
 }
 

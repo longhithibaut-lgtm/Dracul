@@ -392,6 +392,31 @@ export const recipes = {
       voice(o, { src: 'sine', f: 1900, f2: 2500, gain: 0.07 + (0.08 * t) / dur, attack: gap * 0.4, dur: gap * 0.7, delay: t });
     }
   },
+  // Le Tireur blowing on his match's ember for `dur` s: soft breaths on it, the fuse crackling and spitting faster, louder.
+  fuse(o: Play, dur: number) {
+    for (let t = 0; t < dur; t += 0.42) voice(o, { src: 'noise', filter: 'bandpass', ff: 900, ff2: 1300, q: 1.2, gain: 0.35, attack: 0.12, dur: 0.3, delay: t });
+    const n = Math.max(4, Math.round(dur * 14));
+    bursts(o, Array.from({ length: n }, (_, i) => dur * Math.sqrt(i / n) + Math.random() * 0.02), { src: 'noise', filter: 'highpass', ff: 3800, q: 2, gain: 0.3, attack: 0.001, dur: 0.012 });
+  },
+  // His lock cocked on the match: a dry iron click, and the serpentine's spring.
+  click(o: Play) {
+    voice(o, { src: 'square', f: 1900, filter: 'bandpass', ff: 2600, q: 8, gain: 0.6, attack: 0.001, dur: 0.035 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 3400, q: 4, gain: 0.7, attack: 0.001, dur: 0.03, delay: 0.04 });
+    voice(o, { src: 'triangle', f: 640, f2: 520, gain: 0.2, attack: 0.002, dur: 0.12, delay: 0.04 });
+  },
+  // The arquebus goes off: a deep boom and its blast, the ball whining off, the roll of it round the graves.
+  arquebus(o: Play) {
+    voice(o, { src: 'sine', f: 90, f2: 30, gain: 1, attack: 0.002, dur: 0.5 });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: 5000, ff2: 300, gain: 1.1, attack: 0.001, dur: 0.45 });
+    voice(o, { src: 'sine', f: 2400, f2: 900, gain: 0.12, attack: 0.01, dur: 0.25, delay: 0.03 });
+    voice(o, { src: 'noise', filter: 'lowpass', ff: 700, ff2: 200, trem: 6, gain: 0.5, attack: 0.08, dur: 0.9, delay: 0.15 });
+  },
+  // Le Miroitier's mirror catching the light for `dur` s: a bronze hum swelling, a glassy shimmer rising over it.
+  glare(o: Play, dur: number) {
+    voice(o, { src: 'triangle', f: 196, f2: 262, trem: 5, gain: 0.35, attack: dur * 0.8, dur: dur + 0.15 });
+    voice(o, { src: 'sine', f: 1568, f2: 2350, trem: 9, gain: 0.12, attack: dur * 0.9, dur: dur + 0.1 });
+    voice(o, { src: 'noise', filter: 'bandpass', ff: 5000, ff2: 8000, q: 6, trem: 14, gain: 0.25, attack: dur * 0.7, dur: dur + 0.1 });
+  },
   // Thrown into the chasm: a rush of air falling away, his cry going down and out, nothing at the bottom.
   fall(o: Play) {
     voice(o, { src: 'noise', filter: 'bandpass', ff: 1200, ff2: 200, q: 1.5, gain: 0.9, attack: 0.05, dur: 1.6 });

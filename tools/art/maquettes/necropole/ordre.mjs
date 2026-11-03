@@ -172,14 +172,20 @@ export function crocheteur(pose = 'idle', over = {}, o = {}) {
 // ======================= 12. LE TIREUR DU MAUSOLÉE =======================
 // a marksman posted on the mausoleums' roofs: a hooded cape, a bandolier of powder charges, a long arquebus and its
 // forked rest, a slow match coiled at his wrist, its ember always lit. 'tele': down on one knee, the gun on its fork,
-// his cheek to the stock, the ember at the lock blown bright.
-export function tireur(pose = 'idle') {
-  const tele = pose === 'tele'; const b = B(); const J = clone(std); const { rc, el } = b;
+// his cheek to the stock, the ember at the lock blown bright. The game's poses (tools/art/foes.gen.mjs): 'aim' (knelt
+// at the fork, the ember dull), 'shot' (the same, the ember spent: the game leans him back), 'reload' (standing, the gun
+// upright before him, butt down, ramming the ball home, the fork stuck in the ground by him); `over` the joints
+// (breathing, a walk), `o.ember` the ember's glow.
+export function tireur(pose = 'idle', over = {}, o = {}) {
+  const tele = ['tele', 'aim', 'shot'].includes(pose), reload = pose === 'reload'; const b = B(); const J = clone(std); const { rc, el } = b;
+  const glowK = o.ember ?? (pose === 'tele' ? 1.6 : pose === 'aim' ? 0.7 : pose === 'shot' ? 0.25 : 0.9);
   Object.assign(J, tele ? {
     head: [-1, 9, 58], neck: [0, 6, 52], chest: [0, 3, 43], pelvis: [0, -2, 25],
     Sr: [-8, 3, 49], Er: [-12, 10, 40], Wr: [-6, 14, 44], Hr_: [-4.5, 15, 45], Sl: [8, 5, 49], El: [8, 16, 40], Wl: [3, 26, 42], Hl_: [2.5, 28, 42.5],
     Hr: [-3.6, -2, 23], Kr: [-4.5, -4, 2.5], Ar: [-4.5, -22, 3], Tr: [-4.5, -27, 1], Hl: [3.6, -1, 23], Kl: [5, 14, 25], Al: [5, 15, 4], Tl: [5.5, 21, 1.2],
-  } : { Sr: [-8.5, 0, 78], Er: [-12, -2, 66], Wr: [-9, 4, 74], Hr_: [-8, 4.5, 77], Sl: [8.5, 0, 78], El: [10, 4, 62], Wl: [11, 10, 55], Hl_: [11, 11, 54] });
+  } : reload ? { Sr: [-8.5, 0, 78], Er: [-9, 8, 88], Wr: [-2, 12, 96], Hr_: [-0.5, 12, 98], Sl: [8.5, 0, 78], El: [8, 9, 62], Wl: [3, 13, 56], Hl_: [1.5, 13, 56] }
+    : { Sr: [-8.5, 0, 78], Er: [-12, -2, 66], Wr: [-9, 4, 74], Hr_: [-8, 4.5, 77], Sl: [8.5, 0, 78], El: [10, 4, 62], Wl: [11, 10, 55], Hl_: [11, 11, 54] });
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   humanoid(J, b, { thin: 0.95, armM: 2, legM: 5, shinM: 6, footM: 6 });
   const top = J.neck[2];
   b.rev(J.pelvis[0], J.pelvis[1], tele ? 4 : 10, top - 2, t => lerp(tele ? 15 : 13, 9, Math.pow(t, 0.7)), 2, 1.2, 0.85, { fold: [9, 1.3] }); // the cape
@@ -189,12 +195,13 @@ export function tireur(pose = 'idle') {
   // the bandolier: a strap across his chest, a row of little powder flasks
   for (let i = 0; i < 7; i++) { const t = i / 6, p = add(lp(add(J.Sl, [0, 4, 0]), add(J.pelvis, [-7, 5, 4]), t), [0, 1.4, 0]); rc(p, add(p, [0, 0, -3.2]), 0.9, 0.9, 6); }
   // the arquebus (shouldered at rest, laid on its fork and aimed on the wind-up) and the fork
-  const st = tele ? add(J.Sr, [1, 1, -2]) : [-12, -10, 70], mz = tele ? [3, 84, 46] : [-8, 14, 128], gd = nz(sub(mz, st));
+  const st = tele ? add(J.Sr, [1, 1, -2]) : reload ? [1, 14, 3] : [-12, -10, 70], mz = tele ? [3, 84, 46] : reload ? [0, 13, 66] : [-8, 14, 128], gd = nz(sub(mz, st));
   rc(st, add(st, sc(gd, 18)), 2.2, 1.4, 42); rc(add(st, sc(gd, 14)), mz, 1.2, 1.0, 9); rc(mz, add(mz, sc(gd, -2)), 1.4, 1.4, 9);
-  const fork = tele ? [2, 34, 0] : [12, 12, 0], ft = tele ? add(st, sc(gd, 34)) : [12, 12, 110];
+  if (reload) rc(add(mz, [0, 0, -14]), add(J.Hr_, [0, 0, 2]), 0.45, 0.45, 9); // the ramrod, rammed down the barrel
+  const fork = tele ? [2, 34, 0] : reload ? [-13, 8, 0] : [12, 12, 0], ft = tele ? add(st, sc(gd, 34)) : reload ? [-13, 8, 66] : [12, 12, 110];
   rc(fork, add(ft, [0, 0, -4]), 0.9, 0.9, 42); const fs = nz(crs(gd, [0, 0, 1])); for (const s of [-1, 1]) rc(add(ft, [0, 0, -4]), add(ft, add(sc(fs, s * 3), [0, 0, 2])), 0.7, 0.5, 9);
   // the slow match: coiled round his wrist; its ember in the serpentine by the lock, bright on the wind-up
-  const lock = add(st, sc(gd, 12)), ember = tele ? add(lock, [-1.5, -1, 2.5]) : add(J.Hl_, [0, 1, -3]);
+  const lock = add(st, sc(gd, 12)), ember = tele ? add(lock, [-1.5, -1, 2.5]) : reload ? add(J.Wl, [0, 1, -2]) : add(J.Hl_, [0, 1, -3]);
   b.tor(add(lp(J.El, J.Wl, 0.8), [0, 0, 0]), nz(sub(J.Wl, J.El)), 2.6, 0.5, 5); b.tor(add(lp(J.El, J.Wl, 0.6), [0, 0, 0]), nz(sub(J.Wl, J.El)), 2.6, 0.5, 5);
   if (tele) b.chain([lp(J.El, J.Wl, 0.7), add(lp(J.El, J.Wl, 0.7), [-2, -2, -4]), ember], 0.4, 5);
   el(ember, [0.9, 0.9, 0.9], 19);
@@ -206,26 +213,34 @@ export function tireur(pose = 'idle') {
       case 5: return { alb: mix(L('#3a3226'), L('#1a1610'), n), wrap: 0.3 };
       case 6: return { alb: mix(L('#4a3220'), L('#22160c'), n), spec: 0.4, gloss: 40 };
       case 9: return ironM(x, y, z);
-      case 19: return glow(FIRE, tele ? 1.6 : 0.9);
+      case 19: return glow(FIRE, glowK);
       case 42: return kitMat(42, x, y, z);
     }
     return skinM(x, y, z, 143);
   };
   const r = done(b, mat);
-  r.lights = [{ p: add(ember, [0, 2, 1]), c: L('#e07028'), I: tele ? 1.6 : 0.6, r0: 6, R: 50, pad: 2, haze: tele ? 0.12 : 0.05, hazeR: 1.6 }];
+  r.lights = [{ p: add(ember, [0, 2, 1]), c: L('#e07028'), I: glowK > 1 ? glowK : glowK * 0.67, r0: 6, R: 50, pad: 2, haze: glowK > 1 ? 0.12 : 0.05, hazeR: 1.6 }];
+  r.muzzle = mz;
   return r;
 }
 
 // ======================= 13. LE MIROITIER =======================
 // an acolyte under the breach where the Dawn falls: a great round mirror of polished bronze in a sun-rayed iron frame,
 // smoked-glass goggles; he throws the Dawn back into the shade. 'tele': the mirror lifted over his head and tilted at
-// you, flaring with the Dawn it caught: the burning beam follows.
-export function miroitier(pose = 'idle') {
-  const tele = pose === 'tele'; const b = B(); const J = clone(std); const { rc, el } = b;
-  Object.assign(J, tele ? {
-    head: [0, -1, 89], Sr: [-8.5, -1, 78], Er: [-14, 0, 92], Wr: [-11, 3, 104], Hr_: [-10, 3.5, 107], Sl: [8.5, -1, 78], El: [14, 0, 92], Wl: [11, 3, 104], Hl_: [10, 3.5, 107],
-    Kl: [4.5, 6, 26], Al: [5, 5, 4], Tl: [5.5, 11, 1.2], Kr: [-4.5, -4, 26], Ar: [-5, -10, 5], Tr: [-5.5, -5, 1.2],
-  } : { Sr: [-8.5, 0, 78], Er: [-10, 2, 62], Wr: [-12, 8, 52], Hr_: [-12.5, 10, 51], Sl: [8.5, 0, 78], El: [10, 2, 62], Wl: [9, 9, 50], Hl_: [8.5, 10, 49] });
+// you, flaring with the Dawn it caught: the burning beam follows. The game's (tools/art/foes.gen.mjs): `o.lift` from 0
+// (at rest) to 1 (raised, 'tele'), `o.flare` its glare, `o.lantern` his own small lantern of the Order at his hip (away
+// from the breach he catches its light), `o.bare` the mirror gone (shattered); `over` the joints (breathing, a walk).
+const MIRROR_REST = { Sr: [-8.5, 0, 78], Er: [-10, 2, 62], Wr: [-12, 8, 52], Hr_: [-12.5, 10, 51], Sl: [8.5, 0, 78], El: [10, 2, 62], Wl: [9, 9, 50], Hl_: [8.5, 10, 49] };
+const MIRROR_UP = {
+  head: [0, -1, 89], Sr: [-8.5, -1, 78], Er: [-14, 0, 92], Wr: [-11, 3, 104], Hr_: [-10, 3.5, 107], Sl: [8.5, -1, 78], El: [14, 0, 92], Wl: [11, 3, 104], Hl_: [10, 3.5, 107],
+  Kl: [4.5, 6, 26], Al: [5, 5, 4], Tl: [5.5, 11, 1.2], Kr: [-4.5, -4, 26], Ar: [-5, -10, 5], Tr: [-5.5, -5, 1.2],
+};
+export function miroitier(pose = 'idle', over = {}, o = {}) {
+  const lift = o.lift ?? (pose === 'tele' ? 1 : 0), tele = lift >= 1, bare = !!o.bare; const b = B(); const J = clone(std); const { rc, el } = b;
+  const J0 = { ...std, ...MIRROR_REST }, J1 = { ...std, ...MIRROR_UP };
+  for (const k of new Set([...Object.keys(MIRROR_REST), ...Object.keys(MIRROR_UP)])) J[k] = J0[k].map((v, i) => lerp(v, J1[k][i], lift));
+  if (bare) Object.assign(J, { Er: [-10, 1, 61], Wr: [-11, 3, 46], Hr_: [-11.5, 4, 41], El: [10, 1, 61], Wl: [11, 3, 46], Hl_: [11.5, 4, 41] }); // empty-handed
+  Object.assign(J, typeof over === 'function' ? over(J) : over);
   humanoid(J, b, { thin: 0.9, armM: 2 });
   b.rev(0, 0, 0.5, 78, t => t < 0.6 ? lerp(14, 9, Math.pow(t / 0.6, 0.7)) : lerp(9, 7.4, (t - 0.6) / 0.4), 2, 1.5, 0.82, { fold: [9, 1.1] });
   for (const [S1, E, W] of [[J.Sr, J.Er, J.Wr], [J.Sl, J.El, J.Wl]]) { rc(S1, E, 3.0, 3.2, 2, 1.2); rc(E, lp(E, W, 0.8), 3.2, 4.4, 2, 0.8); }
@@ -234,12 +249,17 @@ export function miroitier(pose = 'idle') {
   for (const s of [-1, 1]) { el(add(Hd, [s * 2.1, 4.4, 0.8]), [1.7, 1.0, 1.6], 11, 0.2, { pri: 2 }); b.tor(add(Hd, [s * 2.1, 4.4, 0.8]), [0, 1, 0], 1.8, 0.5, 8); }
   sun(b, add(J.chest, [0, 6.6, 1]), [0, 1, 0.1], 2.4);
   // the mirror: a bronze disc in an iron ring with rays; resting on its foot at his side, or raised and tilted at you
-  const mc = tele ? [0, 10, 112] : [-20, 8, 30], mn = tele ? nz([0.3, 1, -0.32]) : nz([0.35, 1, 0.05]), mu = nz(crs([0, 0, 1], mn)), mv = crs(mn, mu), RM = 22;
-  b.f((x, y, z) => { const q = sub([x, y, z], mc); const w = dot(q, mn), r = Math.hypot(dot(q, mu), dot(q, mv)); return Math.max(r - RM, Math.abs(w + 0.004 * r * r) - 1.0); }, [mc[0] - RM - 2, mc[1] - RM - 2, mc[2] - RM - 2, mc[0] + RM + 2, mc[1] + RM + 2, mc[2] + RM + 2], 22, 0);
-  b.tor(add(mc, sc(mn, -0.5)), mn, RM + 1, 1.4, 9);
-  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, d = add(sc(mu, Math.cos(a)), sc(mv, Math.sin(a))); rc(add(mc, sc(d, RM + 2)), add(mc, sc(d, RM + (i & 1 ? 5 : 8))), 0.9, 0.15, 9); }
-  for (const s of [-1, 1]) rc(add(mc, add(sc(mn, -2), sc(mu, s * 10))), add(mc, add(sc(mn, -4), sc(mu, s * 10))), 1, 1, 9); // the grips behind
-  if (!tele) rc(add(mc, sc(mv, -RM)), [mc[0], mc[1], 0], 1.2, 1.2, 9); // its foot
+  // (raised along an arc held out before him, so it never passes through him)
+  const mc = add(lp([-20, 8, 30], [0, 10, 112], lift), [0, 14 * Math.sin(Math.PI * lift), 0]), mn = nz(lp(nz([0.35, 1, 0.05]), nz([0.3, 1, -0.32]), lift)), mu = nz(crs([0, 0, 1], mn)), mv = crs(mn, mu), RM = 22;
+  if (!bare) {
+    b.f((x, y, z) => { const q = sub([x, y, z], mc); const w = dot(q, mn), r = Math.hypot(dot(q, mu), dot(q, mv)); return Math.max(r - RM, Math.abs(w + 0.004 * r * r) - 1.0); }, [mc[0] - RM - 2, mc[1] - RM - 2, mc[2] - RM - 2, mc[0] + RM + 2, mc[1] + RM + 2, mc[2] + RM + 2], 22, 0);
+    b.tor(add(mc, sc(mn, -0.5)), mn, RM + 1, 1.4, 9);
+    for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, d = add(sc(mu, Math.cos(a)), sc(mv, Math.sin(a))); rc(add(mc, sc(d, RM + 2)), add(mc, sc(d, RM + (i & 1 ? 5 : 8))), 0.9, 0.15, 9); }
+    for (const s of [-1, 1]) rc(add(mc, add(sc(mn, -2), sc(mu, s * 10))), add(mc, add(sc(mn, -4), sc(mu, s * 10))), 1, 1, 9); // the grips behind
+    if (lift < 0.3) rc(add(mc, sc(mv, -RM)), [mc[0], mc[1], Math.max(0, mc[2] - 30)], 1.2, 1.2, 9); // its foot
+  }
+  const lamp = add(J.pelvis, [10, 5, -9]); // his lantern, hung at his left hip from a hook in his belt
+  if (o.lantern) { rc(add(J.pelvis, [9, 3, 1]), add(lamp, [0, 0, 4]), 0.4, 0.4, 9); el(lamp, [2.4, 2.4, 3.2], 23); for (const s of [-1, 1]) rc(add(lamp, [s * 2.4, 0, -3.6]), add(lamp, [s * 2.4, 0, 3.6]), 0.5, 0.5, 9); rc(add(lamp, [0, 0, 3.6]), add(lamp, [0, 0, 4.8]), 1.6, 0.6, 9); }
   const mat = (m, x, y, z) => {
     const n = fbm3(x * 0.35, y * 0.35, z * 0.35, 3, 151);
     switch (m) {
@@ -249,11 +269,18 @@ export function miroitier(pose = 'idle') {
       case 9: return ironM(x, y, z);
       case 11: return { alb: [0.03, 0.025, 0.02], spec: 1.2, gloss: 90 };
       case 22: { const q = sub([x, y, z], mc), r = Math.hypot(dot(q, mu), dot(q, mv)); let c = mix(L('#a07a3a'), L('#5a3e1a'), clamp(vn3(x * 0.3, y * 0.3, z * 0.3, 153) * 1.4 - 0.2)); if (Math.abs(r - RM * 0.62) < 0.6) c = L('#3a2a14');
-        const flare = tele ? clamp(1 - r / (RM * 0.55)) ** 1.5 * 1.6 : 0; return { alb: c, spec: 2.2, gloss: 140, emi: [1.7 * flare, 1.35 * flare, 0.6 * flare], rim: 0.2 }; }
+        const flare = (o.flare ?? (tele ? 1 : 0)) * clamp(1 - r / (RM * 0.55)) ** 1.5 * 1.6; return { alb: c, spec: 2.2, gloss: 140, emi: [1.7 * flare, 1.35 * flare, 0.6 * flare], rim: 0.2 }; }
+      case 23: return glow(HOLY, 0.9);
     }
     return skinM(x, y, z, 154);
   };
   const r = done(b, mat);
+  if (o.lantern) { // the game's: lit by his lantern (and the mirror's glare), its lamp the mirror's middle
+    r.lights = [{ p: add(lamp, [0, 4, 0]), c: L('#f0d890'), I: 0.9, r0: 8, R: 70, pad: 2 }];
+    if (lift > 0) r.lights.push({ p: add(mc, sc(mn, 6)), c: L('#fbf0b0'), I: 2.4 * (o.flare ?? lift), r0: 20, R: 120, pad: 4 });
+    r.lamp = add(mc, sc(mn, 2));
+    return r;
+  }
   r.lights = [{ p: tele ? add(mc, [0, -40, 70]) : add(mc, [10, -40, 80]), c: L('#fbf0b0'), I: tele ? 3 : 1.2, r0: 40, R: 200, pad: 4, noShadow: false }];
   if (tele) { // the beam it throws: a shaft of the Dawn down and out at you
     r.lights.push({ p: add(mc, sc(mn, 4)), c: L('#f8e8a0'), I: 3, r0: 20, R: 160, pad: 4, haze: 0.03, hazeR: 3, noShadow: true });

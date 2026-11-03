@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alarmed, blow, bulk, caught, decks, feed, floor, flung, haul, inPit, meal, nearestEdge, netAt, netted, pecked, startles, stirs, struggle, swept, wakes } from './fauna.ts';
+import { alarmed, blow, bulk, caught, clearRay, decks, feed, floor, floorAngle, flung, haul, inBeam, inPit, leaves, meal, nearestEdge, netAt, netted, pecked, perchFor, screenLen, shotHits, startles, stirs, struggle, sweepTo, swept, wakes } from './fauna.ts';
 import { PITS } from './necropolis.data.ts';
 import { T } from './tuning.ts';
 
@@ -124,5 +124,58 @@ describe('Le Crocheteur', () => {
     const home = { x: -500, y: 0 }, foe = { x: 100, y: 0 }, lamp = { x: 60, y: 0 };
     expect(haul({ x: 0, y: 0 }, [foe, lamp], home)).toBe(lamp);
     expect(haul({ x: 0, y: 0 }, [{ x: K.dragRange + 1, y: 0 }], home)).toBe(home);
+  });
+});
+
+describe('Le Tireur du mausolée', () => {
+  const K = T.tireur, from = { x: 0, y: 0 };
+  it('strikes along his line only, up to where it is stopped', () => {
+    expect(shotHits(from, 0, 200, { x: 150, y: K.width * sq - 0.5 })).toBe(true);
+    expect(shotHits(from, 0, 200, { x: 150, y: (K.width + 1) * sq })).toBe(false); // stepped aside
+    expect(shotHits(from, 0, 200, { x: 210, y: 0 })).toBe(false); // past the tomb that stopped it
+    expect(shotHits(from, 0, 200, { x: -20, y: 0 })).toBe(false); // behind him
+    expect(shotHits(from, Math.PI / 2, screenLen(100, Math.PI / 2), { x: 0, y: 90 * sq })).toBe(true); // down the floor, foreshortened
+    expect(shotHits(from, Math.PI / 2, screenLen(100, Math.PI / 2), { x: 0, y: 110 * sq })).toBe(false);
+  });
+  it('misses a hero who walks off once the lock clicks, hits one who stands', () => {
+    expect((T.hero.speed * K.delayMs) / 1000).toBeGreaterThan(K.width * 3); // aim held at the click, a sidestep clears it
+    expect(K.blowMs + K.delayMs).toBeGreaterThan(1200); // a tell long enough to read in the dark
+  });
+  it('sees over the roof he stands on, never through a tomb in the way', () => {
+    const room = { x: -500, y: -500, width: 1000, height: 1000 }, roof = { x: -30, y: -20, width: 60, height: 24 }, tomb = { x: 80, y: -10, width: 16, height: 20 };
+    expect(clearRay(from, 0, room, [roof])).toBe(500);
+    expect(clearRay(from, 0, room, [roof, tomb])).toBe(80);
+    expect(clearRay(from, Math.PI, room, [roof, tomb])).toBe(500);
+  });
+  it('leaves his roof when the hero comes near him or his ladder; makes for the farthest ladder', () => {
+    const perch = { x: 0, y: 0, h: 34, ladder: { x: 40, y: 0 } };
+    expect(leaves(perch, { x: -K.flee + 5, y: 0 })).toBe(true);
+    expect(leaves(perch, { x: -K.flee - 50, y: 0 })).toBe(false);
+    expect(leaves(perch, { x: 40 + K.flee - 4, y: 0 })).toBe(true);
+    const far = { x: 400, y: 0, h: 30, ladder: { x: 420, y: 0 } };
+    expect(perchFor([perch, far], { x: 0, y: 0 })).toBe(far);
+    expect(perchFor([perch, far], { x: 430, y: 0 })).toBe(perch);
+  });
+});
+
+describe('Le Miroitier', () => {
+  const M = T.miroitier, from = { x: 0, y: 0 };
+  it('burns within the beam only, out to its reach', () => {
+    expect(inBeam(from, 0, 110, { x: 100, y: 0 })).toBe(true);
+    expect(inBeam(from, 0, 110, { x: 100, y: 13 * sq })).toBe(false); // out of its 7° (12 px at 100)
+    expect(inBeam(from, 0, 110, { x: 20, y: 4 * sq })).toBe(true); // at least its width near him
+    expect(inBeam(from, 0, 110, { x: 115, y: 0 })).toBe(false);
+    expect(inBeam(from, 0, 110, { x: -30, y: 0 })).toBe(false); // behind the mirror
+    expect(inBeam(from, floorAngle(from, { x: 0, y: 72 }), 110, { x: 0, y: 72 })).toBe(true); // 100 floor px down the screen
+  });
+  it('turns slowly: a hero walking round him near outpaces it, far off he does not', () => {
+    expect(sweepTo(0, 1, 1000)).toBeCloseTo(M.sweep);
+    expect(sweepTo(0, 0.1, 1000)).toBeCloseTo(0.1);
+    expect(sweepTo(3, -3, 100)).toBeGreaterThan(3); // across the seam, the short way
+    expect(T.hero.speed / 70).toBeGreaterThan(M.sweep);
+    expect(T.hero.speed / M.reach[1]).toBeLessThan(M.sweep); // near the breach, cover saves him
+  });
+  it('misses a hero who walks off 250 ms into the tell: out of reach before its grace is over', () => {
+    expect(50 + (T.hero.speed * (M.liftMs - 250 + M.burn.graceMs)) / 1000).toBeGreaterThan(M.reach[0]);
   });
 });

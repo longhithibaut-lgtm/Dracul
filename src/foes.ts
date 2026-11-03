@@ -18,6 +18,8 @@ import enterreSheet from './enterre.png';
 import gaveSheet from './gave.png';
 import choseSheet from './chose.png';
 import crocheteurSheet from './crocheteur.png';
+import tireurSheet from './tireur.png';
+import miroitierSheet from './miroitier.png';
 
 // How the Order's Purificateur, Prêtre, Chien de chasse, Pénitent, Sonneur (docs/maquettes/ennemis-planche-1.png),
 // Inquisiteur and Bourreau, and the ghouls' Amas (ennemis-planche-2.png) look: the validated sheet's own models rendered offline, already lit, in five views (tools/art/foes.gen.mjs), drawn at half
@@ -27,13 +29,15 @@ import crocheteurSheet from './crocheteur.png';
 // whirled, the Amas gathered up with its arms raised, the axe raised), then the attack itself (the jet, the falling
 // light, the lash, the bell's rings rolling out, the sweep, the Amas' slam spreading over the floor, the crack).
 // The necropolis' Enterré and Gavé (necropole-ennemis-planche-1.png), la Chose du gouffre and the Crocheteur (-2, -3)
-// too; their AI is enterre.ts's, gave.ts's, chose.ts's (which also shows it) and crocheteur.ts's.
+// too, and the Tireur du mausolée and the Miroitier; their AI is enterre.ts's, gave.ts's, chose.ts's (which also shows
+// it), crocheteur.ts's, tireur.ts's and miroitier.ts's.
 export type Kind = Exclude<Sheeted, 'crossbow' | 'crow'>; // the crossbowman's sheet is shown here too, but he is crossbow.ts's; a crow is a flock's (crows.ts)
 type Sheeted = keyof typeof SHEETS;
 export type FoeState = 'chase' | 'aim' | 'shoot' | 'ignite' | 'fire' | 'recover' | 'pray' | 'smite' | 'crouch' | 'leap' | 'cock' | 'lash' | 'raise' | 'toll' | 'whirl' | 'sweep' | 'contract' | 'slam' | 'sprawl' | 'heave' | 'chop' | 'wrench' | 'rip' | 'swing' | 'held' | 'kneel'
   | 'buried' | 'crack' | 'grab' | 'sink' | 'eat' | 'rear' | 'flop' | 'gorge' | 'spew'
-  | 'grip' | 'clench' | 'swipe' | 'rest' | 'recoil' | 'under' | 'rise' | 'spin' | 'toss' | 'hook' | 'drag';
-/** What a foe's own AI module (enterre.ts, gave.ts, crows.ts, chose.ts, crocheteur.ts) may ask of the room it is in (RoomScene). */
+  | 'grip' | 'clench' | 'swipe' | 'rest' | 'recoil' | 'under' | 'rise' | 'spin' | 'toss' | 'hook' | 'drag'
+  | 'post' | 'sight' | 'ram' | 'descend' | 'climb' | 'lift' | 'beam';
+/** What a foe's own AI module (enterre.ts, gave.ts, crows.ts, chose.ts, crocheteur.ts, tireur.ts, miroitier.ts) may ask of the room it is in (RoomScene). */
 export type Ctx = {
   scene: Scene; hero: Sprite; enemies: Phaser.Physics.Arcade.Group;
   lit(): boolean; // the hero stands in light: seen from farther
@@ -52,6 +56,8 @@ export type Ctx = {
   netted(): boolean; // under a Crocheteur's net
   net(): void; // a net falls over him
   marks(e: Sprite): { x: number; y: number }[]; // where a Crocheteur hauls him: the other foes, the lanterns
+  ray(from: { x: number; y: number }, angle: number): number; // how far a shot flies along a screen angle (not stopped by the roof a marksman stands on)
+  holy(x: number, y: number): boolean; // the Dawn's floor there
 };
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Scene = Phaser.Scene;
@@ -70,15 +76,15 @@ const GROUND = ORIGIN / 2;
 const SQ = T.lantern.squash; // the floor seen at an angle
 const STRUCK = 0xff4a3a; // the hit flash: dyed with blood, never white (fx-blood.ts)
 // The states that face the aim locked at their start, and the pose each one holds.
-const LOCKED: FoeState[] = ['aim', 'shoot', 'ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench', 'rip', 'swing', 'rear', 'flop', 'gorge', 'spew', 'spin', 'toss', 'hook'];
+const LOCKED: FoeState[] = ['sight', 'lift', 'beam', 'aim', 'shoot', 'ignite', 'fire', 'crouch', 'leap', 'cock', 'lash', 'whirl', 'sweep', 'heave', 'chop', 'wrench', 'rip', 'swing', 'rear', 'flop', 'gorge', 'spew', 'spin', 'toss', 'hook'];
 // (sprawl: the Gavé's after its slam too; sink: l'Enterré going back under)
 const POSE: Partial<Record<FoeState, string>> = { kneel: 'kneel', shoot: 'shot', ignite: 'ignite', pray: 'pray', smite: 'pray', crouch: 'tele', leap: 'leap', cock: 'tele', lash: 'atk', raise: 'tele', toll: 'atk', slam: 'atk', sprawl: 'atk', heave: 'tele', chop: 'atk', swing: 'tele', sink: 'sink', rear: 'tele', flop: 'atk', gorge: 'gorge', toss: 'toss', hook: 'hook' }; // swing: the axe torn up
-const HEAD: Record<Sheeted, number> = { crossbow: 40, purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50, amas: 0, bourreau: 62, crow: 0, enterre: 0, gave: 0, chose: 0, crocheteur: 44 };
+const HEAD: Record<Sheeted, number> = { tireur: 44, miroitier: 44, crossbow: 40, purifier: 37, priest: 41, penitent: 38, hound: 0, ringer: 36, inquisitor: 50, amas: 0, bourreau: 62, crow: 0, enterre: 0, gave: 0, chose: 0, crocheteur: 44 };
 // Their feet on the floor, sheet px (half as many room px): a man's like the crossbowman's, the big ones' broader.
 const FEET: Partial<Record<Sheeted, [number, number]>> = { amas: [52, 22], bourreau: [36, 16], enterre: [44, 22], gave: [44, 20], chose: [180, 40] }; // the blood drop of the weak, over the feet; the Enterré's: his mound; the Chose's: its hands along the edge
 
 export function preload(scene: Scene) {
-  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet], ['amas', amasSheet], ['bourreau', bourreauSheet], ['crossbow', crossbowSheet], ['crow', crowSheet], ['enterre', enterreSheet], ['gave', gaveSheet], ['chose', choseSheet], ['crocheteur', crocheteurSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
+  for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet], ['amas', amasSheet], ['bourreau', bourreauSheet], ['crossbow', crossbowSheet], ['crow', crowSheet], ['enterre', enterreSheet], ['gave', gaveSheet], ['chose', choseSheet], ['crocheteur', crocheteurSheet], ['tireur', tireurSheet], ['miroitier', miroitierSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
 }
 
 export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: Sheeted, x: number, y: number): Sprite {
@@ -132,11 +138,18 @@ export function show(s: Sprite, state: FoeState, flash: boolean, weak: boolean) 
   else if (state === 'spew') f = 'spew' + (Math.floor(t / 90) % 2);
   else if (state === 'spin') f = 'spin' + (Math.floor((t / 140) * (0.5 + (1.6 * t) / T.crocheteur.netTeleMs)) % 4); // the net whirling faster and faster
   else if (state === 'drag') f = 'drag' + (Math.floor(t / 300) % 2); // hauling, hand over hand
+  else if (state === 'sight') f = t < T.tireur.blowMs * 0.3 ? 'aim' : 'blow'; // knelt at his fork, then blowing on the ember
+  else if (state === 'ram') f = 'reload' + (Math.floor(t / 380) % 2); // the ramrod up and down the barrel
+  else if (state === 'descend' || state === 'climb') f = 'walk' + (Math.floor(t / 170) % S.WALK); // along his roof, on his ladder
+  else if (state === 'lift') f = t < T.miroitier.liftMs * 0.35 ? 'raise' : 'glare'; // the mirror coming up, catching the light
+  else if (state === 'beam') f = 'beam';
   else if (state === 'wrench' || state === 'rip') f = 'pull' + (Math.floor(t / (state === 'rip' ? 90 : 230)) % 2); // tugging the stuck axe; at the hero, hard
   else if (POSE[state]) f = POSE[state]!;
   else if (now - (s.getData('parryAt') ?? -1e9) < 300) f = 'parry';
   else if (state !== 'held' && (hurt < 200 || now < (s.getData('staggerUntil') ?? 0))) f = 'hurt'; // struck: he reels back (the blow's knockback carries him), held while his poise is broken
   else if (state !== 'held' && s.body!.velocity.lengthSq() > 25) f = 'walk' + (Math.floor((walked / S.STRIDE) * S.WALK) % S.WALK);
+  if (s.getData('bare') && s.texture.has(`${VIEW[o]}-b${f}`)) f = 'b' + f; // a Miroitier whose mirror is broken
+  else if (s.getData('bare')) f = 'bidle';
   s.setFrame(`${VIEW[o]}-${f}`);
   const wound = wounded(s, now); // its blood running out: darker, redder, dripping
   if (hurt < 120 && flash) s.setTint(STRUCK);

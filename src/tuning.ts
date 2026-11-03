@@ -96,7 +96,7 @@ export const T = {
   // staggered, it holds firm `steadyMs` from the break (the claws cannot pin it down). A kind not listed never staggers
   // nor is pushed back (the Amas, the Bourreau, the bosses, the necropolis' own).
   poise: {
-    of: { ghoul: 1, crossbow: 1, priest: 1, penitent: 1, hound: 2, ringer: 2, crocheteur: 2, purifier: 3, inquisitor: 4 } as Record<string, number>,
+    of: { ghoul: 1, crossbow: 1, priest: 1, penitent: 1, tireur: 1, miroitier: 1, hound: 2, ringer: 2, crocheteur: 2, purifier: 3, inquisitor: 4 } as Record<string, number>,
     claw: 1, finisher: 3, dash: 2,
     staggerMs: 300, flinchMs: 120, flinchKnock: 0.5, breakStopMs: 30, regenMs: 1500, steadyMs: 800,
     slideMs: 200, // thrown back (staggered or flinching), its pace eases off this fast (time constant): about 22 px for a claw
@@ -121,7 +121,7 @@ export const T = {
   // `riposteMs` that reaches it is a riposte: at least `riposte` damage, the finisher's frames, the hit-stop
   // `riposteStopMs`. `of`, the blows at arm's length from a body or a hand weapon: the ghoul's lunge, the hound's leap, the
   // pénitent's lash, the inquisiteur's censer; never a bolt, fire, holy light, a bell's rings, a slam, an axe, a net or a
-  // hook, nor the bosses' blows. Missed, he stands open `recoverMs` (no claw, mist, shard, glyph nor parry; he walks
+  // hook, a Tireur's ball or a Miroitier's beam, nor the bosses' blows. Missed, he stands open `recoverMs` (no claw, mist, shard, glyph nor parry; he walks
   // slowly); landed, he is free `holdMs` later.
   parry: { windowMs: 180, recoverMs: 420, holdMs: 120, arcDeg: 180, hitStopMs: 90, staggerMs: 1100, knock: 60, riposteMs: 1100, riposte: 5, riposteStopMs: 110, of: ['ghoul', 'hound', 'penitent', 'inquisitor'] },
   // Le coup chargé (RoomScene.release, logic.ts chargeOf): the claws held on `startMs` after their press (the press itself
@@ -426,6 +426,38 @@ export const T = {
     gaffReach: 40, hookTeleMs: 650, hookDamage: 5, dragSpeed: 34, dragMs: 3500, dragRange: 220, gaff: 30,
     recoverMs: 300, reloadMs: 2200, firstMs: 900,
   },
+  // Le Tireur du mausolée (tireur.ts, fauna.ts): an Order marksman posted on a roof (his perch: fauna.ts Perch, its height
+  // `h` in the training room), out of the claws' reach; shards reach him (`hp`). Loaded, the hero within `range` (floor)
+  // on a clear line (low props in the way stop the ball; the roof he stands on does not), he kneels at his fork and blows
+  // on his match's ember, brightening (`blowMs`, his aim on the hero), the lock clicks (his aim held), `delayMs` later the
+  // shot: a silver ball along that line, striking the hero's feet within `width` of it (floor) for `damage`, never
+  // parried; a tracer, smoke. Then he rams the next ball home standing (`reloadMs`). The hero within `flee` of him or of
+  // his ladder's foot (mid-ram too: the ball left half down), he leaves his roof by the ladder, whatever waits at its
+  // foot (`climbMs` down, along the roof first; its foot within the claws' reach), for the perch whose ladder is farthest
+  // from the hero, and climbs it (`climbMs`). On the ground he keeps between `near` and `far` (still shooting), and
+  // climbs once the hero is `flee` from him and the ladder.
+  tireur: {
+    hp: 2, speed: 44, h: 34,
+    range: 260, blowMs: 1100, delayMs: 450, width: 7, damage: 20, shotMs: 350, reloadMs: 4200,
+    flee: 70, climbMs: 1400, near: 90, far: 150,
+    firstMs: 1200,
+  },
+  // Le Miroitier (miroitier.ts, fauna.ts): an acolyte with a great bronze mirror; he keeps between `near` and `far`. The
+  // hero within the beam's reach on a clear line: he lifts the mirror over his head and tilts it, catching the light (a
+  // glare growing, `liftMs`; his aim on the hero until `lockMs` before the end), then throws the beam (`beamMs`): a shaft
+  // of the light he caught, `halfDeg` either side of its line (at least `width` px, floor) out to `reach` (by his own
+  // lantern, [0]; the Dawn's, [1], when the Dawn's floor is within `dawn` of him: near the breach), turning toward the hero
+  // at most `sweep` rad/s (floor). Props and walls cut it. The hero in it is in holy light (RoomScene: `burn`, its grace
+  // then its beat). Aware of the hero, he holds the mirror before him: a blow (claws, shards) within `guardDeg` of where he
+  // faces strikes the bronze, not him; the claws wear it as poise (`mirror`); worn through, it shatters: he reels
+  // `shatterMs`, bare from then on, and runs, keeping `bare` from the hero. From his side or back, he bleeds.
+  miroitier: {
+    hp: 4, speed: 34, near: 70, far: 110, bare: [140, 200],
+    liftMs: 1000, lockMs: 250, beamMs: 2600, sweep: 0.55, reach: [110, 170], halfDeg: 7, width: 5, dawn: 60,
+    burn: { graceMs: 400, burnEveryMs: 900, damage: 10 },
+    guardDeg: 70, mirror: 5, shatterMs: 2500,
+    recoverMs: 600, reloadMs: 2600, firstMs: 900,
+  },
 
   // Sacred lanterns of the Order: their pool of holy light burns the hero (never the ghouls) until he smashes them.
   lantern: {
@@ -492,7 +524,7 @@ export const T = {
   // refuge's basin (within `basin`).
   blood: {
     ring: [0, 1, 3, 8, 20],
-    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20, matrice: 20, enterre: 3, gave: 8, crocheteur: 3 }, // (a flock of crows, la Chose du gouffre never die of a blow),
+    drops: { ghoul: 1, crossbow: 2, penitent: 2, hound: 2, purifier: 3, priest: 3, ringer: 3, inquisitor: 5, amas: 6, bourreau: 15, nourrice: 20, matrice: 20, enterre: 3, gave: 8, crocheteur: 3, tireur: 3, miroitier: 4 }, // (a flock of crows, la Chose du gouffre never die of a blow),
     cache: 5,
     pickup: 16, search: 24, bag: 400, basin: 52,
     // The blood carried weighs (logic.ts burden(), docs/decisions.md 2026-10-29): f, the share of the bag filled (so a
