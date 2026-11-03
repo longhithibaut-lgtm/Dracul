@@ -18,7 +18,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 await mkdir(out, { recursive: true });
 const run = (f, a) => page.evaluate(f, a);
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 await run(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 3, banked: 900, shortcuts: ['grille', 'galerie', 'caveau'] })));
 await page.reload();

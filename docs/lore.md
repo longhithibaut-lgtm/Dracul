@@ -49,7 +49,9 @@ Noms et personnalités choisis par Claude à la demande de l'utilisateur (provis
   Rapporte du sang au refuge : on fera affaire. »* ; à l'échoppe : *« Alors, gamin, on fait affaire ? »*, *« Du sang
   frais ? Montre voir. »*, *« Mes rats t'ont vu venir. »*, *« Marché conclu. Mes petits te suivront. »*, *« Prends. Et
   ne le gâche pas. »*, *« Pas de sang, pas de rats. »*, *« Reviens les poches pleines, gamin. »*, *« Bon choix. »*,
-  *« Ça te va mieux qu'à un noble. »*, *« Comme tu veux. »*.
+  *« Ça te va mieux qu'à un noble. »*, *« Comme tu veux. »* ; au refuge, quand le héros passe près d'elle (**provisoires**, selon sa progression) :
+  *« Mes rats connaissent chaque pierre de ce trou. »*, *« Tu reviens en cendres et tu repars. Têtu comme un rat. »*,
+  *« Ta roue, au mur... Je l'entendais grincer, de ma cage. »*.
 - **Séverin d'Ombrelune** (Maison de la Brume) : prince raffiné, ironique, distant, qui parle par sous-entendus. Le
   plus méprisant au début, et le plus long à admettre qu'il doit sa liberté à un sans-maison. Au refuge, il entraîne
   à l'esquive. *« Un sans-maison qui libère un prince. Le monde a vraiment perdu la raison. »*
@@ -81,6 +83,9 @@ héros, qui a trouvé la chapelle oubliée avant lui. Affamé depuis des années
 versé au bassin, c'est lui qui le boit, et il le garde lucide. Il fouille les catacombes la nuit et revend ce qu'il
 trouve contre du sang ; quand il a assez bu, il se souvient de techniques oubliées (les améliorations du héros). Trop
 longtemps sans sang, il redevient bête un temps : boutique fermée, il grogne dans sa niche.
+Ses répliques quand le héros passe près du bassin, **provisoires** (écrites par Claude, selon la progression) :
+*« Le bassin est sec. Ma tête aussi. »*, *« Tant de sang... Je me souviens de choses que j'avais perdues. »*, *« Encore des
+cendres dans ton cercueil. Elles se relèvent toujours. »*, *« La vieille aux rats compte le sang. Moi, je le bois. »*.
 
 ## Les ennemis
 

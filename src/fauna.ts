@@ -1,6 +1,8 @@
-// The rules of the necropolis' fauna (T.crows, T.enterre, T.gave, T.chose) and of its Order's men (T.crocheteur), apart
-// from Phaser so they are tested (fauna.test.ts): crows.ts, enterre.ts, gave.ts, chose.ts and crocheteur.ts play them. Floor distances undo the ground's foreshortening.
+// The rules of the necropolis' fauna (T.crows, T.enterre, T.gave, T.chose) and of its Order's men (T.crocheteur,
+// T.tireur, T.miroitier), apart from Phaser so they are tested (fauna.test.ts): crows.ts, enterre.ts, gave.ts, chose.ts,
+// crocheteur.ts, tireur.ts and miroitier.ts play them. Floor distances undo the ground's foreshortening.
 import { T } from './tuning.ts';
+import { rayDistance } from './logic.ts';
 
 type P = { x: number; y: number };
 /** Distance along the floor from a to b (the screen's y is the floor's squashed). */
@@ -88,3 +90,40 @@ export function meal<C extends P>(from: P, bodies: C[]) {
   for (const c of bodies) if (floor(from, c) <= d) [best, d] = [c, floor(from, c)];
   return best;
 }
+
+/** Le Tireur du mausolée's post: the floor point of his feet at the roof's edge (his sprite's point; his body, 6 to 12 px
+ *  below it, half out of the building's box so shards reach it), the roof's height `h` (room px) and the floor point at
+ *  the foot of its ladder. */
+export type Perch = { x: number; y: number; h: number; ladder: P };
+/** The screen length of `floorLen` floor px along screen angle `a` (the floor's y is squashed). */
+export const screenLen = (floorLen: number, a: number) => floorLen / Math.hypot(Math.cos(a), Math.sin(a) / T.lantern.squash);
+/** His ball, fired from `from` along screen angle `aim`, flying `reach` screen px before a prop or wall stops it: it
+ *  strikes the hero's feet within T.tireur.width (floor) of its line. */
+export function shotHits(from: P, aim: number, reach: number, feet: P) {
+  const ux = Math.cos(aim), uy = Math.sin(aim), along = (feet.x - from.x) * ux + (feet.y - from.y) * uy;
+  return along >= 0 && along <= reach && floor({ x: from.x + ux * along, y: from.y + uy * along }, feet) <= T.tireur.width;
+}
+/** The perch he makes for, off his roof: the one whose ladder is farthest from the hero. */
+export const perchFor = (perches: Perch[], hero: P) => perches.reduce((m, p) => (floor(p.ladder, hero) > floor(m.ladder, hero) ? p : m));
+/** Perched, he leaves his roof (by its ladder, whatever waits at its foot): the hero within T.tireur.flee of him or of
+ *  the ladder's foot. */
+export const leaves = (perch: Perch, hero: P) => floor(perch, hero) <= T.tireur.flee || floor(perch.ladder, hero) <= T.tireur.flee;
+
+/** Le Miroitier's beam from `from` along floor angle `aim`, out to `reach` (floor): the hero's feet in it, within
+ *  T.miroitier.halfDeg of its line (at least T.miroitier.width px). Props are the caller's (a clear line). */
+export function inBeam(from: P, aim: number, reach: number, feet: P) {
+  const M = T.miroitier, dx = feet.x - from.x, dy = (feet.y - from.y) / T.lantern.squash;
+  const along = dx * Math.cos(aim) + dy * Math.sin(aim), side = Math.abs(-dx * Math.sin(aim) + dy * Math.cos(aim));
+  return along > 0 && along <= reach && side <= Math.max(M.width, along * Math.tan((M.halfDeg * Math.PI) / 180));
+}
+/** The beam turned from floor angle `aim` toward `to`, by `ms` at T.miroitier.sweep rad/s at most. */
+export function sweepTo(aim: number, to: number, ms: number) {
+  const d = Math.atan2(Math.sin(to - aim), Math.cos(to - aim)), max = (T.miroitier.sweep * ms) / 1000;
+  return aim + Math.max(-max, Math.min(max, d));
+}
+/** The floor angle from a to b (the screen's y unsquashed). */
+export const floorAngle = (a: P, b: P) => Math.atan2((b.y - a.y) / T.lantern.squash, b.x - a.x);
+/** How far a shot or a beam flies from `from` along screen angle `a` before a prop (`boxes`) or the room's edge stops it;
+ *  the building a marksman stands on (a box holding `from`) does not. */
+export const clearRay = (from: P, a: number, inside: Box, boxes: Box[]) =>
+  rayDistance(from, a, inside, boxes.filter((b) => !(from.x >= b.x && from.x <= b.x + b.width && from.y >= b.y && from.y <= b.y + b.height)));

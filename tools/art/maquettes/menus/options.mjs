@@ -38,7 +38,7 @@ function key(L, T, s, x, y, clash) {
   return keycap(L, T[`oKey:${s}`], x, y, clash ? { base: lin('#b42c1e') } : {});
 }
 // a slider: a glass ampoule filled with blood up to v, its number after it
-function ampoule(L, x0, x1, yc, v, sel) {
+export function ampoule(L, x0, x1, yc, v, sel) {
   const r = 4, fx = x0 + v * (x1 - x0);
   L.paint(x0, yc - r, x1, yc + r + 1, (x, y) => {
     const dy = y - yc, h = Math.sqrt(Math.max(0, r * r - dy * dy)) * 0.9; if (Math.abs(dy) > r) return;

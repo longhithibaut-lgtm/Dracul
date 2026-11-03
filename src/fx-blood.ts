@@ -59,6 +59,21 @@ function anim(scene: Phaser.Scene, depth: number, ms: number, draw: (g: G, t: nu
   return g;
 }
 
+// The blood lying on the floor (room px), for his footfalls to splash in (step()): the puddles of wounds and his own
+// drips, the latest few dozen per scene. Its floor layer (enemy.ts stains) lives on the GPU, too dear to read back.
+const POOLS = 48;
+const pools = new WeakMap<Phaser.Scene, { x: number; y: number; r: number }[]>();
+function lies(scene: Phaser.Scene, x: number, y: number, r: number) {
+  let l = pools.get(scene);
+  if (!l) {
+    pools.set(scene, (l = []));
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => pools.delete(scene)); // a scene restarted starts clean
+  }
+  if (l.push({ x, y, r }) > POOLS) l.shift();
+}
+/** Whether floor point (x, y) (room px) lies in blood. */
+export const wet = (scene: Phaser.Scene, x: number, y: number) => !!pools.get(scene)?.some((p) => Math.hypot(p.x - x, (p.y - y) * 1.6) < p.r);
+
 /** A drop of blood thrown at t0 ms from floor point (x, y), z above it (fine px, px/s); it stains the floor where it
  *  lands, `n` px smeared along its way. */
 type Drop = { t0: number; x: number; y: number; z: number; vx: number; vy: number; vz: number; c: number; n: number; back: boolean; land: number; on: boolean };
@@ -200,6 +215,7 @@ function burst(scene: Phaser.Scene, ix: number, iy: number, fy: number, angle: n
         if (d < 1) floor.fill(B[1 + Math.min(3, Math.floor((1 - d) * 0.9 * 4))], 1, (px + X) / Z, (py + Y) / Z, 1 / Z, 1 / Z);
       }
       floor.fill(B[5], 1, Math.round(px - rx * 0.3) / Z, Math.round(py - ryy * 0.3) / Z, 1 / Z, 1 / Z).render();
+      lies(scene, px / Z, py / Z, rx / Z + 1);
     }
   });
 }
@@ -225,11 +241,11 @@ export function gore(scene: Phaser.Scene, x: number, y: number, angle: number, k
 export function dash(scene: Phaser.Scene, from: P, angle: number) {
   const hero = from as Partial<Phaser.GameObjects.Sprite> & P, sprite = hero.frame ? (hero as Phaser.GameObjects.Sprite) : undefined;
   const D = T.dash.durationMs, GHOST_MS = 420, blend = prelit(scene);
-  const puffs: { t: number; x: number; y: number; r: number; life: number; s: number; rise: number }[] = [], drops: Drop[] = [];
+  const puffs: { t: number; x: number; y: number; r: number; life: number; s: number; rise: number; drift: number }[] = [], drops: Drop[] = [];
   const ghosts: { t: number; img: Phaser.GameObjects.Image; y: number; h: number }[] = [];
   const feet = () => Math.round((hero.y + 15) * Z);
   const puff = (t: number, x: number, y: number, r: number, life: number) => {
-    puffs.push({ t, x, y, r, life, s: Phaser.Math.Between(0, 999), rise: rnd(4, 12) });
+    puffs.push({ t, x, y, r, life, s: Phaser.Math.Between(0, 999), rise: rnd(4, 12), drift: rnd(3, 10) });
     if (Math.random() < 0.45) drops.push(drop(t + rnd(60, 220), x + rnd(-r, r) * 0.6, feet() + rnd(-2, 2), feet() - y - r * 0.5, rnd(-6, 6), 0, 0, B[3]));
   };
   const thrown = (t: number, m: number) => { // clots thrown round his feet
@@ -242,19 +258,19 @@ export function dash(scene: Phaser.Scene, from: P, angle: number) {
     if (!sprite) return;
     const f = sprite.frame, name = f.name.replace(/dash\d$/, 'run1'); // the intact run pose, not the vapour
     const img = scene.add.image(sprite.x, sprite.y, sprite.texture, name).setOrigin(sprite.originX, sprite.originY).setScale(sprite.scaleX).setFlipX(sprite.flipX)
-      .setTint(B[1]).setTintMode(Phaser.TintModes.FILL).setBlendMode(blend).setAlpha(0.6).setDepth(sprite.depth - 1);
+      .setTint(B[0]).setTintMode(Phaser.TintModes.FILL).setBlendMode(blend).setAlpha(0.7).setDepth(sprite.depth - 1);
     ghosts.push({ t, img, y: sprite.y, h: f.cutHeight });
   };
   for (let i = 0; i < 5; i++) puff(0, hero.x * Z + rnd(-10, 10), (hero.y - 4) * Z + rnd(-16, 22), rnd(7, 12), rnd(450, 600));
   thrown(0, 14);
   ghost(0);
   let last = { x: hero.x * Z, y: hero.y * Z }, arrived = -1, ghosted = false;
-  const wisps = Array.from({ length: 12 }, () => ({ a: angle + Math.PI + rnd(-1.3, 1.3), r: rnd(10, 22) })); // from behind him
+  const wisps = Array.from({ length: 20 }, () => ({ a: angle + Math.PI + rnd(-1.4, 1.4), r: rnd(14, 40), y: rnd(-14, 10) })); // from his trail behind him
   anim(scene, hero.y - 1, D + 700, (g, t) => {
     const hx = hero.x * Z, hy = hero.y * Z;
     if (t <= D) { // the plume: a puff every few px of his way
       for (let d = Math.hypot(hx - last.x, hy - last.y), k = 5; k <= d; k += 5)
-        puff(t, last.x + ((hx - last.x) * k) / d + rnd(-3, 3), last.y + ((hy - last.y) * k) / d - 8 + rnd(-10, 14), rnd(5, 9), rnd(300, 460));
+        puff(t, last.x + ((hx - last.x) * k) / d + rnd(-3, 3), last.y + ((hy - last.y) * k) / d - 8 + rnd(-10, 14), rnd(5, 9), rnd(380, 600)); // a trail that lingers
       if (Math.hypot(hx - last.x, hy - last.y) >= 5) last = { x: hx, y: hy };
       if (!ghosted && t >= D / 2) (ghosted = true), ghost(t);
     } else if (arrived < 0) {
@@ -267,27 +283,28 @@ export function dash(scene: Phaser.Scene, from: P, angle: number) {
       const k = (t - p.t) / p.life;
       if (k < 0 || k >= 1) continue;
       // Ragged 2x2 clumps, darker and thinner as it ages; lighter on top.
-      const rx = p.r * (0.8 + 0.5 * k), ry = rx * 0.8, cy = p.y - p.rise * k;
+      const rx = p.r * (0.8 + 0.5 * k), ry = rx * 0.8, cy = p.y - p.rise * k, px = p.x - Math.cos(angle) * p.drift * k; // rising, drifting back
       for (let dy = -ry; dy <= ry; dy += 2) for (let dx = -rx; dx <= rx; dx += 2) {
         const e = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
         if (e > 1) continue;
         const v = vn((p.x + dx) / 4.5, (cy + dy) / 3.5, p.s) + (1 - Math.sqrt(e)) * 0.6 - k * 0.45;
         if (v < 0.55) continue;
-        const tone = (v - 0.55) * 2.2 - dy / (ry * 4) - k * 0.5;
-        g.fillStyle(tone > 0.6 ? B[4] : tone > 0.35 ? B[3] : tone > 0.1 ? B[2] : B[1], 0.92).fillRect(Math.round(p.x + dx), Math.round(cy + dy), 2, 2);
+        // Darkest as it thins, lit on top; its ragged edge in single specks, a vapour more than clots.
+        const tone = (v - 0.55) * 2.2 - dy / (ry * 4) - k * 0.5, w = v < 0.62 ? 1 : 2;
+        g.fillStyle(tone > 0.95 ? B[4] : tone > 0.55 ? B[3] : tone > 0.2 ? B[2] : B[1], 0.92).fillRect(Math.round(px + dx), Math.round(cy + dy), w, w);
       }
     }
     for (const gh of ghosts) { // crumbling from the feet up, rising a little
       const k = (t - gh.t) / GHOST_MS;
       if (k >= 1) { if (gh.img.active) gh.img.destroy(); continue; }
-      gh.img.setCrop(0, 0, gh.img.frame.cutWidth, Math.round(gh.h * (1 - k))).setY(gh.y - k * 1.5).setAlpha(0.6 * (1 - k * 0.5));
+      gh.img.setCrop(0, 0, gh.img.frame.cutWidth, Math.round(gh.h * (1 - k))).setY(gh.y - k * 1.5).setAlpha(0.7 * (1 - k * 0.5));
     }
     rain(g, null, drops, t);
-    if (arrived >= 0 && t - arrived < 160) { // the vapour drawn back into him
-      const k = (t - arrived) / 160, cx = hx, cy = hy - 6;
+    if (arrived >= 0 && t - arrived < 200) { // the vapour drawn back out of the trail into him, faster and faster
+      const k = ((t - arrived) / 200) ** 2, cx = hx, cy = hy - 6;
       for (const w of wisps) {
-        const r = w.r * (1 - k), x = cx + Math.cos(w.a) * r, y = cy + Math.sin(w.a) * r * 0.9;
-        seg(g, x, y, x - Math.cos(w.a) * 4, y - Math.sin(w.a) * 4, B[2], B[3]);
+        const r = w.r * (1 - k), x = cx + Math.cos(w.a) * r, y = cy + w.y * (1 - k) + Math.sin(w.a) * r * 0.6, l = 3 + 6 * (1 - k);
+        seg(g, x, y, x + Math.cos(w.a) * l, y + Math.sin(w.a) * l * 0.6, B[1], k < 0.5 ? B[2] : B[3]);
       }
     }
   }, blend, () => ghosts.forEach((gh) => gh.img.destroy()));
@@ -369,6 +386,29 @@ export function drip(scene: Phaser.Scene, x: number, y: number, ms: number) {
   const g = take(scene, 2, 0), fx = Math.round((x + rnd(-3, 3)) * Z), fy = Math.round((y + rnd(-1, 2)) * Z), w = pick([3, 4, 4, 5]);
   g.fillStyle(B[2]).fillRect(fx - 1, fy - 1, w, 3).fillRect(fx - 2, fy, w + 2, 1).fillStyle(B[4]).fillRect(fx, fy - 1, w - 2, 2);
   scene.tweens.add({ targets: g, alpha: 0, delay: ms * 0.4, duration: ms * 0.6, onComplete: () => give(g) });
+  lies(scene, fx / Z, fy / Z, 2);
+}
+
+/** A foot planted at floor point (x, y) (room px): in blood, a splash (drops flicked out low, a dark ring); else a
+ *  breath of grave dust that settles (`heavy`, bowed under a full bag: more of it). */
+export function step(scene: Phaser.Scene, x: number, y: number, heavy: boolean) {
+  const fx = Math.round(x * Z), fy = Math.round(y * Z);
+  if (wet(scene, x, y)) {
+    const drops = Array.from({ length: heavy ? 7 : 5 }, () => { const a = rnd(0, Math.PI * 2), v = rnd(25, 60); return drop(0, fx, fy, 1, Math.cos(a) * v, Math.sin(a) * v * 0.5, rnd(30, 70), pick([B[3], B[4], B[5]])); });
+    return anim(scene, y + 0.2, until(drops, 160), (g, t) => {
+      const k = Math.min(1, t / 160), r = 2 + 5 * ease(k);
+      if (k < 1) for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2; dot(g, fx + Math.cos(a) * r, fy + Math.sin(a) * r * 0.45, k < 0.5 ? B[4] : B[2], 1 - k); }
+      rain(g, null, drops, t);
+    }, prelit(scene));
+  }
+  const motes = Array.from({ length: heavy ? 9 : 5 }, () => ({ x: rnd(-6, 6), y: rnd(-1, 1.5), up: rnd(2, heavy ? 6 : 4), life: rnd(220, heavy ? 480 : 360), c: pick([0x7a7264, 0x8e8576, 0x645c50]) }));
+  anim(scene, y + 0.2, heavy ? 480 : 360, (g, t) => {
+    for (const m of motes) {
+      const k = t / m.life;
+      if (k >= 1) continue;
+      dot(g, fx + m.x * (0.6 + 0.6 * k), fy + m.y - m.up * Math.sin(k * Math.PI), m.c, 0.55 * (1 - k));
+    }
+  }, prelit(scene));
 }
 
 /** Blood regained: he darkens with it a moment, a ring spreads at his feet and drops rise off him. */

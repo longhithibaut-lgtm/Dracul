@@ -7,7 +7,7 @@ import * as Nec from './necropolis.data.ts';
 import * as Cat from './catacombs.data.ts';
 import { stepsFrom, walkCells } from './logic.ts';
 import type { Item } from './items.ts';
-import type { Haunt } from './haunts.ts';
+import type { Haunt, Perch } from './haunts.ts';
 
 export type Place = 'refuge' | 'necropolis' | 'catacombs' | 'hall' | 'nave' | 'ossuary' | 'chapel' | 'cloister';
 type P = { x: number; y: number };
@@ -162,7 +162,7 @@ export function lair(way: readonly P[], hero: P, far: number, stairs: boolean, d
  *  already followed him through an exit; `pack`: the battue's pack it belongs to, until it found him), its caches not
  *  yet searched (their blood, the item some hide), the blood and the items left on its floor. */
 export type RoomState = {
-  foes: { kind: string; x: number; y: number; hp: number; home: P; followed?: boolean; pack?: number; haunt?: Haunt }[]; // haunt: what la nécropole makes of it (haunts.ts)
+  foes: { kind: string; x: number; y: number; hp: number; home: P; followed?: boolean; pack?: number; haunt?: Haunt; perches?: Perch[] }[]; // haunt: what la nécropole makes of it (haunts.ts); perches: a Tireur's roofs
   prisoner?: P | null; // the prisoner the Order drags to its camp, where he is (null: freed)
   caches: (P & { blood: number; item?: Item })[];
   drops: (P & { blood: number })[];

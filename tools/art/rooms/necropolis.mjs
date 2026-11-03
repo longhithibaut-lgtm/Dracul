@@ -307,6 +307,7 @@ const LATE = [ // laid after the graves were (they keep off nothing new)
 LATE.push({ id: 'miroir-breche', x: 2768, y: 452, kinds: ['miroitier', 'penitent'] }); // the Dawn within his mirror's reach
 const KEEP = [...POSTS.flatMap((p) => [[p.x, p.y], ...(p.feed ?? []), ...(p.relic ? [p.relic] : [])]), ...RATS, ...NOTES.map((n) => [n.x, n.y])]; // graves keep off them
 POSTS.push(...LATE);
+Object.assign(NOTES.find((n) => n.id === 'sanctuaire'), { x: 562, y: 1036 }); // clear of the shrine's cache (after the graves keep off its first spot)
 
 // The north cliff's talus: rock fallen at its foot every 60-90 px, but at the arches, doors, the court and the walls;
 // decor only (a solid heap against the rock would squeeze a walker into it).

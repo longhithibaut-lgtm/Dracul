@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { prelit } from './dark.ts';
 import * as Grand from './grand.data.ts';
 import * as Gait from './gait.ts';
+import * as Fx from './fx.ts';
 import { T } from './tuning.ts';
 import grandSheet from './grand-hero.png';
 
@@ -11,8 +12,10 @@ import grandSheet from './grand-hero.png';
 // Gameplay calls create() once, show() every frame and die() when he falls; everything visual lives here. hurtFrom: the
 // way the last blow travelled (radians), for the side he reels from.
 // parry: his guard up (la parade), struck (clang: a blow just turned aside, a flash), or open after a missed one; charge: le coup chargé, its share of a full charge;
-// stalking: a foe that has not noticed him is within reach (T.predator), he darkens.
-export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; hurtFrom?: number; dazed?: boolean; invulnerable: boolean; facing: number; swarm?: boolean; parry?: 'guard' | 'clang' | 'open'; charge?: number; stalking?: boolean }; // swarm: turned into la Nuée (rats.ts draws it)
+// stalking: a foe that has not noticed him is within reach (T.predator), he darkens. blow: what the claw blow under way
+// is beyond the combo (le coup chargé let go, the riposte, the predator strike); burden: the share of his bag filled
+// with blood (logic.ts burden), which bows him (Gait.HUNCH).
+export type HeroLook = { moving: boolean; dashing: boolean; slashing: boolean; combo: number; throwing: boolean; biting: boolean; casting: boolean; hurt: boolean; hurtFrom?: number; dazed?: boolean; invulnerable: boolean; facing: number; swarm?: boolean; parry?: 'guard' | 'clang' | 'open'; charge?: number; stalking?: boolean; blow?: 'heavy' | 'riposte' | 'pounce'; burden?: number }; // swarm: turned into la Nuée (rats.ts draws it)
 
 /** Where the hero stands to bite: this far beside the prey's sprite centre, so his mouth lands on its neck. */
 export const BITE_REACH = 8;
@@ -26,14 +29,21 @@ export function preload(scene: Phaser.Scene) {
 type State = {
   shadow: Phaser.GameObjects.Image; was: HeroLook; swing: number; slashAt: number; hurtAt: number; dashAt: number; dashEnd: number;
   throwAt: number; castAt: number; biteAt: number; hurtFrom?: number; dazeAt: number; tearAt: number; finAt: number; stillAt: number;
+  guardAt: number; clangAt: number; openAt: number; eyes: Phaser.GameObjects.Image[]; ember: Phaser.GameObjects.Image;
 };
 // The steps of a struck claw (<view>-claw<combo>-<i>, ms after the press): the blow lands on the press and fx.ts sweeps
 // its arc over the first 60-80 ms, so the anticipation is a glimpse and the strike pose holds through the sweep.
 const CLAW = [0, 30, 90, 150];
 const TEAR_MS = 160; // torn away from the prey, after the drink
+// The new actions' steps (ms in), fitted to their windows (tuning.ts): the guard raised (T.parry.windowMs 180), the
+// miss's stumble (its recoverMs 420), the charged claw let go (T.charge.strikeMs 300), the riposte and the predator strike
+// (a claw's cooldownMs 210). The sparks' pose holds through the parry's hold (holdMs 120 + 60).
+const GUARD = [0, 40], STUMBLE = [0, 150], HEAVY = [0, 60, 170], RIPOSTE = [0, 50, 120], POUNCE = [0, 90, 170], CLANG_MS = 180;
+const LAND_MS = [70, 180]; // out of the mist, standing: re-formed (dash2) then crouched on arrival (land-0) until this
 // Dying (die()): the knees give, on his knees, slumped, then the body breaks into vapour (RoomScene restarts at 1200 ms).
 const DEATH = [0, 110, 300, 560, 720, 880];
 const states = new WeakMap<Phaser.Physics.Arcade.Sprite, State>();
+const EMBERS = 7985; // as the foes' eyes (dark.ts)
 // A multiply tint from none (0) to the predator's dark (1).
 const darken = (k: number) => {
   const c = T.predator.tint, ch = (sh: number) => Math.round(255 + (((c >> sh) & 255) - 255) * k);
@@ -42,8 +52,8 @@ const darken = (k: number) => {
 
 export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physics.Arcade.Sprite {
   const tex = scene.textures.get('hero');
-  if (!tex.has('down-idle0')) for (const [name, { cell, lamp }] of Object.entries(Grand.FRAMES))
-    Object.assign(tex.add(name, 0, (cell % Grand.COLS) * Grand.FW, Math.floor(cell / Grand.COLS) * Grand.FH, Grand.FW, Grand.FH)!.customData, { lamp });
+  if (!tex.has('down-idle0')) for (const [name, { cell, ...marks }] of Object.entries(Grand.FRAMES)) // the lamp, eyes, claw
+    Object.assign(tex.add(name, 0, (cell % Grand.COLS) * Grand.FW, Math.floor(cell / Grand.COLS) * Grand.FH, Grand.FW, Grand.FH)!.customData, marks);
   // Soles 15 room px below his y, the 8x6 feet hitbox 5 px below it (sheet px: two per room px).
   const s = scene.physics.add.sprite(x, y, 'hero', 'down-idle0').setOrigin(0.5, (Grand.SOLE - 30) / Grand.FH).setScale(0.5);
   s.setSize(16, 12).setOffset(Grand.FW / 2 - 8, Grand.SOLE - 20).setBlendMode(prelit(scene))
@@ -56,11 +66,25 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
     t.refresh();
   }
   const shadow = scene.add.image(x, y, 'hero-shadow');
+  // His eyes' embers and the charged claw's, over the dark (dark.ts: unlit from depth 7980): a hot pixel in a dim cross.
+  if (!scene.textures.exists('hero-ember')) {
+    const t = scene.textures.createCanvas('hero-ember', 3, 3)!;
+    t.context.fillStyle = 'rgba(122,14,14,0.45)';
+    t.context.fillRect(1, 0, 1, 3);
+    t.context.fillRect(0, 1, 3, 1);
+    t.context.fillStyle = '#e0402a';
+    t.context.fillRect(1, 1, 1, 1);
+    t.refresh();
+  }
+  const eyes = [0, 1].map(() => scene.add.image(x, y, 'hero-ember').setScale(0.5).setDepth(EMBERS).setVisible(false));
+  const ember = scene.add.image(x, y, 'hero-ember').setDepth(EMBERS).setVisible(false);
   const follow = () => shadow.setPosition(s.x, s.y).setDepth(s.depth - 0.5);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
   s.once(Phaser.GameObjects.Events.DESTROY, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow));
+  s.once(Phaser.GameObjects.Events.DESTROY, () => [...eyes, ember].forEach((e) => e.destroy()));
   const was = { moving: false, dashing: false, slashing: false, combo: 0, throwing: false, biting: false, casting: false, hurt: false, invulnerable: false, facing: 0 };
-  states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9, throwAt: -1e9, castAt: -1e9, biteAt: -1e9, dazeAt: -1e9, tearAt: -1e9, finAt: -1e9, stillAt: scene.time.now });
+  states.set(s, { shadow, was, swing: 1, slashAt: -1e9, hurtAt: -1e9, dashAt: -1e9, dashEnd: -1e9, throwAt: -1e9, castAt: -1e9, biteAt: -1e9, dazeAt: -1e9, tearAt: -1e9, finAt: -1e9, stillAt: scene.time.now,
+    guardAt: -1e9, clangAt: -1e9, openAt: -1e9, eyes, ember });
   return s;
 }
 
@@ -77,6 +101,9 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   if (!look.slashing && st.was.slashing && st.was.combo === 2) st.finAt = now; // the finisher's recovery
   if (look.dashing && !st.was.dashing) st.dashAt = now;
   if (!look.dashing && st.was.dashing) st.dashEnd = now;
+  if (look.parry === 'clang' && st.was.parry !== 'clang') st.clangAt = now;
+  if (look.parry === 'guard' && !st.was.parry) st.guardAt = now;
+  if (look.parry === 'open' && st.was.parry !== 'open') st.openAt = now;
   st.was = { ...look };
 
   // The view he faces (eight ways) and, past the action poses, his walk.
@@ -96,10 +123,11 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   // The body turns to mist during the dash (after the push-off) and re-forms just after (fx.ts ghosts the intact run
   // pose instead).
   if (look.dashing) frame = `dash${now - st.dashAt < 40 ? 0 : 1}`;
-  // La parade: the forearm raised before him (his flinch's first frame); missed, stooped forward, open (the finisher's weight).
-  else if (look.parry && has('hurt-0')) frame = look.parry === 'open' ? 'fin-0' : 'hurt-0';
-  // Le coup chargé: reared back on his back foot, the claw drawn high (the finisher's anticipation), held.
-  else if (look.charge !== undefined && has('claw2-0')) frame = 'claw2-0';
+  // La parade: the guard raised, then held; a blow turned aside, the sparks' sweep; at nothing, the stumble, open (a riposte
+  // under way shows over the guard's last ms).
+  else if (look.parry && !look.slashing) frame = now - st.clangAt < CLANG_MS ? 'parry-0' : look.parry === 'open' ? step('stumble', st.openAt, STUMBLE, '') : step('guard', st.guardAt, GUARD, '');
+  // Le coup chargé: drawing back, then reared right back, the claw cocked high and smouldering, held.
+  else if (look.charge !== undefined) frame = `charge-${Number(look.charge >= 0.45)}`;
   // 70: T.bite.lungeMs; latched side-on, he drinks, then tears away.
   else if (look.biting && (view === 'side' || has('bite-0'))) frame = step('bite', st.biteAt, [0, 70, 200], 'bite');
   else if (look.casting) frame = step('cast', st.castAt, [0, 60, 140], 'cast');
@@ -107,11 +135,14 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
     const h = Gait.hurtOf(look.facing, st.hurtFrom, flip);
     frame = step(has(`${h}-0`) ? h : 'hurt', st.hurtAt, [0, 60], '');
   } else if (look.dazed && has('hurt-0')) frame = has('stagger-0') ? `stagger-${Math.floor((now - st.dazeAt) / 150) % 4}` : 'hurt-1'; // a bell: he reels
+  // Beyond the combo: le coup chargé let go, the riposte, the predator strike out of the dark.
+  else if (look.slashing && look.blow) frame = step(look.blow, st.slashAt, { heavy: HEAVY, riposte: RIPOSTE, pounce: POUNCE }[look.blow], '');
   // The arm rakes the way the arc goes: fx.ts sweeps combo 1 back the other way; a sprite mirrored to face left mirrors it.
   else if (look.slashing && has(`claw${look.combo}-0`)) frame = step(`claw${look.combo < 2 && flip ? 1 - look.combo : look.combo}`, st.slashAt, CLAW, '');
   else if (look.slashing && now - st.slashAt < 150) frame = `slash${Number(look.combo === 1) ^ Number(flip)}`;
   else if (look.throwing) frame = step('throw', st.throwAt, [0, 35, 80], `throw${st.swing}`);
-  else if (now - st.dashEnd < 70) frame = has('dash2') ? 'dash2' : 'dash0';
+  else if (now - st.dashEnd < LAND_MS[0]) frame = 'dash2';
+  else if (now - st.dashEnd < LAND_MS[1] && !look.moving) frame = 'land-0';
   else if (now - st.tearAt < TEAR_MS && has('bite-3')) frame = 'bite-3';
   // The finisher's weight, standing (walking off, the walk takes over at once).
   else if (!look.moving && now - st.finAt < T.slash.finisherRecoveryMs && has('fin-0')) frame = step('fin', st.finAt, [0, 80], '');
@@ -119,6 +150,8 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   if (frame !== idle) st.stillAt = now;
   else if (has('glance-0')) frame = Gait.idleVariant(now - st.stillAt) ?? idle; // standing a while, now and then a gesture
   s.setFrame(`${view}-${frame}`).setFlipX(flip);
+  if (g.footfall && !look.dashing) Fx.step(s.scene, s.x, s.y + 15, (look.burden ?? 0) >= Gait.HUNCH); // his soles, 15 px below
+  embers(s, st, look, now);
 
   if (look.hurt) s.setTint(now - st.hurtAt < 60 ? 0xffffff : 0xe0284a).setTintMode(Phaser.TintModes.FILL);
   else if (look.parry === 'clang') s.setTint(0xffe8c8).setTintMode(Phaser.TintModes.FILL); // the blow turned aside: a pale flash
@@ -129,6 +162,31 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   const blink = look.invulnerable && !look.hurt && Math.floor(now / 70) % 2 === 1;
   s.setAlpha(look.swarm ? 0 : look.dashing ? 0.85 : blink ? 0.25 : 1);
   st.shadow.setAlpha(look.swarm ? 0 : look.dashing ? 0.45 : 1).setScale(look.dashing ? 0.75 : 1);
+}
+
+// Sheet px of this frame (customData) to room px, as dark.ts hangs his lantern.
+function at(s: Phaser.Physics.Arcade.Sprite, [x, y]: [number, number]) {
+  const tl = s.getTopLeft();
+  return { x: tl.x! + (s.flipX ? s.frame.width - x : x) * s.scaleX, y: tl.y! + y * s.scaleY };
+}
+
+// His eyes burn over the dark, hotter stalking or charging (the predator's); the charged claw smoulders, throbbing full.
+function embers(s: Phaser.Physics.Arcade.Sprite, st: State, look: HeroLook, now: number) {
+  const { eyes = [], claw } = s.frame.customData as { eyes?: [number, number][]; claw?: [number, number] };
+  const shown = s.visible && s.alpha > 0.5 && !look.swarm && !look.hurt, hot = look.stalking || look.charge !== undefined;
+  st.eyes.forEach((e, i) => {
+    e.setVisible(shown && i < eyes.length);
+    if (e.visible) e.setPosition(at(s, eyes[i]).x, at(s, eyes[i]).y).setAlpha(hot ? 0.85 + 0.15 * Math.sin(now / 70) : 0.5);
+  });
+  st.ember.setVisible(shown && !!claw && look.charge !== undefined);
+  if (st.ember.visible) st.ember.setPosition(at(s, claw!).x, at(s, claw!).y).setScale(look.charge! >= 1 ? 1 : 0.5)
+    .setAlpha(look.charge! >= 1 ? 0.7 + 0.3 * Math.sin(now / 45) : 0.3 + 0.5 * look.charge!);
+}
+
+/** The charged claw's room point on his current frame (where its glint shows), if it is drawn. */
+export function clawAt(s: Phaser.Physics.Arcade.Sprite) {
+  const { claw } = s.frame.customData as { claw?: [number, number] };
+  return claw && at(s, claw);
 }
 
 /** He falls (RoomScene.damageHero, the last blood): show() stops, this plays the collapse and the dissolve facing the
@@ -142,6 +200,7 @@ export function die(s: Phaser.Physics.Arcade.Sprite) {
   s.scene.tweens.addCounter({ from: 0, to: 1, duration: 1300, onUpdate: () => {
     const t = s.scene.time.now - t0;
     s.setFrame(`${view}-death-${Gait.stepOf(DEATH, t)}`).setFlipX(flip).setAlpha(1);
+    [...st.eyes, st.ember].forEach((e) => e.setVisible(false)); // his embers go out
     if (t > 90) s.clearTint(); // past the blow's flash
     st.shadow.setAlpha(Phaser.Math.Clamp(1 - (t - DEATH[3]) / 400, 0, 1));
   } });

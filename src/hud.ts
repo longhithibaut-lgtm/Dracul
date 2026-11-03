@@ -6,6 +6,7 @@ import { icon, RARE } from './satchel.ts';
 import { FRAMES, BRANDS, STEPS } from './hud.data.ts';
 import atlasUrl from './hud.png';
 import fellUrl from './fell-italic.ttf';
+import { binds, label } from './keys.ts';
 
 // Heads-up display « Chair » (docs/maquettes/hud-2-chair.png; docs/decisions.md): diegetic, little text. Bottom left, a
 // heart that blackens from its apex as life is lost, beating (faster when low); the mist's recharge, a vein that
@@ -22,7 +23,7 @@ export type Power = 'griffes' | 'tir' | 'glyphe' | 'brume' | 'nuee';
 export type Hud = {
   health(current: number, max: number): void;
   cooldown(id: Power, readyAt: number | undefined): void; // each frame: when it is back (game time); undefined: locked
-  title(text: string): void;
+  title(text: string, o?: { ms?: number; size?: number; mid?: boolean }): void; // `ms` up (T.expedition.titleMs), `size` px, `mid`: a card in the middle of the screen (the prologue's)
   blood(carried: number, bag: number, banked?: number): void; // blood carried out of the bag; at the refuge, banked too
   bag(items: readonly Item[] | undefined, size: number): void; // the items carried, in a bag of `size`; undefined: not shown
   threats(enemies: { x: number; y: number }[]): void; // room px on the view; off it, a pip points at each
@@ -50,14 +51,16 @@ export function preload(scene: Phaser.Scene) {
   if (!fontQueued) { fontQueued = true; scene.load.font('fellI', fellUrl); } // no style given: italic is asked of it, as in the mockups
 }
 
-/** A texture of `lines` in the HUD's italic, `size` px, centred, cut to pixels, in `color` over a shadow below right; a
- *  line ending in « (F) » starts with that key in red instead (« F fouiller »). Returns its key. */
-export function words(scene: Phaser.Scene, lines: string[], size: number, color = BONE, op = 1, spacing = 0) {
-  const key = `fell:${size}:${color}:${op}:${spacing}:${lines.join('\n')}`;
+/** A texture of `lines` in the HUD's italic (or `face`: the menus' roman), `size` px, centred, cut to pixels, in
+ *  `color` over a shadow below right; a line ending in « (F) » starts with the key that bites in red instead
+ *  (« F fouiller »; keys.ts). Returns its key. */
+export function words(scene: Phaser.Scene, lines: string[], size: number, color = BONE, op = 1, spacing = 0, face = 'italic fellI') {
+  const bite = label(binds.bite[0][0] ?? binds.bite[1][0] ?? '?');
+  const key = `fell:${face}:${size}:${color}:${op}:${spacing}:${bite}:${lines.join('\n')}`;
   if (scene.textures.exists(key)) return key;
-  const rows = lines.map((l) => (l.endsWith(' (F)') ? [['F', FRESH], [l.slice(0, -4), color]] : [[l, color]]));
+  const rows = lines.map((l) => (l.endsWith(' (F)') ? [[bite, FRESH], [l.slice(0, -4), color]] : [[l, color]]));
   const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true })!;
-  const font = () => { g.font = `italic ${size}px fellI`; g.letterSpacing = `${spacing}px`; };
+  const font = () => { g.font = face.replace(/(\S+)$/, `${size}px $1`); g.letterSpacing = `${spacing}px`; };
   font();
   // as the mockups measure: the ink's own ascent and descent, 2 px round it
   const gap = Math.round(size / 4), m = lines.map((l) => g.measureText(l)), asc = Math.ceil(Math.max(...m.map((t) => t.actualBoundingBoxAscent)));
@@ -95,7 +98,7 @@ function soft(scene: Phaser.Scene, w: number, h: number, k: number, cx = w / 2, 
 }
 
 /** The finger of blood smeared under a title `w` px wide (its text `h` px tall): the mockup's, in flat colours. */
-function smear(scene: Phaser.Scene, w: number) {
+export function smear(scene: Phaser.Scene, w: number) {
   const key = `hud-smear:${w}`;
   if (scene.textures.exists(key)) return key;
   const W = w + 14, H = 9, t = scene.textures.createCanvas(key, W, H)!, img = t.context.createImageData(W, H);
@@ -164,7 +167,7 @@ export function create(scene: Phaser.Scene): Hud {
   const pouch = img('pouch0'), gain = blank(), basin = blank();
   const slots = Array.from({ length: 9 }, () => ({ icon: blank().setScale(2), mark: blank(), rare: scene.add.rectangle(0, 0, 10, 2, 0).setOrigin(0).setVisible(false) }));
   const strip = img('strip'), brands = PIPS.map(([, k]) => img(`b${k}:0`)), mice = img('mice');
-  const keyE = scene.add.image(0, 0, words(scene, ['E'], 13, BONE_DIM, 0.75)).setOrigin(0), keyR = scene.add.image(0, 0, words(scene, ['R'], 14, BONE, 0.85)).setOrigin(0);
+  const keyE = scene.add.image(0, 0, words(scene, [label(binds.glyph[1][0] ?? binds.glyph[0][0] ?? '')], 13, BONE_DIM, 0.75)).setOrigin(0), keyR = scene.add.image(0, 0, words(scene, [label(binds.swarm[0][0] ?? binds.swarm[1][0] ?? '')], 14, BONE, 0.85)).setOrigin(0);
   const bossScrim = blank(), cord0 = img('cord0').setVisible(false), cord1 = img('cord1').setVisible(false), bossName = blank();
   const titleScrim = blank(), titleSmear = blank(), titleText = blank();
   const band = scene.add.rectangle(0, 0, 1, 1, 0x000000, 0.6).setOrigin(0).setVisible(false), lineRows = Array.from({ length: 5 }, blank);
@@ -180,7 +183,7 @@ export function create(scene: Phaser.Scene): Hud {
   };
   let carried = -1, bagSize = 1, banked: number | undefined, gotAt = -1e9;
   let items: readonly Item[] | undefined, size = 0, itemAt = -1e9;
-  let titleAt = -1e9, lineEnd = -1e9, lowKey = '';
+  let titleAt = -1e9, titleMs: number = T.expedition.titleMs, titleY = 40, lineEnd = -1e9, lowKey = '';
   let boss: { hp: number; max: number; hitAt: number; shown: number } | undefined;
   let threats: { x: number; y: number }[] = [];
 
@@ -259,11 +262,11 @@ export function create(scene: Phaser.Scene): Hud {
     });
 
     // A place's name, or what just happened: at the top, over its smear; it fades out.
-    const tt = now - titleAt, ta = tt < T.expedition.titleMs - 400 ? 1 : clamp((T.expedition.titleMs - tt) / 400);
+    const tt = now - titleAt, ta = tt < titleMs - 400 ? 1 : clamp((titleMs - tt) / 400), ty = titleY < 0 ? Math.round((H - titleText.height) / 2) : titleY;
     for (const o of [titleScrim, titleSmear, titleText]) o.setAlpha(ta).setVisible(ta > 0 && titleText.texture.key !== '__DEFAULT');
-    titleText.setPosition(Math.round((W - titleText.width) / 2), 40);
-    titleSmear.setPosition(titleText.x - 6, 40 + titleText.height - 3);
-    titleScrim.setPosition(Math.round(W / 2 - titleScrim.width / 2), 10);
+    titleText.setPosition(Math.round((W - titleText.width) / 2), ty);
+    titleSmear.setPosition(titleText.x - 6, ty + titleText.height - 3);
+    titleScrim.setPosition(Math.round(W / 2 - titleScrim.width / 2), ty - 30);
 
     // A guardian: her name over her cord, plump where her blood remains, withered behind; a blow drains it after a beat.
     for (const o of [bossScrim, cord0, cord1, bossName]) o.setVisible(!!boss);
@@ -343,10 +346,10 @@ export function create(scene: Phaser.Scene): Hud {
         if (o.mark.texture.key === '__DEFAULT') o.mark.setTexture(cross(scene)).setAlpha(0.35);
       });
     },
-    title(t) {
-      titleAt = scene.time.now;
+    title(t, o = {}) {
+      [titleAt, titleMs, titleY] = [scene.time.now, o.ms ?? T.expedition.titleMs, o.mid ? -1 : 40];
       if (!t) return void titleText.setTexture('__DEFAULT');
-      titleText.setTexture(words(scene, [t], 30, BONE, 0.85));
+      titleText.setTexture(words(scene, [t], o.size ?? 30, BONE, 0.85));
       titleSmear.setTexture(smear(scene, titleText.width - 2));
       titleScrim.setTexture(soft(scene, titleText.width + 120, 100, 0.45, (titleText.width + 120) / 2, 46, titleText.width / 2 + 70, 40));
     },

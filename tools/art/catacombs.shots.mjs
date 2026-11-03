@@ -13,6 +13,9 @@ const port = Number(arg('port', 5211));
 const VIEWS = {
   galerie: [[1880, 186], [1880, 230]], croisee: [[1430, 340], [1400, 320]], boyau: [[700, 250], [700, 250]], nid: [[560, 690], [610, 640]],
   lac: [[1440, 600], [1530, 630]], prison: [[2300, 800], [2360, 800]], puits: [[2560, 236], [2600, 210]],
+  // the world's scenes (docs/histoire-proposition.md §3): the stairs' altar, the rats' run, their altar, the low ways, the antechamber, Vesna's days
+  caveau: [[290, 196], [290, 170]], course: [[215, 330], [240, 340]], rats: [[2060, 548], [2060, 520]], basse: [[1480, 950], [1520, 940]],
+  antichambre: [[2336, 1046], [2310, 940]], jours: [[2290, 780], [2330, 760]],
 };
 
 const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' });
@@ -26,7 +29,7 @@ page.on('console', (m) => (m.type() === 'error' || m.type() === 'assert') && err
 const run = (f, a) => page.evaluate(f, a);
 const arrived = (layout) => page.waitForFunction((l) => { const s = window.game.scene.getScene('room'); return s.layout === l && s.sys.isActive() && s.phase === 'play'; }, layout, { timeout: 20000 });
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await arrived('refuge');
 await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'catacombs' }));
 await arrived('catacombs');

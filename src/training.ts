@@ -9,13 +9,13 @@ import { ITEMS, ITEM_IDS, type Item, type ItemId } from './items.ts';
 import { POWERS, SLOTS, slotOf, type Power } from './powers.ts';
 import { itemSlots } from './shop.ts';
 
-export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'priest' | 'hounds' | 'penitents' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau' | 'crows' | 'enterre' | 'gave' | 'chose' | 'crocheteur' | 'matrice' | 'nourrice';
+export type Spawn = 'ghoul' | 'crossbow' | 'weak' | 'lantern' | 'purifier' | 'priest' | 'hounds' | 'penitents' | 'ringer' | 'inquisitor' | 'amas' | 'bourreau' | 'crows' | 'enterre' | 'gave' | 'chose' | 'crocheteur' | 'tireur' | 'miroitier' | 'matrice' | 'nourrice';
 /** Survive the scene restarts (a death in training starts the training room again). out, cool: the « Mode test »'s,
  *  out of the training room too, until a reload: invincible, the mist's, the glyph's and la Nuée's recharges at once. */
 export const opts = { god: true, passive: false, out: false, cool: false };
 
 const ROOMS: [LayoutId, string][] = [['hall', 'La crypte'], ['nave', 'La nef'], ['ossuary', 'L\'ossuaire effondré'], ['chapel', 'La chapelle aux vitraux'], ['cloister', 'Le cloître'], ['refuge', 'Le refuge'], ['necropolis', 'La nécropole']];
-const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne'], ['purifier', 'Purificateur'], ['priest', 'Prêtre'], ['hounds', 'Chiens (3)'], ['penitents', 'Pénitents (6)'], ['ringer', 'Sonneur'], ['inquisitor', 'Inquisiteur'], ['amas', 'Amas'], ['bourreau', 'Bourreau'], ['crows', 'Corneilles'], ['enterre', 'Enterré'], ['gave', 'Gavé'], ['chose', 'Chose du gouffre'], ['crocheteur', 'Crocheteur'], ['matrice', 'La Matrice'], ['nourrice', 'L\'Araignée']];
+const SPAWNS: [Spawn, string][] = [['ghoul', 'Goule'], ['crossbow', 'Arbalétrier'], ['weak', 'Arbalétrier affaibli'], ['lantern', 'Lanterne'], ['purifier', 'Purificateur'], ['priest', 'Prêtre'], ['hounds', 'Chiens (3)'], ['penitents', 'Pénitents (6)'], ['ringer', 'Sonneur'], ['inquisitor', 'Inquisiteur'], ['amas', 'Amas'], ['bourreau', 'Bourreau'], ['crows', 'Corneilles'], ['enterre', 'Enterré'], ['gave', 'Gavé'], ['chose', 'Chose du gouffre'], ['crocheteur', 'Crocheteur'], ['tireur', 'Tireur du mausolée (sur un toit)'], ['miroitier', 'Miroitier'], ['matrice', 'La Matrice'], ['nourrice', 'L\'Araignée']];
 // [label, group, key, min, max, step]
 const KNOBS = [
   ['Vitesse de marche', 'hero', 'speed', 30, 160, 2],
@@ -93,7 +93,7 @@ const CSS = `
 /** Opens the panel; returns what closes it. */
 export function panel(api: {
   gifts: GiftId[]; spawn(s: Spawn): void; clear(): void; heal(): void; toggle(id: GiftId, on: boolean, rank: number): void; rank(rank: number): void;
-  swarm(): void; restart(layout?: LayoutId): void; battue(): void; reset(): void;
+  swarm(): void; restart(layout?: LayoutId): void; battue(): void; reset(): void; prologue(): void;
   go(layout: LayoutId, at: { x: number; y: number } | undefined, full: boolean, bag: Item[]): void;
 }) {
   const S = Save.data, box = (attr: string, on: boolean, label: string) => `<label><input type="checkbox" ${attr}${on ? ' checked' : ''}> ${label}</label>`;
@@ -118,7 +118,7 @@ export function panel(api: {
     group('aller', 'Aller à <small>· en expédition, T revient ici</small>', `<div class="row">${Cheats.PLACES.map(([l], i) => `<button type="button" data-go="${i}">${l}</button>`).join('')}</div>`),
     group('heros', 'Héros', `${box('data-opt="god"', opts.god, 'Invincible ici')}${box('data-opt="out"', opts.out, 'Invincible en expédition aussi')}
       ${box('data-opt="cool"', opts.cool, 'Recharges instantanées <small>· brume, glyphe, Nuée</small>')}<div class="row"><button type="button" data-act="heal">Soigner</button></div>`),
-    group('reset', 'Réinitialiser', '<div class="row"><button type="button" data-act="reset-save">Effacer la sauvegarde</button></div>'),
+    group('reset', 'Réinitialiser', '<div class="row"><button type="button" data-act="reset-save">Effacer la sauvegarde</button><button type="button" data-act="prologue">Nouvelle partie <small>· le prologue</small></button></div>'),
   ].join('');
 
   // Every gift can be ticked, several in one slot too: the one-per-slot rule is the run's, not the training room's.
@@ -185,6 +185,7 @@ export function panel(api: {
     else if (b.dataset.act === 'heal') api.heal();
     else if (b.dataset.act === 'swarm') api.swarm();
     else if (b.dataset.act === 'battue') api.battue();
+    else if (b.dataset.act === 'prologue' && confirm('Nouvelle partie : la sauvegarde est effacée, le prologue commence.')) api.prologue();
     else if (b.dataset.act === 'reset-save' && confirm('Effacer la sauvegarde (sang au bassin, achats, objets, Vesna, raccourcis) ?')) kit.bag = [], api.reset();
     else if (b.dataset.blood) S.banked += Number(b.dataset.blood), saved();
     else if (b.dataset.cheat === 'ronge') Cheats.ronge(S), saved();

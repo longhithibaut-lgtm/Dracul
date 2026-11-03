@@ -6,6 +6,9 @@ import * as D from './refuge.data.ts';
 import * as V from './refuge-vesna.data.ts';
 import * as Baked from './baked.ts';
 import * as Save from './save.ts';
+import { prelit } from './dark.ts';
+import * as Lutrin from './lutrin.data.ts';
+import lutrinUrl from './lutrin.png';
 
 // The refuge (docs/lore.md « Le refuge »), as its validated mockup shows it before any chief is freed: the crypt of
 // coffins where the hero re-forms (his coffin, the four chiefs' shut on their catafalques), the great hall round the dry
@@ -31,10 +34,13 @@ export const RONGE = { x: 857, y: 645 };
 export const CHEST = { x: 762, y: 652 };
 // Vesna's place behind her stall, in her shop off the great hall (the mockup's): her floor point; her body stops walkers.
 export const VESNA = { x: 1240, y: 564 };
+// The lectern by his coffin (docs/histoire-proposition.md §4), floor point: F there opens le journal (journal.ts).
+export const LUTRIN = { x: 924, y: 246 };
 // Where the hero comes up the stairs from the crypt, his feet below STAIRS in its well (x 816-864).
 const STAIRWAY = { x: 840, y: 876 };
 
 export function preload(scene: Phaser.Scene) {
+  if (!scene.textures.exists('lutrin')) scene.load.image('lutrin', lutrinUrl);
   if (!Save.data.vesna) return Baked.preload(scene, 'refuge');
   for (const k of ['albedo', 'light']) if (!scene.textures.exists(`refuge-vesna-${k}`)) { // the first state's, and hers over it, to lay together
     if (!scene.textures.exists(`refuge-${k}`)) scene.load.image(`refuge-${k}`, Baked.url(`refuge-${k}`));
@@ -66,6 +72,9 @@ export function build(scene: Phaser.Scene): Room {
   obstacles.add(scene.add.zone(RONGE.x + 3, RONGE.y, 20, 16));
   if (freed) obstacles.add(scene.add.zone(VESNA.x, VESNA.y - 2, 28, 10));
   obstacles.add(scene.add.zone(CHEST.x, CHEST.y - 2, 28, 12));
+  // the lectern, rendered already lit like le coffre (tools/art/chest.gen.mjs --lutrin)
+  scene.add.image(LUTRIN.x, LUTRIN.y, 'lutrin').setOrigin(0.5, Lutrin.SOLE / Lutrin.FH).setScale(0.5).setDepth(LUTRIN.y).setBlendMode(prelit(scene));
+  obstacles.add(scene.add.zone(LUTRIN.x, LUTRIN.y - 2, 14, 7));
   return {
     bounds: new Phaser.Geom.Rectangle(0, 0, D.W, D.H),
     obstacles,
