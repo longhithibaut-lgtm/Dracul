@@ -280,7 +280,7 @@ if (!only || only === 'tools') { // part 2: the predator's tools
     [960, () => page.keyboard.press('Space')]], at(-12, -10), 130);
   const [, heavy] = cev.filter((e) => e.what === 'griffes'), mist2 = cev.find((e) => e.what === 'brume');
   console.log('charge:', JSON.stringify({ mid, ev: cev }));
-  check(mid.charging && mid.full && /claw2-0$/.test(mid.frame) && mid.hp === 99 - T.slash.damage, 'J held: the press claws, then he rears back, full charge');
+  check(mid.charging && mid.full && /charge-1$/.test(mid.frame) && mid.hp === 99 - T.slash.damage, 'J held: the press claws, then he rears back, full charge');
   check(mid.struck === mid.hp - C.damage[1] && mid.reels, `let go: the heavy claw (${C.damage[1]}), his poise broken`);
   check(!!heavy && !!mist2 && mist2.at - heavy.at >= C.commitMs && mist2.at - heavy.at <= C.commitMs + 34, `a mist pressed at once waits out its ${C.commitMs} committed ms, then cuts it short`);
   // Let go before full: the lighter heavy claw; a mist during the charge lets it go unstruck.
