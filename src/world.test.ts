@@ -156,8 +156,8 @@ describe('la nécropole', () => {
     expect(area(D.refuge.x, D.refuge.y + 60).groups).toBe(0); // the forecourt at the refuge's stairs: a sure pause
     expect(area(1525, 200).groups).toBe(0); // the court behind the grille: none waits by the shortcut
     expect(area(1525, 200).ring).toBe(2);
-    expect([area(1380, 800).id, area(1430, 800).id]).toEqual(['proche-sud', 'milieu-sud']); // the sectors part in the chasm
-    expect([area(3120, 880).id, area(2800, 1200).id, area(3500, 600).id]).toEqual(['camp', 'loin-sud', 'loin-est']);
+    expect([area(1380, 800).id, area(1430, 800).id]).toEqual(['champ', 'allee']); // the places part in the chasm
+    expect([area(3120, 880).id, area(2800, 1200).id, area(3500, 600).id]).toEqual(['camp', 'buchers', 'chapelle']);
     expect(area(3500, 600).groups).toBeGreaterThanOrEqual(3); // the far end not the emptiest
     expect(ringAt('necropolis', D.refuge.x, D.refuge.y + 40)).toBe(1);
     expect(ringAt('necropolis', D.hall.x, D.hall.y + 20)).toBe(1);
@@ -167,7 +167,7 @@ describe('la nécropole', () => {
     for (const [k, a] of Zone.AREAS.entries()) {
       const spawns = Zone.SPAWNS.filter((s) => s[2] === k);
       expect(spawns.length, a.id).toBeGreaterThanOrEqual(a.groups * 2);
-      expect(T.expedition.pools[a.ring].length).toBeGreaterThan(0);
+      expect((T.expedition.necropolis[a.id] ?? T.expedition.pools[a.ring]).length).toBeGreaterThan(0);
     }
     for (const [x, y] of Zone.SPAWNS) {
       expect(steps(shut, { x, y }) < Infinity || steps(open, { x, y }) < Infinity, `${x},${y}`).toBe(true);

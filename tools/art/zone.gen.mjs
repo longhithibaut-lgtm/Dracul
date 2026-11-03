@@ -201,7 +201,7 @@ export const GATES = ${J(GATES.map(({ list, ...g }) => ({ ...g, frames: list.map
 export const OPENS = ${J(OPENS.map(({ list, ...o }) => ({ ...o, frames: list.map((f) => [f.ax, f.ay]) })))} as { id: string; at: [number, number]; w: number; h: number; depth: number; frames: [number, number][] }[];
 export const TUNNEL: { x: number; y: number; w: number }[] = ${J(Z.TUNNEL)};
 export const DOORS: Record<string, { x: number; y: number; w: number }> = ${J(Object.fromEntries(Object.entries(Z.DOORS).map(([k, d]) => [k, { x: d.x, y: d.y, w: d.w }])))};
-export const AREAS = ${J(Z.AREAS)} as { id: string; ring: number; rect: [number, number, number, number]; groups: number }[];
+export const AREAS = ${J(Z.AREAS)} as { id: string; name?: string; ring: number; rect: [number, number, number, number]; groups: number }[];
 export const SPAWNS: [number, number, number][] = ${J(SPAWNS)};
 export const CACHES: [number, number][] = ${J(caches)};
 export const CHOKES: [number, number, number][] = ${J(Z.CHOKES)};

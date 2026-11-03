@@ -464,12 +464,42 @@ export const T = {
       [['ghoul', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'ghoul', 'ghoul'], ['hound', 'hound', 'penitent'], ['penitent', 'penitent', 'penitent'], ['amas', 'ghoul', 'ghoul']],
       [['ghoul', 'ghoul', 'ghoul', 'ghoul', 'ghoul'], ['amas', 'ghoul', 'ghoul', 'ghoul'], ['hound', 'hound', 'hound', 'penitent'], ['penitent', 'penitent', 'penitent', 'priest'], ['amas', 'amas', 'ghoul'], ['inquisitor', 'hound', 'hound', 'penitent']],
     ],
+    // La nécropole's own, by place (tools/art/rooms/necropolis.mjs AREAS: how many groups each, its name, its ring): the
+    // curve (docs/decisions.md 2026-11-03) runs from ghouls on their dead by the refuge, through the middle's fosses
+    // (le Gavé, ghouls in packs of four) and its alley of mausoleums (l'Enterré, pénitents, hounds, the first
+    // Crocheteurs), to the Order's ground past the breach (nets, bolts, bells, inquisiteurs). A place not listed draws
+    // from its ring's `pools`. L'Enterré is laid on the nearest mound (none near: left out), les Corneilles on their dead.
+    necropolis: {
+      caveaux: [['ghoul', 'ghoul'], ['ghoul', 'ghoul', 'ghoul'], ['crows', 'ghoul', 'ghoul'], ['enterre', 'ghoul']],
+      champ: [['ghoul', 'ghoul', 'ghoul'], ['crows', 'ghoul', 'ghoul'], ['enterre', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'crossbow'], ['enterre', 'enterre', 'crows']],
+      fosses: [['gave', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'ghoul', 'ghoul'], ['penitent', 'penitent', 'hound'], ['crows', 'ghoul', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'penitent', 'priest']],
+      allee: [['penitent', 'penitent', 'penitent'], ['hound', 'hound', 'hound'], ['enterre', 'ghoul', 'ghoul', 'ghoul'], ['ghoul', 'purifier', 'crossbow'], ['crocheteur', 'penitent', 'penitent'], ['enterre', 'enterre', 'penitent']],
+      postes: [['crocheteur', 'crossbow', 'crossbow'], ['penitent', 'penitent', 'ringer', 'crossbow'], ['inquisitor', 'penitent', 'penitent'], ['hound', 'hound', 'hound', 'crossbow']],
+      camp: [['crocheteur', 'crossbow', 'purifier'], ['penitent', 'penitent', 'penitent', 'ringer'], ['inquisitor', 'hound', 'hound', 'crossbow'], ['crossbow', 'crossbow', 'priest', 'penitent']],
+      buchers: [['purifier', 'penitent', 'penitent'], ['gave', 'ghoul', 'ghoul', 'ghoul'], ['amas', 'ghoul', 'ghoul'], ['crows', 'hound', 'hound', 'hound']],
+      chapelle: [['inquisitor', 'penitent', 'penitent', 'crossbow'], ['purifier', 'priest', 'crossbow'], ['ringer', 'penitent', 'penitent', 'penitent'], ['crocheteur', 'crocheteur', 'crossbow']],
+      puits: [['amas', 'ghoul', 'ghoul'], ['ghoul', 'ghoul', 'ghoul', 'ghoul', 'ghoul'], ['hound', 'hound', 'hound', 'inquisitor'], ['gave', 'ghoul', 'ghoul', 'ghoul'], ['enterre', 'enterre', 'ghoul', 'ghoul']],
+    } as Record<string, readonly (readonly string[])[]>,
     guards: { cloister: ['bourreau'] },
     clear: 170, gap: 90, zoneGap: 180, // the zone's groups farther apart (twice T.sight.call): one roused does not wake its neighbours
     caches: [1, 2],
     fadeMs: 450, // to black through an exit; the next room fades in as fast
     titleMs: 1200, // a room's name, or what just happened, stays up this long
   },
+  // Elites (docs/extraction.md §5: a known foe, stronger, seen to be): darker, bloodier, `scale` bigger; `hp` times its
+  // blood (so the strike from the shade no longer kills it outright), its blows `damage` times harder while it steps
+  // (a bolt in flight keeps its kind's), `speed` times faster, `poise` more to break, `sight` times farther on the
+  // watch; it leaves `blood` times its kind's. In la nécropole: a group's first foe by its place's ring (`chance`, rings 0-4), and those set at its key points
+  // (tools/art/rooms/necropolis.mjs POSTS). Never a flock, an Enterré nor la Chose.
+  elite: { hp: 2.4, blood: 2.5, damage: 1.5, speed: 1.15, poise: 2, sight: 1.25, scale: 1.15, chance: [0, 0, 0.12, 0.3, 0.4], tint: [0.62, 0.42, 0.4] },
+  // What lives in la nécropole (tools/art/rooms/necropolis.mjs POSTS, ROUTES, CORPSES, RATS). Patrols of the Order walk
+  // their routes (from waypoint to waypoint, within `reach` of one: the next) while he is within `wake` of them, their
+  // lantern bearer's pool (`light` px round him, floor) lighting the shade as they pass: standing in it he is seen as
+  // in light (it does not burn: it is carried, not planted). Ghouls on their dead eat with their heads down: they see
+  // `feedSight` as far, and growl over it within `feedHeard` of him every `feedMs`. The prisoner the Order drags to
+  // its camp: his captors dead or gone `free` px away, F frees him: he runs off (`fleeMs`), leaving what they took
+  // (an item, sure), a word said.
+  haunts: { reach: 6, wake: 560, light: 52, lightI: 1.6, feedSight: 0.45, feedHeard: 150, feedMs: [2200, 4200], free: 60, fleeMs: 1600 },
   // How a placed foe notices the hero: within `range` (px) with no prop between them, or struck, but only within `shade`
   // while he keeps out of the light (docs/extraction.md §12.3: the baked light at his feet under `lit`, dark.ts's T, 4 at
   // full; no Order lantern's pool; his own lantern does not count); then the others of

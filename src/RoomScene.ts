@@ -35,6 +35,8 @@ import * as Gave from './gave.ts';
 import * as Chose from './chose.ts';
 import * as Crocheteur from './crocheteur.ts';
 import { decks, nearestEdge, struggle } from './fauna.ts';
+import * as Haunts from './haunts.ts';
+import * as Necro from './necro.ts';
 import { WORLD, ZONES, areaAt, chokes, expedition, galleryOpen, go, homeward, isZone, lair, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState, type ZoneId } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
 
@@ -57,7 +59,7 @@ type Rat = { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until
 // A room: the hero walks in (up its stairs, or down from one of its exits), plays, and walks out by any exit when he
 // pleases: deeper up through its open portcullises, back down its stairs.
 type Phase = 'enter' | 'play' | 'leave';
-type Placed = { hp?: number; home?: { x: number; y: number }; alert?: boolean; followed?: boolean; pack?: number };
+type Placed = { hp?: number; home?: { x: number; y: number }; alert?: boolean; followed?: boolean; pack?: number; haunt?: Haunts.Haunt };
 type Blood = { x: number; y: number; blood: number };
 type Lying = { x: number; y: number; item: Items.Item; fx: Loot.Glint; label: Loot.Label }; // an item on the floor
 const NAV = 8; // walk grid cell, px
@@ -174,6 +176,14 @@ export class RoomScene extends Phaser.Scene {
   private fly?: { x: number; y: number; dx: number; dy: number; at: number; into: boolean }; // flung by la Chose du gouffre
   private bodies: Foes.Ctx['bodies'] = []; // the dead lying on the floor (a Gavé eats them)
   private ctx!: Foes.Ctx; // what the foes' own AI modules may ask of this room
+  // La nécropole's life (haunts.ts, necro.ts): the places named as he enters them (when each was last said), the
+  // patrols' bearers this frame and their lit glass, the prisoner, the foe stepping now (its blows an elite's?).
+  private said = new Map<string, number>();
+  private place0?: string;
+  private bearers: Sprite[] = [];
+  private glasses = new Map<Sprite, Phaser.GameObjects.Rectangle>();
+  private prisoner?: Necro.Prisoner;
+  private striker?: Sprite;
 
   constructor() {
     super('room');
@@ -236,6 +246,11 @@ export class RoomScene extends Phaser.Scene {
     this.heldBy = this.pull = this.netG = this.fly = undefined;
     this.netUntil = this.netPoints = 0;
     this.bodies = [];
+    this.said = new Map();
+    this.place0 = undefined;
+    this.bearers = [];
+    this.glasses = new Map();
+    this.prisoner = this.striker = this.prisonerWords = undefined;
   }
 
   preload() {
@@ -283,7 +298,9 @@ export class RoomScene extends Phaser.Scene {
     // whirls), each bourreau's reliquary, each purificateur's pilot while it flares and burns, each sonneur's bell while
     // its rim glows and rings, then its lanterns. Their bodies' tells, in the dark rooms.
     const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (['priest', 'inquisitor', 'bourreau', 'nourrice', 'matrice'].includes(e.getData('kind')) || ['ignite', 'fire', 'raise', 'toll'].includes(e.getData('state'))))
-      .map((e) => ({ ...(e.getData('kind') === 'nourrice' ? Nourrice.lamp(e) : e.getData('kind') === 'matrice' ? Matrice.lamp(e) : Foes.lamp(e)), lit: true, I: this.glow(e) })), ...this.lanterns];
+      .map((e) => ({ ...(e.getData('kind') === 'nourrice' ? Nourrice.lamp(e) : e.getData('kind') === 'matrice' ? Matrice.lamp(e) : Foes.lamp(e)), lit: true, I: this.glow(e) })), ...this.lanterns,
+      ...this.bearers.map((b) => ({ x: b.x, y: b.y, h: 14, lit: true, I: T.haunts.lightI }))] // a patrol's carried lantern
+      .sort((a, b) => Phaser.Math.Distance.BetweenPoints(a, this.hero) - Phaser.Math.Distance.BetweenPoints(b, this.hero)); // dark.ts shows the nearest four
     if (this.room.zone) Dark.light(this, this.hero, this.enemies, lights, [ZONES[this.room.zone.id].SW, ZONES[this.room.zone.id].SH], this.room.look, this.room.zone.chunks.quads);
     else Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
     this.propBoxes = this.room.obstacles.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody);
@@ -488,22 +505,33 @@ export class RoomScene extends Phaser.Scene {
     const at = this.at ?? d ?? (this.entry === undefined ? r.heroStart : this.entry < 0 ? { x: r.stairs.x, y: r.bounds.bottom } : r.exits[this.entry]);
     this.exp ??= expedition(ring); // a room opened directly (scripts, tools): an expedition of its own
     const pools = (zone?.id === 'catacombs' ? E.catacombs : E.pools) as readonly (readonly (readonly string[])[])[];
-    const groups = (pool: number, n: number, spawns: { x: number; y: number }[]) => placeGroups(pools[pool], n, spawns, at, E.clear, zone ? E.zoneGap : E.gap, Math.random)
-      .flatMap((g) => g.kinds.map((kind, i) => ({ x: g.at.x + (i % 2 ? 12 : -12) * Math.ceil(i / 2), y: g.at.y, kind }))); // side by side: they push each other off
+    const nec = zone?.id === 'necropolis', ring0 = (a: { ring: number }) => (nec ? a.ring : -1); // la nécropole: its elites by ring, its places' own pools
+    const groups = (pool: readonly (readonly string[])[], n: number, spawns: { x: number; y: number }[], ring = -1) => placeGroups(pool, n, spawns, at, E.clear, zone ? E.zoneGap : E.gap, Math.random)
+      .flatMap((g) => g.kinds.map((kind, i): Haunts.Placing => ({ x: g.at.x + (i % 2 ? 12 : -12) * Math.ceil(i / 2), y: g.at.y, kind, // side by side: they push each other off
+        ...(i === 0 && ring >= 0 && Haunts.elite(kind, ring, Math.random) ? { haunt: { elite: true } } : {}) })));
+    // L'Enterré lies under the mound nearest where his group stands (none near: he is not there).
+    const buried: { x: number; y: number }[] = [];
+    const laid = (f: Haunts.Placing) => { if (f.kind !== 'enterre' || !nec) return [f]; const m = Haunts.mound(f, 120, buried); return m ? (buried.push(m), [{ ...f, ...m }]) : []; };
+    const relics = nec ? Haunts.relics() : [];
     const hide = (list: { x: number; y: number }[]) => Phaser.Utils.Array.Shuffle([...list]).slice(0, Phaser.Math.Between(E.caches[0], E.caches[1]));
     const inArea = (p: { x: number; y: number }, [x0, y0, x1, y1]: readonly number[]) => p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1;
     const st: RoomState = (this.exp.rooms[this.here] ??= {
       foes: (Z
-        ? Z.AREAS.flatMap((a, k) => groups(a.ring, a.groups, Z.SPAWNS.filter((p) => p[2] === k).map(([x, y]) => ({ x, y }))))
-        : [...groups(ring, E.groups[ring], r.spawns), ...((E.guards as Record<string, readonly string[]>)[this.layout] ?? []).map((kind) => ({ ...r.medallion, kind }))]
-      ).map((f) => ({ ...f, hp: stats(f.kind).hp, home: { x: f.x, y: f.y } })),
-      // the zone's: one or two in each area
-      caches: (Z ? Z.AREAS.flatMap((a) => hide(W.caches.filter((c) => inArea(c, a.rect) && Z.AREAS.find((b) => inArea(c, b.rect)) === a))) : hide(W.caches))
-        .map((c) => ({ ...c, blood: T.blood.cache * T.blood.ring[this.ring(c)], item: this.found(this.ring(c), !!zone && (T.items.sure as readonly string[]).includes(areaAt(zone.id, c.x, c.y)?.id ?? '')) })),
+        ? [...Z.AREAS.flatMap((a, k) => groups((nec && E.necropolis[a.id]) || pools[a.ring], a.groups, Z.SPAWNS.filter((p) => p[2] === k).map(([x, y]) => ({ x, y })), ring0(a))), ...(nec ? Haunts.setPieces() : [])].flatMap(laid)
+        : [...groups(pools[ring], E.groups[ring], r.spawns), ...((E.guards as Record<string, readonly string[]>)[this.layout] ?? []).map((kind) => ({ ...r.medallion, kind }))]
+      ).map((f: Haunts.Placing) => ({ ...f, hp: Math.round(stats(f.kind).hp * (f.haunt?.elite ? T.elite.hp : 1)), home: { x: f.x, y: f.y } })),
+      // the zone's: one or two in each area; la nécropole's reliquaries always, an item in each
+      caches: [...(Z ? Z.AREAS.flatMap((a) => hide(W.caches.filter((c) => inArea(c, a.rect) && Z.AREAS.find((b) => inArea(c, b.rect)) === a && !relics.some((q) => q.x === c.x && q.y === c.y)))) : hide(W.caches)), ...relics]
+        .map((c) => ({ ...c, blood: T.blood.cache * T.blood.ring[this.ring(c)], item: this.found(this.ring(c), relics.includes(c) || (!!zone && (T.items.sure as readonly string[]).includes(areaAt(zone.id, c.x, c.y)?.id ?? ''))) })),
+      ...(nec ? { prisoner: (({ x, y }) => ({ x, y: y + 18 }))(Haunts.POSTS.find((p) => p.prisoner)!) } : {}),
       drops: [],
       items: [],
     });
     for (const f of st.foes) this.place(f, f.kind as Kind, f);
+    if (nec) { // its dead on the floor for its feeders (shortcut: those eaten lie there again on his next coming), the prisoner if not yet freed
+      for (const p of Haunts.corpses()) this.bodies.push(Necro.corpse(this, p));
+      if (st.prisoner) this.prisoner = new Necro.Prisoner(this, st.prisoner);
+    }
     for (const c of st.caches) this.caches.push({ ...c, fx: Loot.cache(this, c.x, c.y), label: Loot.label(this, c.x, c.y - 26, 'fouiller (F)') });
     for (const d of st.drops) this.addDrop(d);
     for (const l of st.items) this.addLoot(l);
@@ -775,7 +803,17 @@ export class RoomScene extends Phaser.Scene {
     // it burns twice as fast.
     const c = this.hero.body!.center, R = T.lantern.radius; // the planted lanterns' pools, the zone's on their poles
     const lamp = this.lanterns.some((l) => Lantern.lights(l, c)) || !!this.room.zone?.lamps.some((l) => ellipseDist(l, c, R, R * T.lantern.squash) <= 1);
-    this.inLight = lamp || (this.room.light?.(c.x, c.y) ?? Infinity) >= T.sight.lit;
+    // La nécropole's patrols: each one's bearer (its first still standing), whose carried lantern lights him (never burns).
+    const nec = zone?.id === 'necropolis', H = T.haunts;
+    if (nec) {
+      const lead = new Map<string, Sprite>();
+      for (const e of this.enemies.getChildren() as Sprite[]) { const h: Haunts.Haunt | undefined = e.getData('haunt'); if (e.body?.enable && h?.route && (lead.get(h.route)?.getData('haunt').slot ?? Infinity) > h.slot!) lead.set(h.route, e); }
+      this.bearers = [...lead.values()];
+      Necro.glasses(this, this.glasses, this.bearers);
+      this.places(c, time);
+      this.stepPrisoner(delta, time);
+    }
+    this.inLight = lamp || this.bearers.some((b) => ellipseDist(b, c, H.light, H.light * T.lantern.squash) <= 1) || (this.room.light?.(c.x, c.y) ?? Infinity) >= T.sight.lit;
     if (zone && !this.training) Carte.see(zone.id, c.x, c.y, this.inLight); // the map's fog
     let dawn = false;
     if (lamp || this.room.holy(c.x, c.y)) {
@@ -814,6 +852,9 @@ export class RoomScene extends Phaser.Scene {
         this.hurtEnemy(e, e.getData('bleedDmg'));
         if (!e.body?.enable) continue;
       }
+      // La nécropole is wide: a foe far from him that has not seen him waits where it is, unstepped.
+      if (nec && !e.getData('alert') && Phaser.Math.Distance.BetweenPoints(e, c) > H.wake) { e.setVelocity(0); continue; }
+      this.striker = e; // its blows this step: an elite's land harder (damageHero)
       const kind = e.getData('kind'), bow = kind === 'crossbow';
       // Bound by the glyph, it stops dead, its lunge or aim cancelled, and cannot be shoved; it resumes once let go. A
       // prey in the hero's jaws is held by the bite instead.
@@ -849,6 +890,7 @@ export class RoomScene extends Phaser.Scene {
         // Quickened by a sonneur's bell: faster on its feet (its walk, set afresh each frame it closes in or keeps its distance).
         if (e.getData('state') === 'chase' && time < (e.getData('hasteUntil') ?? 0)) e.body!.velocity.scale(T.ringer.haste);
         if (e.getData('state') === 'chase' && e.getData('torn')) e.body!.velocity.scale(T.amas.crawl); // torn off an Amas, it crawls
+        if (e.getData('state') === 'chase' && e.getData('alert') && e.getData('haunt')?.elite) e.body!.velocity.scale(T.elite.speed); // an elite closes in faster
       }
       // Commanded: its wait between attacks runs out faster.
       if (this.order(e) && e.getData('readyAt') > time && commanders.some((c) => c !== e && Phaser.Math.Distance.BetweenPoints(c, e) < T.inquisitor.commandRange))
@@ -863,6 +905,7 @@ export class RoomScene extends Phaser.Scene {
       else Enemy.show(e, e.getData('state'), e.getData('facing'), time < e.getData('flashUntil'));
       e.setDepth(e.y);
     }
+    this.striker = undefined;
     // Enemies hunting him off the screen (a tall window, the tall cloister) are pointed at from its edge, all alike:
     // where they are, never what they are about to do; on screen, they are not marked, nor those that have not seen him
     // (but the battue's packs in wait near him, with the Cor de chasse volé).
@@ -1972,7 +2015,7 @@ export class RoomScene extends Phaser.Scene {
     // rewarded. Holding, it flinches walking or recovering, and holds firm mid-attack; the heavy ones never budge.
     const P = T.poise, state = e.getData('state'), heavy = this.heavy(e);
     const { taken, breaks } = poiseHit({ taken: e.getData('poiseTaken') ?? 0, lastAt: e.getData('poiseAt') ?? -1e9, steadyUntil: e.getData('poiseUntil') ?? 0 },
-      now, weight, heavy ? Infinity : P.of[e.getData('kind') ?? 'ghoul'] ?? Infinity, P.regenMs);
+      now, weight, heavy ? Infinity : (P.of[e.getData('kind') ?? 'ghoul'] ?? Infinity) + (e.getData('haunt')?.elite ? T.elite.poise : 0), P.regenMs);
     const firm = heavy || this.kneeling(e) || (!breaks && !['chase', 'recover'].includes(state));
     e.setData({ poiseTaken: taken, poiseAt: now, blow: { angle, at: now, force: knock / T.slash.knockback } });
     if (breaks) e.setData({ state: 'chase', until: 0, stunnedUntil: now + P.staggerMs, staggerUntil: now + P.staggerMs, poiseUntil: now + P.steadyMs });
@@ -2058,7 +2101,7 @@ export class RoomScene extends Phaser.Scene {
     if (this.has('vermine')) this.releaseRats(e, T.pacts.vermine.rats);
     if (this.has('curee') && ++this.kills % T.pacts.curee.every === 0) this.heal(T.pacts.curee.heal);
     if (!this.exp || e.getData('torn')) return;
-    this.addDrop({ x: c.x, y: c.y, blood: Math.round(T.blood.drops[(kind ?? 'ghoul') as Exclude<Kind, 'crows' | 'chose'>] * T.blood.ring[this.ring(c)] * (1 + this.gear.spoils)) });
+    this.addDrop({ x: c.x, y: c.y, blood: Math.round(T.blood.drops[(kind ?? 'ghoul') as Exclude<Kind, 'crows' | 'chose'>] * T.blood.ring[this.ring(c)] * (1 + this.gear.spoils) * (e.getData('haunt')?.elite ? T.elite.blood : 1)) }); // an elite bleeds more
     if ((T.items.elites as readonly string[]).includes(kind)) this.addLoot({ x: c.x + 12, y: c.y + 4, item: this.found(this.ring(c), true)! }); // an elite's
   }
 
@@ -2076,7 +2119,7 @@ export class RoomScene extends Phaser.Scene {
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.talk) return this.talk();
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.CHEST) < T.ronge.talk) return this.openSatchel('coffre');
     if (!prey && this.vesna && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.VESNA) < T.vesna.talk) return this.openStall();
-    if (!prey && (this.search() || this.lever() || this.reliquary() || this.take())) return true;
+    if (!prey && (this.search() || this.unbind() || this.lever() || this.reliquary() || this.take())) return true;
     if (!fangs) return true; // the bite is not his yet (the Rongé will teach it)
     this.biteAt = now;
     if (!prey) {
@@ -2193,10 +2236,11 @@ export class RoomScene extends Phaser.Scene {
     return true;
   }
 
-  /** The catacombs' rats: a few about each nest, nosing here and there, scattering from the hero; never far from home. */
+  /** The zones' rats: a few about each nest, nosing here and there, scattering from the hero; never far from home. */
   private scurry(time: number, delta: number) {
-    if (this.room.zone?.id === 'catacombs' && !this.vermin.length && this.navOpen.length)
-      for (const [x, y] of Cat.RATS) for (let k = 0; k < 3; k++) this.vermin.push({ s: Rats.rat(this, x + Phaser.Math.Between(-14, 14), y + Phaser.Math.Between(-6, 6)), home: { x, y }, heading: Math.random() * 6.3, turnAt: 0 });
+    const nests = this.room.zone?.id === 'catacombs' ? Cat.RATS : this.room.zone?.id === 'necropolis' ? Haunts.RATS : [];
+    if (nests.length && !this.vermin.length && this.navOpen.length)
+      for (const [x, y] of nests) for (let k = 0; k < 3; k++) this.vermin.push({ s: Rats.rat(this, x + Phaser.Math.Between(-14, 14), y + Phaser.Math.Between(-6, 6)), home: { x, y }, heading: Math.random() * 6.3, turnAt: 0 });
     const f = this.hero.body!.center;
     for (const v of this.vermin) {
       const away = Phaser.Math.Distance.BetweenPoints(v.s, f) < 70, home = Phaser.Math.Distance.BetweenPoints(v.s, v.home);
@@ -2207,6 +2251,47 @@ export class RoomScene extends Phaser.Scene {
       else v.turnAt = 0; // a wall, too far: another way
       Rats.scurry(v.s, v.heading, away || time % 1400 < 900 ? time : 0);
     }
+  }
+
+  /** La nécropole's places, named as he comes into each (not one said within the last 30 s). */
+  private places(c: { x: number; y: number }, time: number) {
+    const name = areaAt('necropolis', c.x, c.y)?.name;
+    if (this.place0 === undefined) this.place0 = name ?? ''; // where he comes in: the zone's own name is up
+    if (!name || name === this.place0 || this.phase !== 'play') return;
+    this.place0 = name;
+    if (time - (this.said.get(name) ?? -1e9) > 30000) this.hud.title(name);
+    this.said.set(name, time);
+  }
+
+  /** The prisoner the Order drags to its camp (necro.ts), behind its captors' bearer; they gone, F frees him. */
+  private prisonerWords?: Loot.Label;
+  private stepPrisoner(delta: number, time: number) {
+    const p = this.prisoner;
+    if (!p) return;
+    const lead = this.bearers.find((b) => b.getData('haunt').route === 'camp');
+    p.step(lead, delta, time);
+    const free = this.unguarded();
+    if (free && !this.prisonerWords) this.prisonerWords = Loot.label(this, p.at.x, p.at.y - 30, 'libérer (F)');
+    if (!free) { this.prisonerWords?.destroy(); this.prisonerWords = undefined; }
+    this.prisonerWords?.near(Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, p.at) < T.blood.search + 8);
+  }
+  /** No captor of his standing within T.haunts.free of him. */
+  private unguarded() {
+    const p = this.prisoner!;
+    return !(this.enemies.getChildren() as Sprite[]).some((e) => e.body?.enable && e.getData('haunt')?.route === 'camp' && Phaser.Math.Distance.BetweenPoints(e, p.at) < T.haunts.free);
+  }
+  /** F by the prisoner, unguarded: he runs off, leaving what they took from him (an item), a word thrown back. */
+  private unbind() {
+    const p = this.prisoner, f = this.hero.body!.center;
+    if (!p || Phaser.Math.Distance.BetweenPoints(f, p.at) > T.blood.search + 4 || !this.unguarded()) return false;
+    const item = this.found(3, true);
+    if (item) this.addLoot({ ...p.at, item });
+    this.prisonerWords?.destroy();
+    this.prisonerWords = this.prisoner = undefined;
+    if (this.exp?.rooms.necropolis) this.exp.rooms.necropolis.prisoner = null;
+    p.free(this, f);
+    this.hud.say('', 'Merci.', 1400);
+    return true;
   }
 
   /** F by a cache: he stoops a moment and its blood spills out at his feet (picked up as he stands in it). */
@@ -2475,7 +2560,8 @@ export class RoomScene extends Phaser.Scene {
       const hounds = live.filter((e) => e.getData('kind') === 'hound' && e.getData('alert') && !e.getData('followed'));
       const st = exp.rooms[this.here];
       if (st) Object.assign(st, { // as he leaves it; an Amas' torn ghouls are its own, gone with it
-        foes: live.filter((e) => !hounds.includes(e) && !e.getData('torn')).map((e) => ({ kind: e.getData('kind') ?? 'ghoul', x: e.x, y: e.y, hp: e.getData('hp'), home: e.getData('home'), followed: e.getData('followed'), pack: e.getData('pack') })),
+        foes: live.filter((e) => !hounds.includes(e) && !e.getData('torn')).map((e) => ({ kind: e.getData('kind') ?? 'ghoul', x: e.x, y: e.y, hp: e.getData('hp'), home: e.getData('home'), followed: e.getData('followed'), pack: e.getData('pack'), haunt: e.getData('haunt') })),
+        ...(this.prisoner ? { prisoner: this.prisoner.at } : {}),
         caches: this.caches.map(({ x, y, blood, item }) => ({ x, y, blood, item })),
         drops: this.drops.map(({ x, y, blood }) => ({ x, y, blood })),
         items: this.loot.map(({ x, y, item }) => ({ x, y, item })),
@@ -2609,6 +2695,8 @@ export class RoomScene extends Phaser.Scene {
     // Blows go through la Nuée; only holy light breaks it (update()).
     if (this.dead || (by && now >= this.dashUntil && now >= this.swarmUntil && this.deflect(by)) || (this.training ? Training.opts.god : Training.opts.out) || now < this.invulnUntil || now < this.dashUntil || now < this.swarmUntil) return false;
     this.clawDownAt = this.chargeAt = 0; // a blow taken lets a charge go
+    // shortcut: an elite's blows land harder only while it steps (a bolt already flying keeps its kind's), enough for now
+    if ((by ?? this.striker)?.getData('haunt')?.elite) amount = Math.round(amount * T.elite.damage);
     this.invulnUntil = now + T.hero.hurtInvulnMs;
     this.hurtAt = now;
     this.hurtFrom = from && Phaser.Math.Angle.BetweenPoints(from, this.hero.body!.center);
@@ -2703,7 +2791,8 @@ export class RoomScene extends Phaser.Scene {
   private hunts(e: Sprite, time: number) {
     if (this.training) return true;
     const from = e.body!.center, to = this.hero.body!.center, d = Phaser.Math.Distance.BetweenPoints(from, to), was = !!e.getData('alert');
-    const k = this.weight().notice, S = { ...T.sight, range: T.sight.range * k, shade: T.sight.shade * (1 + this.gear.shade) * k, back: T.sight.back * k }; // the blood he drips; a Linceul noir
+    const h: Haunts.Haunt | undefined = e.getData('haunt'), feeding = !!h?.feed && !was && Phaser.Math.Distance.BetweenPoints(e, h.feed) < 24; // head down in its dead
+    const k = this.weight().notice * (feeding ? T.haunts.feedSight : 1) * (h?.elite ? T.elite.sight : 1), S = { ...T.sight, range: T.sight.range * k, shade: T.sight.shade * (1 + this.gear.shade) * k, back: T.sight.back * k }; // the blood he drips; a Linceul noir
     const way = Phaser.Math.Angle.BetweenPoints(from, to), back = !was && behind(from, e.getData('facing') ?? 0, to); // on the watch it sees the half it faces
     const sees = d <= sightRange(S, was, this.inLight, back) && this.boltReach(from, way) >= d;
     // Seeing him on the watch, it first turns to him; it hunts only once it has kept him in sight a beat (unaware till then).
@@ -2730,14 +2819,33 @@ export class RoomScene extends Phaser.Scene {
    *  they rose first, until it gives up.
    *  shortcut: straight back to its post (a pit or prop in the way stops it), upgrade to the walk grid if foes stick. */
   private idle(e: Sprite) {
+    const h: Haunts.Haunt | undefined = e.getData('haunt');
+    if (h?.route) this.patrol(e, h); // its post moves along its route
     const heard = e.getData('heard'), home = heard?.until > this.time.now ? heard : e.getData('home'), d = Phaser.Math.Distance.BetweenPoints(e, home), a = Phaser.Math.Angle.BetweenPoints(e, home);
     if (d < 4) e.setVelocity(0);
     else this.physics.velocityFromRotation(a, stats(e.getData('kind') ?? 'ghoul').speed * T.sight.homeSpeed, e.body!.velocity);
     e.setData({ state: 'chase', ...(d < 4 ? {} : { facing: a }) });
-    // At its post it looks the other way now and then (its back the way in, T.sight), not while it turns to him.
+    // At its post it looks the other way now and then (its back the way in, T.sight), not while it turns to him; on its
+    // dead, it eats, head down, growling over it.
     const now = this.time.now, [lo, hi] = T.sight.turnMs;
-    if (d < 4 && !e.getData('spotAt') && now >= (e.getData('turnAt') ?? 0))
+    if (d < 4 && h?.feed && !e.getData('spotAt')) {
+      e.setData('facing', Phaser.Math.Angle.BetweenPoints(e, h.feed));
+      if (now >= (e.getData('turnAt') ?? 0) && Phaser.Math.Distance.BetweenPoints(e, this.hero) < T.haunts.feedHeard) Sfx.play(this, 'chew', 1);
+      if (now >= (e.getData('turnAt') ?? 0)) e.setData('turnAt', now + Phaser.Math.Between(T.haunts.feedMs[0], T.haunts.feedMs[1]));
+    } else if (d < 4 && !e.getData('spotAt') && now >= (e.getData('turnAt') ?? 0))
       e.setData({ facing: Phaser.Math.Angle.Wrap((e.getData('facing') ?? 0) + Math.PI + Phaser.Math.FloatBetween(-0.6, 0.6)), turnAt: now + Phaser.Math.Between(lo, hi) });
+  }
+
+  /** A patrol's foe on its route (haunts.ts): its bearer heads for the next waypoint, the others walk in file behind it. */
+  private patrol(e: Sprite, h: Haunts.Haunt) {
+    const R = Haunts.ROUTES[h.route!], lead = this.bearers.find((b) => b.getData('haunt').route === h.route);
+    if (!lead || lead === e) {
+      Object.assign(h, Haunts.advance(R, h.leg!, h.dir!, e));
+      const [x, y] = R.pts[h.leg!];
+      return void e.setData('home', { x, y });
+    }
+    const l: Haunts.Haunt = lead.getData('haunt'), [x, y] = R.pts[l.leg!];
+    e.setData('home', Haunts.inFile(lead, Phaser.Math.Angle.Between(lead.x, lead.y, x, y), h.slot! - l.slot!));
   }
 
   /** The training room calls an enemy in at `p`: it rises after its telegraph, hunting (`hp` to start it weakened). */
@@ -2769,6 +2877,11 @@ export class RoomScene extends Phaser.Scene {
     }
     else if (bow) e.setData({ ...common, kind: 'crossbow', human: true, readyAt: now + T.crossbow.firstShotMs });
     else e.setData({ ...common, restUntil: 0, ...(o.alert ? {} : { born: -1e9 }) }); // a ghoul on its post, not rising
+    if (o.haunt) { // la nécropole's: an elite stands taller (enemy.ts wounded() darkens it); a feeder faces its dead
+      e.setData('haunt', { ...o.haunt });
+      if (o.haunt.elite) e.setScale(e.scaleX * T.elite.scale);
+      if (o.haunt.feed) e.setData('facing', Phaser.Math.Angle.BetweenPoints(p, o.haunt.feed));
+    }
     return e;
   }
 }

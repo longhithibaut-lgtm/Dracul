@@ -187,8 +187,8 @@ export function wounded(s: Sprite, now: number): number {
     s.setData('dripAt', now + Phaser.Math.Linear(F.dripMs[0], F.dripMs[1], (w - F.dripFrom) / (1 - F.dripFrom)) * Phaser.Math.FloatBetween(0.6, 1.4));
     bleed(s.scene, s.x + Phaser.Math.Between(-4, 4), s.y, Math.PI / 2, w > 0.6 ? 2 : 1, 0.6, 0.15, Phaser.Math.Between(6, 16));
   }
-  const g = Math.round(255 * (1 - F.tint * w));
-  return Phaser.Display.Color.GetColor(Math.round(255 * (1 - 0.3 * F.tint * w)), g, Math.round(g * 0.85)); // blood, darker, not fire: the blue goes first
+  const g = Math.round(255 * (1 - F.tint * w)), [er, eg, eb] = s.getData('haunt')?.elite ? T.elite.tint : [1, 1, 1]; // an elite: darker, bloodier (T.elite)
+  return Phaser.Display.Color.GetColor(Math.round(255 * (1 - 0.3 * F.tint * w) * er), Math.round(g * eg), Math.round(g * 0.85 * eb)); // blood, darker, not fire: the blue goes first
 }
 
 // After-images left behind during the lunge.

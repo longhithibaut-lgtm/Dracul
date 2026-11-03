@@ -6,11 +6,11 @@
 // from the same shapes (zone.gen.mjs walk()).
 // World units as in common.mjs: x east, y south, z up; a room px of floor is 2 world units across and 2 / SN deep.
 import { sdBox, sdRC, sdEll, clamp, vn, fbm, vn3, fbm3, h2, L, hex, mix, mul, mulberry32 } from '../maquettes/hub3/lib.mjs';
-import { pillar, portcullis, skull } from '../maquettes/grand/cast.mjs';
+import { pillar, portcullis, skull, wristCorpse, pitBodies, slumped, cage } from '../maquettes/grand/cast.mjs';
 import { oldCoffin } from '../maquettes/hub3/props2.mjs';
 import { candles2, brazier2, rubble, statue, chest, trophyPike, weaponRack } from '../maquettes/hub3/props3.mjs';
 import { pitBones } from '../maquettes/hub/props.mjs';
-import { cross, stele } from '../maquettes/cloitre/props.mjs';
+import { cross, stele, burnt, exhumed } from '../maquettes/cloitre/props.mjs';
 import { cam, SN, CS, wx, wy, wz, rx, ry, C, broken, scaled, block, stage, flags, grime, ashlar, ossuary, stain, segDist, stone3, ironMat } from './common.mjs';
 import { ground, pitShadow, PAL as CRYPT_PAL } from './crypts.mjs';
 import { BONE_TOP, heapMat, boneWall, slate, inPointed, archTop, gatehouse, mausoleum, rockColumn, rimMat, charred, stake, banner, pole, lever, sarcophagus, crackOver, vaultOf, shafts } from './zone-kit.mjs';
@@ -116,14 +116,15 @@ const CAMP = [2930, 690, 3380, 1060]; // trampled mud
 // The breach: one wide patch over the whole gap in the wall, so crossing it in the open burns (docs/decisions.md).
 const SUNHOLES = [[2620, 360, 130, 100]];
 export const SUN_BOX = [2440, 200, 2820, 560]; // room px round the breach: the floor the Dawn may burn (zone.gen.mjs)
-const MOONHOLES = [[560, 980, 40], [1130, 330, 34], [2150, 600, 40], [1700, 1000, 36], [3100, 440, 40], [3560, 1040, 40], [900, 760, 30], [3000, 1180, 30]];
+const MOONHOLES = [[560, 980, 40], [1900, 520, 30], [2420, 470, 32], [1130, 330, 34], [2150, 600, 40], [1700, 1000, 36], [3100, 440, 40], [3560, 1040, 40], [900, 760, 30], [3000, 1180, 30]];
 // Lit braziers (then one at each fork of the paths, landmarks in the dark; then one by each narrow way where the battue
 // waits, CHOKES) and candles at graves (room px floor points); more candles at the near field's graves (GRAVE_CANDLES)
 // and at each mausoleum's door.
 const BRAZIERS = [[180, 132], [282, 132], [1340, 1138], [1490, 1200], [1488, 304], [1562, 304], [3520, 314], [3600, 314],
   [3060, 880], [3236, 872], [3150, 724], [2470, 650], [1928, 760], [1662, 114], [1718, 114], [3232, 114], [3288, 114], [2700, 1170],
   [500, 400], [820, 792], [1800, 1108], [2900, 450], [3200, 380],
-  [1318, 1192], [1300, 210], [1556, 234], [2465, 392], [2562, 486], [1714, 228], [2084, 262]];
+  [1318, 1192], [1300, 210], [1556, 234], [2465, 392], [2562, 486], [1714, 228], [2084, 262],
+  [2836, 282], [2726, 1006]]; // the gallows, the pyre of les Bûchers: landmarks
 const CANDLES = [[742, 486, 3], [780, 488, 2], [1124, 664, 3], [430, 1094, 2], [1870, 344, 2], [1898, 346, 3], [3380, 448, 3], [3548, 316, 2], [3578, 318, 2],
   [560, 676, 2], [312, 886, 3], [2270, 196, 2], [1620, 1284, 2], [3610, 1114, 2], [2730, 1244, 2], [1714, 616, 2], [3712, 716, 2], [1960, 754, 2],
   [1000, 1024, 3], [1158, 136, 2]]; // the way back's landmarks: the sarcophagus mid-trunk, the rubble on the north path
@@ -132,19 +133,25 @@ export const LANTERNS = [[2996, 716], [3320, 716], [2996, 1036], [3320, 1036], [
 const PYRE = [3120, 846]; // the camp's fire: a pyre of coffin boards and bones
 
 // ---------- the gameplay plan, read by zone.gen.mjs ----------
-// Areas where the foes stand (docs/extraction.md: rings by distance from the refuge), first match; groups: how many.
-// The forecourt by the refuge's stairs and the court behind the grille hold none (a sure pause); x 1400 lies in the chasm.
+// The zone's places, as he meets them (named as he enters each, RoomScene), and where the foes stand: by ring (docs/
+// extraction.md: farther from the refuge, harder), first match; groups: how many drawn from the place's own pool
+// (T.expedition.necropolis, else its ring's). The forecourt by the refuge's stairs and the court behind the grille hold
+// none (a sure pause); the causeway, the bridge and the breach only their set pieces (POSTS); x 1400 lies in the chasm.
 export const AREAS = [
-  { id: 'parvis', ring: 1, rect: [100, 60, 460, 360], groups: 0 },
-  { id: 'cour', ring: 2, rect: [1440, 60, 1610, 292], groups: 0 },
-  { id: 'proche-nord', ring: 1, rect: [0, 0, 1400, 520], groups: 2 },
-  { id: 'proche-sud', ring: 1, rect: [0, 520, 1400, 1350], groups: 3 },
-  { id: 'milieu-nord', ring: 2, rect: [1400, 0, 2612, 707], groups: 3 },
-  { id: 'milieu-sud', ring: 2, rect: [1400, 707, 2612, 1350], groups: 3 },
-  { id: 'camp', ring: 3, rect: [2920, 680, 3390, 1065], groups: 3 },
-  { id: 'loin-sud', ring: 3, rect: [2612, 640, 3300, 1350], groups: 1 },
-  { id: 'loin-ouest', ring: 3, rect: [2612, 0, 3200, 640], groups: 2 },
-  { id: 'loin-est', ring: 3, rect: [3200, 0, 3840, 1350], groups: 3 },
+  { id: 'parvis', name: 'Le Parvis', ring: 1, rect: [100, 60, 460, 360], groups: 0 },
+  { id: 'cour', name: 'La Cour de la grille', ring: 2, rect: [1440, 60, 1610, 292], groups: 0 },
+  { id: 'chaussee', name: 'La Chaussée', ring: 1, rect: [1240, 150, 1440, 320], groups: 0 },
+  { id: 'pont', name: 'Le Gouffre', ring: 2, rect: [1280, 1090, 1540, 1250], groups: 0 },
+  { id: 'caveaux', name: 'Les Caveaux', ring: 1, rect: [0, 0, 1400, 520], groups: 2 },
+  { id: 'champ', name: 'Le Champ des Croix', ring: 1, rect: [0, 520, 1400, 1350], groups: 3 },
+  { id: 'breche', name: 'La Brèche', ring: 3, rect: [2440, 200, 2820, 560], groups: 0 },
+  { id: 'fosses', name: 'Les Fosses', ring: 2, rect: [1400, 0, 2612, 707], groups: 3 },
+  { id: 'allee', name: "L'Allée des Mausolées", ring: 2, rect: [1400, 707, 2612, 1350], groups: 4 },
+  { id: 'camp', name: "Le Camp de l'Ordre", ring: 3, rect: [2920, 680, 3390, 1065], groups: 3 },
+  { id: 'buchers', name: 'Les Bûchers', ring: 3, rect: [2612, 640, 3300, 1350], groups: 2 },
+  { id: 'postes', name: "Les Postes de l'Ordre", ring: 3, rect: [2612, 0, 3200, 640], groups: 2 },
+  { id: 'chapelle', name: 'Le Parvis de la Chapelle', ring: 3, rect: [3200, 0, 3840, 640], groups: 3 },
+  { id: 'puits', name: 'Le Puits', ring: 3, rect: [3200, 640, 3840, 1350], groups: 3 },
 ];
 // Blood caches: floor points in front of what is worth searching, by area.
 export const CACHES = [[1124, 676], [432, 1102], [1020, 1028], [2270, 206], [1724, 1030], [2190, 960], [3168, 912], [3384, 460], [2730, 1250], [3612, 1124], [3030, 286],
@@ -153,7 +160,10 @@ export const CACHES = [[1124, 676], [432, 1102], [1020, 1028], [2270, 206], [172
 // causeway, the grille, the breach's two ways out, west and south under the wall, out of the Dawn; out of the gallery's
 // mouth, south to the grille or east past the nave, where its roof no longer hides them): x, y, how near his way must pass.
 export const CHOKES = [[1320, 1168, 32], [1318, 233, 32], [1525, 240, 32], [2470, 360, 64], [2585, 476, 32], [1690, 220, 32], [2060, 280, 40]];
-export const TORCH_ROWS = () => [...BRAZIERS.map(([x, y]) => [x, Math.round(y - 4 - 36 * CS / 2), 1]), ...[-8, 0, 7].map((d) => [PYRE[0] + d, Math.round(PYRE[1] - 6 - 22 * CS / 2), 1])]; // flames over the dark (dark.ts)
+const PYRES = () => [PYRE, ...PROPS.filter((o) => o.kind === 'pyre').map((o) => [o.x, o.y])];
+export const TORCH_ROWS = () => [...BRAZIERS.map(([x, y]) => [x, Math.round(y - 4 - 36 * CS / 2), 1]), ...PYRES().flatMap(([px, py]) => [-8, 0, 7].map((d) => [px + d, Math.round(py - 6 - 22 * CS / 2), 1]))]; // flames over the dark (dark.ts)
+// Where the rot glows pale green (le Puits' dead, its nest), floor points.
+const ROT = [[3560, 1150], [3610, 1180], [2236, 660]];
 
 // ---------- solid footprints (room px x, y, w, h): what stops walkers ----------
 const rect = (x0, y0, x1, y1) => [x0, y0, x1 - x0, y1 - y0];
@@ -173,7 +183,7 @@ export function solids() {
   for (const run of PALISADE) { const [[a, b], [c, d]] = run; out.push(a === c ? rect(a - 3, b, a + 3, d) : rect(a, b - 3, c, b + 3)); }
   for (const [x, y] of CRATES) out.push(rect(x - 14, y - 9, x + 14, y));
   for (const g of GRAVES) out.push(rect(g.x - g.w / 2, g.y - g.h, g.x + g.w / 2, g.y));
-  for (const o of PROPS) out.push(rect(o.x - o.w / 2, o.y - o.h, o.x + o.w / 2, o.y));
+  for (const o of PROPS) if (o.solid !== false) out.push(rect(o.x - o.w / 2, o.y - o.h, o.x + o.w / 2, o.y));
   for (const [x, y] of BRAZIERS) out.push(rect(x - 6, y - 8, x + 6, y));
   for (const [x, y] of LANTERNS) out.push(rect(x - 2, y - 3, x + 2, y));
   for (const [x, y] of STAKES) out.push(rect(x - 3, y - 3, x + 3, y));
@@ -230,6 +240,64 @@ const PROPS = [
 const RUBBLE = [[2080, 880, 26], [2200, 1040, 30], [1980, 1130, 22], [2600, 280, 20], [2610, 444, 22], [1180, 120, 24], [600, 1270, 22], [3420, 620, 24], [2300, 640, 20],
   [1760, 1180, 20], [2380, 1050, 24]];
 for (const [x, y, r] of RUBBLE) PROPS.push({ kind: 'rubble', x, y: y + r * 0.3, w: r * 1.2, h: r * 0.5, r });
+// Vignettes: scenes that tell without a word (docs/histoire-proposition.md §3, those that fit; never the unvalidated
+// revelations), landmarks in the dark. solid: false, decor walked over (low, or in the way of a shade).
+PROPS.push(
+  { kind: 'gibbet', x: 2880, y: 250, w: 34, h: 6 }, // les Postes: the Order's gallows, one hung by the wrists
+  { kind: 'burnt', x: 2690, y: 404, w: 20, h: 8, solid: false }, // la Brèche: one burnt in the Dawn, chained to its ring, reaching for the shade
+  { kind: 'shrine', x: 560, y: 1000, w: 30, h: 10 }, // le Champ: an abandoned shrine under a crack of moon, a last candle
+  { kind: 'nest', x: 2222, y: 646, w: 44, h: 14, solid: false }, // les Fosses: the dead heaped by the pits, le Gavé's
+  { kind: 'opengrave', x: 1700, y: 1072, w: 30, h: 8, solid: false }, // l'Allée: a grave pushed open from inside, its stake broken
+  { kind: 'pyre', x: 2760, y: 980, w: 36, h: 12 }, // les Bûchers: one burning now, on his stake
+  { kind: 'cage', x: 3270, y: 1030, w: 30, h: 12 }, // the camp: where they bring the ones they catch
+  { kind: 'reliquary', x: 2300, y: 1176, w: 30, h: 12 }, // l'Allée: a reliquary in its iron cage, an elite by it
+  { kind: 'toll', x: 1300, y: 1146, w: 6, h: 4 }, // le Gouffre: the bridge's toll, fangs nailed in its board
+  { kind: 'bucket', x: 3742, y: 1214, w: 12, h: 6 }, // le Puits: a bucket sticky with fresh blood, a basket of raw meat
+);
+// The burnt shadows under the breach (V10): where the Order makes them kneel in the Dawn, a ring sealed before each.
+const SHADOWS = [[2596, 392], [2622, 398], [2648, 402], [2730, 408], [2756, 404]];
+
+// ---------- what lives here (src/haunts.ts, RoomScene; numbers in T.haunts, T.elite) ----------
+// Set pieces, placed every expedition at the zone's key points: kinds (the first carries the lantern on a route), the
+// dead they eat (feed: bodies on the floor, src/foes.ts' corpse), elite: which one is (an index), route: the one they
+// walk, relic: the cache they guard (always there, always an item), prisoner: the one they drag along their route.
+export const POSTS = [
+  { id: 'festin-caveaux', x: 1000, y: 300, kinds: ['ghoul', 'ghoul'], feed: [[1004, 312]] },
+  { id: 'corneilles-champ', x: 430, y: 960, kinds: ['crows'] },
+  { id: 'tertre-champ', x: 760, y: 1000, kinds: ['enterre'] },
+  { id: 'chaussee', x: 1290, y: 252, kinds: ['crocheteur', 'penitent'] },
+  { id: 'pont', x: 1415, y: 1150, kinds: ['chose'] },
+  { id: 'nid', x: 2190, y: 666, kinds: ['gave', 'ghoul', 'ghoul'], feed: [[2240, 662], [2196, 648], [2264, 674]] },
+  { id: 'festin-fosses', x: 1760, y: 470, kinds: ['ghoul', 'ghoul', 'ghoul'], feed: [[1764, 482]] },
+  { id: 'corneilles-fosses', x: 2400, y: 300, kinds: ['crows'] },
+  { id: 'tombe-ouverte', x: 1700, y: 1090, kinds: ['enterre', 'crows'] },
+  { id: 'reliquaire-allee', x: 2300, y: 1200, kinds: ['penitent', 'hound', 'hound'], elite: 0, relic: [2300, 1190] },
+  { id: 'breche-est', x: 2800, y: 380, kinds: ['crocheteur', 'crossbow', 'crossbow'], elite: 1 },
+  { id: 'gibet', x: 2880, y: 280, kinds: ['penitent', 'penitent', 'crossbow', 'crossbow'], elite: 0 },
+  { id: 'bucher', x: 2780, y: 1012, kinds: ['purifier', 'penitent', 'penitent'], elite: 0 },
+  { id: 'reliquaire-chapelle', x: 3384, y: 480, kinds: ['inquisitor', 'penitent', 'penitent', 'crossbow'], elite: 0, relic: [3384, 460] },
+  { id: 'nid-puits', x: 3560, y: 1140, kinds: ['gave', 'ghoul', 'ghoul', 'ghoul'], feed: [[3580, 1150], [3540, 1160]], elite: 0 },
+  { id: 'ronde-breche', x: 3115, y: 660, kinds: ['crossbow', 'penitent', 'penitent'], route: 'breche' },
+  { id: 'ronde-chapelle', x: 3220, y: 360, kinds: ['priest', 'penitent', 'penitent'], route: 'chapelle' },
+  { id: 'ronde-puits', x: 3420, y: 930, kinds: ['crossbow', 'hound', 'hound'], route: 'puits' },
+  { id: 'ronde-milieu', x: 2470, y: 560, kinds: ['crossbow', 'penitent', 'penitent'], route: 'milieu' },
+  { id: 'prisonnier', x: 2840, y: 410, kinds: ['crocheteur', 'crossbow'], route: 'camp', prisoner: true },
+];
+// The patrols' routes (room px waypoints, walked straight from one to the next): `once`, to its end; else back and forth.
+export const ROUTES = {
+  breche: { pts: [[3115, 660], [3050, 610], [2960, 480], [2900, 425], [2800, 405]] },
+  chapelle: { pts: [[3220, 360], [3380, 335], [3520, 330]] },
+  puits: { pts: [[3420, 930], [3600, 1000], [3660, 1110]] },
+  milieu: { pts: [[2470, 560], [2500, 700], [2450, 900], [2150, 1000], [1800, 1080]] },
+  camp: { pts: [[2840, 410], [2900, 425], [2960, 480], [3050, 610], [3115, 680], [3150, 820]], once: true },
+};
+// Rats' nests (src/rats.ts, RoomScene scurry()): a few nose about each, flee him.
+export const RATS = [[600, 700], [1000, 1150], [1750, 500], [2200, 1150], [2900, 1200], [3500, 1250], [2300, 600], [450, 1200], [3000, 1180]];
+// Where the notes another hand will add may lie (id, x, y): clear floor by the vignettes.
+export const NOTES = [{ id: 'parvis', x: 300, y: 200 }, { id: 'peage', x: 1300, y: 1166 }, { id: 'tombe', x: 1730, y: 1086 }, { id: 'breche', x: 2560, y: 450 },
+  { id: 'gibet', x: 2860, y: 270 }, { id: 'camp', x: 3200, y: 1000 }, { id: 'puits', x: 3720, y: 1240 }, { id: 'sanctuaire', x: 590, y: 1020 }];
+const KEEP = [...POSTS.flatMap((p) => [[p.x, p.y], ...(p.feed ?? []), ...(p.relic ? [p.relic] : [])]), ...RATS, ...NOTES.map((n) => [n.x, n.y])]; // graves keep off them
+
 // The north cliff's talus: rock fallen at its foot every 60-90 px, but at the arches, doors, the court and the walls;
 // decor only (a solid heap against the rock would squeeze a walker into it).
 const TALUS = [];
@@ -247,7 +315,8 @@ const taken = (x, y, m) => {
     || COLS.some(([cx, cy, r]) => near(cx - r, cy - r, cx + r, cy + 6)) || TENTS.some(([tx, ty]) => near(tx - 36, ty - 50, tx + 36, ty + 6)) || near(...CAMP)
     || BEFORE.props.some((o) => near(o.x - o.w / 2, o.y - o.h - 16, o.x + o.w / 2, o.y + 6)) || BEFORE.doors.some((d) => Math.hypot(d.x - x, d.y - y) < 70)
     || BEFORE.gates.some((g) => near(g.x0 - 40, g.y0 - 40, g.x1 + 40, g.y1 + 50)) || BEFORE.braziers.some(([bx, by]) => Math.hypot(bx - x, by - y) < 18)
-    || SUNHOLES.some(([sx, sy, a]) => Math.hypot(sx - x, sy - y) < a + 30) || STAKES.some(([sx, sy]) => Math.hypot(sx - x, sy - y) < 16) || BEFORE.caches.some(([cx, cy]) => Math.hypot(cx - x, cy - y) < 24);
+    || SUNHOLES.some(([sx, sy, a]) => Math.hypot(sx - x, sy - y) < a + 30) || STAKES.some(([sx, sy]) => Math.hypot(sx - x, sy - y) < 16) || BEFORE.caches.some(([cx, cy]) => Math.hypot(cx - x, cy - y) < 24)
+    || KEEP.some(([kx, ky]) => Math.hypot(kx - x, ky - y) < 26);
 };
 // Each grave: x, y (its feet line), kind, footprint w x h, seed.
 // Clearings and clusters (a slow noise over the blocks), jittered, sized +-25 %, some sunk or broken.
@@ -300,24 +369,46 @@ const moundAt = (X, Y) => { const x = Math.floor(X), y = Math.floor(Y); return x
 /** The bare earth at world (x, y) (room px X, Y): its noise drawn at (x, y * SN), round on screen; dark, mossy near the
  *  refuge, bone dust in the middle (paler north of the wall), ash on the far side; half-buried old flags, clods, puddles,
  *  pebbles; turned earth over the graves, in relief. */
+// Each place's own floor: how much moss, bone dust, ash, black wet mud, old flags and bone chips its earth shows.
+const FLAVOR = {
+  parvis: [0.8, 0.1, 0, 0, 0.8, 0.3], caveaux: [0.9, 0.15, 0, 0.15, 0.5, 0.4], champ: [1, 0.1, 0, 0.25, 0.15, 0.3], chaussee: [0.4, 0.4, 0, 0, 0.3, 0.6],
+  pont: [0.5, 0.3, 0, 0.2, 0.3, 0.5], fosses: [0.15, 1, 0, 0, 0.15, 1.6], allee: [0.45, 0.45, 0, 0.1, 0.9, 0.6], breche: [0, 0.25, 0.9, 0, 0.3, 0.5],
+  postes: [0, 0.2, 0.8, 0.3, 0.2, 0.4], camp: [0, 0.1, 0.5, 0.4, 0, 0.3], buchers: [0, 0.1, 1.3, 0.2, 0.1, 0.5], chapelle: [0.15, 0.25, 0.4, 0, 1, 0.3], puits: [0.35, 0.1, 0.2, 1, 0.2, 0.7],
+};
+const FL0 = [0.6, 0.4, 0.3, 0.2, 0.4, 0.5];
+const flavorOf = (X, Y) => FLAVOR[AREAS.find(({ rect: [x0, y0, x1, y1] }) => X >= x0 && X < x1 && Y >= y0 && Y < y1)?.id] ?? FL0;
+/** The floor's flavour at room px (X, Y): moss, dust, ash, mud, flags, bones; four samples over a ragged border of places. */
+function flavor(X, Y) {
+  const out = [0, 0, 0, 0, 0, 0];
+  for (let k = 0; k < 4; k++) { const f = flavorOf(X + 90 * (vn(X / 70, Y / 70, 120 + k) - 0.5), Y + 90 * (vn(X / 70, Y / 70, 130 + k) - 0.5)); for (let j = 0; j < 6; j++) out[j] += f[j] / 4; }
+  return out;
+}
 function earthAt(x, y, X, Y, i) {
-  const ys = y * SN, mid = clamp(1 - Math.abs(X - 2000) / 700), pale = mid * clamp((760 - Y) / 200), far = clamp((X - 2600) / 500), near = clamp((1500 - X) / 400);
+  const ys = y * SN, [moss, dust, ash, wet, old] = flavor(X, Y);
   let c = mix(E.earth, E.earthD, clamp(fbm(x / 26, ys / 26, 4, 101) * 1.2 - 0.1)), spec = 0.03, gloss = 12;
-  c = mix(c, E.dust, clamp((fbm(x / 60, ys / 60, 3, 102) - 0.55 + mid * 0.25 + pale * 0.25) * 2.5) * (0.5 + 0.2 * mid + 0.25 * pale)); // bone dust, the middle's ossuaries
-  c = mix(c, E.ash, far * clamp((fbm(x / 40, ys / 40, 3, 103) - 0.4) * 2)); // ash where the Order burns
-  const m = fbm(x / 30, ys / 30, 4, 33), m0 = 0.66 - 0.1 * near; if (m > m0) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? E.mossL : E.moss, clamp((m - m0) * 4) * 0.6 * (1 - far));
+  c = mix(c, E.dust, clamp((fbm(x / 60, ys / 60, 3, 102) - 0.55 + dust * 0.4) * 2.5) * (0.45 + 0.4 * dust)); // bone dust, the middle's ossuaries
+  c = mix(c, ash > 1 ? mul(E.ash, 0.45) : E.ash, Math.min(1, ash) * clamp((fbm(x / 40, ys / 40, 3, 103) - 0.45 + 0.15 * ash) * 2)); // ash where the Order burns, charcoal at its pyres
+  c = mix(c, E.mudD, wet * clamp((fbm(x / 34, ys / 34, 3, 104) - 0.42) * 2.4) * 0.8); // black wet mud
+  const m = fbm(x / 30, ys / 30, 4, 33), m0 = 0.72 - 0.1 * moss; if (m > m0) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? E.mossL : E.moss, clamp((m - m0) * 4) * 0.65 * Math.min(1, moss));
   const f = (u, v) => vn(u / 14, v / 14, 21), gx = f(x + 1, ys) - f(x - 1, ys), gy = f(x, ys + 1) - f(x, ys - 1);
   let N = [-gx * 0.4, -gy * 0.4, 1];
   // half-buried old flags where a slow noise says so, the earth over their edges
-  const fl = fbm(x / 140, ys / 140, 3, 110);
-  if (fl > 0.67 && fbm(x / 12, ys / 12, 3, 111) < 0.25 + (fl - 0.67) * 3) { const g = flags(x, y, 46, 34, 17); c = mix(c, mul(g.c, 0.7), 0.85); N = g.N; }
+  const fl = fbm(x / 140, ys / 140, 3, 110), f0 = 0.72 - 0.14 * old;
+  if (fl > f0 && fbm(x / 12, ys / 12, 3, 111) < 0.25 + (fl - f0) * 3) { const g = flags(x, y, 46, 34, 17); c = mix(c, mul(g.c, 0.7), 0.85); N = g.N; }
   else {
     const cx = Math.floor(x / 9), cy = Math.floor(ys / 9);
     if (h2(cx, cy, 120) < 0.04) { // a clod
       const ox = (cx + 0.2 + 0.6 * h2(cx, cy, 121)) * 9, oy = (cy + 0.2 + 0.6 * h2(cx, cy, 122)) * 9, r = 2 + 2.5 * h2(cx, cy, 123), d = Math.hypot(x - ox, ys - oy) / r;
       if (d < 1) { N = [(x - ox) / r * 0.5, (ys - oy) / r * 0.5, 1]; c = mul(c, 0.85 + 0.25 * (1 - d)); }
     }
-    const p = fbm(x / 36, ys / 36, 3, 121); if (p > 0.77) { c = mul(c, 0.6); spec = 0.25 * clamp((p - 0.77) * 12); gloss = 60; N = [0, 0, 1]; } // a puddle
+    // a flat stone sunk in the earth, its edge catching the light: forms a few px across that read at a glance
+    const sx = Math.floor(x / 16), sy = Math.floor(ys / 16);
+    if (h2(sx, sy, 140) < 0.035 + 0.04 * old) {
+      const ox = (sx + 0.25 + 0.5 * h2(sx, sy, 141)) * 16, oy = (sy + 0.25 + 0.5 * h2(sx, sy, 142)) * 16, r = 3 + 3 * h2(sx, sy, 143), a = h2(sx, sy, 144) * 3;
+      const u = ((x - ox) * Math.cos(a) + (ys - oy) * Math.sin(a)) / r, v = (-(x - ox) * Math.sin(a) + (ys - oy) * Math.cos(a)) / (r * 0.65), d = Math.hypot(u, v) + 0.15 * (vn(x / 2, ys / 2, 145) - 0.5);
+      if (d < 1) { c = mul(mix(C.stB, C.stC, h2(sx, sy, 146)), d > 0.8 ? 0.6 : 0.8 + 0.1 * vn(x / 2, ys / 2, 147)); N = d > 0.8 ? [(x - ox) / r, (ys - oy) / r, 1] : [0, 0, 1]; }
+    }
+    const p = fbm(x / 36, ys / 36, 3, 121), p0 = 0.77 - 0.09 * wet; if (p > p0) { c = mul(c, 0.6); spec = 0.25 * clamp((p - p0) * 12); gloss = 60; N = [0, 0, 1]; } // a puddle
   }
   const q = h2(x / 4 | 0, ys / 4 | 0, 17); if (q < 0.012) c = mul(c, 0.7); else if (q > 0.996) c = mix(c, E.dust, 0.4); // pebbles
   const a = moundAt(X, Y);
@@ -355,14 +446,23 @@ function floorAt(x, y) {
     const t = clamp((d.y - Y) / (RECESS + (d.y < 100 ? 16 : 0))), step = Math.floor((d.y - Y) / 3) & 1;
     return { alb: mul(mix(C.stB, C.stC, vn(x / 6, y / 6, 3)), (step ? 0.75 : 1) * (1 - 0.9 * t)), N: step ? [0, 0.3, 1] : [0, 0, 1], spec: 0.03 };
   }
+  // a pit's lip: earth thrown up round it, paler, bones in it, raised toward the drop
+  for (const [hx, hy, a, b] of HOLES) { const dx = (X - hx) / a, dy = (Y - hy) / b, d = Math.hypot(dx, dy); if (d < 1 || d > 1.7) continue;
+    const t = 1 - (d - 1) / 0.7, n = vn(x / 2.5, y / 2.5, 43);
+    c = mix(c, n > 0.62 ? C.bone : mix(E.turnedL, E.dust, 0.35), clamp(t * 1.4) * (n > 0.62 ? 0.7 : 0.8)); Nn = [dx * 0.5 * t, dy * 0.5 * t, 1]; }
   // the chasm's lip: broken stone, paler, then the drop
   { const e = Math.abs(X - chasmX(Y)) - chasmW(Y); if (!crossing(Y) && e > -2 && e < 5) { c = mix(mix(C.stB, C.stC, vn(x / 3, y / 3, 41)), C.grime, clamp(e / 5) * 0.6); Nn = [0, 0, 1]; } }
   // the dark creeps in from the cliffs
   const dn = Y - north(X), ds = south(X) - Y, dw = Math.min(X - XW, XE - X, dn * 1.4, ds * 2); if (dw < 18) c = mix(c, E.earthD, (1 - Math.max(0, dw) / 18) * 0.6);
   if (blood[i]) { const a = blood[i] / 255; c = mix(c, mix(C.bloodD, C.blood, vn(x / 4, y / 4, 8) * 0.6), a); if (a > 0.3) { spec = 0.4 * a; gloss = 70; Nn = [0, 0, 1]; } }
+  // the burnt shadows under the breach (V10): each a figure on its knees burnt into the earth, the iron ring it was chained to before it
+  for (const [sx, sy] of SHADOWS) { const dx = X - sx, dy = Y - sy; if (Math.abs(dx) > 9 || Math.abs(dy) > 14) continue;
+    const e = (ex, ey, a, b) => ((dx - ex) / a) ** 2 + ((dy - ey) / b) ** 2 < 1, rag = vn(x / 1.5, y / 1.5, sx) > 0.25;
+    if (rag && (e(0, -9, 2.4, 2.2) || e(0, -3, 3.6, 4.6) || e(0, 3, 4.8, 2.6) || e(-4.5, -3, 1.2, 4) || e(4.5, -2, 1.2, 4.2))) { c = mix(c, L('#100c0a'), 0.85); Nn = [0, 0, 1]; spec = 0.02; }
+    if (Math.abs(Math.hypot(dx, (dy - 10) * 1.6) - 2.2) < 0.6) { c = mix(C.iron, C.rust, 0.4); Nn = [0, 0.4, 1]; spec = 0.4; gloss = 40; } }
   // bone splinters and teeth, more in the fields
   { const cx = Math.floor(x / 7), cy = Math.floor(y / 7);
-    if (h2(cx, cy, 300) < (k === 0 ? 0.004 + 0.008 * clamp(1 - Math.abs(X - 2000) / 700) : 0.0015)) { const an = h2(cx, cy, 301) * 3.14, lx = x - (cx * 7 + 3.5), ly = y - (cy * 7 + 3.5), u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an);
+    if (h2(cx, cy, 300) < (k === 0 ? 0.003 + 0.007 * flavor(X, Y)[5] : 0.0015)) { const an = h2(cx, cy, 301) * 3.14, lx = x - (cx * 7 + 3.5), ly = y - (cy * 7 + 3.5), u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an);
       if (Math.abs(v) < 0.6 && Math.abs(u) < 3) { c = mix(c, C.bone, 0.6); Nn = [0, 0, 1]; } } }
   return { alb: c, N: Nn, spec, gloss };
 }
@@ -543,6 +643,36 @@ for (const g of GRAVES) {
   if ((g.kind === 'cross' || g.kind === 'stele') && h2(g.seed, 5, 3) < 0.15) m = broken(m, (x, y) => (14 + 8 * h2(g.seed, 6, 3)) * g.s + 3 * vn(x / 3, y / 3, g.seed)); // broken off
   add('grave', weathered(m, g), P, g.kind === 'lying' ? Math.PI / 2 + a : g.kind === 'tomb' ? a * 0.3 : a);
 }
+const wood = (m, x, y, z) => ({ alb: mix(C.wood, C.woodD, vn3(x * 0.3, y * 0.3, z * 0.05, 3)), spec: 0.05 });
+const stoneM = (m, x, y, z) => ({ alb: stone3(x, y, z, C.stB, 9), spec: 0.04 });
+/** The vignettes' models, each a few objects of its own at its feet line (room px o.x, o.y). */
+const VIGNETTES = {
+  gibbet: (o) => { const P = [wx(o.x), wy(o.y - 3), 0];
+    for (const s of [-1, 1]) add('gibbet', block(s * 34 - 3, -3, 0, s * 34 + 3, 3, 156, wood, 0.6), P);
+    add('gibbet', block(-40, -3, 150, 40, 3, 157, wood, 0.6), P);
+    add('corpse', wristCorpse(5, 150), [P[0], P[1] + 2, 0]); },
+  burnt: (o) => { add('corpse', burnt(), [wx(o.x), wy(o.y - 4), 0], -0.4); add('stake', charred(stake(64, 5)), [wx(o.x) - 5, wy(o.y - 4) - 12, 0]); /* staked down */add('ring', block(-5, -1.5, 0, 5, 1.5, 3, ironMat, 1), [wx(o.x - 12), wy(o.y - 14), 0]); },
+  shrine: (o) => { const P = [wx(o.x), wy(o.y - 5), 0];
+    add('shrine', block(-26, -14, 0, 26, 14, 12, stoneM, 1.5), P);
+    add('statue', broken(statue(4), (x, y) => 128 + 14 * vn(x / 6, y / 6, 4)), [P[0], P[1], 12]);
+    for (const [dx, dy] of [[-20, 18], [-8, 22], [10, 21], [22, 17]]) add('skull', skull(), [P[0] + dx, P[1] + dy, 0], dx * 0.1); },
+  nest: (o) => { const P = [wx(o.x), wy(o.y - 6), 0]; add('nest', pitBodies(9, 80, 30), P, 0.2); add('bones', pitBones(4), [P[0] + 40, P[1] + 10, 0], 1.2); },
+  opengrave: (o) => { const P = [wx(o.x), wy(o.y - 4), 0]; add('corpse', exhumed(13), P, 1.4); add('stake', broken(stake(40, 3), (x) => 18 + x), [P[0] + 30, P[1] - 6, 0]);
+    add('rubble', rubble(7, 16, 8), [P[0] - 34, P[1] - 4, 0], 0.5); },
+  pyre: (o) => { const P = [wx(o.x), wy(o.y - 6), 0]; add('pyre', pyre(), P); add('stake', stake(170, 4), P);
+    add('corpse', charred(wristCorpse(7, 150)), [P[0], P[1] + 4, 18]); },
+  cage: (o) => { const P = [wx(o.x), wy(o.y - 6), 0]; add('cage', cage(46, 30, 70), P); add('corpse', slumped(11), [P[0] - 4, P[1] - 4, 1]); },
+  reliquary: (o) => { const P = [wx(o.x), wy(o.y - 6), 0]; add('dais', block(-30, -16, 0, 30, 16, 8, stoneM, 1), P);
+    add('chest', chest(3), [P[0], P[1], 8]); add('cage', cage(40, 26, 52), [P[0], P[1], 8]); },
+  toll: (o) => { const P = [wx(o.x), wy(o.y - 2), 0]; add('post', block(-2, -2, 0, 2, 2, 74, wood, 0.4), P);
+    add('toll', block(-16, -1.5, 46, 16, 1.5, 68, (m, x, y, z) => { // the board, fangs nailed into it in rows
+      const fx = Math.floor((x + 16) / 3.2), fz = Math.floor((z - 46) / 4.4);
+      return h2(fx, fz, 61) < 0.45 && Math.abs(((x + 16) % 3.2) - 1.6) < 0.7 && ((z - 46) % 4.4) < 2.6 ? { alb: mix(C.bone, C.wax, 0.4), spec: 0.3, gloss: 40 } : wood(m, x, y, z); }, 0.3), P); },
+  bucket: (o) => { const P = [wx(o.x), wy(o.y - 3), 0];
+    add('bucket', { sdf: (x, y, z) => Math.max(Math.abs(Math.hypot(x, y) - 6) - 1, Math.abs(z - 8) - 8), mat: (m, x, y, z, nx, ny, nz) => ({ alb: z > 12 || nz > 0.5 ? mix(C.blood, C.bloodF, 0.5) : wood(m, x, y, z).alb, spec: z > 12 ? 0.5 : 0.05, gloss: 60 }),
+      bounds: [-8, -8, 0, 8, 8, 17], step: 0.6 }, P);
+    add('basket', scaled(chest(5), 0.5), [P[0] + 18, P[1] + 6, 0], 0.3); },
+};
 for (const o of PROPS) {
   const P = [wx(o.x), wy(o.y - o.h / 2), 0];
   if (o.kind === 'statue') add('statue', statue(o.x % 5), P, 0);
@@ -556,6 +686,7 @@ for (const o of PROPS) {
   else if (o.kind === 'banner') add('banner', banner(o.x % 9), P, 0);
   else if (o.kind === 'lever') add('lever', lever(), P, 0);
   else if (o.kind === 'cross') add('cross', cross(46), P, 0.15);
+  else if (VIGNETTES[o.kind]) VIGNETTES[o.kind](o);
   else if (o.kind === 'rubble') add('rubble', rubble(o.x % 31, wx(o.r) * 0.8, 18), [wx(o.x), wy(o.y - o.h), 0], h2(o.x, 0, 3) * 6);
 }
 for (const [x, y, r] of TALUS) add('rubble', rubble(x % 31, wx(r) * 0.8, 18), [wx(x), wy(y), 0], h2(x, 0, 3) * 6);
@@ -603,6 +734,10 @@ for (const [x, y, n] of GRAVE_CANDLES) light({ p: [wx(x + n * 1.5), wy(y) + 2, 1
 for (const [x, y] of MAUS) light({ p: [wx(x), wy(y + 3) + 2, 16], c: CANDLE, I: 1.4, r0: 18, R: 180, soft: 4, pad: 3, haze: 0.01, hazeR: 3, skip: ['candles'] });
 for (const [x, y] of LANTERNS) light({ p: [wx(x), wy(y), 124], c: ORDER, I: 6, r0: 30, R: 300, soft: 6, pad: 6, haze: 0.012, hazeR: 5, skip: ['lantern'] });
 for (const d of Object.values(DOORS)) if (!d.well) light({ p: [wx(d.x), wy(d.y - RECESS - 6), 26], c: CANDLE, I: 1.4, r0: 16, R: 160, soft: 4, pad: 4 }); // a glow deep in each doorway
+// The vignettes' own: les Bûchers' pyre, the shrine's last candle; the rot glowing pale green round le Puits' dead.
+for (const o of PROPS.filter((o) => o.kind === 'pyre')) light({ p: [wx(o.x), wy(o.y - 6), 40], c: FIRE, I: 8, r0: 50, R: 600, soft: 10, pad: 12, haze: 0.03, hazeR: 12, skip: ['pyre', 'corpse', 'stake'] });
+for (const o of PROPS.filter((o) => o.kind === 'shrine')) { candles(o.x + 14, o.y + 3, 1); light({ p: [wx(o.x + 15), wy(o.y + 3) + 2, 16], c: CANDLE, I: 1.1, r0: 18, R: 160, soft: 4, pad: 3, skip: ['candles'] }); }
+for (const [x, y] of ROT) light({ p: [wx(x), wy(y), 8], c: L('#8a9a4a'), I: 1.3, r0: 20, R: 170, soft: 6, pad: 4, haze: 0.008, hazeR: 4 });
 for (const [x, y] of MOONHOLES) light({ p: [wx(x), wy(y), 30], c: MOONC, I: 0.3, r0: 60, R: 260, noShadow: true, noEnv: true }); // what a moonlit patch throws back
 
 const env = ground(floorAt, (X, Y) => pit(X, Y, 1));
@@ -618,5 +753,8 @@ export const finish = (img, x0, y0) => shafts(img, x0, y0, [...MOONH.map((o) => 
 export const PAL = [...CRYPT_PAL, ...[['#b8a466', '#d8c886', '#ece0a8', '#f8f0cc', '#fffbe8']].flatMap((s) => s.map((c) => hex(c).map((v) => v * 255)))];
 export const POST = { exposure: 3.3, vignette: 0.2, desat: 0.18, grain: 0.012, dither: 0.02 };
 export const GRAVE_COUNT = GRAVES.length;
+/** What the game places from the plan (src/necropolis.data.ts): the set pieces, routes, nests, the notes' spots, and the
+ *  mounds an Enterré may lie under (each grave's but a tomb's, its middle). */
+export const DATA = { POSTS, ROUTES, RATS, NOTES, MOUNDS: GRAVES.filter((g) => g.kind !== 'tomb').map((g) => [g.x, Math.round(g.y + 9 * g.s)]) };
 /** The floor's kind at room px (X, Y), for the map (tools/art/map.gen.mjs): 0 earth, 1 gravel, 2 paving, 3 the camp's mud. */
 export const floorKind = (X, Y) => kind[Math.floor(Y) * RW + Math.floor(X)] ?? 0;

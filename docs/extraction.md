@@ -105,9 +105,21 @@ directions ; les salles déjà peintes deviennent des **intérieurs** dont on pa
 - **Chemins** (mesurés sur la grille de marche, de la porte de la chapelle à l'escalier du refuge) : sans raccourci,
   pont et brèche, environ 4 100 px (une minute de marche) ; **A** ouvert, 3 400 px ; **A et B**, 2 000 px (la galerie se
   passe d'un fondu au noir, d'une bouche à l'autre). B seul ne sert qu'à qui vient déjà de la bande nord du milieu.
-- **Ennemis** : des groupes placés par secteur (proche nord et sud, milieu nord et sud, loin ouest, camp, loin sud,
-  est ; le parvis de l'escalier et la cour derrière la grille n'en ont aucun), à 180 px au moins les uns des autres,
-  tirés dans la réserve de l'anneau du secteur ; les intérieurs gardent leur anneau (crypte 1, nef et ossuaire 2,
+- **Lieux nommés** *(2026-11-03, noms provisoires)*, dits à l'écran quand il y entre, chacun son sol, ses accessoires,
+  sa lumière et ses ennemis : **Le Parvis** (aucun), **Les Caveaux** et **Le Champ des Croix** (anneau 1 : goules sur
+  leurs morts, Corneilles, l'Enterré sous sa butte), **La Chaussée** et **Le Gouffre** (un Crocheteur et un pénitent à la
+  chaussée ; la Chose sous le pont), **La Cour de la grille** (aucun), **Les Fosses** (anneau 2 : le Gavé au charnier,
+  goules par quatre, pénitents, prêtre), **L'Allée des Mausolées** (anneau 2 : l'Enterré à la tombe rouverte, pénitents,
+  chiens, premiers Crocheteurs ; un reliquaire gardé par un pénitent d'élite), **La Brèche** (l'Aube ; un Crocheteur
+  et deux arbalétriers à l'est), **Les Postes de l'Ordre**, **Le Camp de l'Ordre**, **Les Bûchers**, **Le Parvis de la
+  Chapelle** et **Le Puits** (anneau 3 : filets, carreaux, cloches, inquisiteurs ; le Gavé et les goules au puits ; un
+  reliquaire gardé par un inquisiteur d'élite). **Élites** : un ennemi connu, plus grand, plus sombre et rougi, plus de
+  sang, frappe plus fort, voit plus loin (`T.elite`) ; aux points clés, et le premier d'un groupe selon l'anneau.
+  **Vie** : patrouilles de l'Ordre à lanterne (sa lueur l'éclaire, ne brûle pas) sur leurs rondes, goules qui mangent
+  tête basse (voient moitié moins loin), rats et Corneilles, un prisonnier traîné vers le camp (F le libère : il laisse
+  un objet). Plan : `tools/art/rooms/necropolis.mjs` (`AREAS`, `POSTS`, `ROUTES`), règles `src/haunts.ts`.
+- **Ennemis** : des groupes placés par lieu, à 180 px au moins les uns des autres, tirés dans la réserve du lieu
+  (`T.expedition.necropolis`, sinon de son anneau), plus les postes fixes ; les intérieurs gardent leur anneau (crypte 1, nef et ossuaire 2,
   chapelle 3, cloître 4). Dans l'ombre (hors de la lumière cuite, des braseros, des lanternes), ils le remarquent de
   plus près (§12.3). **La battue** se poste sur le chemin du retour à travers la caverne (par la galerie si elle
   est ouverte), entre le héros et l'escalier du refuge, hors de vue (à 300 px au moins), **aux passages obligés** qu'il
