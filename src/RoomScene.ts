@@ -154,7 +154,7 @@ export class RoomScene extends Phaser.Scene {
   private gateWords = new Map<string, { at: { x: number; y: number }; l: Loot.Label }[]>(); // a shut shortcut's, by its id
   private propBoxes: Phaser.Physics.Arcade.StaticBody[] = []; // what stops bolts (and sight)
   private passage?: { x: number; y: number }; // out of the zone's gallery: the mouth he comes out of
-  private passedAt = -1e9; // when he last came out of it: its mouths take him again a while later only
+  private passedAt = -1e9; // when he last came into the zone (a door, a way up, the gallery): its doors take him again a while later only
   private rats: Rat[] = [];
   private vermin: { s: Phaser.GameObjects.Sprite; home: { x: number; y: number }; heading: number; turnAt: number }[] = []; // the catacombs' rats, about their nests
   // La Nuée: the hero a swarm until swarmUntil; when each enemy may be bitten again.
@@ -918,7 +918,7 @@ export class RoomScene extends Phaser.Scene {
     }
     if (this.phase === 'enter' && (door ? feet.bottom > door.y + 6 : this.layout === 'refuge' ? feet.bottom < Refuge.STAIRS - 10 : this.walk < 0 ? feet.bottom < b.bottom - 16 : feet.top > b.top + 8)) {
       this.phase = 'play';
-      if (this.passage) this.passedAt = time;
+      this.passedAt = time;
       this.passage = undefined;
       this.hero.setCollideWorldBounds(true);
     }
@@ -926,12 +926,13 @@ export class RoomScene extends Phaser.Scene {
     // through a room's open portcullises, or down its stairs.
     if (this.phase === 'play' && this.layout === 'refuge' && feet.bottom > Refuge.STAIRS && !this.prologue) this.leave(0);
     else if (this.phase === 'play' && !this.training && zone) { // into a door of the zone: up into its dark (a shut gate keeps him out of its recess)
-      const into = (d: { x: number; y: number; w: number }) => Math.abs(feet.center.x - d.x) < d.w / 2 - 4 && feet.bottom < d.y - 3 && feet.bottom > d.y - 40; // in its recess
+      const into = (d: { x: number; y: number; w: number }) => time > this.passedAt + T.expedition.fadeMs * 4 // just come in (a key maybe still held): not back at once
+        && Math.abs(feet.center.x - d.x) < d.w / 2 - 4 && feet.bottom < d.y - 3 && feet.bottom > d.y - 40; // in its recess
       const Z = ZONES[zone.id], tunnel = galleryOpen(Save.data.shortcuts) ? Z.TUNNEL : [];
       const up = Zone.ups(zone.id).findIndex(into), exit = Zone.exits(zone.id).findIndex(into), mouth = tunnel.findIndex(into);
       if (up >= 0) this.leave(-1 - up);
       else if (exit >= 0) this.leave(exit);
-      else if (mouth >= 0 && time > this.passedAt + T.expedition.fadeMs * 4) this.through(tunnel[1 - mouth]);
+      else if (mouth >= 0) this.through(tunnel[1 - mouth]);
       if (this.exp) this.exp.deepest = Math.max(this.exp.deepest, ringAt(zone.id, feet.center.x, feet.center.y));
     } else if (this.phase === 'play' && !this.training && this.layout !== 'refuge') {
       const exit = this.room.exits.findIndex((g, i) => Math.abs(feet.center.x - g.x) < 14 && WORLD[this.here].ahead[i]);
