@@ -194,8 +194,6 @@ export class RoomScene extends Phaser.Scene {
       last = time;
       step(time - off, delta);
     };
-    // Back from the pause menu: claws let go meanwhile charge no more (the menu took their release).
-    this.events.on(Phaser.Scenes.Events.RESUME, () => !Keys.down('claw') && (this.clawDownAt = this.chargeAt = 0));
   }
 
   init(data: Run) {
@@ -366,6 +364,10 @@ export class RoomScene extends Phaser.Scene {
       const i = this.satchel?.panel.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM) ?? -1, moved = p.x !== p.prevPosition.x || p.y !== p.prevPosition.y; // a still mouse leaves the keys' cursor be
       if (i >= 0 && moved && i !== this.satchel!.view.cursor) this.showSatchel({ cursor: i });
     });
+    // Back from the pause menu: claws let go meanwhile charge no more (the menu took their release).
+    const resumed = () => !Keys.down('claw') && (this.clawDownAt = this.chargeAt = 0);
+    this.events.on(Phaser.Scenes.Events.RESUME, resumed);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off(Phaser.Scenes.Events.RESUME, resumed));
     this.input.enabled = this.input.keyboard!.enabled = !this.titled;
     if (this.titled) {
       this.hero.setVisible(false).disableBody(false, false); // his coffin empty; his lamp out with him (dark.ts)
