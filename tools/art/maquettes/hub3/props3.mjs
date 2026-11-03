@@ -335,6 +335,37 @@ export function writingDesk(maps = 1) {
   return { sdf, mat, bounds: boundsOf(parts, 2), step: 0.6 };
 }
 
+// the lectern by the hero's coffin (le journal, docs/histoire-proposition.md §4): a wooden post on a stone foot, its
+// sloped desk facing +y, a thick book open on it, scraps of paper tucked under, a red ribbon hanging
+export function lectern() {
+  const b = builder(); const { parts, bx, rc } = b, T = 0.62, cT = Math.cos(T), sT = Math.sin(T), Z0 = 50;
+  bx([0, 0, 3], [11, 8, 3], 3, 0.8);                                         // its stone foot
+  rc([0, 0, 6], [0, -1, Z0 - 4], 2.6, 2.0, 1, 0.5);                          // the post
+  rc([-7, 0, 6], [7, 0, 6], 1.6, 1.6, 1, 0.3);
+  // the desk and what lies on it, in its own frame: u across, v up its slope (toward -y), w out of it
+  const slope = (f, m, k = 0) => parts.push({ m, k, box: [-20, -16, Z0 - 14, 20, 14, Z0 + 14], f: (x, y, z) => { const Y = y, Z = z - Z0; return f(x, -Y * cT + Z * sT, Y * sT + Z * cT); } });
+  slope((u, v, w) => sdBox(u, v, w, 0, 0, -1, 15, 10, 1.4, 0.3), 1);          // the desk
+  slope((u, v, w) => sdBox(u, v, w, 0, -10.5, 0.8, 15, 0.8, 1.6, 0.2), 1);     // its lip, the book's rest
+  slope((u, v, w) => sdBox(u, v, w, 0, 0, 1.2, 12.5, 8.5, 1.2, 0.4), 4);       // the book's boards
+  slope((u, v, w) => sdBox(u, v, w, 0, 0, 2.8 + 0.8 * Math.cos(u * 0.13), 11.5, 8, 0.6, 0.2), 2); // its pages, bowed open
+  slope((u, v, w) => sdBox(u, v, w, -14, 3, 0.6, 3.5, 5, 0.2, 0), 2);          // a note tucked under
+  rc([1, 9.5, Z0 - 6], [1.5, 11, Z0 - 17], 0.5, 0.5, 5, 0);                  // the ribbon hanging
+  const sdf = partsSdf(parts);
+  const mat = (m, x, y, z, nx, ny, nz) => {
+    if (m === 3) return stoneMat(x, y, z, 12);
+    if (m === 4) return { alb: mix(L('#2a1410'), L('#140a08'), vn3(x * 0.4, y * 0.4, z * 0.4, 5)), spec: 0.2, gloss: 30 };
+    if (m === 5) return { alb: C.bloodF, spec: 0.3, gloss: 40 };
+    if (m === 2) { // the pages: yellowed, lines of a hand in faded ink, the gutter dark
+      let c = mix(L('#b4a47c'), L('#7a6a4a'), clamp(vn3(x * 0.3, y * 0.3, z * 0.3, 6) * 1.4 - 0.3));
+      if (Math.abs(x) < 1) c = mul(c, 0.5);
+      else if (Math.abs(x) > 2.5 && Math.abs(x) < 10 && Math.sin(z * 2.6 + y * 1.4) > 0.75 && vn3(x * 0.8, y, z, 7) > 0.35) c = mix(c, L('#2a2016'), 0.7);
+      return { alb: c, wrap: 0.4 };
+    }
+    return woodMat(x, y, z, 2, 61);
+  };
+  return { sdf, mat, bounds: boundsOf(parts, 2), step: 0.6 };
+}
+
 // ---------- wardrobe corner ----------
 export function armoire(open = true) { // faces +y, 76 wide, 168 tall; one door ajar, a coat inside
   const b = builder(); const { parts, bx, rc, el } = b;

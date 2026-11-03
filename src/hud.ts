@@ -95,7 +95,7 @@ function soft(scene: Phaser.Scene, w: number, h: number, k: number, cx = w / 2, 
 }
 
 /** The finger of blood smeared under a title `w` px wide (its text `h` px tall): the mockup's, in flat colours. */
-function smear(scene: Phaser.Scene, w: number) {
+export function smear(scene: Phaser.Scene, w: number) {
   const key = `hud-smear:${w}`;
   if (scene.textures.exists(key)) return key;
   const W = w + 14, H = 9, t = scene.textures.createCanvas(key, W, H)!, img = t.context.createImageData(W, H);

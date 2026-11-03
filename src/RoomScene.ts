@@ -29,6 +29,8 @@ import * as Matrice from './matrice.ts';
 import * as Vesna from './vesna.ts';
 import * as Powers from './powers.ts';
 import * as Carte from './map.ts';
+import * as Notes from './notes.ts';
+import * as Journal from './journal.ts';
 import * as Crows from './crows.ts';
 import * as Enterre from './enterre.ts';
 import * as Gave from './gave.ts';
@@ -165,7 +167,8 @@ export class RoomScene extends Phaser.Scene {
   private cut = false; // a scene plays (Vesna freed): he stands, the world waits
   private vesna?: ReturnType<typeof Vesna.create>; // at the refuge, freed, behind her stall
   private stall?: Vesna.Stall; // her powers, open: the hero waits
-  private carte?: Carte.Carte; // the zone's map, open (key C): the game paused
+  private carte?: Carte.Carte | Journal.Panel; // the zone's map (key C), a note or le journal (N), open: the game paused
+  private notes: Journal.Lying[] = []; // the notes lying here (notes.ts)
   private heldBy?: Sprite; // l'Enterré holding him by the ankle, a Crocheteur's hook in his net: he stands, dragged, until he struggles free
   private pull?: { x: number; y: number; speed: number }; // where the hold drags him (none: toward who holds him)
   private netUntil = 0; // under a Crocheteur's net until then, or until he tears free (netPoints)
@@ -230,6 +233,7 @@ export class RoomScene extends Phaser.Scene {
     this.bag = [...(data.bag ?? [])];
     this.lostItems = data.lostItems ?? 0;
     this.loot = [];
+    this.notes = [];
     this.satchel = undefined;
     this.fight = this.vesna = this.stall = this.carte = undefined;
     this.cut = false;
@@ -325,7 +329,7 @@ export class RoomScene extends Phaser.Scene {
     const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.carte) return void this.closeMap();
+      if (this.carte) return void ('click' in this.carte && this.carte.click(p.x, p.y) || this.closeMap());
       if (this.counter) { // a card buys, anywhere else leaves
         const i = this.counter.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM);
         return void (i < 0 ? this.closeShop() : this.sell(i));
@@ -355,7 +359,7 @@ export class RoomScene extends Phaser.Scene {
     this.keys.J.on('up', () => !this.clawMouse && this.release());
     this.input.keyboard!.on('keydown-X', (ev: KeyboardEvent) => { if (ev.repeat) return; const a = this.aimMouse ? Phaser.Math.Angle.BetweenPoints(this.hero, world(this.input.activePointer)) : this.facing; this.press(() => this.parry(a)); });
     this.keys.K.on('down', () => { const a = this.facing; this.aimMouse = false; this.press(() => this.shoot(a)); });
-    this.keys.F.on('down', () => (this.counter ? this.closeShop() : this.stall ? this.closeStall() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
+    this.keys.F.on('down', () => (this.carte ? this.closeMap() : this.counter ? this.closeShop() : this.stall ? this.closeStall() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
     // Le Rongé's wares: hovered, bought by their key or a click, left with Escape (or F).
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.aimMouse = true;
@@ -376,6 +380,7 @@ export class RoomScene extends Phaser.Scene {
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
     for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => !this.satchel && !this.carte && (this.dashPressedAt = this.time.now));
     this.input.keyboard!.on('keydown-C', () => (this.carte ? this.closeMap() : this.openMap())); // la carte (M mutes)
+    this.input.keyboard!.on('keydown-N', () => (this.carte && 'journal' in this.carte && this.carte.journal ? this.closeMap() : this.openJournal())); // le journal (J claws)
     // Le Glyphe: E casts it at the pointer (the mouse aiming), L ahead of the hero.
     const castAt = (to: { x: number; y: number }) => this.press(() => this.cast(to));
     const ahead = () => {
@@ -444,6 +449,7 @@ export class RoomScene extends Phaser.Scene {
     }
     this.cameras.main.fadeIn(T.expedition.fadeMs);
     this.showBlood();
+    this.notes = Notes.lying(this.layout, Save.data.vesna).map((n) => Journal.lay(this, n, Save.data.notes.includes(n.id)));
     if (this.layout === 'refuge') return this.home();
     this.hud.title(WORLD[this.here].name);
     this.enterRoom();
@@ -457,7 +463,7 @@ export class RoomScene extends Phaser.Scene {
     this.labels.push({ at: B, l: Loot.label(this, B.x - 12, B.y - 2, 'Bassin de sang') }, { at: { x: S.x, y: Refuge.STAIRS }, l: Loot.label(this, S.x, Refuge.STAIRS - 20, WORLD.necropolis.name) });
     this.ronge = Ronge.create(this, R.x, R.y);
     Satchel.chest(this, C.x, C.y);
-    this.labels.push({ at: C, l: Loot.label(this, C.x, C.y - 24, 'Le coffre (F)') });
+    this.labels.push({ at: C, l: Loot.label(this, C.x, C.y - 24, 'Le coffre (F)') }, { at: Refuge.LUTRIN, l: Loot.label(this, Refuge.LUTRIN.x, Refuge.LUTRIN.y - 30, 'Le journal (F)') });
     if (this.exp) {
       Save.log({ end: 'retour', deepest: this.exp.deepest, blood: this.carried, life: this.health, s: Math.round((Date.now() - this.exp.startedAt) / 1000), loosed: this.exp.loosed, met: this.exp.met, boss: this.exp.boss });
       Save.data.dry++; // back: le Rongé hungers until blood is poured
@@ -764,6 +770,7 @@ export class RoomScene extends Phaser.Scene {
     }
     for (const l of this.labels) l.l.near(near(l.at, 64)); // the basin's before he pours (T.blood.basin)
     for (const c of this.caches) c.label.near(near(c, T.blood.search + 8));
+    for (const n of this.notes) n.label.near(near(n.note, T.notes.reach + 8));
     for (const l of this.loot) l.label.near(near(l, T.items.pickup + 8));
     for (const d of [...this.drops]) if (near(d, T.blood.pickup)) this.pickUp(d);
     // The refuge's basin takes the blood he carries: banked.
@@ -2076,7 +2083,7 @@ export class RoomScene extends Phaser.Scene {
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.talk) return this.talk();
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.CHEST) < T.ronge.talk) return this.openSatchel('coffre');
     if (!prey && this.vesna && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.VESNA) < T.vesna.talk) return this.openStall();
-    if (!prey && (this.search() || this.lever() || this.reliquary() || this.take())) return true;
+    if (!prey && (this.search() || this.lever() || this.reliquary() || this.take() || this.read())) return true;
     if (!fangs) return true; // the bite is not his yet (the Rongé will teach it)
     this.biteAt = now;
     if (!prey) {
@@ -2433,6 +2440,31 @@ export class RoomScene extends Phaser.Scene {
     this.hero.setVelocity(0);
     this.carte = Carte.open(this, z, this.hero.body!.center, this.facing);
     Sfx.play(this, 'snap');
+  }
+
+  /** F by a note: read over the paused game, kept in le journal (saved) the first time. At the refuge, F by the lectern
+   *  opens le journal. */
+  private read() {
+    if (this.layout === 'refuge' && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.LUTRIN) < T.notes.reach) return this.openJournal();
+    const n = Notes.at(this.notes.map((l) => l.note), this.hero.body!.center, T.notes.reach);
+    if (!n || this.phase !== 'play') return false;
+    const fresh = Notes.keep(Save.data.notes, n.id);
+    if (fresh) Save.store();
+    this.notes.find((l) => l.note === n)!.seen();
+    this.hero.setVelocity(0);
+    this.carte = Journal.read(this, n, fresh);
+    Sfx.play(this, 'snap');
+    return true;
+  }
+
+  /** Le journal over the game, paused (key N, the refuge's lectern); a note open gives way to it; busy, nothing. */
+  private openJournal() {
+    if (this.carte) this.closeMap();
+    if (this.satchel || this.counter || this.stall || this.dead || this.prey || this.cut || this.phase !== 'play') return false;
+    this.hero.setVelocity(0);
+    this.carte = Journal.journal(this, Save.data.notes);
+    Sfx.play(this, 'snap');
+    return true;
   }
 
   private closeMap() {
