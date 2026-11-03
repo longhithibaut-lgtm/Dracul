@@ -148,7 +148,8 @@ async function exit(x, y, key, to) {
  *  one (chasing, it would walk through). */
 const doors = () => run(() => { const s = window.game.scene.getScene('room'); return [...s.room.exits, s.room.stairs, ...(s.layout === 'necropolis' ? [{ x: 1690, y: 92 }, { x: 3260, y: 92 }] : [])]; });
 /** Fights the enemies within `reach` (all: Infinity) of where he stood at the start, none by a door, the nearest first,
- *  for at most `ms`: walks up to it, claws it toward it. True once none is left there. */
+ *  for at most `ms`: walks up to it, claws it toward it. True once none is left there. Not what no claw kills: a flock
+ *  of crows (it scatters), la Chose, l'Enterré under the earth, a Tireur up on his roof (RoomScene aloft()). */
 async function fight(ms, reach = Infinity) {
   const at = (await state()).hero, by = await doors();
   for (const left = await timer(ms); await left();) {
@@ -156,7 +157,7 @@ async function fight(ms, reach = Infinity) {
       const s = window.game.scene.getScene('room'), f = s.hero?.body?.center, c = s.cameras.main.worldView;
       if (!f) return undefined;
       at ??= f;
-      const live = s.enemies.getChildren().filter((e) => e.body?.enable).map((e) => ({ x: e.body.center.x, y: e.body.center.y, d: Math.hypot(e.body.center.x - f.x, e.body.center.y - f.y) }));
+      const live = s.enemies.getChildren().filter((e) => e.body?.enable && !['crows', 'chose'].includes(e.getData('kind')) && !s.aloft(e)).map((e) => ({ x: e.body.center.x, y: e.body.center.y, d: Math.hypot(e.body.center.x - f.x, e.body.center.y - f.y) }));
       const e = live.filter((e) => Math.hypot(e.x - at.x, e.y - at.y) < reach && by.every((d) => Math.hypot(e.x - d.x, e.y - d.y) > 48)).sort((a, b) => a.d - b.d)[0];
       return e && { ...e, sx: (e.x - c.x) * 4, sy: (e.y - 8 - c.y) * 4 };
     }, [reach, at, by]);
@@ -224,12 +225,14 @@ async function cursorDown() {
   }
   return false;
 }
-const where = async () => { const h = (await state()).hero; return `${Math.round(h.x)},${Math.round(h.y)}`; };
+const where = async () => { const h = (await state()).hero; return h ? `${Math.round(h.x)},${Math.round(h.y)}` : 'between places'; };
+/** The room up and the hero in it (a restart or a fade under way: waits for it). */
+const ready = () => until(() => { const s = window.game.scene.getScene('room'); return s.sys.isActive() && !!s.hero?.body; }, null, 15000);
 
 // ---- Les catacombes: across the necropolis (its shortcuts open) to the well at its far end, down it; a gallery, a
 // crossroads, le caveau's gate raised from below (the shortcut), le nid, the arena and Vesna's sealed reliquary; the
 // battue loosed down there and up in the necropolis; back up le caveau's stairs, home. ----
-const cull = (r) => run((r) => { const s = window.game.scene.getScene('room'), f = s.hero.body.center; for (const e of s.enemies.getChildren()) if (e.body?.enable && Math.hypot(e.x - f.x, e.y - f.y) < r) s.kill(e); }, r);
+const cull = async (r) => (await ready()) && run((r) => { const s = window.game.scene.getScene('room'), f = s.hero?.body?.center; if (f) for (const e of s.enemies.getChildren()) if (e.body?.enable && Math.hypot(e.x - f.x, e.y - f.y) < r) s.kill(e); }, r);
 /** A walk by way of `points`, the foes near him put down as he goes (what is checked here is the way, not the fights). */
 async function trek(points, what) {
   for (const [x, y] of points) {
@@ -257,6 +260,10 @@ async function catacombs() {
   await trek([[3220, 300], [2950, 430], [3050, 640], [3115, 720], [3150, 860], [3300, 930], [3420, 940], [3600, 1000], [3690, 1180], [3700, 1226]], 'through the camp, down the path to the well');
   await look('well-top', 3700, 1190);
   check(await exit(3700, 1222, 'ArrowUp', 'catacombs'), 'down the well, into les catacombes');
+  await hold(['ArrowUp'], 300); // the key still held as he comes down: the well does not take him back up at once
+  await page.waitForTimeout(700); // (taken, he would be fading out by now)
+  check(await run(() => { const s = window.game.scene.getScene('room'); return s.layout === 'catacombs' && s.phase === 'play'; }), 'ArrowUp still held at the foot of the well: he stays down');
+  await hold(['ArrowDown'], 300); // out of its recess
   await keep(true);
   const bottom = await state();
   check(Math.abs(bottom.hero.x - 2600) < 20 && bottom.hero.y < 200, `at the well's foot (${await where()})`);
@@ -425,8 +432,8 @@ check(light.forecourt >= 0.6 && light.field < 0.6, `the baked light read back: $
 check(placed.n > 30 && placed.idle === placed.n && placed.near > 150, `zone: ${placed.n} foes on their posts by area, none hunting him (${JSON.stringify(placed.kinds)}), the nearest ${Math.round(placed.near)} px away; ${placed.caches} caches; ${placed.chunks} chunks shown of 40`);
 const byRing = await run(() => { const s = window.game.scene.getScene('room'), r = {}; for (const e of s.enemies.getChildren()) { const k = e.x < 1350 ? 'proche' : e.x < 2612 ? 'milieu' : 'loin'; (r[k] ??= new Set()).add(e.getData('kind')); } return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, [...v].join(' ')])); });
 check(!/inquisitor|ringer|purifier|priest/.test(byRing.proche ?? ''), `foes by distance: near ${byRing.proche} | middle ${byRing.milieu} | far ${byRing.loin}`);
-{ // The nearest group on its post, the hero coming up to it unseen (just out of its sight), between them on screen.
-  const f = (await state()).hero, g = placed.at.filter((e) => e.x < 1300).sort((a, b) => Math.hypot(a.x - f.x, a.y - f.y) - Math.hypot(b.x - f.x, b.y - f.y))[0];
+{ // The nearest ghouls on their post (Les Caveaux, Le Champ des Croix; the Parvis has none), the hero coming up to them unseen (just out of their sight), between them on screen.
+  const f = (await state()).hero, g = placed.at.filter((e) => e.x < 1300 && !e.kind).sort((a, b) => Math.hypot(a.x - f.x, a.y - f.y) - Math.hypot(b.x - f.x, b.y - f.y))[0];
   for (const left = await timer(30000); await left();) {
     const h = (await state()).hero;
     if (Math.hypot(g.x - h.x, g.y - h.y) < 175) break;
