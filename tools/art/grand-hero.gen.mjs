@@ -4,11 +4,13 @@
 // snapped onto its 67 colours). One model unit is one pixel at 960x540: he stands ~80 px tall; the game draws the
 // sheet at half scale on its x2 view of that room (dark.ts). Views down / up / side and the diagonals downside /
 // upside (the side ones face right, the game mirrors them): idle 2 frames (breathing, the lantern swaying), the walks
-// (WALKS: run 8, backpedal and the two side-steps 6), halt 1, a deep breath 1, then each action's steps (ACTS: the
-// three claw strikes stepping into the blow and the finisher's recovery, the mist (impulse, dissolved, re-forming), the
-// throw, the glyph, the bite (lunge, latch, drink and tear-away side-on), hurt from the front, back and either side,
-// the bell's stagger, death, the idle gestures), posed from a few numbers each by rig().
-// Writes src/grand-hero.png (three rows per view) and src/grand.data.ts. Usage: node tools/art/grand-hero.gen.mjs (~1 min
+// (WALKS: run 8, the full bag's trudge, backpedal and the two side-steps 6), halt 1, a deep breath 1, then each action's
+// steps (ACTS: the three claw strikes stepping into the blow and the finisher's recovery, the mist (impulse, dissolved,
+// re-forming), the throw, the glyph, the bite (lunge, latch, drink and tear-away side-on), hurt from the front, back and
+// either side, the bell's stagger, death, the idle gestures, the parry (guard, sparks, the miss's stumble), the charge
+// and its release, the predator strike, the riposte, the turn round, setting off, the arrival out of the mist), posed
+// from a few numbers each by rig().
+// Writes src/grand-hero.png (four rows per view) and src/grand.data.ts. Usage: node tools/art/grand-hero.gen.mjs (~1 min
 // on 4 cores); ONLY=claw0,bite renders just those actions to shots/grand-preview.png (x3, on grey), to try a pose.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { writeFileSync } from 'node:fs';
@@ -25,8 +27,8 @@ const VIEWS = { down: 0, up: Math.PI, side: -Math.PI / 2, downside: -Math.atan(c
 // The walks, each a cycle of n frames tied to the floor (Hero.show turns them by the distance walked): `go`, the way he
 // travels in his own frame (x his left, y ahead); `step`, how far each ankle reaches either side of the hips along it
 // (model units); `lift`, how high the swinging foot rises. Forward the heavy stalk; backward a shorter, upright
-// backpedal; sideways (to his right, to his left) cross-steps.
-const WALKS = { run: { n: 8, go: [0, 1], step: 17, lift: 8 }, back: { n: 6, go: [0, -1], step: 12, lift: 5 }, strafer: { n: 6, go: [-1, 0], step: 10, lift: 5 }, strafel: { n: 6, go: [1, 0], step: 10, lift: 5 } };
+// backpedal; sideways (to his right, to his left) cross-steps; `trudge`, the stalk bowed under a full bag of blood.
+const WALKS = { run: { n: 8, go: [0, 1], step: 17, lift: 8 }, trudge: { n: 6, go: [0, 1], step: 13, lift: 5 }, back: { n: 6, go: [0, -1], step: 12, lift: 5 }, strafer: { n: 6, go: [-1, 0], step: 10, lift: 5 }, strafel: { n: 6, go: [1, 0], step: 10, lift: 5 } };
 
 const add = (a, b) => a.map((v, i) => v + b[i]);
 const sub = (a, b) => a.map((v, i) => v - b[i]);
@@ -54,7 +56,9 @@ function ik(R, T, L1, L2, pole, what) {
 const I = POSES.idle;
 // A pose from a few numbers: the idle torso tipped forward by `lean` about the hips, sideways by `roll`, turned by `turn`,
 // lowered by `drop` and moved by `at`; the head turned by `yaw`; each hand put at a point (r / l: [wrist, elbow pole, hand direction]), else carried as at idle;
-// ankles at `feet` ([x, y, lift, toe pitch], right then left), else idle's; the coat's flare, swing back and sideways.
+// ankles at `feet` ([x, y, lift, toe pitch], right then left), else idle's; the coat's flare, swing back and sideways,
+// `wing` (its skirts thrown open like wings, the violet lining out); `hair`, the curtain swung [to his left, ahead];
+// `glow`, the claw hand's claws smouldering (the charge).
 // A step may override any of these for one view (`up: {...}`).
 function rig(o, what) {
   const p0 = I.pelvis, pel = add(p0, [...(o.at ?? [0, 0]), -(o.drop ?? 0)]);
@@ -62,6 +66,7 @@ function rig(o, what) {
   const P = {
     ...I, tilt: o.tilt ?? I.tilt, yaw: o.yaw ?? 0, pelvis: pel, head: add(tf(I.head), o.head ?? [0, 0, 0]), neck: tf(I.neck), chest: tf(I.chest), Sr: tf(I.Sr), Sl: tf(I.Sl),
     coatFlare: o.flare ?? 0, coatBack: o.back ?? 0, coatSide: o.side ?? 0, curl: o.curl ?? I.curl, spread: o.spread ?? I.spread, lanSway: o.sway ?? [0, 0],
+    coatWing: o.wing ?? 0, hairSwing: o.hair, clawGlow: o.glow ?? 0,
   };
   const arm = (S, [W, pole, hand], s) => { const [E, w] = ik(S, W, 18.1, 15.2, pole, `${what} ${s} arm`); return [E, w, add(w, sc(nz(hand), 4.3))]; };
   [P.Er, P.Wr, P.Kr_] = o.r ? arm(P.Sr, o.r, 'right') : [tf(I.Er), tf(I.Wr), tf(I.Kr_)];
@@ -181,6 +186,63 @@ const ACTS = {
     { ...SLUMP, mist: 0.75, rise: true },
     { ...SLUMP, mist: 1.15, rise: true },
   ],
+  // La parade (Hero.show): the guard raised (a glimpse), then held: crouched, the claw forearm across before his face, the
+  // claws spread like a cage, the lantern drawn back behind his hip, the coat drawn round him.
+  guard: [
+    { lean: 0.08, drop: 3, at: [0, -1], turn: 0.2, feet: [[-6, 5], [6, -7, 0, -0.3]], r: [[-6, 10, 74], [-1, -0.2, -0.6], [0.3, 0.6, 0.6]], l: [[13, -6, 56], [1, 0, 0], [0.2, -0.3, -1]], curl: 0.5, spread: 1.6, flare: -0.15, back: 0.15, tilt: 0.1 },
+    { lean: 0.15, drop: 6, at: [0, -1], turn: 0.3, feet: [[-7, 6], [7, -8, 0, -0.4]], r: [[2, 13, 84], [-1, -0.2, -0.8], [0.5, 0.6, 0.6]], l: [[12, -9, 54], [1, 0, 0], [0.2, -0.4, -1]], curl: 0.6, spread: 2, flare: -0.25, back: 0.25, side: 0.1, tilt: 0.15, sway: [0, -1.5] },
+  ],
+  // The blow turned aside (the sparks): the claw swept out to his right and up, the body rocked back by it, the coat and
+  // the hair swung out.
+  parry: [
+    { lean: -0.05, drop: 4, at: [0, -2], turn: -0.25, feet: [[-7, 4], [7, -9, 0, -0.5]], r: [[-24, 14, 82], [-0.5, -0.3, -1], [-0.6, 0.6, 0.5]], l: [[14, -8, 55], [1, 0, 0], [0.2, -0.4, -1]], spread: 2, curl: 0.2, flare: 0.3, back: -0.1, side: -0.3, tilt: -0.1, hair: [-1.5, 0.5], sway: [1.5, -1] },
+  ],
+  // A parry at nothing: the claw swung through empty air down to his left, he lurches a step on, off balance; then
+  // catches himself, hunched, the claw hanging, the back foot dragged up (the 420 ms he stands open).
+  stumble: [
+    { lean: 0.4, drop: 6, at: [0, 4], turn: -0.4, roll: -0.1, feet: [[-5, 16, 0, 0.2], [5, -9, 1, -0.6]], r: [[10, 18, 44], [-0.3, 0.4, -1], [0.6, 0.4, -0.7]], l: [[16, -4, 46], [1, 0, 0], [0.4, -0.3, -0.8]], spread: 1.6, curl: 0.3, flare: 0.4, back: 0.5, tilt: 0.35, hair: [0, 1.5], sway: [0, 2.5] },
+    { lean: 0.3, drop: 5, at: [0, 3], feet: [[-5, 14], [5, -4, 1.5, -0.3]], r: [[-9, 16, 42], [-1, 0, -0.4], [0, 0.3, -1]], l: [[16, 2, 52], [1, 0, 0], [0.3, 0, -1]], tilt: 0.4, curl: 0.7, flare: 0.2, back: 0.3, hair: [0, 1], sway: [0, 1] },
+  ],
+  // Le coup chargé: the weight drawn onto the back foot, the claw drawn back low behind his hip, the coat drawing back,
+  // the claws starting to smoulder; then reared right back, the claw cocked high behind his head, crouched, the coat
+  // dragged back and flaring, the claws dark red (held until let go).
+  charge: [
+    { lean: 0.1, drop: 5, at: [0, -2], turn: 0.5, feet: [[-6, -4, 0, -0.3], [6, 8]], r: [[-16, -16, 62], [-1, 0.2, 0], [-0.2, -0.6, 0.6]], l: [[12, 10, 58], [1, -0.2, -0.3], [0.3, 0.5, -1]], curl: 0.9, spread: 1.4, back: 0.6, flare: 0.3, side: 0.2, tilt: 0.25, glow: 0.4, hair: [0, -0.6] },
+    { lean: 0.2, drop: 8, at: [0, -3], turn: 0.7, roll: 0.06, feet: [[-7, -7, 0, -0.4], [7, 10]], r: [[-16, -18, 92], [-1, 0.3, 0.2], [0, -0.3, 1]], l: [[14, 14, 54], [1, -0.2, -0.3], [0.3, 0.6, -1]], curl: 1.2, spread: 1.9, back: 1, flare: 0.6, side: 0.3, tilt: 0.35, glow: 1, hair: [0, -1.2] },
+  ],
+  // Its release: the claw smashed down and across as the right foot lands far ahead, the coat flung out; carried through
+  // low to his left; then he rises and draws it back.
+  heavy: [
+    { lean: 0.6, drop: 10, at: [0, 7], turn: -0.35, feet: [[-5, 24, 0, 0.3], [5, -14, 0, -0.6]], r: [[2, 36, 28], [-1, 0.3, -0.2], [0.3, 0.6, -1]], l: [[18, -10, 44], [1, 0, 0], [0.3, -0.5, -1]], spread: 2, curl: 0, flare: 1.1, back: 1, side: -0.2, tilt: 0.3, glow: 0.6, hair: [0, 2] },
+    { lean: 0.65, drop: 12, at: [0, 7], turn: -0.6, feet: [[-5, 24], [5, -14, 0, -0.6]], r: [[14, 26, 16], [-0.3, 0.4, -1], [0.6, 0.3, -1]], l: [[20, -10, 42], [1, 0, 0], [0.3, -0.5, -1]], spread: 1.9, curl: 0.2, flare: 0.8, back: 0.7, side: -0.4, tilt: 0.35, glow: 0.2, hair: [1, 1.5] },
+    { lean: 0.35, drop: 6, at: [0, 5], turn: -0.2, feet: [[-5, 20], [5, -8, 1.5, -0.3]], r: [[-6, 24, 36], [-1, 0.2, -0.3], [0, 0.4, -1]], flare: 0.4, back: 0.4, tilt: 0.2, curl: 0.5 },
+  ],
+  // L'attaque dans l'ombre: a lunge out of the dark, long and low, the claw reaching, the back foot trailing off the
+  // floor, the coat thrown open behind him like wings (the violet lining out); the claws in, hunched over the prey; rising
+  // off it, the coat settling.
+  pounce: [
+    { lean: 0.8, drop: 12, at: [0, 9], turn: -0.1, feet: [[-5, 22, 3, 0.2], [5, -18, 6, -0.9]], r: [[-6, 50, 46], [-1, 0, -0.3], [0, 1, -0.2]], l: [[16, -16, 46], [1, -0.3, 0.2], [0.3, -0.6, -0.5]], spread: 2, curl: 0.4, flare: 1.4, back: 1.2, wing: 1.5, tilt: 0.1, hair: [0, -3], sway: [0, -3] },
+    { lean: 0.6, drop: 12, at: [0, 8], turn: -0.25, feet: [[-6, 22], [6, -12, 0, -0.6]], r: [[-2, 36, 28], [-1, 0.3, -0.3], [0.2, 0.5, -1]], l: [[20, -6, 50], [1, 0, 0], [0.3, -0.4, -1]], curl: 1, spread: 1.6, flare: 1, back: 0.6, wing: 0.8, tilt: 0.55, hair: [0, 1.5] },
+    { lean: 0.3, drop: 6, at: [0, 5], feet: [[-5, 18], [5, -8, 1, -0.3]], r: [[-9, 20, 40], [-1, 0, -0.4], [0, 0.4, -1]], flare: 0.4, back: 0.2, wing: 0.3, tilt: 0.3, curl: 0.6 },
+  ],
+  // The riposte, on a foe reeling from the parry: the claw driven in straight at its belly; torn up out of it over his
+  // head, the body arching back; flung out to his side, shaking the blood off.
+  riposte: [
+    { lean: 0.4, drop: 6, at: [0, 6], turn: -0.3, feet: [[-5, 20, 0, 0.2], [5, -10, 0, -0.5]], r: [[-4, 40, 58], [-1, 0, -0.3], [0, 1, 0]], l: [[18, -6, 56], [1, 0, 0], [0.3, -0.4, -1]], spread: 0.6, curl: 0, flare: 0.6, back: 0.6, tilt: 0.2, hair: [0, -1] },
+    { lean: -0.1, drop: 2, at: [0, 6], turn: 0.1, feet: [[-5, 20], [5, -8, 0, -0.6]], r: [[-8, 26, 102], [-1, 0, 0.3], [0, 0.4, 1]], spread: 2, curl: 0.3, flare: 0.5, back: 0.3, tilt: -0.3, head: [0, -1, 0.5], hair: [0, -1.5] },
+    { lean: 0.05, drop: 2, at: [0, 5], turn: 0.4, feet: [[-5, 18], [5, -6, 1.5, -0.3]], r: [[-26, 10, 84], [-0.5, -0.3, -1], [-0.8, 0.3, 0.3]], spread: 1.9, flare: 0.4, side: -0.3, tilt: 0.05, hair: [-1, 0] },
+  ],
+  // Turning round on the spot (Gait: the view between), toward his left (pivot-0) or his right (pivot-1): the body twisted
+  // ahead of the coat, which swings out the other way with the hair and the lantern.
+  pivot: [
+    { lean: 0.1, drop: 3, turn: -0.45, roll: 0.05, feet: [[-5, 2], [6, -2, 2, -0.3]], flare: 0.35, side: -0.45, back: 0.2, hair: [-2, 0], sway: [-2.5, 0.5], tilt: 0.05 },
+    { lean: 0.1, drop: 3, turn: 0.45, roll: -0.05, feet: [[-6, -2, 2, -0.3], [5, 2]], flare: 0.35, side: 0.45, back: 0.2, hair: [2, 0], sway: [2.5, 0.5], tilt: 0.05 },
+  ],
+  // Setting off (Gait, the first steps from standing): leaning into it off the back foot, the coat, hair and lantern
+  // left behind.
+  go: [{ lean: 0.28, drop: 3.5, at: [0, 2], feet: [[-4, 10, 4, 0.2], [4, -10, 0, -0.7]], back: 0.6, flare: 0.3, hair: [0, -1.5], sway: [0, -2.5], tilt: 0.12 }],
+  // Arriving out of the mist, standing: crouched low, a claw touching the floor ahead, the coat settling round him.
+  land: [{ lean: 0.45, drop: 16, at: [0, 2], feet: [[-7, 8], [7, -8, 0, -0.5]], r: [[-9, 22, 12], [-1, 0, 0.2], [0, 0.5, -1]], l: [[12, 6, 30], [1, 0, 0], [0.3, 0, -1]], flare: 0.8, back: -0.3, tilt: -0.1, hair: [0, 1.5], sway: [0, 2] }],
   // Idle, once in a while (Hero.show): a glance aside; the lantern raised to his face, peering into the dark.
   glance: [{ yaw: 0.35, turn: 0.06 }, { yaw: 0.8, turn: 0.12, tilt: 0.02 }],
   lift: [
@@ -205,20 +267,25 @@ function pose(name, k, view) {
   const ph = (2 * Math.PI * k) / W.n, bob = 1.5 * Math.cos(2 * ph) - 1.0, [gx, gy] = W.go;
   const feet = [1, -1].map((s, i) => {
     const x = i ? 1 : -1, f = s * Math.sin(ph), lift = W.lift * Math.max(0, s * Math.cos(ph)) ** 1.5;
-    const toe = lift < 0.5 ? 0 : name === 'run' ? (f < 0 ? -0.75 : 0.25) : name === 'back' ? (f < 0 ? -0.2 : -0.5) : -0.3;
+    const toe = lift < 0.5 ? 0 : name === 'run' || name === 'trudge' ? (f < 0 ? -0.75 : 0.25) : name === 'back' ? (f < 0 ? -0.2 : -0.5) : -0.3;
     // Side-stepping, the trailing foot crosses on the camera's side of the other, so the coat never hides it.
     return [x * 4 + gx * W.step * f, -0.6 + gy * W.step * f + (gx ? (x === -gx ? 3.5 : -2) * (view.startsWith('up') ? -1 : 1) : 0), lift, toe];
   });
   if (name === 'run') { // the heavy stalk: long steps, leaning in, the claw arm against the legs, the lantern lagging, the coat flaring behind
-    const P = rig({ lean: 0.11, drop: 2.5 - bob, feet, back: 0.35, flare: 0.3, side: 0.25 * Math.sin(ph), tilt: 0.08 }, `run${k}`);
+    const P = rig({ lean: 0.11, drop: 2.5 - bob, feet, back: 0.35, flare: 0.3, side: 0.25 * Math.sin(ph), tilt: 0.08, hair: [0.5 * Math.sin(ph), -1] }, `run${k}`);
     const ar = -0.55 * Math.sin(ph), al = 0.12 * Math.sin(ph);
     return Object.assign(P, { Er: swing(P.Er, P.Sr, ar), Wr: swing(P.Wr, P.Sr, ar), Kr_: swing(P.Kr_, P.Sr, ar), El: swing(P.El, P.Sl, al), Wl: swing(P.Wl, P.Sl, al), Kl_: swing(P.Kl_, P.Sl, al), lanSway: [0, -2.2 * Math.cos(ph)] });
+  }
+  if (name === 'trudge') { // bowed under the blood he carries: hunched, the head low, heavier on each foot, the arms hanging
+    const P = rig({ lean: 0.36, drop: 5 - bob * 1.4, feet, back: 0.2, flare: 0.15, side: 0.2 * Math.sin(ph), tilt: 0.35, head: [0, 1.2, -1.2], hair: [0.4 * Math.sin(ph), 0.8] }, `trudge${k}`);
+    const ar = -0.3 * Math.sin(ph), al = 0.08 * Math.sin(ph);
+    return Object.assign(P, { Er: swing(P.Er, P.Sr, ar), Wr: swing(P.Wr, P.Sr, ar), Kr_: swing(P.Kr_, P.Sr, ar), El: swing(P.El, P.Sl, al), Wl: swing(P.Wl, P.Sl, al), Kl_: swing(P.Kl_, P.Sl, al), lanSway: [0, -1.4 * Math.cos(ph)] });
   }
   // Backing off or side-stepping he faces what he fights: upright, the claw raised on guard, spread; the coat and the
   // lantern lag behind the way he goes.
   const guard = [[-7, 17, 68], [-0.6, -0.3, -1], [0.1, 1, 0.5]];
   return rig({ lean: gy ? -0.03 : 0.05, drop: (gy ? 1.5 : 2.5) - bob * 0.6, at: [0.8 * gx * Math.cos(2 * ph), 0], feet, r: guard, curl: 0.3, spread: 1.4,
-    back: gy ? -0.3 : 0.1, flare: 0.2, side: -gx * 0.35, sway: [-gx * 1.5, gy ? 1.5 : -0.5], tilt: 0.02 }, `${name}${k}`);
+    back: gy ? -0.3 : 0.1, flare: 0.2, side: -gx * 0.35, sway: [-gx * 1.5, gy ? 1.5 : -0.5], tilt: 0.02, hair: [-gx * 1.2, -gy * 0.8] }, `${name}${k}`);
 }
 
 // The dash's dissolve, on the rendered cell: the body breaks into clotted blood vapour from the feet and its trailing
@@ -255,18 +322,20 @@ const ONLY = process.env.ONLY?.split(',');
 const NAMES = [['idle', 2], ...Object.entries(WALKS).map(([n, w]) => [n, w.n]), ['halt', 1], ['breath', 1], ...Object.entries(ACTS).map(([n, a]) => [n, a.length])].filter(([n]) => !ONLY || ONLY.includes(n));
 const CELLS = Object.keys(VIEWS).flatMap((view) => NAMES.flatMap(([name, n]) => Array.from({ length: n }, (_, k) => [view, name, k])))
   .filter(([view, name, k]) => ACTS[name]?.[k].views?.includes(view) ?? true); // a step drawn for some views only
-const COLS = Math.ceil(CELLS.length / (3 * Object.keys(VIEWS).length)); // three rows per view: the sheet stays under 4096 px wide
+const COLS = Math.ceil(CELLS.length / (4 * Object.keys(VIEWS).length)); // four rows per view: the sheet stays under 4096 px wide
 
 function scene(view, name, k) {
   const yaw = VIEWS[view], h = hero(pose(name, k, view)), c = Math.cos(yaw), s = Math.sin(yaw), l = h.P._lantern;
   const lan = [CX + c * l[0] - s * l[1], s * l[0] + c * l[1], l[2]];
   const lights = [
     { p: lan, c: L('#d0cc78'), I: 3.6, r0: 24, R: 95, pad: 3.6, soft: 5 },
-    { p: [CX + 30, -60, 75], c: L('#8098a2'), I: 9, r0: 90, R: 260, soft: 10 }, // the cold rim from behind
+    { p: [CX + 30, -60, 75], c: L('#8098a2'), I: 10.5, r0: 90, R: 260, soft: 10 }, // the cold rim from behind (a touch up: his edge against the dark)
     { p: [CX - 70, 70, 140], c: L('#a08a70'), I: 0.9, r0: 130, R: 420, soft: 12 },
   ];
   const objects = [{ name: 'hero', pos: [CX, 0, 0], yaw, sdf: h.sdf, mat: h.mat, bounds: h.bounds, id: 1, step: 0.6 }];
-  return { sc: { W: FW, H: FH, cam, off: -SOLE, objects, lights, env: null, ambient: L('#1a1c1e').map((v) => v * 0.6) }, lamp: project(cam, ...lan, -SOLE) };
+  const on = (q) => project(cam, CX + c * q[0] - s * q[1], s * q[0] + c * q[1], q[2], -SOLE); // a model point on the cell
+  return { sc: { W: FW, H: FH, cam, off: -SOLE, objects, lights, env: null, ambient: L('#1a1c1e').map((v) => v * 0.6) }, lamp: project(cam, ...lan, -SOLE),
+    eyes: h.P._eyes.map(on), profile: on(h.P._hp(-1.5, 4.4, 0)), claw: h.P.clawGlow ? on(h.P.Kr_) : undefined };
 }
 
 if (isMainThread) {
@@ -280,7 +349,8 @@ if (isMainThread) {
   const all = new Map(done.flat().map((f) => [f.i, f]));
   const W = FW * COLS, H = FH * Math.ceil(CELLS.length / COLS), rgba = new Uint8ClampedArray(W * H * 4), frames = {};
   for (const [i, [view, name, k]] of CELLS.entries()) {
-    const f = all.get(i), ox = (i % COLS) * FW, oy = Math.floor(i / COLS) * FH, at = { cell: i, lamp: f.lamp.map((v) => Math.round(v * 2) / 2) };
+    const half = (p) => p.map((v) => Math.round(v * 2) / 2), f = all.get(i), ox = (i % COLS) * FW, oy = Math.floor(i / COLS) * FH;
+    const at = { cell: i, lamp: half(f.lamp), ...(f.eyes.length ? { eyes: f.eyes.map(half) } : {}), ...(f.claw ? { claw: half(f.claw) } : {}) };
     for (let y = 0; y < FH; y++) rgba.set(f.px.subarray(y * FW * 4, (y + 1) * FW * 4), ((oy + y) * W + ox) * 4);
     // The game's frame names (Hero.show): idle and blink 0-3 on the two breaths, run0-7, back0-5, strafer0-5,
     // strafel0-5, halt0, dash0-2, the steps of the others as <action>-<step> (breath-0 too).
@@ -290,24 +360,30 @@ if (isMainThread) {
   if (ONLY) { // on grey, to see the silhouettes
     for (let p = 0; p < W * H; p++) if (!rgba[p * 4 + 3]) rgba.set([70, 70, 74, 255], p * 4);
     writePNG('shots/grand-preview.png', rgba, W, H, 3);
+    writeFileSync('shots/grand-preview.json', JSON.stringify({ FW, FH, COLS, FRAMES: frames })); // (its cells, x3)
     console.log(`shots/grand-preview.png: ${ONLY} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     process.exit(0);
   }
   writePNG('src/grand-hero.png', rgba, W, H);
   writeFileSync('src/grand.data.ts', `// Generated by tools/art/grand-hero.gen.mjs: edit the model there, not this table.
 // The hero's sheet (src/grand-hero.png): FW x FH cells, ${COLS} per row; each game frame's cell and its
-// lantern glass centre (sheet px, where dark.ts hangs his light). Soles on row ${SOLE}, centred on column ${CX}.
+// lantern glass centre (sheet px, where dark.ts hangs his light), the eyes that show and, smouldering (the charge), the
+// claw hand. Soles on row ${SOLE}, centred on column ${CX}.
 // GAIT: each walk's frames and the room px walked across the floor per cycle (the planted foot's travel: two steps of
 // 2 x step model units, a model unit half a room px), and SQUASH, how much shorter the floor is up and down the screen.
 export const FW = ${FW}, FH = ${FH}, COLS = ${COLS}, SOLE = ${SOLE}, SQUASH = ${Math.round(cam.s * 1000) / 1000};
 export const GAIT: Record<string, { n: number; stride: number }> = ${JSON.stringify(Object.fromEntries(Object.entries(WALKS).map(([w, { n, step }]) => [w, { n, stride: 2 * step }])))};
-export const FRAMES: Record<string, { cell: number; lamp: [number, number] }> = ${JSON.stringify(frames)};
+export const FRAMES: Record<string, { cell: number; lamp: [number, number]; eyes?: [number, number][]; claw?: [number, number] }> = ${JSON.stringify(frames)};
 `);
   console.log(`src/grand-hero.png ${W}x${H}, ${CELLS.length} cells, ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 } else {
   const { w, N } = workerData, out = [];
   for (let i = w; i < CELLS.length; i += N) {
-    const [view, name, k] = CELLS[i], { sc, lamp } = scene(view, name, k), img = render(sc);
+    const [view, name, k] = CELLS[i], { sc, lamp, eyes, profile, claw } = scene(view, name, k), img = render(sc);
+    // The eyes that show (their embers rendered within a px of where they project), for Hero.show's glow over the dark.
+    const seen = eyes.filter(([x, y]) => [-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => { const e = img.emis[(Math.round(y) + dy) * FW + Math.round(x) + dx]; return e > 0.8 && e < 1.6; })));
+    // Side-on the socket hides it from the camera: his near eye glows at the brow's edge anyway (where it shows by day).
+    if (!seen.length && view === 'side' && !ACTS[name]?.[k].mist && img.oid[Math.round(profile[1]) * FW + Math.round(profile[0])] >= 0) seen.push(profile);
     const px = post(img, { exposure: 3.2, vignette: 0, desat: 0.15, grain: 0.004, dither: 0.015 });
     for (let p = 0; p < FW * FH; p++) px[p * 4 + 3] = img.oid[p] >= 0 ? 255 : 0;
     // The trail streams away from where he goes: left of the side view (he faces right), up the screen facing down.
@@ -315,7 +391,7 @@ export const FRAMES: Record<string, { cell: number; lamp: [number, number] }> = 
     const m = ACTS[name]?.[k];
     if (m?.rise) mist(px, m.mist, 0, -1, lamp);
     else if (m?.mist) mist(px, m.mist, view.endsWith('side') ? -1 : 0, { down: -1, up: 1 }[view] ?? 0);
-    out.push({ i, px, lamp });
+    out.push({ i, px, lamp, eyes: seen, claw });
   }
   parentPort.postMessage(out);
 }

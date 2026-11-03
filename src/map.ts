@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import * as Font from './font.ts';
+import { binds, label as keyLabel } from './keys.ts';
 import * as Save from './save.ts';
 import { T } from './tuning.ts';
 import { runMask } from './logic.ts';
@@ -144,7 +145,7 @@ export function preload(scene: Phaser.Scene, z: string) {
 }
 
 /** Opens zone `z`'s map over the game, paused until close(): him at `hero`, facing `facing` (radians); `hint`: its keys. */
-export function open(scene: Phaser.Scene, z: ZoneId, hero: P, facing: number, hint = 'C ou Échap : fermer') {
+export function open(scene: Phaser.Scene, z: ZoneId, hero: P, facing: number, hint = `${[...binds.map.flat().map(keyLabel), 'Échap'].join(' ou ')} : fermer`) {
   Save.store(); // what he has seen so far, for good
   scene.physics.pause();
   scene.tweens.pauseAll();

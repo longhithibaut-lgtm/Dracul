@@ -516,6 +516,8 @@ export const T = {
   // good: those within `dark` px of him (`lit`: in light, as for the foes above), his sight stopped by rock and walls but
   // for their first `into` px (so the edges he faces are drawn).
   carte: { cell: 32, dark: 120, lit: 190, into: 24 },
+  // Les notes (notes.ts): read with F within `reach` px of where one lies (the refuge's lectern too).
+  notes: { reach: 24 },
   // Blood carried, apart from life: the dead drop `drops` of their kind (an Amas' torn ghouls none), a cache holds
   // `cache`, both times the ring's multiplier `ring`. Picked up within `pickup` px of his feet, searched within
   // `search`; at most `bag` carried (to be raised at the refuge). All of it lost at death; banked by walking up to the

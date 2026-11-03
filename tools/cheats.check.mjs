@@ -28,7 +28,7 @@ const training = async () => {
 const click = (sel) => page.click(`#training ${sel}`);
 const go = async (label) => { await click(`[data-go]:text-is("${label}")`); };
 
-await page.goto('http://localhost:5208/');
+await page.goto('http://localhost:5208/?play');
 await run(() => localStorage.clear());
 await page.reload();
 await arrived('refuge', false);

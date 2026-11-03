@@ -87,7 +87,7 @@ const tour = async (more) => {
   await more?.();
 };
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await ready();
 if (!only || only === 'fresh') await set('fresh', { banked: 0, deaths: 0, returns: 0 }), await tour();
 if (!only || only === 'mid') await set('mid', { banked: 900, bite: true, life: 2, bag: 1, items: [0, 3, 7, 12], deaths: 4, returns: 3 }), await tour(async () => {

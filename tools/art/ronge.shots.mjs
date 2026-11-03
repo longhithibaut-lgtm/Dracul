@@ -34,7 +34,7 @@ const at = async (x, y) => {
 const save = (o) => run((o) => localStorage.setItem('dracul.save', JSON.stringify({ ...JSON.parse(localStorage.getItem('dracul.save') ?? '{}'), ...o })), o);
 const want = (got, pose) => got?.startsWith(pose) || errors.push(`expected him ${pose}, got ${got}`);
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await ready();
 await save({ banked: 200, dry: 0 });
 await page.reload();
