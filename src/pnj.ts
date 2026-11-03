@@ -72,7 +72,7 @@ function figure(scene: Phaser.Scene, id: keyof typeof SHEETS, at: P, frame: stri
   return scene.add.image(at.x, at.y, `pnj-${id}`, frame).setOrigin(0.5, S.SOLE / S.FH).setScale(0.5).setDepth(at.y).setBlendMode(prelit(scene));
 }
 
-type Npc = { at: P; s: Phaser.GameObjects.Image; label: Loot.Label; talk(): Dialogue.Talk | string | undefined; show(time: number, near: boolean): void; r?: number };
+type Npc = { at: P; s: Phaser.GameObjects.Image; label: Loot.Label; talk(): Dialogue.Talk | string | undefined; show(time: number, near: boolean): void; r?: number; name?(): string; lift?: number };
 
 export type Pnj = ReturnType<typeof create>;
 /** The four of this room, as the quests stand. */
@@ -248,6 +248,7 @@ export function create(scene: Phaser.Scene, host: Host) {
     escort = { feet, s: n.s.setVisible(true), hp: O.hp, hitAt: 0, hurtAt: -1e9, flip: false, walked: 0 };
     n.at = (feet.body as Phaser.Physics.Arcade.Body).center;
     n.label = { near: () => {}, destroy: () => {} }; // (no words over him as he walks)
+    n.name = undefined;
     n.show = () => {};
   };
   if (here === 'refuge' && Q.atRefuge(q, 'odo')) {
@@ -289,8 +290,10 @@ export function create(scene: Phaser.Scene, host: Host) {
   /** A talk opened over the paused world; a bare string is a title, no box. */
   const open1 = (t: Dialogue.Talk) => {
     host.pause(true);
-    box = Dialogue.open(scene, t, () => { box = undefined; host.pause(false); });
+    box = Dialogue.open(scene, t, () => { box = undefined; host.pause(false); scene.time.delayedCall(0, relabel); });
   };
+  /** Their words afresh, once a talk may have changed who they are (met, fed, gone). */
+  const relabel = () => { for (const o of npcs) if (o.name && o.lift && npcs.includes(o)) { o.label.destroy(); o.label = Loot.label(scene, o.at.x, o.at.y - o.lift, o.name()); } };
   const odoDies = () => {
     const e = escort!;
     escort = undefined;
@@ -315,7 +318,7 @@ export function create(scene: Phaser.Scene, host: Host) {
       if (!n) return false;
       host.hero.setVelocity(0);
       const t = n.talk();
-      if (typeof t === 'string') host.title(t);
+      if (typeof t === 'string') { host.title(t); relabel(); }
       else if (t) open1(t);
       return true;
     },
@@ -376,7 +379,7 @@ export function create(scene: Phaser.Scene, host: Host) {
       else host.title('Maître Odo reste en arrière.');
       escort = undefined;
     },
-    /** Odo's blood left, while he follows (undefined: he does not). */
-    odo: () => escort?.hp,
+    /** Odo while he follows: his blood left, where he stands (undefined: he does not follow). */
+    odo: () => escort && { hp: escort.hp, x: escort.feet.x, y: escort.feet.y },
   };
 }

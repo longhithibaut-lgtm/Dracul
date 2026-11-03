@@ -37,7 +37,7 @@ function wrap(text: string, size: number, max: number) {
 /** Opens `t` over the game; `done` once it closes (before a choice acts). */
 export function open(scene: Phaser.Scene, t: Talk, done: () => void): Box {
   const main = scene.cameras.main, hud = scene.cameras.cameras.find((c) => c !== main && c.name !== 'dark-over');
-  let made: Phaser.GameObjects.GameObject[] = [], line = 0, hot = -1, rows: { y0: number; y1: number; i: number }[] = [], shut = false;
+  let made: Phaser.GameObjects.GameObject[] = [], line = 0, hot = -1, rows: { y0: number; y1: number; i: number }[] = [], shut = false, at0 = performance.now();
   // Only the HUD's camera draws it (dark.ts hands every object the HUD's camera does not ignore to it alone).
   const own = <O extends Phaser.GameObjects.GameObject & { setDepth(d: number): O }>(o: O) => {
     o.setDepth(DEPTH);
@@ -94,6 +94,8 @@ export function open(scene: Phaser.Scene, t: Talk, done: () => void): Box {
   const at = (y: number) => rows.find((r) => y >= r.y0 - 1 && y < r.y1 + 1)?.i ?? -1;
   return {
     next() {
+      if (performance.now() - at0 < 120) return; // one press, one line (a press delivered twice, or the one that opened it)
+      at0 = performance.now();
       if (line < t.lines.length - 1) { line++; hot = -1; return draw(); }
       if (!t.choices?.length) close();
     },
