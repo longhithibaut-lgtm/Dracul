@@ -188,6 +188,7 @@ check((await run(() => JSON.parse(localStorage.getItem('dracul.save')).banked)) 
 // ---- 8. Les quatre cercueils ----
 const R = await run(() => import('/src/prologue.data.ts').then((m) => m.REFUGE));
 for (const [i, p] of R.coffins.entries()) { await walk(p.x, p.y, 10, 15000); await play(500); if (i === 0 || i === 3) await shot(`cercueil-${i}`); }
+if (await until(`window.S().children.list.some((o) => o.texture?.key === 'rat' && o.getData('high'))`, 15000)) await shot('rat-signe'); // up on the Rat's coffin
 check(await until(`window.S().prologue.beat === 'cercueil'`, 15000), 'the four coffins, the nobles, the rat gone');
 await shot('rat-parti');
 await walk(R.mine.x, R.mine.y, 6, 10000);

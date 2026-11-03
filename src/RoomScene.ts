@@ -2269,7 +2269,7 @@ export class RoomScene extends Phaser.Scene {
 
   private showBlood() {
     if (this.training) return;
-    this.hud.blood(this.carried, this.bloodBag(), this.layout === 'refuge' ? Save.data.banked : undefined);
+    this.hud.blood(this.carried, this.bloodBag(), this.layout === 'refuge' && !this.beat ? Save.data.banked : undefined);
     this.hud.bag(this.layout === 'refuge' ? undefined : this.bag, Shop.itemSlots(Save.data));
   }
 
