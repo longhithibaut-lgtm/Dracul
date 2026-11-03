@@ -49,10 +49,11 @@ describe('the journal in the save', () => {
   it('comes up empty from an older save', () => {
     const s = parse('{"v":6,"banked":30,"vesna":true}');
     expect([s.v, s.notes, s.banked, s.vesna]).toEqual([VERSION, [], 30, true]);
+    expect(parse('{"v":7,"prologue":true}')).toMatchObject({ v: VERSION, notes: [], prologue: true }); // the prologue's 7
   });
 
   it('keeps the notes read, once each, in order; drops what is no note', () => {
-    expect(parse('{"v":7,"notes":["lent","seau","lent",4,"nothing"]}').notes).toEqual(['lent', 'seau']);
-    expect(parse(JSON.stringify(parse('{"v":7,"notes":["gardien"]}'))).notes).toEqual(['gardien']);
+    expect(parse('{"v":8,"notes":["lent","seau","lent",4,"nothing"]}').notes).toEqual(['lent', 'seau']);
+    expect(parse(JSON.stringify(parse('{"v":8,"notes":["gardien"]}'))).notes).toEqual(['gardien']);
   });
 });
