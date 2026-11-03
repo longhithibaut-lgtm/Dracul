@@ -394,8 +394,8 @@ export class RoomScene extends Phaser.Scene {
     const claws = (b: string) => Keys.lookup(Keys.binds, b).some((h) => h.action === 'claw');
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => claws(`Mouse${p.button}`) && this.clawMouse && this.release());
     // Key events, not polling: a tap shorter than one frame would otherwise be lost. A key held repeats: it acts once.
-    this.input.keyboard!.on('keydown', (ev: KeyboardEvent) => !ev.repeat && this.keyDown(ev));
-    this.input.keyboard!.on('keyup', (ev: KeyboardEvent) => claws(Keys.name(ev)) && !this.clawMouse && this.release());
+    this.input.keyboard!.on('keydown', Keys.once((ev: KeyboardEvent) => !ev.repeat && this.keyDown(ev)));
+    this.input.keyboard!.on('keyup', Keys.once((ev: KeyboardEvent) => claws(Keys.name(ev)) && !this.clawMouse && this.release()));
     // Le Rongé's wares: hovered, bought by their key or a click, left with Escape (or F).
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.aimMouse = true;
