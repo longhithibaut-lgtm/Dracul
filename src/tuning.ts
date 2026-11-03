@@ -531,6 +531,26 @@ export const T = {
   // (100, 150, 225, 338, 506, 759, 1139, 1709), la Nuée `swarm`.
   vesna: { talk: 40, cost: 100, mult: 1.5, swarm: 1200 },
 
+  // The four met in the world and their quests (quests.ts, pnj.ts; docs/histoire-proposition.md « implémenté »): F
+  // within `talk` of one speaks to them. Mirelle l'Emmurée: `blood` carried poured through her slit, once a night (an
+  // expedition), `feeds` times, and she joins the refuge (le Rongé holds one more night before turning beast); left
+  // unfed more than `starve` nights after the last time (or the meeting), she turns ghoul (`ghoulHp`), and her ghoul
+  // dead drops `ribbon` blood. Le Greffier: the Order's ledger from the camp weighs like `weight` blood carried, lost at
+  // death; given to him, he gives the catacombs' map and `reward` blood. Ilse: her Gavé killed, she offers her blood:
+  // bitten, the hero heals `heal` and carries `blood` more, she dies; spared, she gives a Faucille du fossoyeur of
+  // rarity `r`. Maître Odo: freed from his stake, he follows `keep` px behind at `speed`, `hp` of his own; a hunting foe
+  // within `reach` of him strikes him `hit` every `hitMs`, an idle one within `draw` of him rouses; farther than `lost`
+  // he catches up off screen. He comes down to the refuge if within `near` of the hero going down its stairs. Kept, he
+  // reforges the weapon worn up a rarity for `forge`[r] banked; given to le Rongé, the Rongé never turns beast and sells
+  // at `cut` of his prices.
+  quests: {
+    talk: 36,
+    mirelle: { blood: 30, feeds: 3, starve: 3, ghoulHp: 6, ribbon: 60 },
+    greffier: { weight: 150, reward: 80 },
+    ilse: { heal: 50, blood: 40, r: 1 },
+    odo: { hp: 40, speed: 44, keep: 22, reach: 16, hit: 10, hitMs: 900, draw: 70, lost: 320, near: 90, forge: [120, 240], cut: 0.75 },
+  },
+
   // Items (items.ts, docs/extraction.md §6): found on an expedition, lost at death until brought back to the refuge,
   // where they are acquired for good (its chest). Worn in `slots` by family; carried in a bag of `bag` items, one more
   // a rank of le Rongé's bag. Found: in a cache, by its ring's `cache` chance (every cache of the zone's `sure` areas:

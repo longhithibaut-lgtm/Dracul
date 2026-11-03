@@ -2305,14 +2305,14 @@ export class RoomScene extends Phaser.Scene {
       return true;
     }
     this.hero.setVelocity(0);
-    this.counter = Ronge.counter(this, this.offers(), Save.data.banked, Phaser.Utils.Array.GetRandom(Shop.LINES.greet));
+    this.counter = Ronge.counter(this, this.offers(), Save.data.banked, Phaser.Utils.Array.GetRandom(Shop.greet(Save.data)));
     return true;
   }
 
   private offers(): Ronge.Offer[] {
     const S = Save.data;
     return Shop.WARES.map((ware) => {
-      const owned = Shop.owned(S, ware), price = Shop.price(ware, owned);
+      const owned = Shop.owned(S, ware), price = Shop.price(ware, owned, Shop.cut(S));
       return { ware, owned, ranks: Shop.ranks(ware), price, afford: price !== undefined && S.banked >= price };
     });
   }

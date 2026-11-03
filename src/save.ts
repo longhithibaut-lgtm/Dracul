@@ -3,8 +3,9 @@
 // game runs without storage (a private window, a framed preview): it then starts afresh each time.
 import { ITEMS, SLOTS, type Item, type Worn } from './items.ts';
 import { isPower, slotOf, type Power, type Worn as Powers } from './powers.ts';
+import * as Quests from './quests.ts';
 
-export const VERSION = 6; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers; 4: the map's fog (carte), or (another branch's 4) the guardian is la Matrice; 5: both; 6: life in HP (50, was 5 drops). An older save comes up without what it lacks
+export const VERSION = 7; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers; 4: the map's fog (carte), or (another branch's 4) the guardian is la Matrice; 5: both; 6: life in HP (50, was 5 drops); 7: the quests of the four met in the world. An older save comes up without what it lacks
 // unlocks: what the Rongé sold for banked blood (shop.ts): the bite, the ranks of max life (`life`) and of the bag (`bag`)
 // bought (ranks: each worth T.ronge.life.hp, so an older save's ranks hold as they are). dry: how many times in a row the hero came back (or re-formed) without pouring blood: the Rongé's hunger.
 // shortcuts: the zone's gates raised for good (necropolis.data.ts GATES ids). stash: the items brought back (the
@@ -14,9 +15,10 @@ export const VERSION = 6; // 2: the items (stash, worn, next); 3: the Nourrice, 
 // l'Araignée before), fights begun and her death (for good); vesna: freed (for good, even if he dies on his way back; an
 // older save whose guardian, the Araignée, was killed counts her freed); powers: the Rat house's powers bought from her,
 // and those worn, one per slot (powers.ts). carte: per open zone, the map's cells he has seen, a bitmask in base64
-// (map.ts; one of another size is dropped there).
+// (map.ts; one of another size is dropped there). quests: the four met in the world, their quests and the choices made
+// (quests.ts; an older save meets them afresh).
 export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number; shortcuts: string[]; stash: Item[]; worn: Worn; next: number;
-  nourrice: { tries: number; dead: boolean }; vesna: boolean; powers: { bought: Power[]; worn: Powers }; carte: Partial<Record<'necropolis' | 'catacombs', string>> };
+  nourrice: { tries: number; dead: boolean }; vesna: boolean; powers: { bought: Power[]; worn: Powers }; carte: Partial<Record<'necropolis' | 'catacombs', string>>; quests: Quests.Quests };
 const KEY = 'dracul.save', LOG = 'dracul.log';
 
 /** A save read back from `json`, whatever it holds: brought up to this version, missing or broken fields to their
@@ -43,7 +45,7 @@ export function parse(json: string | null): Save {
   const carte: Save['carte'] = {};
   for (const z of ['necropolis', 'catacombs'] as const) { const s = o.carte?.[z]; if (typeof s === 'string' && /^[A-Za-z0-9+/]*={0,2}$/.test(s)) carte[z] = s; }
   return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry), shortcuts, stash, worn, next,
-    nourrice: { tries: count(o.nourrice?.tries), dead: o.nourrice?.dead === true }, vesna: o.vesna === true || (araignee && o.nourrice?.dead === true), powers: { bought, worn: wearing }, carte };
+    nourrice: { tries: count(o.nourrice?.tries), dead: o.nourrice?.dead === true }, vesna: o.vesna === true || (araignee && o.nourrice?.dead === true), powers: { bought, worn: wearing }, carte, quests: Quests.read(o.quests) };
 }
 
 const storage = () => { try { return localStorage; } catch { return undefined; } }; // a sandboxed frame throws on access

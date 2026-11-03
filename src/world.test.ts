@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHOKES, NAV, WORLD, ZONES, around, chokes, cellAt, expedition, go, homeward, isZone, lair, loose, parents, quadOf, ringAt, wayBack, waysUp, type Came, type Place } from './world.ts';
 import { parse, VERSION, type Save } from './save.ts';
+import { fresh as freshQuests } from './quests.ts';
 import { LINES, WARES, WARE_TEXT, bagSize, beast, buy, owned, price } from './shop.ts';
 import { T } from './tuning.ts';
 import { missing } from './font.ts';
@@ -335,7 +336,7 @@ describe('les catacombes', () => {
 });
 
 describe('save', () => {
-  const V3 = { nourrice: { tries: 0, dead: false }, vesna: false, powers: { bought: [], worn: {} }, carte: {} }; // versions 3 and 4's, at their start
+  const V3 = { nourrice: { tries: 0, dead: false }, vesna: false, powers: { bought: [], worn: {} }, carte: {}, quests: freshQuests() }; // versions 3, 4 and 7's, at their start
   it('starts afresh without a save, or with a broken one', () => {
     const fresh = { v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0, ...V3 };
     expect(parse(null)).toEqual(fresh);
