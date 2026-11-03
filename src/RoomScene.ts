@@ -34,7 +34,9 @@ import * as Enterre from './enterre.ts';
 import * as Gave from './gave.ts';
 import * as Chose from './chose.ts';
 import * as Crocheteur from './crocheteur.ts';
-import { decks, nearestEdge, struggle } from './fauna.ts';
+import * as Tireur from './tireur.ts';
+import * as Miroitier from './miroitier.ts';
+import { clearRay, decks, nearestEdge, struggle, type Perch } from './fauna.ts';
 import { WORLD, ZONES, areaAt, chokes, expedition, galleryOpen, go, homeward, isZone, lair, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState, type ZoneId } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
 
@@ -57,7 +59,7 @@ type Rat = { s: Phaser.GameObjects.Sprite; heading: number; phase: number; until
 // A room: the hero walks in (up its stairs, or down from one of its exits), plays, and walks out by any exit when he
 // pleases: deeper up through its open portcullises, back down its stairs.
 type Phase = 'enter' | 'play' | 'leave';
-type Placed = { hp?: number; home?: { x: number; y: number }; alert?: boolean; followed?: boolean; pack?: number };
+type Placed = { hp?: number; home?: { x: number; y: number }; alert?: boolean; followed?: boolean; pack?: number; perches?: Perch[] }; // perches: a Tireur's roofs (the first his), else a stand-in at `p`
 type Blood = { x: number; y: number; blood: number };
 type Lying = { x: number; y: number; item: Items.Item; fx: Loot.Glint; label: Loot.Label }; // an item on the floor
 const NAV = 8; // walk grid cell, px
@@ -283,7 +285,8 @@ export class RoomScene extends Phaser.Scene {
     // whirls), each bourreau's reliquary, each purificateur's pilot while it flares and burns, each sonneur's bell while
     // its rim glows and rings, then its lanterns. Their bodies' tells, in the dark rooms.
     const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (['priest', 'inquisitor', 'bourreau', 'nourrice', 'matrice'].includes(e.getData('kind')) || ['ignite', 'fire', 'raise', 'toll'].includes(e.getData('state'))))
-      .map((e) => ({ ...(e.getData('kind') === 'nourrice' ? Nourrice.lamp(e) : e.getData('kind') === 'matrice' ? Matrice.lamp(e) : Foes.lamp(e)), lit: true, I: this.glow(e) })), ...this.lanterns];
+      .map((e) => ({ ...(e.getData('kind') === 'nourrice' ? Nourrice.lamp(e) : e.getData('kind') === 'matrice' ? Matrice.lamp(e) : Foes.lamp(e)), lit: true, I: this.glow(e) })),
+    ...(this.enemies.getChildren() as Sprite[]).flatMap((e) => !e.body?.enable ? [] : e.getData('kind') === 'tireur' ? Tireur.lights(e, this.time.now) : e.getData('kind') === 'miroitier' ? Miroitier.lights(e, this.time.now) : []), ...this.lanterns]; // a Tireur's ember, a Miroitier's lantern, glare and beam
     if (this.room.zone) Dark.light(this, this.hero, this.enemies, lights, [ZONES[this.room.zone.id].SW, ZONES[this.room.zone.id].SH], this.room.look, this.room.zone.chunks.quads);
     else Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
     this.propBoxes = this.room.obstacles.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody);
@@ -297,6 +300,7 @@ export class RoomScene extends Phaser.Scene {
       pits: this.room.pits.getChildren().map((o) => o.body as Phaser.Physics.Arcade.StaticBody),
       fling: (dx, dy, into) => this.fling(dx, dy, into),
       netted: () => this.netted(), net: () => { [this.netUntil, this.netPoints] = [this.time.now + T.crocheteur.netMs, 0]; },
+      ray: (from, angle) => clearRay(from, angle, this.room.bounds, this.propBoxes), holy: (x, y) => this.room.holy(x, y),
       marks: (e) => [...(this.enemies.getChildren() as Sprite[]).filter((o) => o !== e && o.body?.enable && !this.aloft(o) && !['crows', 'chose', 'enterre'].includes(o.getData('kind'))).map((o) => o.body!.center),
         ...this.lanterns.filter((l) => l.lit), ...(this.room.zone?.lamps ?? [])],
     };
@@ -778,9 +782,10 @@ export class RoomScene extends Phaser.Scene {
     this.inLight = lamp || (this.room.light?.(c.x, c.y) ?? Infinity) >= T.sight.lit;
     if (zone && !this.training) Carte.see(zone.id, c.x, c.y, this.inLight); // the map's fog
     let dawn = false;
-    if (lamp || this.room.holy(c.x, c.y)) {
+    const beam = (this.enemies.getChildren() as Sprite[]).some((e) => e.body?.enable && e.getData('burning')); // in a Miroitier's beam (miroitier.ts)
+    if (lamp || beam || this.room.holy(c.x, c.y)) {
       if (this.swarmFx) this.unswarm();
-      const L = lamp ? T.lantern : this.room.burn, grace = L.graceMs + this.gear.grace, before = burnsAfter(this.litMs, grace, L.burnEveryMs);
+      const L = beam ? T.miroitier.burn : lamp ? T.lantern : this.room.burn, grace = L.graceMs + this.gear.grace, before = burnsAfter(this.litMs, grace, L.burnEveryMs);
       this.litMs += delta * (this.has('noires') ? T.pacts.noires.burn : 1) * Math.max(0, 1 + this.gear.burn);
       dawn = L === T.dawn;
       if (!dawn) Lantern.sizzle(this, this.hero);
@@ -819,7 +824,7 @@ export class RoomScene extends Phaser.Scene {
       // prey in the hero's jaws is held by the bite instead.
       const boss = kind === 'nourrice' || kind === 'matrice', bound = !!this.glyph && !boss && kind !== 'crows' && kind !== 'enterre' && kind !== 'chose' && Glyph.binds(this.glyph, e.body.center, time); // the glyph cannot hold her, a flock, nor what lies in the earth
       const kneeling = this.kneeling(e); // a human just weakened, down on its knees: see hurtEnemy()
-      e.setImmovable(bound || e === this.prey || kneeling || boss); // her brood never shoves her
+      e.setImmovable(bound || e === this.prey || kneeling || boss || (kind === 'tireur' && Tireur.perched(e))); // her brood never shoves her; nor a roof a Tireur stands on
       if (bound && e !== this.prey) {
         held.push(e);
         if (this.has('pestilent')) this.infect(e, this.v('pestilent'));
@@ -835,6 +840,8 @@ export class RoomScene extends Phaser.Scene {
         else if (kind === 'gave') Gave.step(this.ctx, e, time);
         else if (kind === 'chose') Chose.step(this.ctx, e, time);
         else if (kind === 'crocheteur') Crocheteur.step(this.ctx, e, time);
+        else if (kind === 'tireur') Tireur.step(this.ctx, e, time);
+        else if (kind === 'miroitier') Miroitier.step(this.ctx, e, time);
         else if (!this.hunts(e, time)) this.idle(e);
         else if (bow) this.stepCrossbow(e, time);
         else if (kind === 'purifier') this.stepPurifier(e, time);
@@ -1697,9 +1704,11 @@ export class RoomScene extends Phaser.Scene {
   }
 
   /** An inquisiteur turns aside a blow coming at his front from floor point `from` (claws, a shard): sparks off his
-   *  gauntlet, a ringing clang, and nothing else: no wound, no flinch. True when he did. */
-  private parried(e: Sprite, from: { x: number; y: number }) {
+   *  gauntlet, a ringing clang, and nothing else: no wound, no flinch. True when he did. A Miroitier's mirror takes it
+   *  likewise, worn by the claw's poise `weight` (miroitier.ts guards()). */
+  private parried(e: Sprite, from: { x: number; y: number }, weight = 0) {
     const c = e.body!.center;
+    if (e.getData('kind') === 'miroitier') return !this.kneeling(e) && e !== this.prey && Miroitier.guards(this.ctx, e, from, weight, this.time.now);
     if (e.getData('kind') !== 'inquisitor' || this.kneeling(e) || e === this.prey || !e.getData('alert') || this.time.now < (e.getData('staggerUntil') ?? 0) || !inArc(c, e.getData('facing'), from, Infinity, 2 * T.inquisitor.parryDeg)) return false;
     const a = Phaser.Math.Angle.Between(from.x, from.y, c.x, c.y);
     e.setData('parryAt', this.time.now);
@@ -1950,7 +1959,7 @@ export class RoomScene extends Phaser.Scene {
       Chose.struck(this.ctx, e, now);
       return 0;
     }
-    if (this.parried(e, this.hero.body!.center)) { // his arm jars back
+    if (this.parried(e, this.hero.body!.center, weight)) { // his arm jars back
       this.physics.velocityFromRotation(angle + Math.PI, 110, this.shove);
       this.shoveUntil = now + 90;
       return 0;
@@ -2756,6 +2765,7 @@ export class RoomScene extends Phaser.Scene {
     const bow = kind === 'crossbow', now = this.time.now;
     const edge = kind === 'chose' ? nearestEdge(decks(this.ctx.pits), p) : undefined, gripped = !!edge && Phaser.Math.Distance.BetweenPoints(edge, p) < 40; // a deck's edge: the chasm's
     const e = (kind === 'chose' ? Chose.create(this, this.enemies, gripped ? edge! : { x: p.x, y: p.y, span: T.chose.span, depth: 40 }, !gripped)
+      : kind === 'tireur' ? Tireur.create(this, this.enemies, o.perches ?? [Tireur.perchAt(p)], !o.perches)
       : Foes.isFoe(kind) ? Foes.create(this, this.enemies, kind, p.x, p.y) : kind === 'nourrice' ? Nourrice.create(this, this.enemies, p.x, p.y) : kind === 'matrice' ? Matrice.create(this, this.enemies, p.x, p.y)
       : kind === 'crows' ? Crows.create(this, this.enemies, p.x, p.y) : (bow ? Crossbow : Enemy).create(this, this.enemies, p.x, p.y)).setCollideWorldBounds(true);
     // hp0: its blood as it came, for its wounds (enemy.ts wounded).

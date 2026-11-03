@@ -12,7 +12,8 @@ describe('foes sheets', () => {
         ...{ purifier: ['ignite', 'fire0', 'fire1', 'jet0', 'jet1'], priest: ['pray'], hound: ['tele', 'leap'], penitent: ['tele', 'atk'], ringer: ['tele', 'atk'],
           inquisitor: ['whirl0', 'whirl1', 'whirl2', 'whirl3', 'sweep0', 'sweep1', 'sweep2', 'parry'], amas: ['tele0', 'tele1', 'atk'], bourreau: ['tele', 'atk', 'pull0', 'pull1'], crossbow: ['raise', 'aim', 'lock', 'shot'],
           crow: ['tele', 'dive'], enterre: ['tele0', 'tele1', 'grab0', 'grab1', 'sink'], gave: ['eat0', 'eat1', 'tele', 'atk', 'gorge', 'spew0', 'spew1'],
-          chose: ['tele0', 'tele1', 'tele2', 'swipe0', 'swipe1', 'swipe2', 'rest', 'sink'], crocheteur: ['spin0', 'spin1', 'spin2', 'spin3', 'toss', 'hook', 'drag0', 'drag1'] }[kind]!];
+          chose: ['tele0', 'tele1', 'tele2', 'swipe0', 'swipe1', 'swipe2', 'rest', 'sink'], crocheteur: ['spin0', 'spin1', 'spin2', 'spin3', 'toss', 'hook', 'drag0', 'drag1'],
+          tireur: ['aim', 'blow', 'shot', 'reload0', 'reload1'], miroitier: ['raise', 'glare', 'beam', 'bidle', 'bwalk0', 'bwalk1', 'bwalk2', 'bwalk3', 'bhurt'] }[kind]!];
       for (const view of kind === 'enterre' || kind === 'chose' ? ['down'] : ['side', 'dside', 'down', 'uside', 'up']) for (const f of frames) expect(S.FRAMES[`${view}-${f}`], `${kind} ${view}-${f}`).toBeDefined();
       expect(S.FRAMES.corpse).toBeDefined();
     }

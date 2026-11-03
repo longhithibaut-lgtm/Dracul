@@ -9,8 +9,12 @@
 // empty, with the hound pack, six pénitents, a Sonneur, an Inquisiteur, an Amas and a Bourreau fighting.
 // The necropolis' crows, Enterré and Gavé likewise (their alarm, grip and meals checked too); la Chose du gouffre at the
 // bridge (its recoil under a claw, and the fall: a hero standing on the deck is flung into the chasm) and the Crocheteur
-// (his net, his hook hauling the hero toward a ghoul, the net torn off by keys).
-// Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=necropolis --only=fauna]
+// (his net, his hook hauling the hero toward a ghoul, the net torn off by keys). The Tireur du mausolée on his stand-in
+// roof (out of the claws' reach, not of the shards; his ember, his shot's tracer, his ram; driven off his roof, caught at
+// his ladder) and the Miroitier (his glare, his beam, the claws ringing off his mirror in front until it shatters, his
+// back bleeding).
+// Writes <out>/foes-<what>.png. Usage: node tools/art/foes.shots.mjs [--out=shots --port=5209 --layout=necropolis --only=fauna|batch3]
+// (batch3: the Tireur and the Miroitier alone)
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
@@ -462,7 +466,7 @@ const fauna = async () => {
   await page.screenshot({ path: `${out}/foes-dead5.png` });
   await clear();
 };
-await fauna();
+if (only !== 'batch3') await fauna();
 
 // La Chose du gouffre at the bridge: gripping (the hero on the stone beside it), stirred by his feet on the deck (the tell
 // in three), its sweep, the arm lying there; clawed on its fingers in the tell: it tears its hands back and sinks, and
@@ -559,7 +563,112 @@ const batch2 = async () => {
   if (presses !== Math.ceil(T.crocheteur.free / T.crocheteur.key) || (await run(`!!${S}.heldBy`))) errors.push(`the net or the hook did not let go: ${presses} keys`);
   await clear();
 };
-await batch2();
+// The Tireur du mausolée: perched on his stand-in roof (idle), blowing on his ember (the tell), the click, the shot (its
+// tracer), ramming the next ball; the claws cannot reach him up there, a shard does; the hero near, he goes down his
+// ladder (caught at its foot by a claw). The Miroitier: idle, walking, the mirror coming up (the tell), the beam; claws on
+// his front ring off the bronze until it shatters (he reels, bare); one in his back bleeds him.
+const batch3 = async () => {
+  await clear();
+  await hero(240, 340);
+  await call([['tireur', 120, 330]]);
+  await step(300);
+  await crop('tireur', 'tireur-idle', 420, 400, -16);
+  await page.screenshot({ path: `${out}/foes-tireur-full.png` });
+  await set('tireur', { readyAt: 0, loaded: true });
+  await until(async () => (await S3('tireur')) === 'sight', 1500);
+  await step(T.tireur.blowMs * 0.5);
+  await crop('tireur', 'tireur-tell0', 420, 400, -16);
+  await step(T.tireur.blowMs * 0.5 + 100);
+  await crop('tireur', 'tireur-tell', 420, 400, -16);
+  await page.screenshot({ path: `${out}/foes-tireur-tell-full.png` });
+  await until(async () => (await S3('tireur')) === 'shoot', 1000);
+  await step(30);
+  await crop('tireur', 'tireur-attack', 720, 440, -12);
+  await page.screenshot({ path: `${out}/foes-tireur-shot-full.png` });
+  await step(500);
+  await crop('tireur', 'tireur-smoke', 720, 440, -12);
+  await until(async () => (await S3('tireur')) === 'ram', 1000);
+  await step(400);
+  await crop('tireur', 'tireur-reload', 420, 400, -16);
+  const hp = () => run(`${foe('tireur')}.getData('hp')`);
+  await hero(120, 430);
+  await step(100);
+  await run(`(() => { const s = ${S}, e = ${foe('tireur')}, c = s.hero.body.center; s.shotReadyAt = s.slashUntil = 0; s.shoot(Math.atan2(e.body.center.y - c.y, e.body.center.x - c.x)); })()`);
+  await step(600);
+  const shot = await hp();
+  console.log(`the Tireur on his roof: a shard takes him to ${shot} (of ${T.tireur.hp})`);
+  if (shot >= T.tireur.hp) errors.push('a shard did not reach the Tireur on his roof');
+  await run(`(() => { const s = ${S}, e = ${foe('tireur')}, h = s.hero; h.body.reset(e.body.center.x - 14 + h.x - h.body.center.x, e.body.center.y + 4 + h.y - h.body.center.y); s.slashReadyAt = 0; s.slash(0); })()`); // right under him
+  await step(100);
+  if ((await hp()) !== shot) errors.push(`a claw reached the Tireur on his roof: ${await hp()}`);
+  for (let t = 0; t < 6000 && (await S3('tireur')) !== 'descend'; t += 16) await step(16); // the hero near: off his roof
+  if ((await S3('tireur')) !== 'descend') errors.push(`the Tireur did not leave his roof: ${await S3('tireur')}`);
+  await step(T.tireur.climbMs * 0.6);
+  await crop('tireur', 'tireur-descend', 420, 400, -16);
+  await page.screenshot({ path: `${out}/foes-tireur-descend-full.png` });
+  await until(async () => (await S3('tireur')) !== 'descend', 1500);
+  await run(`(() => { const s = ${S}, e = ${foe('tireur')}, h = s.hero; h.body.reset(e.body.center.x - 16 + h.x - h.body.center.x, e.body.center.y + h.y - h.body.center.y); s.slashReadyAt = 0; s.slash(0); })()`); // at the ladder's foot
+  await step(200);
+  const caught = await run(`(() => { const e = ${foe('tireur')}; return e ? e.getData('hp') : 0; })()`);
+  console.log(`the Tireur caught at his ladder's foot: hp ${caught}`);
+  if (caught >= shot) errors.push('a claw did not reach the Tireur at his ladder\'s foot');
+  await clear();
+
+  await hero(240, 330);
+  await call([['miroitier', 160, 330]]);
+  await crop('miroitier', 'miroitier-idle', 420, 400, -16);
+  await hero(240, 250);
+  await set('miroitier', { readyAt: Infinity, state: 'chase', until: 0 });
+  for (const k of [0, 1, 2]) { await step(140); await crop('miroitier', `miroitier-walk${k}`, 420, 400, -16); }
+  await hold();
+  await run(`${foe('miroitier')}.body.reset(160, 330)`);
+  await hero(230, 340);
+  await still();
+  await set('miroitier', { readyAt: 0, state: 'chase', until: 0 });
+  await until(async () => (await S3('miroitier')) === 'lift', 1500);
+  await step(T.miroitier.liftMs * 0.3);
+  await crop('miroitier', 'miroitier-tell0', 480, 440, -16);
+  await step(T.miroitier.liftMs * 0.5);
+  await crop('miroitier', 'miroitier-tell', 480, 440, -16);
+  await page.screenshot({ path: `${out}/foes-miroitier-tell-full.png` });
+  await step(T.miroitier.liftMs * 0.2 + 500);
+  await crop('miroitier', 'miroitier-attack', 720, 440, -12);
+  await page.screenshot({ path: `${out}/foes-miroitier-beam-full.png` });
+  await hero(270, 300); // walking round him: the beam turns after him, slowly
+  await step(600);
+  await crop('miroitier', 'miroitier-sweep', 720, 440, -12);
+  await until(async () => (await S3('miroitier')) === 'chase', 4000);
+  await hold();
+  const m = () => run(`(() => { const e = ${foe('miroitier')}; return { hp: e.getData('hp'), bare: !!e.getData('bare'), wear: e.getData('wear') ?? 0 }; })()`);
+  const passive = (on) => run((on) => import('/src/training.ts').then((t) => { t.opts.passive = on; }), on); // he stands still, as he faces
+  await passive(true);
+  await run(`(() => { const e = ${foe('miroitier')}; e.body.reset(200, 330); e.setVelocity(0); e.setData({ facing: 0 }); })()`);
+  await hero(178, 330); // at his back
+  await run(`(() => { const s = ${S}; s.slashReadyAt = 0; s.slash(0); })()`);
+  await step(120);
+  const back = await m();
+  if (back.hp >= T.miroitier.hp) errors.push(`a claw in the Miroitier's back did not bleed him: ${JSON.stringify(back)}`);
+  await step(1700);
+  await run(`(() => { const e = ${foe('miroitier')}; e.body.reset(200, 330); e.setVelocity(0); e.setData({ facing: 0 }); })()`);
+  await hero(222, 330); // before him
+  let rings = 0;
+  for (; rings < 8 && !(await m()).bare; rings++) {
+    await hero(222, 330); // (each ring jars his arm back)
+    await run(`(() => { const s = ${S}; s.slashReadyAt = 0; s.combo = 0; s.lastSlashAt = -1e9; s.slash(Math.PI); ${foe('miroitier')}.setData('facing', 0); })()`);
+    await step(rings ? 340 : 60);
+    if (!rings) await crop('miroitier', 'miroitier-guard', 480, 440, -16);
+  }
+  const front = await m();
+  console.log(`claws on the Miroitier's front: ${rings} to shatter the mirror`, JSON.stringify(front));
+  if (!front.bare || front.hp !== back.hp) errors.push(`the Miroitier's mirror did not take the claws, or never shattered: ${JSON.stringify(front)}`);
+  await step(150);
+  await crop('miroitier', 'miroitier-shatter', 480, 440, -16);
+  await passive(false);
+  await step(T.miroitier.shatterMs + 600);
+  await crop('miroitier', 'miroitier-bare', 420, 400, -16);
+  await clear();
+};
+if (only !== 'batch3') await batch2(); else await batch3();
 
 // The bot plays each attack, the hero mortal and alone with the foe: standing still, then stepping out REACT ms after
 // the tell starts (holding a key: the hero walks at T.hero.speed). `then(t)`, if given, is what the bot does at each
@@ -662,12 +771,18 @@ async function peck(key) {
   await keys([], ['w', 'a', 's', 'd']);
   return 50 - (await run(() => window.game.scene.getScene('room').health));
 }
-Object.assign(fights, {
+if (only !== 'batch3') Object.assign(fights, {
   'Corneilles, immobile': await peck(null), 'Corneilles, s\'écarte': await peck('s'),
   'Enterré, immobile': await play('enterre', 16, 0, null, 'crack', ['grab']), 'Enterré, s\'éloigne': await play('enterre', 16, 0, 'd', 'crack', ['grab']),
   'Gavé, immobile (écrasement)': await play('gave', 26, 0, null, 'rear', ['flop']), 'Gavé, pas de côté (écrasement)': await play('gave', 26, 0, 's', 'rear', ['flop']),
   'Gavé, immobile (bile)': await play('gave', 50, 0, null, 'gorge', ['spew']), 'Gavé, pas de côté (bile)': await play('gave', 50, 0, 's', 'gorge', ['spew']),
   'Crocheteur, immobile (filet)': await play('crocheteur', 70, 0, null, 'spin', ['toss']), 'Crocheteur, pas de côté (filet)': await play('crocheteur', 70, 0, 's', 'spin', ['toss']),
+});
+// The Tireur on his roof 150 px off: the hero stands (the ball), or steps aside 250 ms into the tell (the aim follows him
+// until the click, then holds). The Miroitier 50 px off: the hero stands in the beam, or walks off.
+Object.assign(fights, {
+  'Tireur du mausolée, immobile': await play('tireur', 150, 0, null, 'sight', ['shoot']), 'Tireur du mausolée, pas de côté': await play('tireur', 150, 0, 's', 'sight', ['shoot']),
+  'Miroitier, immobile (le rai)': await play('miroitier', 50, 0, null, 'lift', ['beam']), 'Miroitier, s\'éloigne': await play('miroitier', 50, 0, 'd', 'lift', ['beam']),
 });
 // La Chose du gouffre: the hero on the bridge 10 px east of its middle when it stirs; he stands (flung into the chasm: the
 // fall, his whole life), or walks off east along the deck REACT ms into the tell. Last: the fall ends the scene (restart).
@@ -695,11 +810,13 @@ async function sweep(key) {
   const lost = 50 - (await run(`${S}.health`));
   return { lost, fell };
 }
+if (only !== 'batch3') {
 const away = await sweep('d'), stood = await sweep(null);
 console.log('la Chose du gouffre:', JSON.stringify({ stood, away }));
 if (!stood.fell) errors.push('la Chose\'s sweep did not throw a hero standing on the bridge into the chasm');
 Object.assign(fights, { 'Chose du gouffre, immobile (le gouffre)': stood.lost, 'Chose du gouffre, s\'éloigne sur le pont': away.lost });
 await step(2500); // re-formed in the training room (its panel built anew once the room is up)
+}
 for (let t = 0; t < 20000 && !(await run(() => !!document.querySelector('[data-opt="god"]') && !!window.game.scene.getScene('room').hero?.body?.enable)); t += 200) { await page.waitForTimeout(200); await step(16); }
 await run(() => document.querySelector('[data-opt="god"]').click());
 const names = Object.keys(fights), fair = names.every((n, i) => (i % 2 ? !fights[n] : fights[n] > 0));
