@@ -125,12 +125,12 @@ describe('quests', () => {
     expect(beast(m)).toBe(true);
   });
 
-  it('reads a version 6 save (no quests) and a broken one to a clean start', () => {
-    expect(VERSION).toBe(7);
-    const old = parse(JSON.stringify({ v: 6, banked: 120, unlocks: { bite: true, life: 1, bag: 0 } }));
+  it('reads a version 7 save (no quests) and a broken one to a clean start', () => {
+    expect(VERSION).toBe(8);
+    const old = parse(JSON.stringify({ v: 7, banked: 120, unlocks: { bite: true, life: 1, bag: 0 } }));
     expect(old.banked).toBe(120);
     expect(old.quests).toEqual(Q.fresh());
-    const bad = parse(JSON.stringify({ v: 7, quests: { night: -4, mirelle: { s: 'eaten', n: 'x', at: 99, c: 'nope' }, odo: { s: 'done', n: 1, at: 0, c: 'donne' }, ilse: null } }));
+    const bad = parse(JSON.stringify({ v: 8, quests: { night: -4, mirelle: { s: 'eaten', n: 'x', at: 99, c: 'nope' }, odo: { s: 'done', n: 1, at: 0, c: 'donne' }, ilse: null } }));
     expect(bad.quests.night).toBe(0);
     expect(bad.quests.mirelle).toEqual({ s: 'new', n: 0, at: 0 });
     expect(bad.quests.odo).toEqual({ s: 'done', n: 1, at: 0, c: 'donne' });

@@ -298,7 +298,7 @@ let registered = false;
 export type Look = {
   light: string; texel: number; torches: [number, number, number][]; flicker: boolean; amb: string; night: number;
   lamp: [number, number, number]; ys: number; post: [number, number, number, number]; vig: [number, number, number, number]; pal: string[]; wY: number;
-  albedo?: string; sprites?: number; warm?: number;
+  albedo?: string; sprites?: number; warm?: number; torch?: number; // torch: its baked light (torches, candles) scaled, 1 when none
 };
 
 /** The baked light of `src` (its first band, `texel` texels a room px), w x h room px, read back once: at each room px the
@@ -332,7 +332,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   const pre = over.preRender.bind(over);
   over.preRender = () => {
     // Origin 0: what is pinned to the screen (scroll factor 0: cards, flashes) lands at its place times the zoom.
-    over.setOrigin(0).setZoom(main.zoom).setScroll(main.worldView.x, main.worldView.y).setSize(main.width, main.height).setAlpha(1 - (main.fadeEffect as unknown as { alpha: number }).alpha);
+    over.setOrigin(0).setZoom(main.zoom).setScroll(main.worldView.x, main.worldView.y).setSize(main.width, main.height).setAlpha(Math.max(1e-3, 1 - (main.fadeEffect as unknown as { alpha: number }).alpha)); // never 0: Phaser stops calling preRender on a camera at 0, it would stay hidden after a full fade
     pre();
   };
   const sort = () => { // every object to one of the two (the HUD's own camera keeps its own)
@@ -382,7 +382,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
       lamp0 = 0.9 + 0.08 * Math.sin(time / 400) + Math.random() * 0.04;
       f.frame = (f.frame + 1) % 97;
     }
-    f.torch = torch;
+    f.torch = torch * (look.torch ?? 1);
     f.lamp = [lx, feet + 1, feet - ly, hero.visible ? look.lamp[0] * lamp0 : 0];
     f.glass = [lx, ly, hero.visible ? lamp0 : 0];
     f.night = [hero.x, feet, 90, look.night];

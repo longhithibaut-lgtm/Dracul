@@ -25,7 +25,7 @@ const save = () => run(() => JSON.parse(localStorage.getItem('dracul.save') ?? '
 const quests = async () => (await save()).quests;
 /** A fresh game with `quests` (and `more` of the save) set; the page reloaded at the refuge. */
 const fresh = async (q = {}, more = {}) => {
-  await run(([q, more]) => { localStorage.clear(); localStorage.setItem('dracul.save', JSON.stringify({ v: 7, quests: q, ...more })); }, [q, more]);
+  await run(([q, more]) => { localStorage.clear(); localStorage.setItem('dracul.save', JSON.stringify({ v: 8, prologue: true, quests: q, ...more })); }, [q, more]);
   await page.reload();
   await ready('refuge');
 };

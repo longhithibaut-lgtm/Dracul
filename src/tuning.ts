@@ -551,6 +551,12 @@ export const T = {
     odo: { hp: 40, speed: 44, keep: 22, reach: 16, hit: 10, hitMs: 900, draw: 70, lost: 320, near: 90, forge: [120, 240], cut: 0.75 },
   },
 
+  // The refuge's life (haven.ts): the basin's blood fills as banked / (banked + `fill`) (800: half full, 2400: three
+  // quarters); F within `use` of the coffin, the wardrobe, the trophies, the map table; a line from le Rongé or Vesna
+  // within `say` of them, once `firstMs` in, then at most every `lineMs`, `lines` a visit; le Rongé leans down to lap
+  // from the basin every `lapEvery` ms (random within), `lapMs` long; `rats` run about at `ratSpeed` within `roam` of home, flee within `flee`.
+  refuge: { fill: 800, use: 40, say: 70, firstMs: 2500, lineMs: 40000, lines: 3, lapEvery: [9000, 16000], lapMs: 1800, ratSpeed: 70, flee: 45, roam: 60 },
+
   // Items (items.ts, docs/extraction.md §6): found on an expedition, lost at death until brought back to the refuge,
   // where they are acquired for good (its chest). Worn in `slots` by family; carried in a bag of `bag` items, one more
   // a rank of le Rongé's bag. Found: in a cache, by its ring's `cache` chance (every cache of the zone's `sure` areas:
