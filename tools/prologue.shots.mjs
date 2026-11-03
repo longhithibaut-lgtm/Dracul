@@ -3,13 +3,13 @@
 // through it, comes up behind the crossbowman and strikes, carries his blood up to the refuge, pours it, passes the four
 // coffins, lies in his own) and saves a capture of each beat in shots/prologue/. Then a death mid-prologue (back in the
 // crypt's sarcophagus) and Échap twice (passed). Exits 1 on a page error or a failed check.
-// Usage: node tools/prologue.shots.mjs [--out=shots/prologue --port=5221]
+// Usage: node tools/prologue.shots.mjs [--out=shots/prologue --port=5221 --from=refuge]
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
-const out = arg('out', 'shots/prologue'), port = Number(arg('port', 5221));
+const out = arg('out', 'shots/prologue'), port = Number(arg('port', 5221)), from = arg('from', ''); // --from=refuge: the refuge's beats alone
 await mkdir(out, { recursive: true });
 const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' });
 await server.listen();
@@ -20,7 +20,7 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const run = (f, a) => page.evaluate(f, a);
-const check = (ok, what) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) errors.push(what); return ok; };
+const check = (ok, what) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) run(() => JSON.stringify(window.state())).then((s) => console.log('   ', s), () => {}); if (!ok) errors.push(what); return ok; };
 let n = 0;
 const shot = async (name) => { await page.waitForTimeout(400); await run(() => window.draw()); const f = `${out}/${String(++n).padStart(2, '0')}-${name}.png`; await page.screenshot({ path: f }); console.log('  ', f); };
 
@@ -34,14 +34,14 @@ await run(() => {
   window.S = S;
   const keys = (dx, dy) => { const k = S().keys; if (!k) return; k.D.isDown = dx > 0; k.A.isDown = dx < 0; k.S.isDown = dy > 0; k.W.isDown = dy < 0; };
   window.keys = keys;
-  window.play = (ms, each) => { for (let i = 0; i < Math.round(ms / (1000 / 60)); i++) { each?.(); g.headlessStep((window.t += 1000 / 60), 1000 / 60); } }; // (drawn only for a capture: software WebGL at 1080p is slow)
+  window.play = (ms, each) => { for (let i = 0; i < Math.round(ms / (1000 / 60)); i++) { if (each?.() === true) break; g.headlessStep((window.t += 1000 / 60), 1000 / 60); S().cameras?.main?.preRender(); } }; // (the camera follows, and the zone streams round it, in its preRender) // (drawn only for a capture: software WebGL at 1080p is slow)
   window.draw = () => g.step((window.t += 1000 / 60), 1000 / 60);
   /** Walks to (x, y) by the walk grid, to within `r` px, for `ms` at most; true there. */
   window.walk = (x, y, r = 8, ms = 20000) => {
     let s = S(), steps = s.stepsTo({ x, y }), done = false;
     const b = () => s.room.bounds, cols = () => Math.ceil(b().width / 8);
     window.play(ms, () => {
-      if (done || S() !== s || !s.hero?.body) return keys(0, 0);
+      if (done || S() !== s || !s.hero?.body) return keys(0, 0) ?? true;
       const f = s.hero.body.center;
       if (Math.hypot(f.x - x, f.y - y) < r) { done = true; return keys(0, 0); }
       let c = s.cellOf(f), to = { x, y };
@@ -59,7 +59,7 @@ await run(() => {
   window.fight = (e, ms = 15000) => {
     const s = S();
     window.play(ms, () => {
-      if (!e.body?.enable) return keys(0, 0);
+      if (!e.body?.enable) return keys(0, 0) ?? true; // dead: done
       const f = s.hero.body.center, d = Math.hypot(e.x - f.x, e.y - f.y), a = Math.atan2(e.y - f.y, e.x - f.x);
       if (d > 24) keys(Math.abs(Math.cos(a)) > 0.38 ? Math.sign(Math.cos(a)) : 0, Math.abs(Math.sin(a)) > 0.38 ? Math.sign(Math.sin(a)) : 0);
       else { keys(0, 0); if (s.time.now >= s.slashReadyAt) s.press(() => s.slash(a)); }
@@ -82,6 +82,7 @@ async function until(cond, ms = 20000) {
 }
 const press = async (key) => { await page.keyboard.press(key); await play(50); };
 
+if (from !== 'refuge') {
 // ---- 1. Le noir ----
 await run(() => import('/src/prologue.ts').then((P) => P.startPrologue(window.game)));
 await until(`window.S().layout === 'hall' && window.S().sys.isActive() && window.S().prologue`, 30000);
@@ -145,7 +146,6 @@ await run(() => { window.play(250); window.keys(0, 0); });
 const through = await state();
 check(through.y > ray[1] && through.health === burnt.health, 'in his mist he goes through, unburnt');
 // ---- 6. La nécropole ----
-check(await ratFollow(`window.S().layout === 'necropolis' || window.S().hero.body.center.y > 600`, 15000) || true, 'the rat to the stairs');
 await walk(240, 640, 6, 8000);
 check(await until(`window.S().layout === 'necropolis' && window.S().phase === 'play'`, 8000), 'up the crypt stairs into the necropolis');
 await play(1600);
@@ -168,11 +168,17 @@ const door = await run(() => import('/src/necropolis.data.ts').then((m) => m.DOO
 await walk(door.x, door.y + 12, 6, 15000);
 await run(() => { window.keys(0, -1); window.play(1200); window.keys(0, 0); });
 check(await until(`window.S().layout === 'refuge' && window.S().phase === 'play'`, 8000), 'up the stairs into the refuge');
+} else {
+  await run(() => import('/src/prologue.ts').then((P) => P.startPrologue(window.game)));
+  await until(`window.S().prologue`, 30000);
+  await run(() => window.S().scene.restart({ layout: 'refuge', entry: 0, carried: 340, prologue: 'refuge' }));
+  check(await until(`window.S().layout === 'refuge' && window.S().phase === 'play'`, 30000), 'in the refuge');
+}
 // ---- 7. Le refuge ----
 await walk(840, 740, 6, 8000);
 await play(600);
 await shot('refuge-noir');
-await walk(840, 700, 6, 6000);
+await walk(840, 686, 4, 6000);
 await play(1200);
 await shot('verse');
 await play(2600);

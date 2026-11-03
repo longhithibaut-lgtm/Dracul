@@ -48,6 +48,14 @@ function finish(scene: Phaser.Scene) {
 
 export type Director = ReturnType<typeof play>;
 
+/** Black over the world, under the HUD's words (on the HUD's own camera: a camera's fade leaves the room's glows lit). */
+function curtain(scene: Phaser.Scene, alpha: number) {
+  const r = scene.add.rectangle(0, 0, 8000, 8000, 0x000000).setOrigin(0).setScrollFactor(0).setDepth(-1).setAlpha(alpha);
+  const hud = scene.cameras.cameras.find((k) => k !== scene.cameras.main && k.name !== 'dark-over');
+  if (hud) r.cameraFilter &= ~hud.id; // (dark.ts keeps what the HUD's camera draws off the world's)
+  return r;
+}
+
 // A broken wax seal (r dark, R red, h its sheen), its two halves apart.
 const SEAL = ['.rr...rr.', 'rRhr.rRRr', 'rRRr.rRRr', '.rr...rr.'], WAX = { r: 0x4e080e, R: 0x8a1a1a, h: 0xc04030 };
 /** « SANS MAISON. PAS DE CIRE. » in the Order's chalk: upright capitals, rubbed thin here and there. */
@@ -97,10 +105,10 @@ export function play(c: Ctx, beat: Beat) {
   scene.input.keyboard!.on('keydown-F', (ev: KeyboardEvent) => !ev.repeat && fDown());
 
   // ---- the guide rat: it runs on its walk grid to a point, waits for him when he lags, goes on when he comes ----
-  type Guide = { s: Phaser.GameObjects.Sprite; way: P[]; then?: () => void; heading: number };
+  type Guide = { s: Phaser.GameObjects.Sprite; way: P[]; then?: () => void; heading: number; alone?: boolean }; // alone: it goes, waiting for no one
   let rat: Guide | undefined;
   const ratAt = (p: P) => { rat?.s.destroy(); rat = { s: Rats.rat(scene, p.x, p.y), way: [], heading: 0 }; Rats.motes(scene, p.x, p.y - 2, 5, [0x948a91, 0xd4cdd2], p.y, 4, 5); };
-  const ratTo = (to: P, then?: () => void) => {
+  const ratTo = (to: P, then?: () => void, alone = false) => {
     if (!rat) return;
     const b = c.bounds, steps = c.steps(to), cols = Math.ceil(b.width / 8), way: P[] = [];
     let k = c.cellOf(rat.s);
@@ -112,18 +120,19 @@ export function play(c: Ctx, beat: Beat) {
       k = next;
     }
     rat.way = [...way, to];
-    rat.then = then;
+    [rat.then, rat.alone] = [then, alone];
   };
   const stepRat = (time: number, delta: number) => {
     if (!rat) return;
     const r = rat.s, d = dist(r, feet()), next = rat.way[0];
-    const lag = d > 80 || (d > 50 && r.getData('waiting')); // it waits till he comes within 50 px
+    const lag = !rat.alone && (d > 80 || (d > 50 && r.getData('waiting'))); // it waits till he comes within 50 px
     r.setData('waiting', lag);
     if (!next || lag) {
       if (!next && rat.then) { const t = rat.then; rat.then = undefined; t(); }
       if (!rat?.s.active) return;
       const look = Phaser.Math.Angle.BetweenPoints(r, feet()); // stopped, it turns to him
-      return void Rats.scurry(r, look, 0);
+      Rats.scurry(r, look, 0);
+      return void (r.getData('high') && r.setDepth(r.getData('high'))); // up on a lid
     }
     const step = (75 * delta) / 1000, a = Phaser.Math.Angle.BetweenPoints(r, next);
     if (dist(r, next) <= step) { r.setPosition(next.x, next.y); rat.way.shift(); } else r.setPosition(r.x + Math.cos(a) * step, r.y + Math.sin(a) * step);
@@ -134,6 +143,8 @@ export function play(c: Ctx, beat: Beat) {
   // ---- the places ----
   let ghoul: Sprite | undefined, guard: Sprite | undefined, guardDead = false, lying: (() => void) | undefined;
   const update: ((time: number, delta: number) => void)[] = [];
+  /** `o`'s alpha to `to` over `ms` of the game's clock (a tween runs on the wall clock). */
+  const fade = (o: Phaser.GameObjects.Rectangle, to: number, ms: number) => { const from = o.alpha, t0 = scene.time.now; update.push((time) => void (o.active && o.setAlpha(from + (to - from) * Math.min(1, (time - t0) / ms)))); };
 
   if (place(beat) === 'hall') {
     // Chalk on his sarcophagus' flank; the three others emptied, their red wax seals broken, their chains cut.
@@ -208,11 +219,11 @@ export function play(c: Ctx, beat: Beat) {
         at(Math.min(end, 2600), () => { c.cut(false); ratTo(CRYPT.way[0], () => ratTo(CRYPT.way[1], () => ratTo(CRYPT.way[2]))); });
       };
       if (beat === 'noir') {
-        scene.cameras.main.fade(1, 0, 0, 0, true); // (forced: over the room's own fade in)
+        const black = curtain(scene, 1);
         const end = voice(LINES.noir, true, 600);
         at(end, () => {
           move('captions');
-          scene.cameras.main.fadeIn(2400);
+          fade(black, 0, 2400);
           at(2600, () => { label = Loot.label(scene, sx, sy - 14, 'le pieu (F)'); label.near(true); });
         });
       } else at(500, () => { label = Loot.label(scene, sx, sy - 14, 'le pieu (F)'); label.near(true); });
@@ -260,12 +271,12 @@ export function play(c: Ctx, beat: Beat) {
       REFUGE.coffins.forEach((p, i) => dist(f, p) < 40 && once(`house${i}`, () => hud.title(LINES.houses[i], { ms: 1800 })));
       if (REFUGE.coffins.every((_, i) => said.has(`house${i}`))) once('nobles', () => {
         const end = voice(LINES.nobles, false, 1900);
-        at(end - 1500, () => ratTo(REFUGE.sign, () => at(900, () => {
+        at(end - 1500, () => ratTo(REFUGE.sign, () => (rat?.s.setData('high', REFUGE.sign.y + 60), at(1600, () => { // up on the lid, sat on the sign; then gone through a crack
           ratGone();
           at(400, () => hud.say('le Rongé', LINES.ratGone, readMs(LINES.ratGone)));
           move('coffins');
           at(9000, () => S.beat === 'cercueil' && Loot.label(scene, REFUGE.mine.x, REFUGE.mine.y - 30, 'ton cercueil (F)').near(true)); // only if he lingers
-        })));
+        })), true));
       });
     });
     lying = () => { // F at his coffin: he lies in it, the dark, the title, the save begins
@@ -276,7 +287,7 @@ export function play(c: Ctx, beat: Beat) {
       hero.body!.checkCollision.none = true;
       hero.body!.reset(REFUGE.bed.x, REFUGE.bed.y);
       hero.setFrame('down-blink1').setAngle(-90).setDepth(REFUGE.bed.y + 2);
-      at(600, () => scene.cameras.main.fadeOut(1600));
+      at(600, () => fade(curtain(scene, 0), 1, 1600));
       at(2400, () => hud.title(LINES.title, { ms: 4200, size: 72, mid: true }));
       at(6800, () => finish(scene));
     };

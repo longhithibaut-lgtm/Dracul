@@ -68,14 +68,14 @@ export const CRYPT = {
   seals: [{ x: 392, y: 227 }, { x: 104, y: 377 }, { x: 380, y: 377 }] as P[],
   way: [{ x: 160, y: 262 }, { x: 368, y: 258 }, { x: 330, y: 352 }] as P[], // past the top-right sarcophagus, toward the ghoul
   hide: { x: 316, y: 404 }, // the slab the rat slips under
-  ghoul: { x: 236, y: 430 }, meal: { x: 222, y: 436 },
+  ghoul: { x: 262, y: 420 }, meal: { x: 248, y: 428 },
   ray: [500, 526] as [number, number], slit: { x: 22, y: 488 }, beyond: { x: 22, y: 540 },
   stairs: { x: 240, y: 580 },
 };
 /** The necropolis, around its doors (where the redesign may move them): the crossbowman's post on the parvis in front
  *  of the refuge's stairs, his back to the field (his lantern at his feet, off his left so the way up stays dark); where
  *  the rat waits for him to be dead; two ghouls in the graves, off the way. Offsets from DOORS.refuge, DOORS.hall. */
-export const NECROPOLIS = { guard: { dx: 4, dy: 76 }, lantern: { dx: -26, dy: 80 }, wait: { dx: 70, dy: 140 }, ghouls: [{ dx: -120, dy: -150 }, { dx: -330, dy: -40 }] };
+export const NECROPOLIS = { guard: { dx: 4, dy: 76 }, lantern: { dx: -26, dy: 80 }, wait: { dx: 70, dy: 140 }, ghouls: [{ dx: -60, dy: -230 }, { dx: -380, dy: 20 }] }; // ~180 px off the rat's way
 /** The refuge (src/refuge.data.ts): the four chiefs' shut coffins on their catafalques (the mockup's: rat, brume, loup,
  *  chauve-souris), floor points in front of each; his own coffin, open; the baked light turned down (its candles dead). */
 export const REFUGE = {
