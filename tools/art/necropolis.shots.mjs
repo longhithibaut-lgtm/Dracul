@@ -20,6 +20,7 @@ const VIEWS = {
   puits: [[3600, 1100], [3590, 1110]],
   // what lives there (--life): ghouls on their dead, an elite by its reliquary, the prisoner dragged to the camp, a patrol
   festin: [[940, 360], [1000, 310]], reliquaire: [[2230, 1250], [2290, 1180]], prisonnier: [[3150, 440], [3250, 380]], ronde: [[3000, 560], [3060, 560]],
+  tireur: [[1950, 1060], [1990, 1030]], miroir: [[2700, 480], [2720, 430]],
 };
 
 const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' });
@@ -33,7 +34,7 @@ page.on('console', (m) => (m.type() === 'error' || m.type() === 'assert') && err
 const run = (f, a) => page.evaluate(f, a);
 const arrived = (layout) => page.waitForFunction((l) => { const s = window.game.scene.getScene('room'); return s.layout === l && s.sys.isActive() && s.phase === 'play'; }, layout, { timeout: 180000 });
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`); // past the title
 await arrived('refuge');
 await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'necropolis' }));
 await arrived('necropolis');
