@@ -743,10 +743,10 @@ export class RoomScene extends Phaser.Scene {
 
   /** Échap: the game stands still (the scene paused) under the pause menu (pause.ts), the world dimmed, the HUD lit. */
   private pause() {
-    if (this.dead || this.titled) return;
-    const lost = this.exp && !this.prologue ? [...this.bag, ...Save.data.worn.filter((w): w is Items.Item => !!w && !Items.acquired(Save.data, w))] : [];
+    if (this.dead || this.titled || this.prologue) return; // in the prologue Échap is its own: twice, it is passed (prologue.ts)
+    const lost = this.exp ? [...this.bag, ...Save.data.worn.filter((w): w is Items.Item => !!w && !Items.acquired(Save.data, w))] : [];
     this.scene.pause();
-    this.scene.launch('pause', { place: this.training ? 'Entraînement' : WORLD[this.here].name, exp: !!this.exp && !this.prologue, carried: this.carried, lost });
+    this.scene.launch('pause', { place: this.training ? 'Entraînement' : WORLD[this.here].name, exp: !!this.exp, carried: this.carried, lost });
   }
 
   /** From the pause menu: le sac opened as I would (the game goes on, paused by it). */
