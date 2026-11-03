@@ -147,7 +147,7 @@ export const AREAS = [
   { id: 'breche', name: 'La Brèche', ring: 3, rect: [2440, 200, 2820, 560], groups: 0 },
   { id: 'fosses', name: 'Les Fosses', ring: 2, rect: [1400, 0, 2612, 707], groups: 3 },
   { id: 'allee', name: "L'Allée des Mausolées", ring: 2, rect: [1400, 707, 2612, 1350], groups: 4 },
-  { id: 'camp', name: "Le Camp de l'Ordre", ring: 3, rect: [2920, 680, 3390, 1065], groups: 3 },
+  { id: 'camp', name: "Le Camp de l'Ordre", ring: 3, rect: [2920, 680, 3390, 1065], groups: 4 },
   { id: 'buchers', name: 'Les Bûchers', ring: 3, rect: [2612, 640, 3300, 1350], groups: 2 },
   { id: 'postes', name: "Les Postes de l'Ordre", ring: 3, rect: [2612, 0, 3200, 640], groups: 2 },
   { id: 'chapelle', name: 'Le Parvis de la Chapelle', ring: 3, rect: [3200, 0, 3840, 640], groups: 3 },
@@ -357,7 +357,10 @@ for (const g of GRAVES) if (g.kind !== 'tomb') paint(g.x - 14, g.y, g.x + 14, g.
 // Old blood: pools and drags (room px x, y, rx, ry; polylines).
 const POOLS = [[3150, 860, 14, 6], [3040, 960, 10, 5], [2960, 780, 8, 4], [760, 500, 9, 4], [1124, 680, 8, 4], [1952, 760, 9, 4], [3560, 330, 10, 4], [2700, 380, 8, 4],
   [1500, 1170, 7, 3], [436, 1112, 6, 3], [1880, 350, 6, 3], [2480, 1090, 8, 4], [3300, 1000, 9, 4], [600, 900, 6, 3], [2240, 560, 7, 3]];
-const DRAGS = [[[3150, 860], [3100, 900], [3040, 960]], [[1952, 760], [1940, 800], [1900, 860]], [[760, 500], [740, 560], [700, 600]], [[3560, 330], [3500, 380], [3420, 400]]];
+const DRAGS = [[[3150, 860], [3100, 900], [3040, 960]], [[1952, 760], [1940, 800], [1900, 860]], [[760, 500], [740, 560], [700, 600]], [[3560, 330], [3500, 380], [3420, 400]],
+  [[2850, 418], [2920, 440], [2980, 500], [3050, 615]], [[2222, 650], [2180, 690], [2120, 700]], [[1004, 316], [1040, 350], [1060, 396]]]; // the prisoner's way to the camp; dragged to the heap; out of the mausoleum
+// blood under the dead the feeders eat, the heap, the gallows, the pyre
+POOLS.push(...POSTS.flatMap((p) => (p.feed ?? []).map(([x, y]) => [x, y + 2, 10, 4])), [2222, 648, 18, 7], [2880, 256, 8, 3], [2760, 986, 12, 5], [2300, 1180, 6, 3]);
 for (const [px, py, sx, sy] of POOLS) paint(px - 3 * sx, py - 3 * sy, px + 3 * sx, py + 3 * sy, (i, x, y) => { blood[i] = Math.max(blood[i], 255 * stain(x, y, px, py, sx * 1.3, sy * 1.3, 0.85, px + py)); });
 for (const d of DRAGS) for (let k = 0; k < d.length - 1; k++) { const a = d[k], b = d[k + 1];
   paint(Math.min(a[0], b[0]) - 4, Math.min(a[1], b[1]) - 4, Math.max(a[0], b[0]) + 4, Math.max(a[1], b[1]) + 4, (i, x, y) => { const t = segDist(x, y, a, b); if (t < 2.4 && vn(x / 1.2, y / 1.2, 36 + k) > 0.3 + t / 6) blood[i] = Math.max(blood[i], 200); }); }
@@ -378,7 +381,13 @@ const FLAVOR = {
 const FL0 = [0.6, 0.4, 0.3, 0.2, 0.4, 0.5];
 const flavorOf = (X, Y) => FLAVOR[AREAS.find(({ rect: [x0, y0, x1, y1] }) => X >= x0 && X < x1 && Y >= y0 && Y < y1)?.id] ?? FL0;
 /** The floor's flavour at room px (X, Y): moss, dust, ash, mud, flags, bones; four samples over a ragged border of places. */
+const FLC = new Float32Array(RW * RH * 6).fill(-1); // worked out once per room px
 function flavor(X, Y) {
+  const i = (Math.min(RH - 1, Math.max(0, Math.floor(Y))) * RW + Math.min(RW - 1, Math.max(0, Math.floor(X)))) * 6;
+  if (FLC[i] < 0) FLC.set(flavor0(Math.floor(X) + 0.5, Math.floor(Y) + 0.5), i);
+  return FLC.subarray(i, i + 6);
+}
+function flavor0(X, Y) {
   const out = [0, 0, 0, 0, 0, 0];
   for (let k = 0; k < 4; k++) { const f = flavorOf(X + 90 * (vn(X / 70, Y / 70, 120 + k) - 0.5), Y + 90 * (vn(X / 70, Y / 70, 130 + k) - 0.5)); for (let j = 0; j < 6; j++) out[j] += f[j] / 4; }
   return out;
@@ -447,8 +456,8 @@ function floorAt(x, y) {
     return { alb: mul(mix(C.stB, C.stC, vn(x / 6, y / 6, 3)), (step ? 0.75 : 1) * (1 - 0.9 * t)), N: step ? [0, 0.3, 1] : [0, 0, 1], spec: 0.03 };
   }
   // a pit's lip: earth thrown up round it, paler, bones in it, raised toward the drop
-  for (const [hx, hy, a, b] of HOLES) { const dx = (X - hx) / a, dy = (Y - hy) / b, d = Math.hypot(dx, dy); if (d < 1 || d > 1.7) continue;
-    const t = 1 - (d - 1) / 0.7, n = vn(x / 2.5, y / 2.5, 43);
+  for (const [hx, hy, a, b] of HOLES) { const dx = (X - hx) / a, dy = (Y - hy) / b, d = Math.hypot(dx, dy), out = 1.3 + 0.5 * vn(X / 6, Y / 6, 44); if (d < 1 || d > out) continue;
+    const t = 1 - (d - 1) / (out - 1), n = vn(x / 2.5, y / 2.5, 43);
     c = mix(c, n > 0.62 ? C.bone : mix(E.turnedL, E.dust, 0.35), clamp(t * 1.4) * (n > 0.62 ? 0.7 : 0.8)); Nn = [dx * 0.5 * t, dy * 0.5 * t, 1]; }
   // the chasm's lip: broken stone, paler, then the drop
   { const e = Math.abs(X - chasmX(Y)) - chasmW(Y); if (!crossing(Y) && e > -2 && e < 5) { c = mix(mix(C.stB, C.stC, vn(x / 3, y / 3, 41)), C.grime, clamp(e / 5) * 0.6); Nn = [0, 0, 1]; } }
@@ -656,7 +665,8 @@ const VIGNETTES = {
     add('shrine', block(-26, -14, 0, 26, 14, 12, stoneM, 1.5), P);
     add('statue', broken(statue(4), (x, y) => 128 + 14 * vn(x / 6, y / 6, 4)), [P[0], P[1], 12]);
     for (const [dx, dy] of [[-20, 18], [-8, 22], [10, 21], [22, 17]]) add('skull', skull(), [P[0] + dx, P[1] + dy, 0], dx * 0.1); },
-  nest: (o) => { const P = [wx(o.x), wy(o.y - 6), 0]; add('nest', pitBodies(9, 80, 30), P, 0.2); add('bones', pitBones(4), [P[0] + 40, P[1] + 10, 0], 1.2); },
+  nest: (o) => { const P = [wx(o.x), wy(o.y - 6), 0]; add('nest', scaled(pitBodies(9, 80, 30), 1.6), P, 0.2); add('bones', pitBones(4), [P[0] + 60, P[1] + 14, 0], 1.2); add('bones', pitBones(6), [P[0] - 64, P[1] - 4, 0], 2.2);
+    for (let k = 0; k < 7; k++) add('skull', skull(), [P[0] - 50 + k * 16, P[1] + 30 + 6 * Math.sin(k * 2), 0], k); },
   opengrave: (o) => { const P = [wx(o.x), wy(o.y - 4), 0]; add('corpse', exhumed(13), P, 1.4); add('stake', broken(stake(40, 3), (x) => 18 + x), [P[0] + 30, P[1] - 6, 0]);
     add('rubble', rubble(7, 16, 8), [P[0] - 34, P[1] - 4, 0], 0.5); },
   pyre: (o) => { const P = [wx(o.x), wy(o.y - 6), 0]; add('pyre', pyre(), P); add('stake', stake(170, 4), P);
