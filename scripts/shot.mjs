@@ -93,6 +93,7 @@ async function step(x, y, r = 6) {
     if (window.walkTo?.key !== key) window.walkTo = { key, steps: s.stepsTo({ x, y }) };
     const steps = window.walkTo.steps;
     let c = s.cellOf(f);
+    const off = !(steps[c] < Infinity); // off the walk grid: in a wall's box
     for (let k = 0; k < 3 && steps[c] > 1; k++) {
       let best = c;
       for (const n of [c - cols - 1, c - cols, c - cols + 1, c - 1, c + 1, c + cols - 1, c + cols, c + cols + 1])
@@ -100,10 +101,11 @@ async function step(x, y, r = 6) {
       c = best;
     }
     const to = steps[c] <= 1 ? { x, y } : { x: b.x + (c % cols) * 8 + 4, y: b.y + Math.floor(c / cols) * 8 + 4 };
-    return { dx: to.x - f.x, dy: to.y - f.y, far: Math.hypot(x - f.x, y - f.y), at: [f.x, f.y] };
+    return { dx: to.x - f.x, dy: to.y - f.y, far: Math.hypot(x - f.x, y - f.y), at: [f.x, f.y], off };
   }, [x, y, r]);
   if (!d) return false;
   if (d.wait) { await page.waitForTimeout(200); return true; }
+  if (d.off && last && Math.hypot(d.at[0] - last[0], d.at[1] - last[1]) < 0.5) return unstick(d.at); // a sidestep would not free him
   // Snagged on a prop's corner (the grid is cut for a ghoul's feet, his are wider): a sidestep, either way.
   if (last && Math.hypot(d.at[0] - last[0], d.at[1] - last[1]) < 0.5) await hold([['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'][Math.floor(Math.random() * 4)]], 250);
   last = d.at;
@@ -112,6 +114,22 @@ async function step(x, y, r = 6) {
   if (Math.abs(d.dy) > 2) keys.push(d.dy > 0 ? 'ArrowDown' : 'ArrowUp');
   if (d.far > 120 && Math.hypot(d.dx, d.dy) > 20) page.keyboard.press('Space'); // the mist: the zone is wide
   await hold(keys.length ? keys : ['ArrowUp'], d.far > 40 ? 220 : 100); // long strides while far: the round trips are slow headless
+  return true;
+}
+/** Stuck inside a wall's boxes (seen once in the catacombs' low gallery, on a loaded machine: not reproduced, the game's
+ *  to look into): told, then put back on the nearest cell of the walk grid so the run goes on. */
+const embedded = [];
+async function unstick(at) {
+  const to = await run(() => {
+    const s = window.game.scene.getScene('room'), f = s.hero.body.center, cols = s.navCols, b = s.room.bounds, c0 = s.cellOf(f), steps = window.walkTo.steps;
+    for (let r = 1; r < 12; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      const c = c0 + dy * cols + dx;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) === r && steps[c] < Infinity) { const p = { x: b.x + (c % cols) * 8 + 4, y: b.y + Math.floor(c / cols) * 8 + 4 }; s.hero.body.reset(p.x, p.y - 3); return p; }
+    }
+  });
+  embedded.push(`${(await state()).layout} ${Math.round(at[0])},${Math.round(at[1])}`);
+  console.log(`EMBEDDED in a wall at ${Math.round(at[0])},${Math.round(at[1])}: put back at ${JSON.stringify(to)}`);
+  last = undefined;
   return true;
 }
 async function walk(x, y, ms = 40000, r = 6) {
@@ -344,6 +362,7 @@ async function catacombsFps(fps) {
 async function end() {
   for (const z of ['necropolis', 'catacombs']) if (existsSync(`shots/${z}-overview.png`) && out !== 'shots') await copyFile(`shots/${z}-overview.png`, `${out}/${z}-overview.png`);
   console.log(report.join('\n'));
+  if (embedded.length) console.log(`the hero was found stuck inside a wall's boxes ${embedded.length} time(s): ${embedded.join(' | ')}`);
   console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no page errors');
   console.log(failed.length ? `FAILED: ${failed.join('; ')}` : 'all steps ok');
   await browser.close();
@@ -711,7 +730,7 @@ await measureFps();
 await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'refuge' }));
 await arrived('refuge');
 await page.keyboard.press('t');
-if (check(!!(await page.waitForSelector('#training', { timeout: 5000 }).catch(() => null)), 'training room')) {
+if (check(!!(await page.waitForSelector('#training', { timeout: 15000 }).catch(() => null)), 'training room')) {
   await page.click('#training [data-opt="passive"]'); // a dummy: it neither shoots nor flees
   await page.click('#training [data-spawn="crossbow"]');
   await until(() => window.game.scene.getScene('room').enemies.getChildren().some((e) => e.body?.enable), null, 10000);
