@@ -276,6 +276,9 @@ zone d'une nuit à l'autre.
   - **les maisons** : chaque chef libéré ouvre sa salle et ses améliorations propres (Vesna : rats et Peste ;
     Séverin : esquive ; Magda : arène de défis ; Lucian : la carte).
 - Le refuge **change à l'œil** quand on l'améliore : bougies, réparations, chefs présents.
+  **Codé** (2026-11-03, `src/haven.ts`, `src/haven-life.ts`, `T.refuge`) : le sang du bassin monte avec la banque, un feu de
+  plus par amélioration (braseros, appliques, bougies), marques des morts, garde-robe, trophées, mannequin, table des
+  cartes, rats ; les salles qui se réparent restent à faire (il faut une nouvelle cuisson). Détail : `docs/decisions.md`.
 
 ## 8. Quêtes et personnages
 
