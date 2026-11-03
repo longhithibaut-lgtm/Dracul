@@ -26,7 +26,7 @@ page.on('console', (m) => (m.type() === 'error' || m.type() === 'assert') && err
 const run = (f, a) => page.evaluate(f, a);
 const arrived = (layout) => page.waitForFunction((l) => { const s = window.game.scene.getScene('room'); return s.layout === l && s.sys.isActive() && s.phase === 'play'; }, layout, { timeout: 20000 });
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await arrived('refuge');
 await run(() => window.game.scene.getScene('room').scene.restart({ layout: 'catacombs' }));
 await arrived('catacombs');

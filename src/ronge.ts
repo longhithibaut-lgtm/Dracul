@@ -19,16 +19,18 @@ export function preload(scene: Scene) {
   if (!scene.textures.exists('ronge')) scene.load.image('ronge', sheet);
 }
 
-export type Pose = 'idle' | 'look' | 'beast';
+export type Pose = 'idle' | 'look' | 'beast' | 'lap';
 /** Him on the basin's rim over floor point (x, y). show(): drinking from his cupped hands, facing down-left (the basin);
- *  leaning out to speak (the hero near), or gone beast on hands and feet, heaving: both turned to the hero (at `heroX`). */
+ *  leaning out to speak (the hero near), or gone beast on hands and feet, heaving: both turned to the hero (at `heroX`);
+ *  lapping: down on all fours over the basin, slow (his beast's frames, a little nearer it). */
 export function create(scene: Scene, x: number, y: number) {
   const tex = scene.textures.get('ronge');
   FRAMES.forEach((n, i) => tex.has(n) || tex.add(n, 0, i * FW, 0, FW, FH));
   const s = scene.add.image(x, y, 'ronge', 'idle0').setOrigin(0.5, SOLE / FH).setScale(0.5).setFlipX(true).setDepth(y).setBlendMode(prelit(scene));
   return {
     show(pose: Pose, now: number, heroX = x) {
-      s.setFlipX(pose === 'idle' || heroX < x).setFrame(pose === 'beast' ? `beast${Math.floor(now / 140) % 2}` : `${pose}${Math.floor(now / (pose === 'look' ? 260 : 340)) % 4}`);
+      if (pose === 'lap') return void s.setX(x - 3).setFlipX(true).setFrame(`beast${Math.floor(now / 420) % 2}`);
+      s.setX(x).setFlipX(pose === 'idle' || heroX < x).setFrame(pose === 'beast' ? `beast${Math.floor(now / 140) % 2}` : `${pose}${Math.floor(now / (pose === 'look' ? 260 : 340)) % 4}`);
     },
   };
 }

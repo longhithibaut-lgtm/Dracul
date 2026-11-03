@@ -50,7 +50,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => (m.type() === 'error' || m.type() === 'assert') && errors.push(m.text()));
 await page.addInitScript(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 3, unlocks: { bite: true } }))); // the bite bought
 const run = (f, a) => page.evaluate(f, a);
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.getScene('room')?.hero?.body && window.game.scene.isActive('room'));
 await page.waitForTimeout(1200); // the fade in
 await run(() => { window.game.loop.sleep(); window.t = window.game.loop.now; });
