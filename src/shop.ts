@@ -27,17 +27,19 @@ export const LINES = {
 export const owned = (s: Save, w: Ware) => (w === 'bite' ? Number(s.unlocks.bite) : s.unlocks[w]);
 export const ranks = (w: Ware) => (w === 'bite' ? 1 : T.ronge[w].ranks);
 
-/** The price of the next rank of `w` once `n` are bought: cost x mult^n (the bite: its one price); undefined: sold out. */
-export function price(w: Ware, n: number) {
+/** The price of the next rank of `w` once `n` are bought: cost x mult^n (the bite: its one price), times `cut`;
+ *  undefined: sold out. */
+export function price(w: Ware, n: number, cut = 1) {
   if (n >= ranks(w)) return undefined;
-  if (w === 'bite') return T.ronge.bite;
-  return Math.round(T.ronge[w].cost * T.ronge[w].mult ** n);
+  return Math.round((w === 'bite' ? T.ronge.bite : T.ronge[w].cost * T.ronge[w].mult ** n) * cut);
 }
+/** What he asks of the price: less once he was given Maître Odo (quests.ts). */
+export const cut = (s: Save) => (s.quests.odo.c === 'donne' ? T.quests.odo.cut : 1);
 
 /** Buys the next rank of `w` with the blood banked in `s` (changed in place; the caller stores it): 'sold', 'poor' (too
  *  little banked: nothing changes) or 'none' (sold out). */
 export function buy(s: Save, w: Ware): 'sold' | 'poor' | 'none' {
-  const p = price(w, owned(s, w));
+  const p = price(w, owned(s, w), cut(s));
   if (p === undefined) return 'none';
   if (s.banked < p) return 'poor';
   s.banked -= p;
@@ -46,8 +48,11 @@ export function buy(s: Save, w: Ware): 'sold' | 'poor' | 'none' {
   return 'sold';
 }
 
-/** Gone beast: back too many times without pouring blood (T.ronge.hunger). */
-export const beast = (s: Save) => s.dry >= T.ronge.hunger;
+/** Gone beast: back too many times without pouring blood (T.ronge.hunger; one more with Mirelle by him); never once
+ *  given Maître Odo (quests.ts). */
+export const beast = (s: Save) => s.quests.odo.c !== 'donne' && s.dry >= T.ronge.hunger + (s.quests.mirelle.c === 'refuge' ? 1 : 0);
+/** His greetings; one more once he was given Odo. */
+export const greet = (s: Save) => (s.quests.odo.c === 'donne' ? [...LINES.greet, 'Il était bon. Ne me regarde pas comme ça.'] : LINES.greet);
 
 /** How much blood the bag holds, with its ranks bought. */
 export const bagSize = (s: Save) => T.blood.bag + s.unlocks.bag * T.ronge.bag.size;
