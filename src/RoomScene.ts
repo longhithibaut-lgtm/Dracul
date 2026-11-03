@@ -2845,7 +2845,8 @@ export class RoomScene extends Phaser.Scene {
       return void e.setData('home', { x, y });
     }
     const l: Haunts.Haunt = lead.getData('haunt'), [x, y] = R.pts[l.leg!];
-    e.setData('home', Haunts.inFile(lead, Phaser.Math.Angle.Between(lead.x, lead.y, x, y), h.slot! - l.slot!));
+    const behind = this.prisoner && h.route === 'camp' ? 1 : 0; // the prisoner walks first behind the one dragging him
+    e.setData('home', Haunts.inFile(lead, Phaser.Math.Angle.Between(lead.x, lead.y, x, y), h.slot! - l.slot! + behind));
   }
 
   /** The training room calls an enemy in at `p`: it rises after its telegraph, hunting (`hp` to start it weakened). */

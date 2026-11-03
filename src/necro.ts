@@ -51,10 +51,10 @@ export class Prisoner {
     this.rope.clear();
     if (!lead || lead.getData('alert')) return void this.s.setFrame('down-kneel').setDepth(this.s.y);
     const R = ROUTES.camp, h = lead.getData('haunt'), [wx, wy] = R.pts[h.leg], heading = Math.atan2(wy - lead.y, wx - lead.x);
-    const to = inFile(lead, heading, 1.6), d = Math.hypot(to.x - this.s.x, to.y - this.s.y), step = Math.min(d, (40 * delta) / 1000);
+    const to = inFile(lead, heading, 1), d = Math.hypot(to.x - this.s.x, to.y - this.s.y), step = Math.min(d, (40 * delta) / 1000);
     if (d > 1) this.s.setPosition(this.s.x + ((to.x - this.s.x) / d) * step, this.s.y + ((to.y - this.s.y) / d) * step);
-    const view = Math.abs(Math.cos(heading)) > 0.7 ? 'side' : Math.sin(heading) > 0 ? 'down' : 'up';
-    this.s.setFrame(d > 2 ? `${view}-walk${Math.floor(time / 180) % 4}` : 'down-kneel').setFlipX(Math.cos(heading) < 0).setDepth(this.s.y);
+    const view = Math.abs(Math.cos(heading)) > 0.7 ? 'side' : Math.sin(heading) > 0 ? 'down' : 'up', moving = lead.body!.velocity.length() > 2;
+    this.s.setFrame(moving ? `${view}-walk${Math.floor(time / 220) % 4}` : 'down-kneel').setFlipX(Math.cos(heading) < 0).setDepth(this.s.y);
     this.rope.setDepth(this.s.y - 1).lineStyle(1, 0x3a2e22, 0.9).lineBetween(lead.x, lead.y - 10, this.s.x, this.s.y - 12);
   }
 

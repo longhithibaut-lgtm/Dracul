@@ -129,7 +129,7 @@ const CANDLES = [[742, 486, 3], [780, 488, 2], [1124, 664, 3], [430, 1094, 2], [
   [560, 676, 2], [312, 886, 3], [2270, 196, 2], [1620, 1284, 2], [3610, 1114, 2], [2730, 1244, 2], [1714, 616, 2], [3712, 716, 2], [1960, 754, 2],
   [1000, 1024, 3], [1158, 136, 2]]; // the way back's landmarks: the sarcophagus mid-trunk, the rubble on the north path
 // The Order's lanterns on their poles round the camp: their dirty green pool burns like a planted lantern's (zone.ts).
-export const LANTERNS = [[2996, 716], [3320, 716], [2996, 1036], [3320, 1036], [3560, 360]];
+export const LANTERNS = [[2996, 716], [3320, 716], [2996, 1036], [3320, 1036], [3560, 360], [2918, 292]]; // and one by the gallows
 const PYRE = [3120, 846]; // the camp's fire: a pyre of coffin boards and bones
 
 // ---------- the gameplay plan, read by zone.gen.mjs ----------
@@ -281,15 +281,15 @@ export const POSTS = [
   { id: 'ronde-chapelle', x: 3220, y: 360, kinds: ['priest', 'penitent', 'penitent'], route: 'chapelle' },
   { id: 'ronde-puits', x: 3420, y: 930, kinds: ['crossbow', 'hound', 'hound'], route: 'puits' },
   { id: 'ronde-milieu', x: 2470, y: 560, kinds: ['crossbow', 'penitent', 'penitent'], route: 'milieu' },
-  { id: 'prisonnier', x: 2840, y: 410, kinds: ['crocheteur', 'crossbow'], route: 'camp', prisoner: true },
+  { id: 'prisonnier', x: 3360, y: 338, kinds: ['crocheteur', 'crossbow'], route: 'camp', prisoner: true },
 ];
 // The patrols' routes (room px waypoints, walked straight from one to the next): `once`, to its end; else back and forth.
 export const ROUTES = {
-  breche: { pts: [[3115, 660], [3050, 610], [2960, 480], [2900, 425], [2800, 405]] },
+  breche: { pts: [[3115, 660], [3050, 610], [2960, 480], [2930, 440]] },
   chapelle: { pts: [[3220, 360], [3380, 335], [3520, 330]] },
   puits: { pts: [[3420, 930], [3600, 1000], [3660, 1110]] },
   milieu: { pts: [[2470, 560], [2500, 700], [2450, 900], [2150, 1000], [1800, 1080]] },
-  camp: { pts: [[2840, 410], [2900, 425], [2960, 480], [3050, 610], [3115, 680], [3150, 820]], once: true },
+  camp: { pts: [[3360, 338], [3200, 352], [3040, 392], [2960, 470], [3050, 610], [3115, 680], [3150, 820]], once: true },
 };
 // Rats' nests (src/rats.ts, RoomScene scurry()): a few nose about each, flee him.
 export const RATS = [[600, 700], [1000, 1150], [1750, 500], [2200, 1150], [2900, 1200], [3500, 1250], [2300, 600], [450, 1200], [3000, 1180]];
@@ -358,7 +358,7 @@ for (const g of GRAVES) if (g.kind !== 'tomb') paint(g.x - 14, g.y, g.x + 14, g.
 const POOLS = [[3150, 860, 14, 6], [3040, 960, 10, 5], [2960, 780, 8, 4], [760, 500, 9, 4], [1124, 680, 8, 4], [1952, 760, 9, 4], [3560, 330, 10, 4], [2700, 380, 8, 4],
   [1500, 1170, 7, 3], [436, 1112, 6, 3], [1880, 350, 6, 3], [2480, 1090, 8, 4], [3300, 1000, 9, 4], [600, 900, 6, 3], [2240, 560, 7, 3]];
 const DRAGS = [[[3150, 860], [3100, 900], [3040, 960]], [[1952, 760], [1940, 800], [1900, 860]], [[760, 500], [740, 560], [700, 600]], [[3560, 330], [3500, 380], [3420, 400]],
-  [[2850, 418], [2920, 440], [2980, 500], [3050, 615]], [[2222, 650], [2180, 690], [2120, 700]], [[1004, 316], [1040, 350], [1060, 396]]]; // the prisoner's way to the camp; dragged to the heap; out of the mausoleum
+  [[3340, 348], [3200, 360], [3040, 400], [2970, 478], [3050, 616]], [[2222, 650], [2180, 690], [2120, 700]], [[1004, 316], [1040, 350], [1060, 396]]]; // the prisoner's way to the camp; dragged to the heap; out of the mausoleum
 // blood under the dead the feeders eat, the heap, the gallows, the pyre
 POOLS.push(...POSTS.flatMap((p) => (p.feed ?? []).map(([x, y]) => [x, y + 2, 10, 4])), [2222, 648, 18, 7], [2880, 256, 8, 3], [2760, 986, 12, 5], [2300, 1180, 6, 3]);
 for (const [px, py, sx, sy] of POOLS) paint(px - 3 * sx, py - 3 * sy, px + 3 * sx, py + 3 * sy, (i, x, y) => { blood[i] = Math.max(blood[i], 255 * stain(x, y, px, py, sx * 1.3, sy * 1.3, 0.85, px + py)); });
@@ -374,9 +374,9 @@ const moundAt = (X, Y) => { const x = Math.floor(X), y = Math.floor(Y); return x
  *  pebbles; turned earth over the graves, in relief. */
 // Each place's own floor: how much moss, bone dust, ash, black wet mud, old flags and bone chips its earth shows.
 const FLAVOR = {
-  parvis: [0.8, 0.1, 0, 0, 0.8, 0.3], caveaux: [0.9, 0.15, 0, 0.15, 0.5, 0.4], champ: [1, 0.1, 0, 0.25, 0.15, 0.3], chaussee: [0.4, 0.4, 0, 0, 0.3, 0.6],
-  pont: [0.5, 0.3, 0, 0.2, 0.3, 0.5], fosses: [0.15, 1, 0, 0, 0.15, 1.6], allee: [0.45, 0.45, 0, 0.1, 0.9, 0.6], breche: [0, 0.25, 0.9, 0, 0.3, 0.5],
-  postes: [0, 0.2, 0.8, 0.3, 0.2, 0.4], camp: [0, 0.1, 0.5, 0.4, 0, 0.3], buchers: [0, 0.1, 1.3, 0.2, 0.1, 0.5], chapelle: [0.15, 0.25, 0.4, 0, 1, 0.3], puits: [0.35, 0.1, 0.2, 1, 0.2, 0.7],
+  parvis: [0.8, 0.1, 0, 0, 0.8, 0.3], caveaux: [0.9, 0.15, 0, 0.15, 0.5, 0.4], champ: [1, 0.1, 0, 0.25, 0.15, 0.3], chaussee: [0.2, 0.4, 0, 0, 0.3, 0.6],
+  pont: [0.3, 0.3, 0, 0.2, 0.3, 0.5], fosses: [0.15, 1, 0, 0, 0.15, 1.6], allee: [0.15, 0.45, 0, 0.1, 0.9, 0.6], breche: [0, 0.25, 0.9, 0, 0.3, 0.5],
+  postes: [0, 0.2, 0.8, 0.3, 0.2, 0.4], camp: [0, 0.1, 0.5, 0.4, 0, 0.3], buchers: [0, 0.1, 1.3, 0.2, 0.1, 0.5], chapelle: [0, 0.25, 0.4, 0, 1, 0.3], puits: [0.1, 0.1, 0.2, 1, 0.2, 0.7],
 };
 const FL0 = [0.6, 0.4, 0.3, 0.2, 0.4, 0.5];
 const flavorOf = (X, Y) => FLAVOR[AREAS.find(({ rect: [x0, y0, x1, y1] }) => X >= x0 && X < x1 && Y >= y0 && Y < y1)?.id] ?? FL0;
@@ -394,7 +394,7 @@ function flavor0(X, Y) {
 }
 function earthAt(x, y, X, Y, i) {
   const ys = y * SN, [moss, dust, ash, wet, old] = flavor(X, Y);
-  let c = mix(E.earth, E.earthD, clamp(fbm(x / 26, ys / 26, 4, 101) * 1.2 - 0.1)), spec = 0.03, gloss = 12;
+  let c = mix(E.earth, E.earthD, clamp(fbm(x / 26, ys / 26, 4, 101) * 1.2 - 0.1) * 0.6), spec = 0.03, gloss = 12;
   c = mix(c, E.dust, clamp((fbm(x / 60, ys / 60, 3, 102) - 0.55 + dust * 0.4) * 2.5) * (0.45 + 0.4 * dust)); // bone dust, the middle's ossuaries
   c = mix(c, ash > 1 ? mul(E.ash, 0.45) : E.ash, Math.min(1, ash) * clamp((fbm(x / 40, ys / 40, 3, 103) - 0.45 + 0.15 * ash) * 2)); // ash where the Order burns, charcoal at its pyres
   c = mix(c, E.mudD, wet * clamp((fbm(x / 34, ys / 34, 3, 104) - 0.42) * 2.4) * 0.8); // black wet mud
@@ -417,7 +417,7 @@ function earthAt(x, y, X, Y, i) {
       const u = ((x - ox) * Math.cos(a) + (ys - oy) * Math.sin(a)) / r, v = (-(x - ox) * Math.sin(a) + (ys - oy) * Math.cos(a)) / (r * 0.65), d = Math.hypot(u, v) + 0.15 * (vn(x / 2, ys / 2, 145) - 0.5);
       if (d < 1) { c = mul(mix(C.stB, C.stC, h2(sx, sy, 146)), d > 0.8 ? 0.6 : 0.8 + 0.1 * vn(x / 2, ys / 2, 147)); N = d > 0.8 ? [(x - ox) / r, (ys - oy) / r, 1] : [0, 0, 1]; }
     }
-    const p = fbm(x / 36, ys / 36, 3, 121), p0 = 0.77 - 0.09 * wet; if (p > p0) { c = mul(c, 0.6); spec = 0.25 * clamp((p - p0) * 12); gloss = 60; N = [0, 0, 1]; } // a puddle
+    const p = fbm(x / 36, ys / 36, 3, 121), p0 = 0.8 - 0.1 * wet; if (p > p0) { c = mul(c, 0.6); spec = 0.25 * clamp((p - p0) * 12); gloss = 60; N = [0, 0, 1]; } // a puddle
   }
   const q = h2(x / 4 | 0, ys / 4 | 0, 17); if (q < 0.012) c = mul(c, 0.7); else if (q > 0.996) c = mix(c, E.dust, 0.4); // pebbles
   const a = moundAt(X, Y);
