@@ -23,7 +23,7 @@ export type Power = 'griffes' | 'tir' | 'glyphe' | 'brume' | 'nuee';
 export type Hud = {
   health(current: number, max: number): void;
   cooldown(id: Power, readyAt: number | undefined): void; // each frame: when it is back (game time); undefined: locked
-  title(text: string): void;
+  title(text: string, o?: { ms?: number; size?: number; mid?: boolean }): void; // `ms` up (T.expedition.titleMs), `size` px, `mid`: a card in the middle of the screen (the prologue's)
   blood(carried: number, bag: number, banked?: number): void; // blood carried out of the bag; at the refuge, banked too
   bag(items: readonly Item[] | undefined, size: number): void; // the items carried, in a bag of `size`; undefined: not shown
   threats(enemies: { x: number; y: number }[]): void; // room px on the view; off it, a pip points at each
@@ -183,7 +183,7 @@ export function create(scene: Phaser.Scene): Hud {
   };
   let carried = -1, bagSize = 1, banked: number | undefined, gotAt = -1e9;
   let items: readonly Item[] | undefined, size = 0, itemAt = -1e9;
-  let titleAt = -1e9, lineEnd = -1e9, lowKey = '';
+  let titleAt = -1e9, titleMs: number = T.expedition.titleMs, titleY = 40, lineEnd = -1e9, lowKey = '';
   let boss: { hp: number; max: number; hitAt: number; shown: number } | undefined;
   let threats: { x: number; y: number }[] = [];
 
@@ -262,11 +262,11 @@ export function create(scene: Phaser.Scene): Hud {
     });
 
     // A place's name, or what just happened: at the top, over its smear; it fades out.
-    const tt = now - titleAt, ta = tt < T.expedition.titleMs - 400 ? 1 : clamp((T.expedition.titleMs - tt) / 400);
+    const tt = now - titleAt, ta = tt < titleMs - 400 ? 1 : clamp((titleMs - tt) / 400), ty = titleY < 0 ? Math.round((H - titleText.height) / 2) : titleY;
     for (const o of [titleScrim, titleSmear, titleText]) o.setAlpha(ta).setVisible(ta > 0 && titleText.texture.key !== '__DEFAULT');
-    titleText.setPosition(Math.round((W - titleText.width) / 2), 40);
-    titleSmear.setPosition(titleText.x - 6, 40 + titleText.height - 3);
-    titleScrim.setPosition(Math.round(W / 2 - titleScrim.width / 2), 10);
+    titleText.setPosition(Math.round((W - titleText.width) / 2), ty);
+    titleSmear.setPosition(titleText.x - 6, ty + titleText.height - 3);
+    titleScrim.setPosition(Math.round(W / 2 - titleScrim.width / 2), ty - 30);
 
     // A guardian: her name over her cord, plump where her blood remains, withered behind; a blow drains it after a beat.
     for (const o of [bossScrim, cord0, cord1, bossName]) o.setVisible(!!boss);
@@ -346,10 +346,10 @@ export function create(scene: Phaser.Scene): Hud {
         if (o.mark.texture.key === '__DEFAULT') o.mark.setTexture(cross(scene)).setAlpha(0.35);
       });
     },
-    title(t) {
-      titleAt = scene.time.now;
+    title(t, o = {}) {
+      [titleAt, titleMs, titleY] = [scene.time.now, o.ms ?? T.expedition.titleMs, o.mid ? -1 : 40];
       if (!t) return void titleText.setTexture('__DEFAULT');
-      titleText.setTexture(words(scene, [t], 30, BONE, 0.85));
+      titleText.setTexture(words(scene, [t], o.size ?? 30, BONE, 0.85));
       titleSmear.setTexture(smear(scene, titleText.width - 2));
       titleScrim.setTexture(soft(scene, titleText.width + 120, 100, 0.45, (titleText.width + 120) / 2, 46, titleText.width / 2 + 70, 40));
     },

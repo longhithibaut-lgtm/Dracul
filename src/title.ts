@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import * as Menu from './menu.ts';
 import * as Save from './save.ts';
+import * as Prologue from './prologue.ts';
 import type { RoomScene } from './RoomScene.ts';
 
 // The title screen, « Le cercueil » (docs/maquettes/titre-1.png): over the refuge's crypt as the game draws it (the room
@@ -14,9 +15,9 @@ const COFFIN = { x: 840, y: 237 }; // his coffin's ashes, room px (refuge.data.t
 /** A save worth going back to: anything but a fresh one. */
 export const saved = () => JSON.stringify(Save.data) !== JSON.stringify(Save.parse(null));
 
-/** Nouvelle partie's first steps: a hook for the prologue to come (docs/lore.md); for now, the refuge. */
+/** Nouvelle partie's first steps: the prologue (prologue.ts: a new save, the waking under the stake). */
 export function startPrologue(room: Phaser.Scene) {
-  room.scene.restart({});
+  Prologue.startPrologue(room.game);
 }
 
 export class TitleScene extends Phaser.Scene {
@@ -120,8 +121,7 @@ export class TitleScene extends Phaser.Scene {
     const i = this.cursor;
     if (this.ask) {
       if (i === 0) return void ([this.ask, this.cursor] = [false, 1], this.draw());
-      Save.reset();
-      return this.start(startPrologue);
+      return this.start(startPrologue); // (it resets the save)
     }
     if (i === 0) return this.start((room) => room.scene.restart({}));
     if (i === 1) {
