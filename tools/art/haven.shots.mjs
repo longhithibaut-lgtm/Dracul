@@ -97,6 +97,9 @@ if (!only || only === 'mid') await set('mid', { banked: 900, bite: true, life: 2
     await page.waitForTimeout(k < 2 ? 260 : 140);
   }
   await shot('dummy');
+  await run(() => { window.game.scene.getScene('room').haven.lap = () => true; }); // le Rongé laps (as he does every 9 to 16 s), the hero away
+  await frame(760, 700, 840, 640, 900);
+  await shot('lap');
   await table();
 });
 if (!only || only === 'vesna') await set('vesna', { banked: 2400, bite: true, life: 3, bag: 2, items: [0, 3, 7, 12, 1, 9], boss: true, vesna: true, powers: ['griffes', 'eclats', 'swarm'], deaths: 9, returns: 7 }), await tour(async () => {
