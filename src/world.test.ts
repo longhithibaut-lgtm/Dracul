@@ -336,7 +336,7 @@ describe('les catacombes', () => {
 });
 
 describe('save', () => {
-  const V3 = { nourrice: { tries: 0, dead: false }, vesna: false, powers: { bought: [], worn: {} }, carte: {}, quests: freshQuests() }; // versions 3, 4 and 7's, at their start
+  const V3 = { nourrice: { tries: 0, dead: false }, vesna: false, powers: { bought: [], worn: {} }, carte: {}, notes: [], quests: freshQuests() }; // versions 3 and 4's (8's notes, 9's quests), at their start
   it('starts afresh without a save, or with a broken one', () => {
     const fresh = { v: VERSION, banked: 0, unlocks: { bite: false, life: 0, bag: 0 }, dry: 0, shortcuts: [], stash: [], worn: [null, null, null, null, null, null], next: 0, ...V3, prologue: false };
     expect(parse(null)).toEqual(fresh);

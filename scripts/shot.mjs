@@ -218,7 +218,7 @@ async function cursorDown() {
   for (let k = 0; k < 3; k++) {
     await page.keyboard.press('ArrowDown');
     await page.waitForTimeout(150);
-    const c = await run(() => { const s = window.game.scene.getScene('room'); return { cursor: s.satchel?.view.cursor, down: s.keys.DOWN.isDown, s: s.keys.S.isDown }; });
+    const c = await run(() => { const s = window.game.scene.getScene('room'); return { cursor: s.satchel?.view.cursor, paused: s.time.paused }; });
     if (c.cursor >= 6) return true;
     console.log(`ArrowDown not taken: ${JSON.stringify(c)}`);
   }
@@ -378,7 +378,7 @@ async function measureFps() {
 }
 
 await mkdir(out, { recursive: true });
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await run(() => localStorage.clear());
 await page.reload();
 await arrived('refuge');

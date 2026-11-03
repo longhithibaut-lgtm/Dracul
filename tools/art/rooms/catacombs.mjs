@@ -542,6 +542,7 @@ function floorAt(x, y) {
   if (dr < 14 && k !== 2) c = mix(c, E.dustD, (1 - Math.max(0, dr) / 14) * 0.5);
   if (blood[i]) { const b = blood[i] / 255; c = mix(c, mix(C.bloodD, C.blood, vn(u / 4, v / 4, 8) * 0.6), b); if (b > 0.3) { spec = 0.4 * b; gloss = 70; Nn = [0, 0, 1]; } }
   if (dry[i]) c = mix(c, mix(L('#24100b'), L('#3a140d'), vn(u / 3, v / 3, 92)), dry[i] / 255 * 0.8); // dried: matte, brown, flaking
+  const vg = vignette(u, v, c); if (vg) return vg;
   if (k !== 2) { // what lies about: bones, teeth, rat droppings, straw, at sizes the game's pixel shows
     const near = clamp(1 - dr / 18), ossu = inSpan(X, Y + 30) ? 1 : 0;
     const pb = [0.02 + 0.08 * ossu, 0.02, 0.06, 0.03, 0.1, 0.012][a] + 0.03 * near;
@@ -700,6 +701,111 @@ function mound(r, h, seed) {
   };
 }
 
+// ---------- the world's scenes (docs/histoire-proposition.md §3, notes in src/notes.ts) ----------
+// What Vesna's rats laid for him: arrows of bones on the floor toward her prison (room px x, y, the way they point), and
+// their small altar of the Rat (coins, teeth, buttons round a rat's skull); a billet in a dead rat's paw by the first
+// arrows. By the stairs up, the sans-maison's altar: a slab, its candles melted down, a tower charcoaled on the flagstone
+// before it, a drop of red at its top. The guard's chair before the prison's grille, his blanket, his notebook. Inside
+// the prison, Vesna's days scratched in the flagstones. At the well's bottom, the brother's bucket and notebook.
+const ARROWS = [[226, 298, 1.95], [246, 384, 1.16], [1500, 950, 0.3], [1650, 990, 0.1], [1966, 526, 2.95]];
+const RAT_ALTAR = [2002, 514], TOWER = [258, 194], TALLY = [2418, 752, 2464, 772], BLANKET = [2272, 1036];
+const PAPERS = [[230, 334, 'roll'], [1996, 530, 'roll'], [2300, 1040, 'book'], [2600, 254, 'book']]; // the notes' own (src/notes.ts)
+const SLAB = { x: 238, y: 182, top: 16 }, CHAIR = { x: 2290, y: 1028 }, BUCKET = { x: 2598, y: 246 };
+const ironOf = (x, y, z) => { const n = vn3(x * 0.4, y * 0.4, z * 0.4, 7); return { alb: mix(C.iron, n > 0.55 ? C.rustL : C.rust, clamp(n * 1.8 - 0.4)), spec: 0.4, gloss: 30 }; };
+const woodOf = (x, y, z, seed) => ({ alb: mix(mix(C.wood, C.woodD, clamp(vn3(x * 0.12, y * 0.12, z * 1.1, seed) * 1.6 - 0.3)), C.bone, 0.18), spec: 0.08, gloss: 16 }); // grey with wear
+/** The guard's chair: rough planks, its back to +y (it faces the grille), a blanket over its back. */
+function chair() {
+  const legs = (x, y, z) => Math.min(...[[-9, -8], [9, -8], [-9, 8], [9, 8]].map(([a, b]) => sdBox(x, y, z, a, b, 12, 1.6, 1.6, 12, 0.4)));
+  const wood = (x, y, z) => Math.min(sdBox(x, y, z, 0, 0, 25, 11, 10, 1.6, 0.5), legs(x, y, z), sdBox(x, y, z, -9, 8.5, 38, 1.6, 1.4, 14, 0.4), sdBox(x, y, z, 9, 8.5, 38, 1.6, 1.4, 14, 0.4), sdBox(x, y, z, 0, 8.5, 46, 10.5, 1.2, 3, 0.4), sdBox(x, y, z, 0, 8.5, 36, 10, 1, 2, 0.3));
+  const cloth = (x, y, z) => sdBox(x, y + 0.6 * Math.sin(x * 0.5), z, -2, 9.5, 42 - 4 * clamp((x + 8) / 12), 7, 1.6, 7 + 3 * vn(x / 3, z / 3, 4), 0.8); // the blanket over its back, hanging lower on one side
+  return {
+    sdf: (x, y, z) => Math.min(wood(x, y, z), cloth(x, y, z)),
+    mat: (m, x, y, z) => cloth(x, y, z) < wood(x, y, z) ? { alb: mix(mix(E.linen, C.bone, 0.3), E.rag, vn3(x * 0.3, y * 0.3, z * 0.3, 11)), wrap: 0.4 } : woodOf(x, y, z, 21),
+    bounds: [-14, -12, -1, 14, 13, 52], step: 0.6,
+  };
+}
+/** The brother's bucket: staves, two iron hoops, a rope handle; black and red inside. */
+function bucket() {
+  const body = (x, y, z) => Math.max(Math.hypot(x, y) - 7 - 0.06 * z, Math.abs(z - 8) - 8, -(Math.min(Math.hypot(x, y) - 5.6 - 0.06 * z, 15 - z)));
+  const hoop = (x, y, z) => Math.min(...[4, 13].map((h) => Math.max(Math.abs(Math.hypot(x, y) - 7.3 - 0.06 * z) - 0.5, Math.abs(z - h) - 0.9)));
+  const rope = (x, y, z) => Math.hypot(Math.hypot(x, z - 15) - 8, y) - 0.7;
+  return {
+    sdf: (x, y, z) => Math.min(body(x, y, z), hoop(x, y, z), rope(x, y, z)),
+    mat: (m, x, y, z, nx, ny, nz) => { if (hoop(x, y, z) < 0.3) return ironOf(x, y, z); if (rope(x, y, z) < 0.3) return { alb: L('#4a3e2a'), wrap: 0.3 };
+      if (Math.hypot(x, y) < 6.4 + 0.06 * z && nz > 0.3) return { alb: mix(L('#0c0605'), C.bloodD, vn(x / 3, y / 3, 5)), spec: 0.6, gloss: 80 }; // inside
+      const w = woodOf(x * 3, y * 3, z, 22); if (Math.sin(Math.atan2(y, x) * 9) > 0.92) w.alb = mul(w.alb, 0.55); return w; }, // its staves
+    bounds: [-9, -9, -1, 9, 9, 24], step: 0.5,
+  };
+}
+/** The sans-maison's altar: a low slab of old stone against the rock. */
+function slab() {
+  const f = (x, y, z) => sdBox(x, y, z, 0, 0, SLAB.top / 2, 21, 13, SLAB.top / 2, 1.5) + 0.8 * (vn3(x * 0.3, y * 0.3, z * 0.3, 31) - 0.5);
+  return { sdf: f, mat: (m, x, y, z, nx, ny, nz) => ({ alb: mul(mix(mix(C.stB, C.stC, vn3(x * 0.2, y * 0.2, z * 0.2, 32)), C.grime, 0.35), nz > 0.5 ? 0.55 : 0.35), spec: 0.05 }), bounds: [-24, -16, -1, 24, 16, SLAB.top + 2], step: 0.6 };
+}
+/** What the scenes leave on the floor at texel (u, v) over colour `c`: an albedo, or null. */
+function vignette(u, v, c) {
+  const near = (x, y, r) => Math.abs(u - 2 * x) < r && Math.abs(v - 2 * y) < r;
+  const BONE = (k, h) => ({ alb: mul(mix(C.bone, C.boneD, 0.25 + 0.3 * h), k * 0.85), N: [0, 0, 1], spec: 0.1, gloss: 30 });
+  for (const [x, y, a] of ARROWS) { // a shaft of long bones, a head of two, laid with care
+    if (!near(x, y, 30)) continue;
+    const du = u - 2 * x, dv = v - 2 * y, tip = [13 * Math.cos(a), 13 * Math.sin(a)];
+    const parts = [[du, dv, a, 13, 1.7], ...[-0.65, 0.65].map((s) => [du - tip[0] + 6 * Math.cos(a + s), dv - tip[1] + 6 * Math.sin(a + s), a + s, 6.5, 1.4])];
+    let shade = false;
+    for (const [dx, dy, an, hl, r] of parts) { const b = boneAt(dx, dy, an, hl, r, 1.6); if (b && !b.shade) return { ...BONE(b.k, h2(x, y, 3)), N: b.N }; if (b?.shade) shade = true; }
+    if (shade) return { alb: mul(c, 0.55), N: [0, 0, 1] };
+  }
+  if (near(...RAT_ALTAR, 26)) { // a flat stone; on it, round a rat's skull, coins, teeth and buttons in a ring
+    const du = u - 2 * RAT_ALTAR[0], dv = v - 2 * RAT_ALTAR[1], d = Math.hypot(du / 1.25, dv);
+    if (d < 19 + 1.5 * (vn(u / 4, v / 4, 41) - 0.5)) {
+      const sk = Math.hypot((du + 1) / 5, dv / 3);
+      if (sk < 1) return { alb: mul(C.bone, 0.8 - 0.3 * sk * sk), N: [du * 0.1, dv * 0.1, 1], spec: 0.15, gloss: 40 }; // the skull, its snout east
+      if (Math.hypot(du + 2.5, dv + 0.8) < 1.1) return { alb: L('#0c0a08'), N: [0, 0, 1] }; // an eye
+      for (let k = 0; k < 11; k++) {
+        const t = k / 11 * 6.28 + 0.3, px = Math.cos(t) * 13.5, py = Math.sin(t) * 10, e = Math.hypot(du - px, dv - py), kind = k % 3;
+        if (e < (kind === 1 ? 1.5 : 2.2)) return kind === 0 ? { alb: mul(L('#8a6a2a'), 1.1 - 0.4 * e), N: [0, 0, 1], spec: 0.7, gloss: 90 } // a coin, old copper-gold
+          : kind === 1 ? { alb: mix(C.bone, C.wax, 0.4), N: [0, 0, 1], spec: 0.2, gloss: 40 } // a tooth
+          : { alb: e < 0.6 ? L('#0c0a08') : L('#3a3428'), N: [0, 0, 1], spec: 0.3, gloss: 50 }; // a button, its holes dark
+      }
+      return { alb: mul(mix(C.stB, C.stC, vn(u / 5, v / 5, 42)), 0.95 + 0.15 * (1 - d / 19)), N: [0, 0, 1], spec: 0.05 };
+    }
+  }
+  if (near(...TOWER, 30)) { // charcoal on the flagstones: a tower, crenellated, a slit, a drop of red at its top
+    const du = u - 2 * TOWER[0], dv = v - 2 * TOWER[1], line = (d) => Math.abs(d) < 1.4 && vn(u / 2, v / 2, 43) > 0.22;
+    if (Math.hypot(du, dv + 28) < 3.2 + (dv + 28 > 0 ? 0 : 0.6 * (dv + 28))) return { alb: C.bloodF, N: [0, 0, 1], spec: 0.5, gloss: 70 }; // the drop
+    const body = Math.abs(du) < 8 && dv > -14 && dv < 22, roof = dv <= -14 && dv > -24 && Math.abs(du) < 8 * (dv + 24) / 10;
+    const edge = (body && (line(Math.abs(du) - 7) || line(dv - 21))) || (roof && line(Math.abs(du) - 8 * (dv + 24) / 10 + 1)) || (dv > -16 && dv < -12 && Math.abs(du) < 10 && line(dv + 14))
+      || (Math.abs(du) < 1.2 && dv > -2 && dv < 6) || (dv > 12 && dv < 21 && Math.abs(du) < 3 && line(Math.abs(du) - 2.5));
+    if (edge) return { alb: mix(L('#0a0908'), c, 0.25), N: [0, 0, 1], spec: 0.02 };
+  }
+  if (u > 2 * TALLY[0] && u < 2 * TALLY[2] && v > 2 * TALLY[1] && v < 2 * TALLY[3]) { // her days: groups of four strokes and one across
+    const gx = Math.floor((u - 2 * TALLY[0]) / 16), gy = Math.floor((v - 2 * TALLY[1]) / 13), lu = (u - 2 * TALLY[0]) % 16, lv = (v - 2 * TALLY[1]) % 13;
+    const groups = Math.floor((TALLY[2] - TALLY[0]) * 2 / 16), last = gy === Math.floor((TALLY[3] - TALLY[1]) * 2 / 13) - 1 && gx === groups - 1;
+    const wob = 0.6 * (h2(gx, gy, 51) - 0.5), stroke = lv > 1 && lv < 10 && [1, 4, 7, 10].some((s) => Math.abs(lu - s - wob * (lv - 5) * 0.2) < 0.8);
+    const across = !last && Math.abs((lv - 1) - (lu - 0) * 9 / 12) < 0.9 && lu < 12.5 && lv > 0.5 && lv < 10.5;
+    if ((stroke || across) && gx < groups) return { alb: mul(mix(c, C.bone, 0.45), 1.15), N: [0, 0, 1], spec: 0.05 }; // scratched: the paler stone under
+  }
+  if (near(...BLANKET, 16)) { // the guard's blanket, kicked off the chair, in folds; his spoon by it
+    const du = u - 2 * BLANKET[0], dv = v - 2 * BLANKET[1];
+    if (Math.abs(du - 12) < 3 && Math.abs(dv - 5) < 0.7) return { alb: L('#7a7266'), N: [0, 0, 1], spec: 0.8, gloss: 90 }; // the spoon
+    const d = Math.hypot(du / 12, dv / 7) + 0.25 * (vn(u / 4, v / 4, 61) - 0.5);
+    if (d < 1) { const s = Math.sin(du * 0.6 + 2 * vn(u / 6, v / 6, 62)); return { alb: mul(mix(E.linen, E.rag, vn(u / 9, v / 9, 63)), 0.6 + 0.2 * s), N: [s * 0.3, 0, 1], spec: 0.03 }; }
+  }
+  for (const [x, y, k] of PAPERS) { // the notes: a roll held in a dead rat's paw, a notebook dropped open
+    if (!near(x, y, 12)) continue;
+    const du = u - 2 * x, dv = v - 2 * y;
+    if (k === 'roll') {
+      if (Math.abs(du) < 3.5 && Math.abs(dv) < 1.3) return { alb: mul(L('#a89a7a'), 1 - 0.3 * Math.abs(dv)), N: [0, dv * 0.4, 1], spec: 0.05 };
+      const rat = Math.hypot((du + 6) / 5, (dv - 1.5) / 2.4); // the rat, on its back, its tail
+      if (rat < 1 || (du < -10 && du > -16 && Math.abs(dv - 2 - 0.4 * Math.sin(du)) < 0.6)) return { alb: mix(L('#2e2a26'), L('#4a4440'), vn(u / 2, v / 2, 64)), N: [0, 0, 1], spec: 0.1 };
+    } else {
+      if (Math.abs(du) < 5.5 && Math.abs(dv) < 4) return Math.abs(du) < 0.6 ? { alb: L('#1a1410'), N: [0, 0, 1] } // the spine
+        : { alb: mul(L('#a09070'), Math.sin(dv * 2.2) > 0.6 && Math.abs(du) > 1.5 && Math.abs(du) < 4.6 ? 0.45 : 0.9), N: [du * 0.04, 0, 1], spec: 0.04 }; // pages, lines of a hand
+      if (Math.abs(du) < 6.3 && Math.abs(dv) < 4.8) return { alb: L('#241a14'), N: [0, 0, 1] }; // its boards
+    }
+  }
+  return null;
+}
+
 // ---------- props ----------
 const PROPS = [ // kind, floor x, feet line y (room px)
   { kind: 'reliquary', x: RELIQUARY.x, y: RELIQUARY.y, w: 84, h: 34 },
@@ -710,6 +816,7 @@ const PROPS = [ // kind, floor x, feet line y (room px)
   { kind: 'lever', x: 352, y: 146, w: 10, h: 6 },
   { kind: 'mound', x: 610, y: 650, w: 50, h: 22 }, { kind: 'corpse', x: 450, y: 528, w: 16, h: 8 }, { kind: 'corpse', x: 820, y: 742, w: 16, h: 8 }, { kind: 'corpse', x: 2560, y: 236, w: 16, h: 8 },
   { kind: 'corpse', x: 2056, y: 548, w: 16, h: 8 }, { kind: 'coffin', x: 760, y: 610, w: 46, h: 12, open: true }, { kind: 'coffin', x: 470, y: 760, w: 46, h: 12, open: true },
+  { kind: 'chair', x: CHAIR.x, y: CHAIR.y, w: 14, h: 8 }, { kind: 'bucket', x: BUCKET.x, y: BUCKET.y, w: 8, h: 5 }, { kind: 'slab', x: SLAB.x, y: SLAB.y, w: 22, h: 10 },
   { kind: 'nest', x: 2020, y: 500, w: 20, h: 10 }, { kind: 'nest', x: 2110, y: 520, w: 20, h: 10 }, { kind: 'nest', x: 2075, y: 470, w: 20, h: 10 }, { kind: 'nest', x: 240, y: 380, w: 20, h: 10 },
 ];
 // Rubble where galleries fell in (solid in the middle): the dead ends' ends, the rats' passage.
@@ -783,7 +890,13 @@ for (const o of PROPS) {
   else if (o.kind === 'corpse') add('corpse', slumped(o.x % 13), P, h2(o.x, 0, 3) * 6);
   else if (o.kind === 'nest') add('nest', ratNest(o.x % 11), P, h2(o.x, 1, 3) * 3);
   else if (o.kind === 'rubble') add('rubble', rubble(o.x % 31, wx(o.r) * 0.8, 18), [wx(o.x), wy(o.y - o.h), 0], h2(o.x, 0, 3) * 6);
+  else if (o.kind === 'chair') add('chair', chair(), P, 0.6); // turned to the grille
+  else if (o.kind === 'bucket') add('bucket', bucket(), P, 0);
+  else if (o.kind === 'slab') add('slab', slab(), P, 0);
 }
+// the altar's candles, melted down to stubs, three still lit; two stubs by the rats' altar
+add('candles', candles2([[-10, -4, 0, 3, 1.2, 0.2, 0], [12, 3, 0, 2, 1.3, -0.2, 0]]), [wx(RAT_ALTAR[0]), wy(RAT_ALTAR[1] - 7), 0]);
+add('candles', candles2([[-14, -4, SLAB.top, 2, 1.6, 0.2, 0], [-8, 3, SLAB.top, 3.5, 1.3, -0.3, 0], [9, -2, SLAB.top, 1.5, 1.8, 0, 0, 1], [14, 4, SLAB.top, 4, 1.2, 0.2, 0], [2, -6, SLAB.top, 1, 1.9, 0, 0, 1]]), [wx(SLAB.x), wy(SLAB.y - 5), 0]);
 for (const [x, y] of BRAZIERS) add('brazier', brazier2(true), [wx(x), wy(y - 4), 0]);
 for (const [x, y] of LANTERNS) add('lantern', pole(110), [wx(x), wy(y), 0]);
 const candles = (x, y, n) => add('candles', candles2([...Array(n)].map((_, k) => [wx(k * 3 + 1), (k % 2) * 4, 0, 4 + h2(x, k, 3) * 9, 1.2 + h2(x, k, 4) * 0.3, (h2(x, k, 5) - 0.5) * 0.8, 0])), [wx(x), wy(y), 0]);
@@ -820,6 +933,8 @@ for (const [x, y, n] of CANDLES) light({ p: [wx(x + n * 1.5), wy(y) + 2, 16], c:
 for (const [x, y] of LANTERNS) light({ p: [wx(x), wy(y), 114], c: ORDER, I: 6, r0: 30, R: 300, soft: 6, pad: 6, haze: 0.012, hazeR: 5, skip: ['lantern'] });
 for (const [x, y, r] of ROT) light({ p: [wx(x), wy(y), 10], c: ROTC, I: 0.35 + r / 120, r0: 30, R: 5 * r + 80, noShadow: true }); // the rot's own pale glow
 for (const [x, y, r] of MOONHOLES) light({ p: [wx(x), wy(y), 30], c: MOONC, I: 0.25, r0: 50, R: 5 * r + 60, noShadow: true, noEnv: true }); // what a moonlit patch throws back
+light({ p: [wx(SLAB.x), wy(SLAB.y - 5) + 2, SLAB.top + 18], c: CANDLE, I: 0.8, r0: 20, R: 220, soft: 4, pad: 3, haze: 0.012, hazeR: 3, skip: ['candles'] }); // the altar's stubs
+light({ p: [wx(RAT_ALTAR[0]), wy(RAT_ALTAR[1] - 7), 14], c: CANDLE, I: 0.9, r0: 16, R: 180, soft: 4, pad: 3, haze: 0.01, hazeR: 3, skip: ['candles'] }); // the rats'
 for (const d of Object.values(DOORS)) light({ p: [wx(d.x), wy(d.y - RECESS - 4), 30], c: d === DOORS.puits ? MOONC : CANDLE, I: 1.2, r0: 16, R: 150, soft: 4, pad: 4 }); // the way up
 
 const env = ground(floorAt, (X, Y) => pit(X, Y, 1));

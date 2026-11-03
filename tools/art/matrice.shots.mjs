@@ -33,7 +33,7 @@ const S = `window.game.scene.getScene('room')`;
 const BOSS = `${S}.enemies.getChildren().find((e) => e.body?.enable && e.getData('kind') === 'matrice')`;
 const BROOD = `${S}.enemies.getChildren().filter((e) => e.body?.enable && e.getData('torn'))`;
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 await run(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 5, banked: 900, shortcuts: ['grille', 'galerie', 'caveau'] })));
 await page.reload();

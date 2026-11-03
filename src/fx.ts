@@ -32,7 +32,7 @@ export function bite(scene: Phaser.Scene, x: number, y: number) {
   Blood.bite(scene, x, y);
 }
 
-export const { dash, shard, splat, snap, drain, heal, gore, drip } = Blood;
+export const { dash, shard, splat, snap, drain, heal, gore, drip, step } = Blood;
 
 /** Clears and redraws a Graphics every frame with the elapsed ms, for `ms`, then destroys it. */
 function animate(scene: Phaser.Scene, depth: number, ms: number, draw: (g: Phaser.GameObjects.Graphics, t: number) => void) {

@@ -28,7 +28,7 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 await mkdir(out, { recursive: true });
 const run = (f, a) => page.evaluate(f, a);
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 await run((layout) => window.game.scene.getScene('room').scene.restart({ training: true, layout }), layout);
 await page.waitForFunction((layout) => window.game.scene.getScene('room').layout === layout && window.game.scene.getScene('room').hero?.body, layout);

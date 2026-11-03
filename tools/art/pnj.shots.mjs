@@ -25,7 +25,7 @@ const save = () => run(() => JSON.parse(localStorage.getItem('dracul.save') ?? '
 const quests = async () => (await save()).quests;
 /** A fresh game with `quests` (and `more` of the save) set; the page reloaded at the refuge. */
 const fresh = async (q = {}, more = {}) => {
-  await run(([q, more]) => { localStorage.clear(); localStorage.setItem('dracul.save', JSON.stringify({ v: 8, prologue: true, quests: q, ...more })); }, [q, more]);
+  await run(([q, more]) => { localStorage.clear(); localStorage.setItem('dracul.save', JSON.stringify({ v: 9, prologue: true, quests: q, ...more })); }, [q, more]);
   await page.reload();
   await ready('refuge');
 };
@@ -42,7 +42,7 @@ const P = { mirelle: [402, 604], ilse: [1194, 600], odo: [3102, 888], ledger: [3
 const by = (p, dx = -24, dy = 16) => [p[0] + dx, p[1] + dy];
 const kill = (quest) => run((q) => { const s = window.game.scene.getScene('room'), e = s.enemies.getChildren().find((o) => o.getData('quest') === q && o.body?.enable); if (e) s.kill(e); return !!e; }, quest);
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`); // past the title
 await ready('refuge');
 const only = arg('only', 'mirelle,greffier,ilse,odo').split(',');
 try {

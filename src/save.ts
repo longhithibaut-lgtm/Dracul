@@ -4,8 +4,9 @@
 import { ITEMS, SLOTS, type Item, type Worn } from './items.ts';
 import { isPower, slotOf, type Power, type Worn as Powers } from './powers.ts';
 import * as Quests from './quests.ts';
+import { BY_ID } from './notes.ts';
 
-export const VERSION = 8; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers; 4: the map's fog (carte), or (another branch's 4) the guardian is la Matrice; 5: both; 6: life in HP (50, was 5 drops); 7: the prologue played (`prologue`; an older save has played it); 8: the quests of the four met in the world. An older save comes up without what it lacks
+export const VERSION = 9; // 2: the items (stash, worn, next); 3: the Nourrice, Vesna, her powers; 4: the map's fog (carte), or (another branch's 4) the guardian is la Matrice; 5: both; 6: life in HP (50, was 5 drops); 7: the prologue played (`prologue`; an older save has played it); 8: the notes read (notes); 9: the quests of the four met in the world. An older save comes up without what it lacks
 // unlocks: what the Rongé sold for banked blood (shop.ts): the bite, the ranks of max life (`life`) and of the bag (`bag`)
 // bought (ranks: each worth T.ronge.life.hp, so an older save's ranks hold as they are). dry: how many times in a row the hero came back (or re-formed) without pouring blood: the Rongé's hunger.
 // shortcuts: the zone's gates raised for good (necropolis.data.ts GATES ids). stash: the items brought back (the
@@ -17,8 +18,9 @@ export const VERSION = 8; // 2: the items (stash, worn, next); 3: the Nourrice, 
 // and those worn, one per slot (powers.ts). carte: per open zone, the map's cells he has seen, a bitmask in base64
 // (map.ts; one of another size is dropped there). prologue: played through (or passed), the save's real start (prologue.ts).
 // quests: the four met in the world, their quests and the choices made (quests.ts; an older save meets them afresh).
+// notes: the notes read, in the order he read them (notes.ts ids; kept at death: words, not loot).
 export type Save = { v: number; banked: number; unlocks: { bite: boolean; life: number; bag: number }; dry: number; shortcuts: string[]; stash: Item[]; worn: Worn; next: number;
-  nourrice: { tries: number; dead: boolean }; vesna: boolean; powers: { bought: Power[]; worn: Powers }; carte: Partial<Record<'necropolis' | 'catacombs', string>>; prologue: boolean; quests: Quests.Quests };
+  nourrice: { tries: number; dead: boolean }; vesna: boolean; powers: { bought: Power[]; worn: Powers }; carte: Partial<Record<'necropolis' | 'catacombs', string>>; prologue: boolean; notes: string[]; quests: Quests.Quests };
 const KEY = 'dracul.save', LOG = 'dracul.log';
 
 /** A save read back from `json`, whatever it holds: brought up to this version, missing or broken fields to their
@@ -44,10 +46,10 @@ export function parse(json: string | null): Save {
   const araignee = !(Number(o.v) >= 4) || (Number(o.v) === 4 && 'carte' in o);
   const carte: Save['carte'] = {};
   for (const z of ['necropolis', 'catacombs'] as const) { const s = o.carte?.[z]; if (typeof s === 'string' && /^[A-Za-z0-9+/]*={0,2}$/.test(s)) carte[z] = s; }
+  const notes = Array.isArray(o.notes) ? [...new Set(o.notes.filter((n): n is string => typeof n === 'string' && Object.hasOwn(BY_ID, n)))] : [];
   return { v: VERSION, banked: count(o.banked), unlocks: { bite: o.unlocks?.bite === true, life: count(o.unlocks?.life), bag: count(o.unlocks?.bag) }, dry: count(o.dry), shortcuts, stash, worn, next,
     nourrice: { tries: count(o.nourrice?.tries), dead: o.nourrice?.dead === true }, vesna: o.vesna === true || (araignee && o.nourrice?.dead === true), powers: { bought, worn: wearing }, carte,
-    prologue: o.prologue === true || (Object.keys(o).length > 0 && !(Number(o.v) >= 7)), // a save from before the prologue (7): its player is past it
-    quests: Quests.read(o.quests) };
+    prologue: o.prologue === true || (Object.keys(o).length > 0 && !(Number(o.v) >= 7)), notes, quests: Quests.read(o.quests) }; // a save from before the prologue (7): its player is past it
 }
 
 const storage = () => { try { return localStorage; } catch { return undefined; } }; // a sandboxed frame throws on access
@@ -73,11 +75,11 @@ export function store() {
   try { storage()?.setItem(KEY, JSON.stringify(data)); } catch { /* full or refused: it lives on until the page closes */ }
 }
 
-/** One expedition ended: back at the refuge or dead. deepest: the deepest ring reached; blood: carried at its end;
+/** One expedition ended: back at the refuge, dead, or given up (the pause menu). deepest: the deepest ring reached; blood: carried at its end;
  *  life: health left; s: how long it lasted; loosed, met: the battue's packs his scent loosed, and those he walked into;
  *  boss: the Nourrice fought (« essai ») or killed (« tuée ») on it.
  *  Kept (the last 200) in localStorage and shown in the console. */
-export type Entry = { end: 'retour' | 'mort'; deepest: number; blood: number; life: number; s: number; loosed: number; met: number; boss?: 'essai' | 'tuée'; at: string };
+export type Entry = { end: 'retour' | 'mort' | 'abandon'; deepest: number; blood: number; life: number; s: number; loosed: number; met: number; boss?: 'essai' | 'tuée'; at: string };
 /** The expedition log, oldest first (the last 200; none without storage). */
 export function journal(): Entry[] {
   try { const all = JSON.parse(storage()?.getItem(LOG) ?? '[]'); return Array.isArray(all) ? all : []; } catch { return []; }
