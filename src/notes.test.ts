@@ -7,6 +7,7 @@ import * as Nave from './nave.data.ts';
 import * as Ossuary from './ossuary.data.ts';
 import * as Chapel from './chapel.data.ts';
 import * as Cloister from './cloister.data.ts';
+import * as Nec from './necropolis.data.ts';
 
 // Les notes (notes.ts): each lies on open floor where it is said to, away from what F would take first; read, it is
 // kept in the save for good, an older save coming up with none.
@@ -27,6 +28,12 @@ describe('the notes', () => {
       return !(n.x > x0 && n.y > y0 && n.x < x0 + w && n.y < y0 + h) || gap(boxes, n.x, n.y) <= 6 || WORLD[n.place].caches.some((c) => Math.hypot(c.x - n.x, c.y - n.y) <= 30);
     });
     expect(off.map((n) => n.id)).toEqual([]);
+  });
+
+  it('lie on the necropolis’ note spots once its plan has them', () => {
+    const spots = (Nec as unknown as { NOTES?: { id: string; x: number; y: number }[] }).NOTES;
+    if (!spots) return; // the plan before its redesign: the notes' own x, y
+    for (const n of NOTES.filter((n) => n.spot)) expect(spots.find((s) => s.id === n.spot && s.x === n.x && s.y === n.y), n.id).toBeDefined();
   });
 
   it('are read where they lie, the nearest within reach; Vesna’s days once she is out', () => {
