@@ -3,6 +3,7 @@ import { T } from './tuning.ts';
 import * as Q from './quests.ts';
 import { parse, VERSION } from './save.ts';
 import { beast, buy, cut, price } from './shop.ts';
+import { missing } from './font.ts';
 
 // The four met in the world (quests.ts): their quests move as the rules say, each choice holds for good, and a save
 // from before them (version 6) or a broken one reads back to a clean start.
@@ -146,5 +147,10 @@ describe('quests', () => {
     Q.meet(q, 'odo');
     expect(Q.log(q)).toHaveLength(2);
     expect(Q.log(q)[0]).toContain('0 / 3');
+    // every line of every state, in the bag's pixel font
+    const lines: string[] = [];
+    for (const [s, n, c] of [['open', 0], ['open', 1], ['done', 1, 'refuge'], ['failed', 0, 'goule'], ['failed', 0, 'tuee'], ['done', 0, 'registre'], ['done', 0, 'mordue'], ['done', 0, 'epargnee'], ['done', 0, 'garde'], ['done', 0, 'donne'], ['failed', 0, 'mort']] as const)
+      lines.push(...Q.log({ night: 9, ...Object.fromEntries(Q.QUESTS.map((id) => [id, { s, n, at: 0, c }])) } as Q.Quests));
+    expect(missing(lines.join(' ') + ' Quêtes Tu portes le registre de l\'Ordre. Lourd.')).toEqual([]);
   });
 });

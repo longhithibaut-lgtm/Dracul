@@ -378,6 +378,82 @@ passes.
 
 ---
 
+## 7. Implémenté : les quatre rencontres (provisoire, à valider)
+
+Lancé par l'utilisateur le 2026-11-03 : Mirelle, le Greffier, Ilse, Odo (noms provisoires). **Toutes les répliques
+ci-dessous sont provisoires** (écrites par Claude, à valider ou réécrire). Ajusté pour ne rien révéler de ce qui n'est
+pas validé : le Greffier grave les noms des morts (pas de « vampires saignés »), Ilse a les yeux brûlés et « cherche le
+noir » (sans dire par quoi), Odo ment sur les lanternes sans que rien ne le contredise encore, pas de transformation
+(Ilse ne devient pas vampire). Seul le réveil sous le pieu (validé) est rappelé, par le registre. Code : `src/pnj.ts`
+(lieux, répliques), `src/quests.ts` (règles), `src/dialogue.ts` (la boîte), chiffres `T.quests`.
+
+**Mirelle l'Emmurée** (vampire sans maison, murée dans un petit mausolée du champ des tombes ; elle parle par une
+fente, ses doigts passent dessus). Quête « La fente » : verser 30 sang porté par la fente, une fois par nuit, trois
+nuits. Nourrie trois fois : elle casse son mur et descend au refuge (assise dans la crypte aux cercueils ; avec elle,
+le Rongé tient une nuit de plus avant de devenir bête). **Choix sale** : ne pas la nourrir. Plus de 3 nuits sans sang
+après la dernière fois (ou la rencontre) : le mur est cassé de l'intérieur, une goule rôde devant ; la tuer lâche 60 sang.
+- Rencontre (« Derrière le mur ») : « Ne regarde pas. Parle-moi seulement. » / « Je me suis murée. Avant que la faim me
+  prenne la tête. » / « J'ai encore mon nom. Mirelle. Pour combien de temps ? » / « Du sang. Par la fente. Un peu
+  chaque nuit, et je reste moi. » — choix : *Je reviendrai.* / *Non.* (« Ses doigts rentrent dans le noir. »)
+- Ensuite : « Tu sens le sang. » — *Verser 30 sang par la fente.* / *Garder le sang.* ; affamée : « Ça gratte, dans ma
+  tête. Vite. » ; sans sang porté : « Tu n'as rien. Reviens les mains rouges. » ; déjà nourrie : « Demain. Va. » ;
+  après le 1er : « ...Je l'entends moins. » ; le 2e : « Encore une nuit, et je casse ce mur. » ; le 3e : « Assez.
+  Recule. » / « Le mur cède. Elle passe sans te regarder. » / « Je descends chez toi. Ne dis rien au vieux. »
+- Au refuge : « Le Rongé ne parle pas. C'est bien. » / « Je compte mes dents. Elles sont toutes là. » / « Ne me
+  regarde pas trop longtemps. » / « J'ai encore mon nom. Ne le dis à personne. »
+- Goule tuée : « Elle avait encore son nom. » ; le mur ensuite : « Un ruban rouge, dans la poussière. »
+
+**Le Greffier** (vieux vampire sans maison, à genoux dans la galerie de l'ossuaire des catacombes, il gratte des noms
+sur des crânes à la bougie). Quête « Les noms » : prendre le registre de l'Ordre sur une caisse du camp et le monter
+**vivant** au refuge (il pèse comme 150 sang porté : plus lent, plus vite repéré ; perdu à la mort, il retourne au
+camp). Récompense : le Greffier monte au refuge (grande salle) ; à la première parole, la carte des catacombes entière et
+80 sang au bassin. Pas de choix sale (voulu simple).
+- Rencontre (« Un vieux ») : « Ne marche pas sur les noms. » / « Chaque crâne, un nom. Ils comptent. Moi, je nomme. » /
+  « L'Ordre tient un registre, là-haut, au camp. Tous ceux qu'ils ont pris. » / « Monte-le au refuge. Je viendrai le
+  lire. » — *J'irai.* / *Pas mon affaire.* (« Il gratte. Il ne t'entend plus. »)
+- En cours : « Le registre. Au camp. Lourd comme un mort. » ; porté : « Tu l'as. Ne meurs pas avec. Monte-le au
+  refuge. » ; pris : « Le registre : lourd. Ne meurs pas avec. » ; arrivé : « Le registre est au refuge. Le Greffier
+  est monté. »
+- Au refuge, la première fois : « J'ai lu. Tous. » / « Toi aussi, ils t'ont inscrit. Pas de nom. Juste ça : SANS
+  MAISON. PAS DE CIRE. » / « Toi, tu n'as pas de nom à graver. Pas encore. » / « Tiens. Les galeries d'en bas, comme
+  je les connais. » ; puis : « Encore un nom. Encore un. » / « Ils comptent. Moi, je nomme. » / « Un registre ment par
+  ce qu'il tait. Comme tous. »
+
+**Ilse la Fossoyeuse** (humaine, les yeux brûlés bandés de linge, endormie assise contre une stèle du champ des tombes,
+sa bêche plantée). Quête « De quoi dormir » : tuer le Gavé qui mange les morts près de sa tombe (placé chaque nuit tant
+qu'il vit). **Choix sale** : elle offre son sang. *Mordre* : +50 PV et 40 sang porté, elle meurt (affaissée contre sa
+pierre, pour toujours). *Non* : elle donne sa Faucille du fossoyeur (rare) et se rendort.
+- Rencontre (« Une humaine ») : « Qui est là ? ...Tu es froid. Ça repose. » / « J'ai les yeux brûlés. Je cherche le
+  noir. Ici, il y en a encore. » / « Le gros vient manger les morts, près de ma tombe. Bientôt moi. » / « Tue-le. Je
+  n'ai rien d'autre à donner que ma reconnaissance. » — *Je le tuerai.* / *Dors.* (« Elle se recroqueville contre la
+  pierre. »)
+- Le Gavé vivant : « Il est encore là. Je l'entends mâcher. » ; tué : « Il ne mâchera plus. »
+- L'offre : « Il ne mâche plus. » / « Tu as faim. Je l'entends à ta voix. » / « Prends. Je n'en ai plus besoin. » —
+  *Mordre.* (« Elle s'endort. » ; ensuite : « Elle dort. Pour de bon. ») / *Non. Dors.* (« Alors prends ça. C'était pour
+  creuser. » / « Je dors, maintenant. Ne fais pas de bruit en partant. » ; ensuite : « Chut. Je dors. »)
+
+**Maître Odo** (lanternier de l'Ordre, gros, chauve, lunettes rondes, tablier roussi ; attaché à un poteau dans le camp,
+près du bûcher). Quête « Le lanternier » : l'escorter du camp jusqu'à l'escalier du refuge. Il suit lentement (44 px/s,
+le héros 66), a 40 PV ; un ennemi au repos près de lui (70 px) se met en chasse, un ennemi en chasse à 16 px le frappe
+(10 toutes les 0,9 s) ; trop loin derrière hors de l'écran, il rattrape. Mort : pour toujours. Le héros mort, ou sorti
+par une autre porte : Odo est de retour à son poteau la nuit suivante. Arrivé, **le choix sale** au refuge : *Tu
+travailleras pour moi* (il reforge l'arme portée d'une rareté : 120 sang du bassin, puis 240) ou *Le Rongé a faim*
+(le Rongé ne redevient plus jamais bête, ses prix −25 %, et une réplique : « Il était bon. Ne me regarde pas comme ça. »).
+- Rencontre (« Un homme de l'Ordre ») : « Je sais ce que tu es. Je sais ce que tu crains. » / « Maître Odo, lanternier.
+  Ils m'ont attaché là. Une erreur. » / « Détache-moi. Emmène-moi chez toi, en bas. Je travaillerai. » — *Le
+  détacher.* (« Il te suit. Lentement. ») / *Le laisser.* (« Il appelle. Personne ne vient. ») ; de retour au poteau :
+  « Tu reviens. Je savais. » / « Détache-moi encore. Cette fois, ne cours pas. »
+- En chemin : « Plus lentement. Je suis vieux. » / « Les lanternes ? Ce n'est que de l'huile. » / « Ils nous voient.
+  Ils me voient, moi. » ; laissé : « Maître Odo reste en arrière. » ; tué : « Maître Odo est mort. »
+- Au refuge : « C'est donc ça, ton trou. » / « Je peux réparer. Forger. Tout ce que l'Ordre m'a appris. » / « Pourquoi
+  il me regarde comme ça, l'autre, au bassin ? » — *Tu travailleras pour moi.* (« Il sourit trop. ») / *Le Rongé a
+  faim.* (« Le Rongé ne laisse rien. »)
+- Gardé : « Les lanternes ? Ce n'est que de l'huile. » / « Apporte. Je répare tout. » / « Je ne dors pas bien, ici. Ça
+  ne fait rien. » — *Reforger (l'arme) (n sang du bassin).* / *Rien.*
+
+**Le journal des quêtes** : dans le sac (I), sous les objets, une ligne par quête rencontrée (ce qu'il reste à faire, ou
+comment elle a fini).
+
 ## Questions pour l'utilisateur
 1. **Le réveil** : le héros dort-il depuis des années avec un pieu (proposé), ou arrive-t-il autrement ?
 2. **Révélation 4** : on prend la révélation possible du lore comme vraie (l'Ancêtre l'a fait, en dernier, exprès) ?

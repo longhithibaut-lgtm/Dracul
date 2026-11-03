@@ -47,8 +47,8 @@ export function icon(scene: Phaser.Scene, id: ItemId) {
 /** What the panel shows: its title; the slots worn; the list under them in `size` cells (the bag's slots, or the
  *  chest's rows) and its name; `ground`: an item on the ground to take, the bag full (pick the one to leave); `held`: the list item
  *  waiting for the slot it replaces; the cell under the cursor; a word (`line`); the keys; which items are not yet
- *  brought back (lost at death). */
-export type View = { title: string; listName: string; worn: Worn; list: Item[]; size: number; ground?: Item; held?: number; cursor: number; line: string; hint: string; fresh(it: Item): boolean };
+ *  brought back (lost at death); `log`: the quests under way (pnj.ts), under it all. */
+export type View = { title: string; listName: string; worn: Worn; list: Item[]; size: number; ground?: Item; held?: number; cursor: number; line: string; hint: string; fresh(it: Item): boolean; log?: string[] };
 export type Panel = {
   at(x: number, y: number): number; // the cell under a point (native px of the view): 0-5 worn, 6... the list; -1 none
   next(i: number, dx: number, dy: number): number; // the cell from `i` the way (dx, dy) goes
@@ -80,8 +80,8 @@ export function panel(scene: Phaser.Scene, first: View): Panel {
     const W = scene.scale.width / ZOOM, H = scene.scale.height / ZOOM, x0 = Math.round((W - PW) / 2);
     const shown = Math.min(SHOWN, v.size), rows = Math.ceil(shown / COLS);
     const it = v.cursor < SLOTS.length ? v.worn[v.cursor] : v.list[v.cursor - SLOTS.length];
-    const words = it ? Font.wrap(describe(it), PW) : [], hint = Font.wrap(v.hint, PW);
-    const tall = 14 + 14 + CELL + 10 + 12 + rows * (CELL + GAP) + 8 + 24 + Math.max(2, words.length) * 12 + 14 + hint.length * 12;
+    const words = it ? Font.wrap(describe(it), PW) : [], hint = Font.wrap(v.hint, PW), log = (v.log ?? []).flatMap((l) => Font.wrap(l, PW));
+    const tall = 14 + 14 + CELL + 10 + 12 + rows * (CELL + GAP) + 8 + 24 + Math.max(2, words.length) * 12 + 14 + hint.length * 12 + (log.length ? 18 + log.length * 12 : 0);
     let y = Math.max(2, Math.round((H - tall) / 2));
     dim.setSize(W, H);
     g.clear();
@@ -130,6 +130,11 @@ export function panel(scene: Phaser.Scene, first: View): Panel {
     if (v.line) text(v.line, Math.round((W - Font.width(v.line)) / 2), y, GLOW);
     y += 12;
     hint.forEach((l, i) => text(l, Math.round((W - Font.width(l)) / 2), y + i * 12, GREY));
+    if (!log.length) return;
+    y += hint.length * 12 + 6;
+    g.fillStyle(BLOOD[0]).fillRect(x0, y, PW, 1);
+    text('Quêtes', x0, y + 3, GREY);
+    log.forEach((l, i) => text(l, x0, y + 15 + i * 12, BONE_DIM));
   };
   draw();
   const place = () => draw();

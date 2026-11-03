@@ -34,6 +34,7 @@ import * as Enterre from './enterre.ts';
 import * as Gave from './gave.ts';
 import * as Chose from './chose.ts';
 import * as Crocheteur from './crocheteur.ts';
+import * as Pnj from './pnj.ts';
 import { decks, nearestEdge, struggle } from './fauna.ts';
 import { WORLD, ZONES, areaAt, chokes, expedition, galleryOpen, go, homeward, isZone, lair, loose, parents, ringAt, wayBack, type Expedition, type Place, type RoomState, type ZoneId } from './world.ts';
 import { value, type GiftId } from './gifts.ts';
@@ -174,6 +175,7 @@ export class RoomScene extends Phaser.Scene {
   private fly?: { x: number; y: number; dx: number; dy: number; at: number; into: boolean }; // flung by la Chose du gouffre
   private bodies: Foes.Ctx['bodies'] = []; // the dead lying on the floor (a Gavé eats them)
   private ctx!: Foes.Ctx; // what the foes' own AI modules may ask of this room
+  private pnj?: Pnj.Pnj; // the four met in the world, those of this room (pnj.ts)
 
   constructor() {
     super('room');
@@ -236,6 +238,7 @@ export class RoomScene extends Phaser.Scene {
     this.heldBy = this.pull = this.netG = this.fly = undefined;
     this.netUntil = this.netPoints = 0;
     this.bodies = [];
+    this.pnj = undefined;
   }
 
   preload() {
@@ -243,6 +246,7 @@ export class RoomScene extends Phaser.Scene {
     Hud.preload(this);
     Room.preload(this, this.layout, this.zoneDoor() ?? { x: 0, y: 0 });
     Foes.preload(this); // the training room calls them into any room
+    Pnj.preload(this);
     if (this.layout === 'refuge') { Ronge.preload(this); Satchel.preloadChest(this); }
     if (this.layout === 'refuge' || this.layout === 'catacombs') Vesna.preload(this);
     if (this.layout === 'catacombs' || this.training) { Matrice.preload(this); Nourrice.preload(this); } // the training room calls l'Araignée in too
@@ -325,6 +329,7 @@ export class RoomScene extends Phaser.Scene {
     const world = (p: Phaser.Input.Pointer) => this.cameras.main.getWorldPoint(p.x, p.y);
     this.input.mouse!.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (this.pnj?.busy()) return void this.pnj.click(p.x, p.y);
       if (this.carte) return void this.closeMap();
       if (this.counter) { // a card buys, anywhere else leaves
         const i = this.counter.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM);
@@ -355,26 +360,27 @@ export class RoomScene extends Phaser.Scene {
     this.keys.J.on('up', () => !this.clawMouse && this.release());
     this.input.keyboard!.on('keydown-X', (ev: KeyboardEvent) => { if (ev.repeat) return; const a = this.aimMouse ? Phaser.Math.Angle.BetweenPoints(this.hero, world(this.input.activePointer)) : this.facing; this.press(() => this.parry(a)); });
     this.keys.K.on('down', () => { const a = this.facing; this.aimMouse = false; this.press(() => this.shoot(a)); });
-    this.keys.F.on('down', () => (this.counter ? this.closeShop() : this.stall ? this.closeStall() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
+    this.keys.F.on('down', () => (this.pnj?.busy() ? this.pnj.next() : this.counter ? this.closeShop() : this.stall ? this.closeStall() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
     // Le Rongé's wares: hovered, bought by their key or a click, left with Escape (or F).
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.aimMouse = true;
+      this.pnj?.hover(p.x, p.y);
       this.counter?.hover(this.counter.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM));
       this.stall?.hover(this.stall.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM));
       const i = this.satchel?.panel.at(p.x / Dark.ZOOM, p.y / Dark.ZOOM) ?? -1, moved = p.x !== p.prevPosition.x || p.y !== p.prevPosition.y; // a still mouse leaves the keys' cursor be
       if (i >= 0 && moved && i !== this.satchel!.view.cursor) this.showSatchel({ cursor: i });
     });
-    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'].forEach((k, i) => this.input.keyboard!.on(`keydown-${k}`, () => (this.counter ? this.sell(i) : this.stall ? this.trade(i) : this.satchel && i < 7 && this.act(Items.SLOTS.length + i))));
-    this.input.keyboard!.on('keydown-ESC', () => (this.carte ? this.closeMap() : this.satchel ? this.closeSatchel() : this.stall ? this.closeStall() : this.closeShop()));
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'].forEach((k, i) => this.input.keyboard!.on(`keydown-${k}`, () => (this.pnj?.busy() ? this.pnj.pick(i) : this.counter ? this.sell(i) : this.stall ? this.trade(i) : this.satchel && i < 7 && this.act(Items.SLOTS.length + i))));
+    this.input.keyboard!.on('keydown-ESC', () => (this.pnj?.busy() ? this.pnj.close() : this.carte ? this.closeMap() : this.satchel ? this.closeSatchel() : this.stall ? this.closeStall() : this.closeShop()));
     // The items' panel: I (or Tab) opens le sac and closes it; the arrows (or ZQSD, WASD) move the cursor, Enter or
     // Space wears or takes off what it is on.
     this.input.keyboard!.addKeys('TAB,I,ENTER,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE'); // their Key objects: a key held, or a doubled keydown, acts once
     for (const k of ['I', 'TAB']) this.input.keyboard!.on(`keydown-${k}`, () => (this.satchel ? this.closeSatchel() : this.openSatchel('sac')));
     for (const [keys, dx, dy] of [[['LEFT', 'Q', 'A'], -1, 0], [['RIGHT', 'D'], 1, 0], [['UP', 'Z', 'W'], 0, -1], [['DOWN', 'S'], 0, 1]] as const)
       for (const k of keys) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.showSatchel({ cursor: this.satchel.panel.next(this.satchel.view.cursor, dx, dy) }));
-    for (const k of ['ENTER', 'SPACE']) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.act(this.satchel.view.cursor));
+    for (const k of ['ENTER', 'SPACE']) this.input.keyboard!.on(`keydown-${k}`, () => (this.pnj?.busy() ? this.pnj.next() : this.satchel && this.act(this.satchel.view.cursor)));
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
-    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => !this.satchel && !this.carte && (this.dashPressedAt = this.time.now));
+    for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => !this.satchel && !this.carte && !this.pnj?.busy() && (this.dashPressedAt = this.time.now));
     this.input.keyboard!.on('keydown-C', () => (this.carte ? this.closeMap() : this.openMap())); // la carte (M mutes)
     // Le Glyphe: E casts it at the pointer (the mouse aiming), L ahead of the hero.
     const castAt = (to: { x: number; y: number }) => this.press(() => this.cast(to));
@@ -444,6 +450,16 @@ export class RoomScene extends Phaser.Scene {
     }
     this.cameras.main.fadeIn(T.expedition.fadeMs);
     this.showBlood();
+    this.pnj = Pnj.create(this, {
+      layout: this.layout, hero: this.hero, enemies: this.enemies, obstacles: this.room.obstacles, pits: this.room.pits,
+      title: (t) => this.hud.title(t),
+      carried: () => this.carried, spend: (n) => { this.carried = Math.max(0, this.carried - n); this.showBlood(); },
+      give: (n) => { this.carried = Math.min(this.bloodBag(), this.carried + n); this.showBlood(); },
+      heal: (n) => this.heal(n), place: (p, kind, hp) => this.place(p, kind, { hp }), drop: (p, blood) => this.addDrop({ ...p, blood }),
+      loot: (p, id, r) => this.addLoot({ ...p, item: { n: Save.data.next++, id, r } }), way: (o) => this.wayToHero(o as Sprite),
+      pause: (on) => { this.hero.setVelocity(0); if (on) { this.physics.pause(); this.tweens.pauseAll(); } else { this.physics.resume(); this.tweens.resumeAll(); } this.time.paused = on; },
+      stored: () => this.dress(),
+    });
     if (this.layout === 'refuge') return this.home();
     this.hud.title(WORLD[this.here].name);
     this.enterRoom();
@@ -608,13 +624,14 @@ export class RoomScene extends Phaser.Scene {
     this.time.timeScale = this.tweens.timeScale = slow >= 0 && slow < T.feel.slowMs ? Phaser.Math.Linear(T.feel.slow, 1, (slow / T.feel.slowMs) ** 2) : 1;
     if (this.ronge) this.ronge.show(Shop.beast(Save.data) ? 'beast' : Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.notice ? 'look' : 'idle', time, this.hero.x);
     this.vesna?.show(this.stall || Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, this.vesna.s) < T.ronge.notice ? 'count' : 'idle', time);
+    this.pnj?.step(time, delta);
     if (this.cut) { // a scene plays: he stands, the world waits, the zone streams round the camera
       this.hero.setVelocity(0);
       this.room.zone?.chunks.stream(this.cameras.main.worldView);
       for (const l of this.labels) l.l.near(false);
       return void Hero.show(this.hero, { moving: false, dashing: false, slashing: false, combo: 0, throwing: false, biting: false, casting: false, hurt: false, dazed: false, invulnerable: false, facing: -Math.PI / 2, swarm: false });
     }
-    if (this.counter || this.satchel || this.stall || this.carte) { // he stands before the Rongé's wares, Vesna's, or his items, the words over the room gone
+    if (this.counter || this.satchel || this.stall || this.carte || this.pnj?.busy()) { // he stands before the Rongé's wares, Vesna's, his items, or one who speaks; the words over the room gone
       for (const l of this.labels) l.l.near(false);
       return void this.hero.setVelocity(0);
     }
@@ -690,7 +707,7 @@ export class RoomScene extends Phaser.Scene {
       this.hero.setVelocity(x, y);
       this.hero.body!.velocity.normalize().scale(T.hero.speed * (1 + this.gear.speed) * (time < this.swarmUntil ? T.swarm.speed : posing ? 0.3 : time < this.shotUntil ? 0.5 : 1) * (this.netted() ? T.crocheteur.slow : 1) * this.weight().walk);
     }
-    const W = T.blood.weight, fill = this.weight().fill; // the bag well filled drips behind him as he walks
+    const W = T.blood.weight, fill = Math.min(1, this.carried / this.bloodBag()); // the bag well filled drips behind him as he walks (the blood, not the ledger)
     if (fill >= W.dripFrom && time >= this.dripAt && time >= this.dashUntil && this.hero.body!.velocity.lengthSq() > 1) {
       this.dripAt = time + W.dripMs / fill;
       Fx.drip(this, this.hero.body!.center.x, this.hero.body!.center.y, W.dripMs * 10);
@@ -2046,6 +2063,7 @@ export class RoomScene extends Phaser.Scene {
     if (kind === 'chose') Chose.die(e); // the room cleared: gone, no body
     else (kind === 'crossbow' ? Crossbow : Foes.isFoe(kind) ? Foes : kind === 'nourrice' ? Nourrice : kind === 'matrice' ? Matrice : kind === 'crows' ? Crows : Enemy).die(this, e);
     if (kind === 'nourrice' || kind === 'matrice') this.won(e);
+    this.pnj?.killed(e);
     if (this.heldBy === e) this.heldBy = undefined; // the hand lets go
     if (kind === 'crows' || kind === 'chose') return; // a flock gone off, the Chose: no blood, no din
     Sfx.play(this, 'kill');
@@ -2076,7 +2094,7 @@ export class RoomScene extends Phaser.Scene {
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.talk) return this.talk();
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.CHEST) < T.ronge.talk) return this.openSatchel('coffre');
     if (!prey && this.vesna && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.VESNA) < T.vesna.talk) return this.openStall();
-    if (!prey && (this.search() || this.lever() || this.reliquary() || this.take())) return true;
+    if (!prey && (this.pnj?.talk() || this.search() || this.lever() || this.reliquary() || this.take())) return true;
     if (!fangs) return true; // the bite is not his yet (the Rongé will teach it)
     this.biteAt = now;
     if (!prey) {
@@ -2248,7 +2266,7 @@ export class RoomScene extends Phaser.Scene {
 
   /** What the blood he carries weighs (logic.ts burden()): slower, the mist slower back, noticed from farther. */
   private weight() {
-    return burden(this.carried, this.bloodBag(), this.gear.scent, T.blood.weight);
+    return burden(this.carried + Pnj.load(), this.bloodBag(), this.gear.scent, T.blood.weight); // the Order's ledger weighs too
   }
 
   // ---- The battue (the blood's scent) and le Rongé's wares. ----
@@ -2378,7 +2396,7 @@ export class RoomScene extends Phaser.Scene {
   /** Opens the items' panel: le sac (on an expedition the game pauses meanwhile), `ground` the item on the floor to take
    *  in place of one of the bag's; or le coffre at the refuge. */
   private openSatchel(mode: 'sac' | 'coffre', ground?: Lying) {
-    if (this.satchel || this.carte || this.counter || this.training || this.dead || this.prey || this.phase !== 'play') return false;
+    if (this.satchel || this.carte || this.counter || this.pnj?.busy() || this.training || this.dead || this.prey || this.phase !== 'play') return false;
     this.hero.setVelocity(0);
     this.physics.pause();
     this.tweens.pauseAll();
@@ -2395,7 +2413,7 @@ export class RoomScene extends Phaser.Scene {
   private showSatchel(change: Partial<Satchel.View> = {}) {
     const s = this.satchel!, sac = s.mode === 'sac', list = this.list(s.mode), size = sac ? Shop.itemSlots(Save.data) : Math.max(12, Math.ceil(list.length / 12) * 12);
     s.view = { ...s.view, ...change, list, size, ground: s.ground?.item, listName: sac ? `Sac ${list.length} / ${size}` : `Coffre ${list.length}`,
-      fresh: (it) => !Items.acquired(Save.data, it),
+      fresh: (it) => !Items.acquired(Save.data, it), log: Pnj.log(),
       hint: s.ground ? 'Entrée ou clic\u00a0: laisser cet objet\u00a0; Échap\u00a0: rien' : `Entrée ou clic\u00a0: porter, ${sac ? 'ranger au sac' : 'rendre au coffre'}\u00a0; Échap\u00a0: fermer` };
     s.panel?.draw(s.view);
     return s.view;
@@ -2429,7 +2447,7 @@ export class RoomScene extends Phaser.Scene {
   /** Opens the zone's map over the game, paused (map.ts); elsewhere, or busy, nothing. */
   private openMap() {
     const z = this.room.zone?.id;
-    if (!z || this.satchel || this.counter || this.stall || this.dead || this.prey || this.cut || this.phase !== 'play') return;
+    if (!z || this.satchel || this.counter || this.stall || this.pnj?.busy() || this.dead || this.prey || this.cut || this.phase !== 'play') return;
     this.hero.setVelocity(0);
     this.carte = Carte.open(this, z, this.hero.body!.center, this.facing);
     Sfx.play(this, 'snap');
@@ -2475,12 +2493,14 @@ export class RoomScene extends Phaser.Scene {
       const hounds = live.filter((e) => e.getData('kind') === 'hound' && e.getData('alert') && !e.getData('followed'));
       const st = exp.rooms[this.here];
       if (st) Object.assign(st, { // as he leaves it; an Amas' torn ghouls are its own, gone with it
-        foes: live.filter((e) => !hounds.includes(e) && !e.getData('torn')).map((e) => ({ kind: e.getData('kind') ?? 'ghoul', x: e.x, y: e.y, hp: e.getData('hp'), home: e.getData('home'), followed: e.getData('followed'), pack: e.getData('pack') })),
+        foes: live.filter((e) => !hounds.includes(e) && !e.getData('torn') && !e.getData('quest')).map((e) => ({ kind: e.getData('kind') ?? 'ghoul', x: e.x, y: e.y, hp: e.getData('hp'), home: e.getData('home'), followed: e.getData('followed'), pack: e.getData('pack') })),
         caches: this.caches.map(({ x, y, blood, item }) => ({ x, y, blood, item })),
         drops: this.drops.map(({ x, y, blood }) => ({ x, y, blood })),
         items: this.loot.map(({ x, y, item }) => ({ x, y, item })),
       });
       exp.deepest = Math.max(exp.deepest, WORLD[way!.to].ring);
+      if (this.layout === 'refuge') Pnj.setOut(); // a night goes by
+      else this.pnj?.leaving(way!.to);
       next = { layout: way!.to, entry: way!.entry, exp, health: this.health, carried: this.carried, hounds: hounds.map((e) => e.getData('hp')), bag: this.bag };
     }
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart(next));
@@ -2664,6 +2684,7 @@ export class RoomScene extends Phaser.Scene {
       Save.log({ end: 'mort', deepest: this.exp.deepest, blood: this.carried, life: 0, s: Math.round((Date.now() - this.exp.startedAt) / 1000), loosed: this.exp.loosed, met: this.exp.met, boss: this.exp.boss });
       Save.data.dry++; // re-formed empty-handed: le Rongé hungers
       lostItems = this.bag.filter((it) => !Items.acquired(Save.data, it)).length + Items.die(Save.data); // the bag, and what he wore not yet brought back
+      Pnj.died(); // the ledger, if he carried it
       Save.store();
     }
     this.time.delayedCall(fell ? 1800 : 1200, () => this.scene.restart((this.training ? { training: true, gifts: this.gifts, ranks: this.ranks, layout: this.layout } : { lost: this.carried, lostItems }) satisfies Run));

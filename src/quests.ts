@@ -138,7 +138,7 @@ export function log(q: Quests): string[] {
   if (m.s === 'done') L.push('La fente (Mirelle) : elle a cassé son mur. Elle est au refuge.');
   if (m.c === 'goule') L.push('La fente (Mirelle) : le mur est cassé de l\'intérieur. Quelque chose rôde au mausolée.');
   if (m.c === 'tuee') L.push('La fente (Mirelle) : tu l\'as tuée. Elle avait encore son nom.');
-  if (g.s === 'open') L.push('Les noms (le Greffier) : rapporter le registre de l\'Ordre, au camp, jusqu\'à lui dans l\'ossuaire.');
+  if (g.s === 'open') L.push('Les noms (le Greffier) : prendre le registre de l\'Ordre, au camp, et le monter vivant au refuge.');
   if (g.s === 'done') L.push('Les noms (le Greffier) : il a le registre. Il grave.');
   if (i.s === 'open') L.push(i.n ? 'De quoi dormir (Ilse) : le Gavé est mort. Elle t\'attend.' : 'De quoi dormir (Ilse) : tuer le Gavé qui mange les morts près de sa tombe.');
   if (i.c === 'mordue') L.push('De quoi dormir (Ilse) : tu l\'as bue. Elle dort.');
