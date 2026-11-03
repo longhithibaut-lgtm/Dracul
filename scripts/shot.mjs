@@ -56,7 +56,7 @@ const state = () => run(() => {
   return { layout: s.layout, phase: s.phase, active: s.sys.isActive(), health: s.health, carried: s.carried, hero: f && { x: f.x, y: f.y },
     live: (f && s.enemies?.getChildren().filter((e) => e.body?.enable).length) || 0, drops: s.drops?.length ?? 0, caches: s.caches?.length ?? 0 };
 });
-const arrived = (layout) => until((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.sys.isActive() && s.phase === 'play'; }, layout, 15000);
+const arrived = (layout) => until((layout) => { const s = window.game.scene.getScene('room'); return s.layout === layout && s.sys.isActive() && s.phase === 'play'; }, layout, 30000); // the necropolis' build, on a loaded machine, can take longer than 15 s
 // kept from harm (he blinks); a blow that lands anyway is told
 const keep = (on) => run((on) => {
   const s = window.game.scene.getScene('room'), hit = Object.getPrototypeOf(s).damageHero;
@@ -83,7 +83,7 @@ async function hold(keys, ms) {
 
 /** One step of a walk to floor point (x, y) along the walk grid (the way its enemies go round pits), toward the cell a
  *  few steps ahead, misting forward while far; false once his feet are within `r`. */
-let last;
+let last, stuck = 0;
 async function step(x, y, r = 6) {
   const d = await run(([x, y, r]) => {
     const s = window.game.scene.getScene('room'), f = s.hero?.body?.center, b = s.room.bounds, cols = s.navCols;
@@ -105,7 +105,8 @@ async function step(x, y, r = 6) {
   }, [x, y, r]);
   if (!d) return false;
   if (d.wait) { await page.waitForTimeout(200); return true; }
-  if (d.off && last && Math.hypot(d.at[0] - last[0], d.at[1] - last[1]) < 0.5) return unstick(d.at); // a sidestep would not free him
+  stuck = d.off && last && Math.hypot(d.at[0] - last[0], d.at[1] - last[1]) < 0.5 ? stuck + 1 : 0;
+  if (stuck >= 5) return unstick(d.at); // off the grid and five sidesteps did not free him
   // Snagged on a prop's corner (the grid is cut for a ghoul's feet, his are wider): a sidestep, either way.
   if (last && Math.hypot(d.at[0] - last[0], d.at[1] - last[1]) < 0.5) await hold([['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'][Math.floor(Math.random() * 4)]], 250);
   last = d.at;
@@ -130,6 +131,7 @@ async function unstick(at) {
   embedded.push(`${(await state()).layout} ${Math.round(at[0])},${Math.round(at[1])}`);
   console.log(`EMBEDDED in a wall at ${Math.round(at[0])},${Math.round(at[1])}: put back at ${JSON.stringify(to)}`);
   last = undefined;
+  stuck = 0;
   return true;
 }
 async function walk(x, y, ms = 40000, r = 6) {
