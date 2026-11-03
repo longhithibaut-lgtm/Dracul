@@ -74,6 +74,10 @@ export function store() {
  *  boss: the Nourrice fought (« essai ») or killed (« tuée ») on it.
  *  Kept (the last 200) in localStorage and shown in the console. */
 export type Entry = { end: 'retour' | 'mort'; deepest: number; blood: number; life: number; s: number; loosed: number; met: number; boss?: 'essai' | 'tuée'; at: string };
+/** The expedition log, oldest first (the last 200; none without storage). */
+export function journal(): Entry[] {
+  try { const all = JSON.parse(storage()?.getItem(LOG) ?? '[]'); return Array.isArray(all) ? all : []; } catch { return []; }
+}
 export function log(e: Omit<Entry, 'at'>) {
   const entry = { ...e, at: new Date().toISOString() };
   console.info('expédition', JSON.stringify(entry));
