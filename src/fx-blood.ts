@@ -401,7 +401,7 @@ export function step(scene: Phaser.Scene, x: number, y: number, heavy: boolean) 
       rain(g, null, drops, t);
     }, prelit(scene));
   }
-  const motes = Array.from({ length: heavy ? 9 : 5 }, () => ({ x: rnd(-6, 6), y: rnd(-1, 1.5), up: rnd(2, heavy ? 6 : 4), life: rnd(220, heavy ? 480 : 360), c: pick([0x4a4238, 0x3a342c, 0x5a5044]) }));
+  const motes = Array.from({ length: heavy ? 9 : 5 }, () => ({ x: rnd(-6, 6), y: rnd(-1, 1.5), up: rnd(2, heavy ? 6 : 4), life: rnd(220, heavy ? 480 : 360), c: pick([0x7a7264, 0x8e8576, 0x645c50]) }));
   anim(scene, y + 0.2, heavy ? 480 : 360, (g, t) => {
     for (const m of motes) {
       const k = t / m.life;
