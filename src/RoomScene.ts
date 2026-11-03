@@ -27,6 +27,7 @@ import * as Boss from './boss.ts';
 import * as Nourrice from './nourrice.ts';
 import * as Matrice from './matrice.ts';
 import * as Vesna from './vesna.ts';
+import * as HavenLife from './haven-life.ts';
 import * as Powers from './powers.ts';
 import * as Carte from './map.ts';
 import * as Crows from './crows.ts';
@@ -169,6 +170,8 @@ export class RoomScene extends Phaser.Scene {
   private vesna?: ReturnType<typeof Vesna.create>; // at the refuge, freed, behind her stall
   private stall?: Vesna.Stall; // her powers, open: the hero waits
   private carte?: Carte.Carte; // the zone's map, open (key C): the game paused
+  private haven?: HavenLife.Life; // the refuge's life and keepsakes (haven.ts)
+  private table?: number; // at the refuge's map table: which of its maps is open
   private heldBy?: Sprite; // l'Enterré holding him by the ankle, a Crocheteur's hook in his net: he stands, dragged, until he struggles free
   private pull?: { x: number; y: number; speed: number }; // where the hold drags him (none: toward who holds him)
   private netUntil = 0; // under a Crocheteur's net until then, or until he tears free (netPoints)
@@ -236,7 +239,7 @@ export class RoomScene extends Phaser.Scene {
     this.lostItems = data.lostItems ?? 0;
     this.loot = [];
     this.satchel = undefined;
-    this.fight = this.vesna = this.stall = this.carte = undefined;
+    this.fight = this.vesna = this.stall = this.carte = this.haven = this.table = undefined;
     this.cut = false;
     this.heldBy = this.pull = this.netG = this.fly = undefined;
     this.netUntil = this.netPoints = 0;
@@ -249,7 +252,7 @@ export class RoomScene extends Phaser.Scene {
     Hud.preload(this);
     Room.preload(this, this.layout, this.zoneDoor() ?? { x: 0, y: 0 });
     Foes.preload(this); // the training room calls them into any room
-    if (this.layout === 'refuge') { Ronge.preload(this); Satchel.preloadChest(this); }
+    if (this.layout === 'refuge') { Ronge.preload(this); Satchel.preloadChest(this); Carte.preload(this, 'necropolis'); Carte.preload(this, 'catacombs'); } // its map table
     if (this.layout === 'refuge' || this.layout === 'catacombs') Vesna.preload(this);
     if (this.layout === 'catacombs' || this.training) { Matrice.preload(this); Nourrice.preload(this); } // the training room calls l'Araignée in too
     Carte.preload(this, this.layout);
@@ -289,7 +292,7 @@ export class RoomScene extends Phaser.Scene {
     // whirls), each bourreau's reliquary, each purificateur's pilot while it flares and burns, each sonneur's bell while
     // its rim glows and rings, then its lanterns. Their bodies' tells, in the dark rooms.
     const lights = () => [...(this.enemies.getChildren() as Sprite[]).filter((e) => e.body?.enable && (['priest', 'inquisitor', 'bourreau', 'nourrice', 'matrice'].includes(e.getData('kind')) || ['ignite', 'fire', 'raise', 'toll'].includes(e.getData('state'))))
-      .map((e) => ({ ...(e.getData('kind') === 'nourrice' ? Nourrice.lamp(e) : e.getData('kind') === 'matrice' ? Matrice.lamp(e) : Foes.lamp(e)), lit: true, I: this.glow(e) })), ...this.lanterns, ...(this.prologue?.lights() ?? [])];
+      .map((e) => ({ ...(e.getData('kind') === 'nourrice' ? Nourrice.lamp(e) : e.getData('kind') === 'matrice' ? Matrice.lamp(e) : Foes.lamp(e)), lit: true, I: this.glow(e) })), ...this.lanterns, ...(this.haven?.lights() ?? []), ...(this.prologue?.lights() ?? [])];
     if (this.beat && this.layout === 'refuge') this.room.look = { ...this.room.look, torch: PROLOGUE_REFUGE.torch }; // the prologue's: its candles dead
     if (this.room.zone) Dark.light(this, this.hero, this.enemies, lights, [ZONES[this.room.zone.id].SW, ZONES[this.room.zone.id].SH], this.room.look, this.room.zone.chunks.quads);
     else Dark.light(this, this.hero, this.enemies, lights, [this.room.width, this.room.height], this.room.look);
@@ -362,7 +365,7 @@ export class RoomScene extends Phaser.Scene {
     this.keys.J.on('up', () => !this.clawMouse && this.release());
     this.input.keyboard!.on('keydown-X', (ev: KeyboardEvent) => { if (ev.repeat) return; const a = this.aimMouse ? Phaser.Math.Angle.BetweenPoints(this.hero, world(this.input.activePointer)) : this.facing; this.press(() => this.parry(a)); });
     this.keys.K.on('down', () => { const a = this.facing; this.aimMouse = false; this.press(() => this.shoot(a)); });
-    this.keys.F.on('down', () => (this.counter ? this.closeShop() : this.stall ? this.closeStall() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
+    this.keys.F.on('down', () => (this.carte ? this.closeMap() : this.counter ? this.closeShop() : this.stall ? this.closeStall() : this.satchel ? this.closeSatchel() : this.press(() => this.bite())));
     // Le Rongé's wares: hovered, bought by their key or a click, left with Escape (or F).
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.aimMouse = true;
@@ -378,7 +381,7 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard!.addKeys('TAB,I,ENTER,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE'); // their Key objects: a key held, or a doubled keydown, acts once
     for (const k of ['I', 'TAB']) this.input.keyboard!.on(`keydown-${k}`, () => (this.satchel ? this.closeSatchel() : this.openSatchel('sac')));
     for (const [keys, dx, dy] of [[['LEFT', 'Q', 'A'], -1, 0], [['RIGHT', 'D'], 1, 0], [['UP', 'Z', 'W'], 0, -1], [['DOWN', 'S'], 0, 1]] as const)
-      for (const k of keys) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.showSatchel({ cursor: this.satchel.panel.next(this.satchel.view.cursor, dx, dy) }));
+      for (const k of keys) this.input.keyboard!.on(`keydown-${k}`, () => (this.satchel ? this.showSatchel({ cursor: this.satchel.panel.next(this.satchel.view.cursor, dx, dy) }) : dx && this.carte && this.table !== undefined && this.openTable(this.table + dx)));
     for (const k of ['ENTER', 'SPACE']) this.input.keyboard!.on(`keydown-${k}`, () => this.satchel && this.act(this.satchel.view.cursor));
     // Key events, not JustDown polling: a tap shorter than one frame would otherwise be lost.
     for (const k of [this.keys.SPACE, this.keys.SHIFT]) k.on('down', () => !this.satchel && !this.carte && (this.dashPressedAt = this.time.now));
@@ -486,6 +489,11 @@ export class RoomScene extends Phaser.Scene {
       this.vesna = Vesna.create(this, V.x, V.y);
       this.labels.push({ at: { x: V.x, y: V.y + 28 }, l: Loot.label(this, V.x, V.y - 44, 'Vesna (F)') });
     }
+    this.haven = HavenLife.create(this, {
+      hero: this.hero, busy: () => !!(this.counter || this.satchel || this.stall || this.carte || this.cut || this.dead), say: (who, t, ms) => this.hud.say(who, t, ms),
+      title: (t) => this.hud.title(t), coffre: () => this.openSatchel('coffre'), map: () => this.openTable(0),
+    });
+    this.labels.push(...this.haven.labels);
   }
 
   /** The prologue plays here from `beat` (prologue.ts): its foes its own, their blood carried (an expedition of its own,
@@ -631,8 +639,8 @@ export class RoomScene extends Phaser.Scene {
     const slow = time - this.slowAt;
     this.time.timeScale = this.tweens.timeScale = slow >= 0 && slow < T.feel.slowMs ? Phaser.Math.Linear(T.feel.slow, 1, (slow / T.feel.slowMs) ** 2) : 1;
     this.prologue?.update(time, delta);
-    if (this.ronge) this.ronge.show((this.prologue ? this.prologue.beast : Shop.beast(Save.data)) ? 'beast' : Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.notice ? 'look' : 'idle', time, this.hero.x);
-    this.vesna?.show(this.stall || Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, this.vesna.s) < T.ronge.notice ? 'count' : 'idle', time);
+    if (this.ronge) this.ronge.show(this.prologue?.ronge ?? (Shop.beast(Save.data) ? 'beast' : Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.notice ? 'look' : this.haven?.lap(time) ? 'lap' : 'idle'), time, this.hero.x);
+    this.vesna?.show(this.stall || Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, this.vesna.s) < T.ronge.notice || this.haven?.counting(time) ? 'count' : 'idle', time);
     if (this.cut) { // a scene plays: he stands, the world waits, the zone streams round the camera
       this.hero.setVelocity(0);
       this.room.zone?.chunks.stream(this.cameras.main.worldView);
@@ -1904,6 +1912,7 @@ export class RoomScene extends Phaser.Scene {
       hits++;
       this.hitLantern(l, angle, damage);
     }
+    if (this.haven?.strike(this.hero, angle, range, arc, damage, kind)) hits++; // the refuge's training dummy
     if (!hits) return true;
     // Hit-stop: freeze physics briefly so the impact reads, longer the heavier the blow; tweens and timers keep running.
     // The last foe of a fight down (kill()), the slow motion starts after it.
@@ -2104,6 +2113,7 @@ export class RoomScene extends Phaser.Scene {
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.RONGE) < T.ronge.talk) return this.talk();
     if (!prey && this.ronge && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.CHEST) < T.ronge.talk) return this.openSatchel('coffre');
     if (!prey && this.vesna && Phaser.Math.Distance.BetweenPoints(this.hero.body!.center, Refuge.VESNA) < T.vesna.talk) return this.openStall();
+    if (!prey && this.haven?.use(this.hero.body!.center)) return true; // the coffin, the wardrobe, the trophies, the map table
     if (!prey && (this.search() || this.lever() || this.reliquary() || this.take())) return true;
     if (!fangs) return true; // the bite is not his yet (the Rongé will teach it)
     this.biteAt = now;
@@ -2264,6 +2274,7 @@ export class RoomScene extends Phaser.Scene {
     Sfx.play(this, 'gift', 1);
     this.prologue?.poured();
     this.carried = 0;
+    this.haven?.poured();
     this.showBlood();
   }
 
@@ -2467,9 +2478,21 @@ export class RoomScene extends Phaser.Scene {
     Sfx.play(this, 'snap');
   }
 
+  /** At the refuge's map table: map `k` of the zones he has seen (the necropolis always), the arrows turning to the other. */
+  private openTable(k: number) {
+    if (this.satchel || this.counter || this.stall || this.cut) return;
+    const zones = (['necropolis', 'catacombs'] as const).filter((z, i) => !i || Carte.seen(z) > 0);
+    this.carte?.close();
+    this.table = (k + zones.length) % zones.length;
+    this.hero.setVelocity(0);
+    // him nowhere on it: he is here, in the refuge
+    this.carte = Carte.open(this, zones[this.table], { x: -1e4, y: -1e4 }, 0, zones.length > 1 ? 'F ou Échap : fermer ; flèches : l\'autre carte' : 'F ou Échap : fermer');
+    Sfx.play(this, 'snap');
+  }
+
   private closeMap() {
     this.carte?.close();
-    this.carte = undefined;
+    this.carte = this.table = undefined;
   }
 
   private closeSatchel() {

@@ -7,6 +7,7 @@ import * as Enemy from './enemy.ts';
 import * as Lantern from './lantern.ts';
 import { prelit } from './dark.ts';
 import type { Hud } from './hud.ts';
+import type { Pose } from './ronge.ts';
 import { ZONES } from './world.ts';
 import { after, leaves, place, readMs, CRYPT, LINES, NECROPOLIS, REFUGE, SPOILS, type Beat, type Event } from './prologue.data.ts';
 import type { Run } from './RoomScene.ts';
@@ -78,7 +79,7 @@ function chalk(scene: Phaser.Scene) {
 export function play(c: Ctx, beat: Beat) {
   const { scene, hero, hud } = c, said = new Set<string>(), timers: Phaser.Time.TimerEvent[] = [];
   const S = {
-    beat, posed: false, beast: true, // posed: the hero drawn here (lying, rising), not by Hero.show; beast: le Rongé
+    beat, posed: false, ronge: 'beast' as Pose | undefined, // posed: the hero drawn here (lying, rising), not by Hero.show; ronge: his pose (none: as ever)
     lights: [] as { x: number; y: number; lit: boolean; h: number; I: number }[], // the ray's, for dark.ts
   };
   const at = (ms: number, fn: () => void) => timers.push(scene.time.delayedCall(ms, fn));
@@ -295,7 +296,7 @@ export function play(c: Ctx, beat: Beat) {
   fDown = () => lying?.();
 
   return {
-    get beat() { return S.beat; }, get posed() { return S.posed; }, get beast() { return S.beast; }, lights: () => S.lights,
+    get beat() { return S.beat; }, get posed() { return S.posed; }, get ronge() { return S.ronge; }, lights: () => S.lights,
     update(time: number, delta: number) { stepRat(time, delta); for (const u of update) u(time, delta); },
     /** A foe killed: the ghoul (the rat back, to the ray), the crossbowman. */
     killed(e: Sprite) {
@@ -320,8 +321,9 @@ export function play(c: Ctx, beat: Beat) {
       if (S.beat !== 'refuge') return;
       c.cut(true);
       Sfx.play(scene, 'drain');
-      at(1600, () => {
-        S.beast = false;
+      at(300, () => (S.ronge = 'lap')); // into the basin, his hands, his mouth
+      at(1900, () => {
+        S.ronge = undefined;
         let t = 600;
         for (const l of LINES.ronge) { at(t, () => hud.say('le Rongé', l, readMs(l))); t += readMs(l) + 250; }
         at(t, () => { move('poured'); c.cut(false); ratTo({ x: 840, y: 400 }); });
