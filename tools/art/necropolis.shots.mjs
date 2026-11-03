@@ -19,7 +19,7 @@ const VIEWS = {
   postes: [[2880, 470], [2900, 420]], camp: [[3060, 930], [3150, 870]], buchers: [[2780, 1080], [2800, 980]], chapelle: [[3560, 380], [3540, 380]],
   puits: [[3600, 1100], [3590, 1110]],
   // what lives there (--life): ghouls on their dead, an elite by its reliquary, the prisoner dragged to the camp, a patrol
-  festin: [[940, 360], [1000, 310]], reliquaire: [[2230, 1250], [2290, 1180]], prisonnier: [[2760, 480], [2900, 450]], ronde: [[3000, 560], [3060, 560]],
+  festin: [[940, 360], [1000, 310]], reliquaire: [[2230, 1250], [2290, 1180]], prisonnier: [[3150, 440], [3250, 380]], ronde: [[3000, 560], [3060, 560]],
 };
 
 const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' });

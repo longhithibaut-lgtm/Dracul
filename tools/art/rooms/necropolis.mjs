@@ -155,7 +155,8 @@ export const AREAS = [
 ];
 // Blood caches: floor points in front of what is worth searching, by area.
 export const CACHES = [[1124, 676], [432, 1102], [1020, 1028], [2270, 206], [1724, 1030], [2190, 960], [3168, 912], [3384, 460], [2730, 1250], [3612, 1124], [3030, 286],
-  [1060, 404], [1180, 142], [2470, 314], [1700, 614], [2880, 572]];
+  [1060, 404], [1180, 142], [2470, 314], [1700, 614], [2880, 572],
+  [600, 1030], [2850, 300], [2160, 676]]; // the shrine's offerings, the gallows' foot, the heap of the dead
 // Where the battue lies in wait on his way back (world.ts lair()): on the refuge's side of each narrow way (the bridge, the
 // causeway, the grille, the breach's two ways out, west and south under the wall, out of the Dawn; out of the gallery's
 // mouth, south to the grille or east past the nave, where its roof no longer hides them): x, y, how near his way must pass.
@@ -296,7 +297,16 @@ export const RATS = [[600, 700], [1000, 1150], [1750, 500], [2200, 1150], [2900,
 // Where the notes another hand will add may lie (id, x, y): clear floor by the vignettes.
 export const NOTES = [{ id: 'parvis', x: 300, y: 200 }, { id: 'peage', x: 1300, y: 1166 }, { id: 'tombe', x: 1730, y: 1086 }, { id: 'breche', x: 2560, y: 450 },
   { id: 'gibet', x: 2860, y: 270 }, { id: 'camp', x: 3200, y: 1000 }, { id: 'puits', x: 3720, y: 1240 }, { id: 'sanctuaire', x: 590, y: 1020 }];
+/** Le Tireur's perch on mausoleum `m` of MAUS (x, front feet line y, w, d): his feet at its roof's front edge (his body,
+ *  a few px lower, sticks out of its box), its eave's height, the foot of its ladder by its east side. */
+const roofOf = ([x, y, w, d]) => ({ x, y: y - 2, h: Math.round((92 * CS) / 2), ladder: { x: x + w / 2 + 8, y: y - d / 2 } });
+const LATE = [ // laid after the graves were (they keep off nothing new)
+  { id: 'tireur-allee', kinds: ['tireur'], roofs: [[2010, 995, 56, 30], [1890, 1022, 56, 30], [2060, 1092, 56, 30]] },
+  { id: 'tireur-puits', kinds: ['tireur'], roofs: [[3420, 1190, 64, 34], [3700, 700, 60, 32]] },
+].map(({ roofs, ...p }) => { const perches = roofs.map(roofOf); return { ...p, x: perches[0].x, y: perches[0].y, perches }; });
+LATE.push({ id: 'miroir-breche', x: 2768, y: 452, kinds: ['miroitier', 'penitent'] }); // the Dawn within his mirror's reach
 const KEEP = [...POSTS.flatMap((p) => [[p.x, p.y], ...(p.feed ?? []), ...(p.relic ? [p.relic] : [])]), ...RATS, ...NOTES.map((n) => [n.x, n.y])]; // graves keep off them
+POSTS.push(...LATE);
 
 // The north cliff's talus: rock fallen at its foot every 60-90 px, but at the arches, doors, the court and the walls;
 // decor only (a solid heap against the rock would squeeze a walker into it).
@@ -395,7 +405,7 @@ function flavor0(X, Y) {
 function earthAt(x, y, X, Y, i) {
   const ys = y * SN, [moss, dust, ash, wet, old] = flavor(X, Y);
   let c = mix(E.earth, E.earthD, clamp(fbm(x / 26, ys / 26, 4, 101) * 1.2 - 0.1) * 0.6), spec = 0.03, gloss = 12;
-  c = mix(c, E.dust, clamp((fbm(x / 60, ys / 60, 3, 102) - 0.55 + dust * 0.4) * 2.5) * (0.45 + 0.4 * dust)); // bone dust, the middle's ossuaries
+  c = mix(c, E.dust, clamp((fbm(x / 60, ys / 60, 3, 102) - 0.55 + dust * 0.4) * 1.4) * (0.45 + 0.4 * dust)); // bone dust, the middle's ossuaries
   c = mix(c, ash > 1 ? mul(E.ash, 0.45) : E.ash, Math.min(1, ash) * clamp((fbm(x / 40, ys / 40, 3, 103) - 0.45 + 0.15 * ash) * 2)); // ash where the Order burns, charcoal at its pyres
   c = mix(c, E.mudD, wet * clamp((fbm(x / 34, ys / 34, 3, 104) - 0.42) * 2.4) * 0.8); // black wet mud
   const m = fbm(x / 30, ys / 30, 4, 33), m0 = 0.72 - 0.1 * moss; if (m > m0) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? E.mossL : E.moss, clamp((m - m0) * 4) * 0.65 * Math.min(1, moss));

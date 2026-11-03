@@ -5,7 +5,7 @@ import { cellAt, homeward } from './world.ts';
 import * as Zone from './necropolis.data.ts';
 import { MOUNDS, NOTES, POSTS, RATS, ROUTES, advance, corpses, elite, inFile, mound, relics, setPieces } from './haunts.ts';
 
-const KINDS = ['ghoul', 'crossbow', 'purifier', 'priest', 'hound', 'penitent', 'ringer', 'inquisitor', 'amas', 'bourreau', 'crows', 'enterre', 'gave', 'chose', 'crocheteur'];
+const KINDS = ['ghoul', 'crossbow', 'purifier', 'priest', 'hound', 'penitent', 'ringer', 'inquisitor', 'amas', 'bourreau', 'crows', 'enterre', 'gave', 'chose', 'crocheteur', 'tireur', 'miroitier'];
 const area = (x: number, y: number) => Zone.AREAS.find(({ rect: [x0, y0, x1, y1] }) => x >= x0 && x < x1 && y >= y0 && y < y1)!;
 
 describe('la nécropole: its places and what lives there', () => {
@@ -34,6 +34,10 @@ describe('la nécropole: its places and what lives there', () => {
   it('sets its set pieces, their dead, reliquaries, nests and the notes\' spots on open floor', () => {
     for (const p of POSTS) {
       if (p.kinds.includes('chose')) continue; // on the bridge's edge
+      if (p.perches) { // up on mausoleum roofs: each ladder's foot on open floor, his feet at the roof's edge over the building
+        for (const r of p.perches) { expect(open(r.ladder.x, r.ladder.y), `${p.id} ladder`).toBe(true); expect(open(r.x, r.y - 4), `${p.id} roof`).toBe(false); }
+        continue;
+      }
       expect(open(p.x, p.y), p.id).toBe(true);
       expect(area(p.x, p.y), p.id).toBeTruthy();
     }

@@ -7,7 +7,8 @@ import { T } from './tuning.ts';
 import * as Nec from './necropolis.data.ts';
 
 type P = { x: number; y: number };
-export type Post = { id: string; x: number; y: number; kinds: string[]; feed?: number[][]; elite?: number; route?: string; relic?: number[]; prisoner?: boolean };
+export type Perch = { x: number; y: number; h: number; ladder: P }; // a Tireur's roof (fauna.ts)
+export type Post = { id: string; x: number; y: number; kinds: string[]; feed?: number[][]; elite?: number; route?: string; relic?: number[]; prisoner?: boolean; perches?: Perch[] };
 export type Route = { pts: [number, number][]; once?: boolean };
 export const POSTS = Nec.POSTS as Post[];
 export const ROUTES = Nec.ROUTES as unknown as Record<string, Route>;
@@ -18,7 +19,7 @@ export const NOTES = Nec.NOTES as { id: string; x: number; y: number }[];
 /** What a placed foe of the zone is beyond its kind: an elite; eating the dead at `feed`; walking `route` (its `slot` in
  *  the patrol, 0 the lantern bearer; `leg`: the waypoint it heads for, `dir` its way along). Kept with it in the room's state. */
 export type Haunt = { elite?: boolean; feed?: P; route?: string; slot?: number; leg?: number; dir?: number };
-export type Placing = P & { kind: string; haunt?: Haunt };
+export type Placing = P & { kind: string; haunt?: Haunt; perches?: Perch[] };
 
 /** The zone's set pieces, as foes to place: side by side at their post (feeding ghouls round their dead, a patrol in file). */
 export function setPieces(posts: readonly Post[] = POSTS): Placing[] {
@@ -26,7 +27,7 @@ export function setPieces(posts: readonly Post[] = POSTS): Placing[] {
     const feed = p.feed && kind === 'ghoul' ? p.feed[i % p.feed.length] : undefined;
     const at = feed ? { x: feed[0] + (i % 2 ? 14 : -14), y: feed[1] + (i > 1 ? 6 : 0) } : p.route ? { x: p.x, y: p.y + 10 * i } : { x: p.x + (i % 2 ? 14 : -14) * Math.ceil(i / 2), y: p.y };
     const haunt: Haunt = { ...(p.elite === i ? { elite: true } : {}), ...(feed ? { feed: { x: feed[0], y: feed[1] } } : {}), ...(p.route ? { route: p.route, slot: i, leg: 0, dir: 1 } : {}) };
-    return { ...at, kind, ...(Object.keys(haunt).length ? { haunt } : {}) };
+    return { ...at, kind, ...(Object.keys(haunt).length ? { haunt } : {}), ...(p.perches && i === 0 ? { perches: p.perches } : {}) };
   }));
 }
 
