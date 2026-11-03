@@ -12,7 +12,7 @@ export type Note = { id: string; title: string; on: string; text: string[]; plac
 export const NOTES: Note[] = [
   // ---- la nécropole (shortcut: placed on the current plan; the necropolis redesign may move its vignettes) ----
   { id: 'marche', title: 'La première marche', on: 'gravé dans la pierre, sous des griffures', text: ['NE DESCENDS PAS LES MAINS VIDES.'], place: 'necropolis', x: 262, y: 122 },
-  { id: 'ordonnance', title: 'Ordonnance clouée', on: 'cloué à un poteau, la cire du sceau arrachée', paper: true,
+  { id: 'ordonnance', title: 'Ordonnance arrachée', on: 'tombée d\u2019un poteau, piétinée, la cire du sceau cassée', paper: true,
     text: ['Les sans-maison ne se scellent pas.', 'Un pieu, de la chaux, la fosse.', 'Ne pas gaspiller la cire.'], place: 'necropolis', x: 190, y: 170 },
   { id: 'dessin', title: "Un dessin d'enfant", on: 'sous une croûte de pain, au seuil de la crypte', paper: true,
     text: ['« Maman dit que la nuit c’était noir. Je l’ai dessinée. »', 'La feuille est toute noire, frottée au charbon.'], place: 'necropolis', x: 812, y: 512 },
@@ -21,7 +21,7 @@ export const NOTES: Note[] = [
   { id: 'registre', title: 'Registre de la fosse, folio 3', on: 'une page arrachée, au camp de l’Ordre', paper: true,
     text: ['Reçus ce jour : onze. Un pieu chacun, de la chaux.', 'Rendus à la fosse : onze.', 'Le frère portier demande des pieux neufs. Réponse : reprendre les anciens.'], place: 'necropolis', x: 3046, y: 846 },
   // ---- the interiors ----
-  { id: 'cire', title: 'La craie du sarcophage', on: 'sur le couvercle d’un sarcophage', text: ['SANS MAISON. PAS DE CIRE.'], place: 'hall', x: 412, y: 380 },
+  { id: 'cire', title: 'La craie d’un autre sarcophage', on: 'sur un autre couvercle de la crypte que le tien', text: ['SANS MAISON. PAS DE CIRE.'], place: 'hall', x: 412, y: 380 },
   { id: 'releve', title: 'Carnet de relève', on: 'oublié sur une marche de la nef', paper: true,
     text: ['Relève de la nef. Deux frères, une lanterne, un chien.', 'On ne s’assied pas. On n’éteint pas.', 'Frère Anselme s’est assis.'], place: 'nave', x: 150, y: 420 },
   { id: 'tri', title: 'La craie de l\u2019ossuaire', on: 'sur un pilier, à hauteur d’homme', text: ['CROCS À GAUCHE.', 'LE RESTE À DROITE.'], place: 'ossuary', x: 284, y: 412 },
@@ -31,7 +31,7 @@ export const NOTES: Note[] = [
   { id: 'lent', title: 'Un billet de V.', on: 'serré dans la patte d’un rat mort, au pied des flèches d’os', baked: true,
     text: ['T’es lent, gamin. Plus bas.', '— V.'], place: 'catacombs', x: 230, y: 334 },
   { id: 'cordons', title: 'Un autre billet de V.', on: 'sur le petit autel des rats, parmi les dents et les boutons', baked: true,
-    text: ['La grosse au plafond, coupe-lui les cordons. Elle les aime.', '— V.'], place: 'catacombs', x: 1996, y: 540 },
+    text: ['La grosse au plafond, coupe-lui les cordons. Elle les aime.', '— V.'], place: 'catacombs', x: 1996, y: 530 },
   { id: 'ancetre', title: 'Au charbon, sous les bougies', on: 'une tour griffonnée sur la dalle, une goutte rouge à son sommet', baked: true,
     text: ['L’ANCÊTRE SAIGNE ENCORE.'], place: 'catacombs', x: 252, y: 196 },
   { id: 'gardien', title: 'Carnet du gardien', on: 'sous la chaise, face à la grille', baked: true,

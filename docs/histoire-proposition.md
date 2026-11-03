@@ -237,6 +237,16 @@ marque sur la carte : on les trouve en marchant. Les numéros de lieux suivent l
 Douze textes courts. Ramassés avec F, ils vont au **journal** et ne se perdent pas à la mort (ce sont des mots, pas
 du butin). Au refuge, on les relit au lutrin (§4).
 
+> **Dans le jeu (2026-11-03, textes provisoires, `src/notes.ts`)** : N2, N5, N6, N7 tels quels ; N1, N8, N9 réécrits
+> pour ne rien révéler de non validé (le registre ne dit plus « saignés » ni « la fosse ne se remplit pas » ; le carnet
+> du puits parle d'un seau et d'un chant ; le gardien, d'un rat envoyé « ronger un pieu, là-haut ») ; **écartés** : N3
+> (les lanternes), N4 (l'Aube ronge les humains), N10, N11 (le traité), N12 (l'Ancêtre l'a fait). Ajoutés, tirés des
+> vignettes : V1 « NE DESCENDS PAS LES MAINS VIDES. », V3 « SANS MAISON. PAS DE CIRE. », V6 « PÉAGE : UNE DENT. »,
+> V14 « ON SE CACHE ENSEMBLE. », V21 (« L'ANCÊTRE SAIGNE ENCORE. », le nom validé au lieu de « le Père »), V23 (les
+> jours de Vesna, après sa libération) ; et deux de l'Ordre sans révélation : la relève de la nef, la craie de
+> l'ossuaire. Vignettes des catacombes cuites : V15 (seau, carnet), V20 (flèches d'os, autel des rats), V21, V22, V23 ;
+> pas V16-V19 (noms sur les crânes : au Greffier ; V17, V19 : révélation 1 ; V18 : quête).
+
 - **N1. Registre de la fosse, folio 3** (camp de l'Ordre) : « Reçus ce jour : onze. Saignés : onze. Rendus à la
   fosse : onze. Le frère portier signale encore que la fosse ne se remplit pas. »
 - **N2. Ordonnance clouée** (parvis, sur un poteau) : « Les sans-maison ne se scellent pas. Un pieu, de la chaux, la
