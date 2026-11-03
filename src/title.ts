@@ -62,9 +62,10 @@ export class TitleScene extends Phaser.Scene {
     for (const o of [...this.children.list]) if (o !== this.embers) o.destroy();
     this.hits = [];
     const c = this.coffin(), cx = Menu.W / 2;
-    Menu.dim(this, 0.3, 0.55, c.x, c.y);
-    Menu.patch(this, cx, 52, 260, 60, 0.36); // over the dim: 0.55 and 0.75 dark, as the mockup's
-    Menu.patch(this, cx, 430, 200, 95, 0.64);
+    // The mockup's scrims, its overall dim lighter: the crypt renders darker than in its capture.
+    Menu.dim(this, 0.12, 0.55, c.x, c.y);
+    Menu.patch(this, cx, 52, 260, 60, 0.49); // over the dim: 0.55 and 0.75 dark, as the mockup's
+    Menu.patch(this, cx, 430, 200, 95, 0.72);
     Menu.patch(this, c.x, c.y + 2, 70, 26, 0.38, '#bf1f0f', 0.2).setName('glow'); // the ashes glow: he re-forms
     Menu.piece(this, 'title', cx, 22);
     let y = 360;

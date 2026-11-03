@@ -191,6 +191,8 @@ export class RoomScene extends Phaser.Scene {
       last = time;
       step(time - off, delta);
     };
+    // Back from the pause menu: claws let go meanwhile charge no more (the menu took their release).
+    this.events.on(Phaser.Scenes.Events.RESUME, () => !Keys.down('claw') && (this.clawDownAt = this.chargeAt = 0));
   }
 
   init(data: Run) {

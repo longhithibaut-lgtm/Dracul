@@ -109,6 +109,8 @@ if (typeof window !== 'undefined') {
   window.addEventListener('blur', () => held.clear());
 }
 const isHeld = (b: string) => [...held.values()].includes(b);
+/** A key or button of action `a` held right now. */
+export const down = (a: Action) => binds[a].some((s) => s.some(isHeld));
 
 /** Keeps the page's own use of a bound key from it (Tab moves the focus, Space and the arrows scroll), not with a
  *  modifier (Ctrl+R still reloads), nor in the training panel's fields. Called once Phaser listens (main.ts): Phaser
