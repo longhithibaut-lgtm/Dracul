@@ -114,6 +114,7 @@ export class RoomScene extends Phaser.Scene {
   private clawMouse = false; // held on the mouse: the charge aims at the pointer, else where he faces
   private chargeAt = 0; // charging since (0: not)
   private chargeFull = false; // its full charge already told (the glint)
+  private blow?: 'heavy' | 'riposte' | 'pounce'; // the claw blow under way beyond the combo, for his poses (Hero.show)
   private dead = false;
   private lanterns: Lantern.Lantern[] = [];
   private litMs = 0; // time the hero has stood in holy light, back to 0 when he steps out
@@ -633,7 +634,8 @@ export class RoomScene extends Phaser.Scene {
     if (this.chargeAt && this.clawMouse) this.facing = Phaser.Math.Angle.BetweenPoints(this.hero, this.cameras.main.getWorldPoint(this.input.activePointer.x, this.input.activePointer.y));
     if (this.chargeAt && !this.chargeFull && time - this.chargeAt >= T.charge.fullMs) {
       this.chargeFull = true;
-      Fx.glint(this, this.hero.x + Math.cos(this.facing) * 5, this.hero.y - 18 + Math.sin(this.facing) * 3); // at the claw drawn high
+      const c = Hero.clawAt(this.hero) ?? { x: this.hero.x + Math.cos(this.facing) * 5, y: this.hero.y - 18 + Math.sin(this.facing) * 3 };
+      Fx.glint(this, c.x, c.y); // at the claw drawn high
       Sfx.play(this, 'charge', 1);
     }
     const posing = time < this.slashUntil || time < this.castUntil || time < this.openUntil || !!this.chargeAt;
@@ -708,6 +710,7 @@ export class RoomScene extends Phaser.Scene {
     const P = T.parry, guard = time < this.parryAt + P.windowMs || time - this.parriedAt < P.holdMs + 60;
     Hero.show(this.hero, {
       parry: time - this.parriedAt < 70 ? 'clang' : guard ? 'guard' : time < this.openUntil ? 'open' : undefined, charge: this.chargeAt ? chargeOf(this.chargeAt, time, T.charge.fullMs) : undefined, stalking,
+      blow: this.blow, burden: this.weight().fill,
       moving: (x || y) !== 0 && !this.heldBy && !this.fly, dashing: time < this.dashUntil, slashing: time < this.slashUntil, combo: this.combo, throwing: time < this.shotUntil,
       biting: !!this.prey || time - this.biteAt < 130, casting: time < this.castUntil,
       hurt: time - this.hurtAt < 120 || !!this.fly, hurtFrom: this.hurtFrom, dazed, invulnerable: time < this.invulnUntil, facing: this.facing, swarm: time < this.swarmUntil,
@@ -1844,6 +1847,7 @@ export class RoomScene extends Phaser.Scene {
     this.slashUntil = now + (heavy ? C.strikeMs : S.cooldownMs * pace);
     this.commitUntil = now + (heavy ? C.commitMs : fin ? S.finisherCommitMs : S.commitMs);
     this.facing = angle;
+    this.blow = heavy ? 'heavy' : riposte ? 'riposte' : undefined; // (hitEnemy: 'pounce')
     Fx.slash(this, this.hero.x, this.hero.y, angle, kind);
     Sfx.play(this, 'slash', kind);
     Crows.din(this.ctx, this.hero.body!.center, now); // a fight is heard
@@ -1959,7 +1963,7 @@ export class RoomScene extends Phaser.Scene {
     const prey = predatory(e.getData('kind') ?? 'ghoul', !!e.getData('alert'), T.predator.immune) && !this.kneeling(e) && e !== this.prey;
     if (prey) {
       const f = this.hero.body!.center, d = Math.max(0, Math.min(T.predator.lunge, Phaser.Math.Distance.BetweenPoints(e.body!.center, f) - 14));
-      [damage, weight] = [Math.max(damage, T.predator.damage), Infinity];
+      [damage, weight, this.blow] = [Math.max(damage, T.predator.damage), Infinity, 'pounce'];
       Fx.dash(this, f, angle);
       this.tweens.add({ targets: this.hero, x: this.hero.x + Math.cos(angle) * d, y: this.hero.y + Math.sin(angle) * d, duration: 60, ease: 'Quad.easeOut' });
       Fx.gore(this, e.x, e.y, angle, T.predator.gore);

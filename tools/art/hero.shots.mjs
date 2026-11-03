@@ -1,8 +1,13 @@
 // The grand hero's combat animations: <out>/hero-sheet.png, a contact sheet of his action frames straight from the
-// sheet (src/grand-hero.png, a row per action and view, x2 on grey), and <out>/hero.png, crops of the game played by
+// sheet (src/grand-hero.png, a row per action and view, x2 on grey), <out>/hero-new.png the same for the predator's
+// poses and the walk's secondary motion (guard, sparks, stumble, charge and its release, predator strike, riposte, pivot,
+// setting off, arrival, the full bag's trudge), and <out>/hero.png, crops of the game played by
 // hand at 60 Hz on a 1920x1080 PC screen (as tools/art/walk.shots.mjs): the claw combo walking into it three ways, the
 // throw, the mist's start and arrival, the bite (training room, a crossbowman clawed to his knees), hurt from the
-// front, the back and a side, stunned by a bell, the idle gestures, and death. Exits 1 on a page error.
+// front, the back and a side, stunned by a bell, the idle gestures, death, a parry at nothing (guard, stumble), the
+// charged claw held and let go, the riposte and predator strike poses (forced: feel.shots.mjs plays them on real foes),
+// turning round, setting off and stopping, the full bag's trudge with its footfalls, the mist's trail. Exits 1 on a page
+// error.
 // Usage: node tools/art/hero.shots.mjs [--out=shots/hero --port=5211 --only=<part of a strip label>] (DEBUG=1: each crop's frame)
 import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
@@ -11,7 +16,8 @@ import { chromium } from 'playwright';
 const arg = (name, fallback) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
 const out = arg('out', 'shots/hero');
 const port = Number(arg('port', 5211));
-const only = arg('only', ''); // the strips whose label holds this (debugging one)
+const only = arg('only', ''); // the strips whose label holds one of these (comma-separated; debugging some)
+const wants = (label) => !only || only.split(',').some((o) => label.includes(o));
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 
@@ -20,16 +26,19 @@ const data = await readFile('src/grand.data.ts', 'utf8'), num = (k) => Number(da
 const FW = num('FW'), FH = num('FH'), COLS = num('COLS'), FRAMES = JSON.parse(data.match(/FRAMES[^=]*= (\{.*\});/)[1]);
 const png = (await readFile('src/grand-hero.png')).toString('base64');
 const ACTS = ['claw0', 'claw1', 'claw2', 'fin', 'dash', 'throw', 'bite', 'hurt', 'hurtb', 'hurtl', 'hurtr', 'stagger', 'death', 'glance', 'lift', 'breath'];
+const NEW = ['guard', 'parry', 'stumble', 'charge', 'heavy', 'pounce', 'riposte', 'pivot', 'go', 'land', 'trudge'];
 const VIEWS = ['down', 'downside', 'side', 'upside', 'up'];
 // A row per action, its views side by side (at the sheet's scale, a game px on the x2 view).
 const cell = (name) => { const c = FRAMES[name].cell; return `<div class="c" title="${name}" style="background-position:-${(c % COLS) * FW}px -${Math.floor(c / COLS) * FH}px"></div>`; };
-const lines = ACTS.map((a) => `<div style="display:flex;align-items:center;gap:14px"><div style="width:70px">${a}</div>${VIEWS.map((v) =>
-  `<div style="display:flex">${Object.keys(FRAMES).filter((n) => new RegExp(`^${v}-${a}-?\\d$`).test(n)).map(cell).join('')}</div>`).join('')}</div>`);
-const sheet = await browser.newPage({ viewport: { width: 80 + 30 * FW + 5 * 14 + 10, height: 400 } });
-await sheet.setContent(`<style>.c{width:${FW}px;height:${FH}px;background:url(data:image/png;base64,${png}) 0 0;image-rendering:pixelated}</style>
-<body style="margin:4px;background:#46464b;color:#ddd;font:14px sans-serif">${lines.join('')}</body>`);
-await sheet.screenshot({ path: `${out}/hero-sheet.png`, fullPage: true });
-await sheet.close();
+for (const [acts, file, bg, z] of [[ACTS, 'hero-sheet', '#46464b', 1], [NEW, 'hero-new', '#2b2a2e', 2]]) { // the new ones x2, on the dark
+  const lines = acts.map((a) => `<div style="display:flex;align-items:center;gap:14px"><div style="width:70px">${a}</div>${VIEWS.map((v) =>
+    `<div style="display:flex">${Object.keys(FRAMES).filter((n) => new RegExp(`^${v}-${a}-?\\d$`).test(n)).map(cell).join('')}</div>`).join('')}</div>`);
+  const sheet = await browser.newPage({ viewport: { width: (80 + 30 * FW + 5 * 14 + 10) * z, height: 400 } });
+  await sheet.setContent(`<style>.c{width:${FW}px;height:${FH}px;background:url(data:image/png;base64,${png}) 0 0;image-rendering:pixelated}</style>
+<body style="margin:4px;background:${bg};color:#ddd;font:14px sans-serif;zoom:${z}">${lines.join('')}</body>`);
+  await sheet.screenshot({ path: `${out}/${file}.png`, fullPage: true });
+  await sheet.close();
+}
 
 // ---- In game ----
 const server = await createServer({ server: { port, strictPort: true, hmr: false }, logLevel: 'error' });
@@ -75,7 +84,7 @@ const reset = (facing, at = [950, 650]) => run(([f, [x, y]]) => {
 const rows = [];
 // A strip: the hero reset facing `facing`, `ks` held, `acts` ([ms, fn]) fired on time, a crop at each of `at` (ms).
 async function strip(label, { facing = 0, ks = [], at, acts = [], pos, dt }) {
-  if (!label.includes(only)) return;
+  if (!wants(label)) return;
   await reset(facing, pos);
   await play(300);
   await keys(ks, true);
@@ -88,7 +97,7 @@ async function strip(label, { facing = 0, ks = [], at, acts = [], pos, dt }) {
     if (process.env.DEBUG) console.log(label, ms, await run(() => { const s = window.game.scene.getScene('room'); return [s.hero.frame.name, Math.round(s.time.now), s.cut, s.phase, s.hero.body.velocity.x]; }));
     shots.push((await grab()).toString('base64'));
   }
-  await keys(ks, false);
+  await keys([...new Set([...ks, 'a', 'd', 'w', 's'])], false); // (and those an act pressed)
   rows.push({ label, shots });
 }
 const every = (ms, n, from = 17) => Array.from({ length: n }, (_, i) => from + i * ms);
@@ -111,6 +120,22 @@ await strip('cloche : sonné', { facing: D, at: every(80, 12), acts: [[0, () => 
 const nudge = async () => { await keys(['s'], true); await play(50); await keys(['s'], false); };
 await strip('repos (gestes)', { facing: D, dt: 100, at: [100, 2700, 3200, 8700, 9200, 15200, 15400], acts: [[0, nudge]] });
 // Death (in the refuge: the training room spares him), then the room restarts, re-formed at his coffin.
+// The predator's tools, alone in the refuge: a parry at nothing (the guard, then the stumble, open); the claws held (the
+// press, drawing back, reared, full) then let go; the riposte and the predator strike, their poses forced on a plain claw.
+await strip('parade dans le vide', { facing: R, at: every(40, 16), acts: [[0, () => page.keyboard.press('x')]] });
+await strip('coup chargé', { facing: D, at: [...every(100, 10), 1000, 1040, 1080, 1140, 1200, 1300], acts: [[0, () => page.keyboard.down('j')], [980, () => page.keyboard.up('j')]] });
+const forced = (blow, a) => () => run(([b, a]) => { const s = window.game.scene.getScene('room'); s.slash(a); s.blow = b; }, [blow, a]);
+await strip('riposte (pose)', { facing: R, at: every(25, 12), acts: [[0, forced('riposte', R)]] });
+await strip('attaque dans l\'ombre (pose)', { facing: D, at: every(25, 12), acts: [[0, forced('pounce', D)]] });
+// Walking: turning round (right, then left; down, then up), setting off and stopping, with a full bag.
+await strip('demi-tour', { facing: R, at: [...every(40, 6), ...every(25, 10, 260)], acts: [[0, () => keys(['d'], true)], [250, async () => { await keys(['d'], false); await keys(['a'], true); }], [600, () => keys(['a'], false)]] });
+await strip('demi-tour, haut', { facing: D, at: [...every(40, 6), ...every(25, 10, 260)], acts: [[0, () => keys(['s'], true)], [250, async () => { await keys(['s'], false); await keys(['w'], true); }], [600, () => keys(['w'], false)]] });
+await strip('départ, arrêt', { facing: D, at: [...every(30, 6), 400, 430, 460, 490, 520, 560], acts: [[0, () => keys(['s'], true)], [400, () => keys(['s'], false)]] });
+const bag = (full) => () => run((f) => { const s = window.game.scene.getScene('room'); s.carried = f ? s.bloodBag() : 0; }, full);
+await strip('sac plein, droite', { facing: R, ks: ['d'], at: every(70, 14), acts: [[0, bag(true)]] });
+await strip('sac plein, bas', { facing: D, ks: ['s'], at: every(70, 14), acts: [[0, bag(true)]] });
+await bag(false)();
+await strip('brume, traînée', { facing: R, ks: ['d'], at: [...every(20, 10), 220, 260, 300, 360, 440], acts: [[0, () => page.keyboard.press('Space')], [150, () => keys(['d'], false)]] });
 await strip('mort', { facing: D, at: every(80, 15), acts: [[0, () => run(() => { window.game.scene.getScene('room').health = 1; })], [1, () => blow(R)]] });
 // The room (re)started: the game stepped until it is up, its hero standing.
 const ready = async () => { for (let i = 0; i < 100 && !(await run(() => window.game.scene.isActive('room') && !!window.game.scene.getScene('room').hero?.body?.enable)); i++) await play(100); };
@@ -118,7 +143,7 @@ await play(500);
 await ready();
 
 // The bite, in the training room: a passive crossbowman clawed to his knees, then bitten.
-if ('morsure'.includes(only)) {
+if (wants('morsure')) {
   await run(() => window.game.scene.getScene('room').scene.restart({ training: true, layout: 'necropolis' })); // key T
   await play(200);
   await ready();

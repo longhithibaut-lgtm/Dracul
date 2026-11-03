@@ -63,13 +63,14 @@ export function hero(pose = 'idle') {
   parts.push({
     m: M.HAIR, k: 0.5, box: [H[0] - 10, H[1] - 11, H[2] - 24, H[0] + 10, H[1] + 9, H[2] + 9], f: (x, y, z) => {
       const qx0 = x - H[0], qy0 = y - H[1], qz = z - H[2], qx = qx0 * cw - qy0 * sw0, qy = qx0 * sw0 + qy0 * cw;
-      const X = qx, Y = qy * ct - qz * st, Z = qy * st + qz * ct; // head-local
+      let X = qx, Y = qy * ct - qz * st; const Z = qy * st + qz * ct; // head-local
       let d = sdEll(X, Y, Z, 0, -1.0, 1.5, 4.75, 5.9, 5.9);
       d += 0.16 * Math.abs(Math.sin(Math.atan2(X, Z + 2) * 11 + vn(X, Y * 0.5, 6) * 2)) + 0.35 * Math.exp(-X * X * 2) * clamp(Z - 3);
       const hl = 1.7 + 0.16 * X * X;
       d = smax(d, -Math.max(0.6 - Y, Z - hl, Math.abs(X) - 3.5), 0.5); // face window
       // curtain hanging to the shoulder blades
-      const u = clamp(-Z / 18);
+      const u = clamp(-Z / 18), hs = P.hairSwing;
+      if (hs) { X -= hs[0] * u * u; Y -= hs[1] * u * u; } // the curtain swung by his motion (game poses)
       const cy = -1.4 - u * 0.8, rx = 4.9 + u * 1.8, ry = 5.2 - u * 0.6;
       const phi = Math.atan2(X, -(Y - cy));
       let c = Math.hypot(X / rx, (Y - cy) / ry) * Math.min(rx, ry) - Math.min(rx, ry);
@@ -154,7 +155,7 @@ export function hero(pose = 'idle') {
       z = z <= pz ? z * 51.5 / pz : 51.5 + (z - pz) * 31 / lean[2]; // standing-equivalent height
       const below = clamp((P.pelvis[2] - z) / 40);
       const cx = P.pelvis[0] + lean[0] * Math.max(u, 0) + (P.coatSide ?? 0) * below * 6, cy = P.pelvis[1] + lean[1] * Math.max(u, 0) - back * below * 9 + (P.Kr[1] + P.Kl[1]) * 0.5 * below * 0.3 * (1 - back);
-      let rx = tab(RX, z) * (1 + flare * below * 0.35), ry = tab(RY, z) * (1 + flare * below * 0.6);
+      let rx = tab(RX, z) * (1 + flare * below * 0.35 + (P.coatWing ?? 0) * clamp((60 - z) / 40) * 0.6), ry = tab(RY, z) * (1 + flare * below * 0.6);
       const X = x - cx, Y = y - cy;
       const phi = Math.atan2(X, Y);
       const q0 = Math.hypot(X / rx, Y / ry), q1 = Math.hypot(X / (rx * rx), Y / (ry * ry));
@@ -164,7 +165,7 @@ export function hero(pose = 'idle') {
       const th = lerp(0.75, 30, sstep(53, 61, z));
       let d = Math.max(e, -e - th);
       // front opening (V at chest, open below the belt)
-      const open = z > 77 ? 0.0 : z > 60 ? lerp(0.55, 0.12, (z - 60) / 17) : z > 54 ? 0.42 : lerp(0.48, 0.85 + flare * 0.5, clamp((54 - z) / 42));
+      const open = z > 77 ? 0.0 : z > 60 ? lerp(0.55, 0.12, (z - 60) / 17) : z > 54 ? 0.42 : lerp(0.48, 0.85 + flare * 0.5, clamp((54 - z) / 42)) + (P.coatWing ?? 0) * 0.5 * clamp((58 - z) / 30);
       if (open > 0) d = Math.max(d, (open - Math.abs(phi)) * Math.min(rx, 9));
       // ragged hem in strips
       const strip = Math.floor((phi + Math.PI) / (2 * Math.PI) * 24);
@@ -201,7 +202,7 @@ export function hero(pose = 'idle') {
 const C = {
   skin: L('#cfcab6'), skinD: L('#9a9580'), vein: L('#6e7470'), blood: L('#5e0710'), bloodD: L('#350608'), bloodF: L('#7e0c12'),
   coat: L('#222020'), coatW: L('#36302c'), coatMud: L('#2c2418'), lining: L('#4c2a5a'), shirt: L('#3e372e'), shirtD: L('#2a251f'),
-  pants: L('#2c2925'), boot: L('#3d2c1f'), bootW: L('#5a4430'), belt: L('#3c2819'), iron: L('#3a3632'), rust: L('#5a3420'), hair: L('#121014'), claw: L('#2b241a'), bone: L('#d8cdb0'),
+  pants: L('#2c2925'), boot: L('#3d2c1f'), bootW: L('#5a4430'), belt: L('#3c2819'), iron: L('#3a3632'), rust: L('#5a3420'), hair: L('#121014'), claw: L('#4a4031'), bone: L('#d8cdb0'),
 };
 function heroMat(P) {
   return (m, x, y, z, nx, ny, nz) => {
@@ -257,7 +258,10 @@ function heroMat(P) {
       case M.BELT: return { alb: C.belt, spec: 0.15, gloss: 20 };
       case M.BUCKLE: case M.IRON: case M.CHAIN: return { alb: mix(C.iron, C.rust, clamp(n * 2 - 0.6)), spec: 0.5, gloss: 40 };
       case M.HAIR: return { alb: mix(C.hair, L('#221c24'), n * 0.6), spec: 0.12, gloss: 20, wrap: 0, rim: 0.5 };
-      case M.CLAW: { const r = Math.hypot(x - P.Wr[0], y - P.Wr[1], z - P.Wr[2]) < 13; return { alb: r ? mix(C.claw, C.blood, 0.6) : C.claw, spec: 0.5, gloss: 50 }; }
+      case M.CLAW: { // horn, wet with blood on the claw hand; `clawGlow` (the charge): smouldering dark red
+        const r = Math.hypot(x - P.Wr[0], y - P.Wr[1], z - P.Wr[2]) < 13, g = r ? P.clawGlow ?? 0 : 0;
+        return { alb: r ? mix(C.claw, C.blood, 0.45) : C.claw, spec: 0.9, gloss: 70, ...(g ? { emi: [0.9 * g, 0.03 * g, 0.03 * g], noAO: true } : {}) };
+      }
       case M.SMEAR: { const k = clamp((P._sm.t0 - Math.atan2(z - P._sm.C0[2], y - P._sm.C0[1])) / (P._sm.t0 - P._sm.t1)); return { alb: [0, 0, 0], emi: [0.3 * k * k + 0.012, 0.012 * k * k, 0.008 * k], noAO: true, noShadow: true, rim: 0 }; }
       case M.GLASS: return { alb: [0.3, 0.3, 0.1], emi: [1.6, 1.45, 0.45], noAO: true, noShadow: true };
     }

@@ -31,7 +31,15 @@ il regarde ailleurs que là où il va (`src/gait.ts`) ; au combat il marche dans
 (un temps de reprise), la brume part d'une impulsion et se reforme à l'arrivée, la morsure se lit de profil (élan, crocs,
 boire, arracher), un coup reçu le jette selon son côté (face, dos, flancs), la cloche le fait tituber, il meurt à genoux
 et se dissout en vapeur de sang, sa lanterne restée allumée au sol ; au repos, de loin en loin, un regard de côté, la
-lanterne levée, un souffle. La Nourrice des goules, gardienne des catacombes, « la Matrice »
+lanterne levée, un souffle. Les outils du prédateur ont leurs poses : la garde (griffe en travers du visage, manteau
+serré, lanterne ramenée), l'éclat de la parade (griffe balayée vers l'extérieur), la parade ratée (il trébuche, ouvert),
+le coup chargé (il ramène la griffe en arrière puis se cabre, griffe haute, ses griffes couvent un rouge sombre) et son
+coup lâché, l'attaque dans l'ombre (une détente basse, le manteau ouvert comme des ailes, la doublure violette dehors),
+la riposte (enfoncée au ventre, arrachée vers le haut). Mouvement secondaire cuit par image : le manteau, la lanterne et
+les cheveux traînent et se balancent (marche, demi-tour pivoté, départ penché, arrivée accroupie hors de la brume) ;
+sac plein, il marche voûté, la tête basse. Dans le noir : ses yeux brûlent par-dessus l'ombre (plus fort quand il guette
+ou charge), griffes de corne qui prennent le liseré froid ; ses pas soulèvent la poussière des tombes ou éclaboussent le
+sang au sol. La Nourrice des goules, gardienne des catacombes, « la Matrice »
 (`docs/maquettes/boss-nourrice-B-matrice.png`), rendue hors ligne depuis le modèle de la maquette (`tools/art/matrice.gen.mjs`) :
 la roue de l'Ordre (bois cerclé de fer, pointes, huit rayons, petits sceaux d'or cloués sur la jante) vue de trois quarts, elle
 en croix dessus, le sac translucide éclairé de l'intérieur où les larves se tordent ; pendue, balancée, tirée en arrière (le
