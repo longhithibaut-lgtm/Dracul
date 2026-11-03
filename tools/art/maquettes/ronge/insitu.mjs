@@ -17,7 +17,7 @@ await server.listen();
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 page.on('pageerror', (e) => console.log('page error:', e.message));
-await page.goto('http://localhost:5233/');
+await page.goto('http://localhost:5233/?play');
 await page.waitForFunction(() => { const s = window.game?.scene.getScene('room'); return s?.layout === 'refuge' && s.sys.isActive() && s.phase === 'play'; }, null, { timeout: 90000 });
 for (let n = 1; n <= DESIGNS.length; n++) {
   const tag = `s${n}-${DESIGNS[n - 1].insitu}`, meta = JSON.parse(fs.readFileSync(OUT + tag + '.json')), src = 'data:image/png;base64,' + fs.readFileSync(OUT + tag + '.png').toString('base64');

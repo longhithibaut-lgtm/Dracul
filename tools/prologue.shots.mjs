@@ -24,7 +24,7 @@ const check = (ok, what) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if
 let n = 0;
 const shot = async (name) => { await page.waitForTimeout(400); await run(() => window.draw()); const f = `${out}/${String(++n).padStart(2, '0')}-${name}.png`; await page.screenshot({ path: f }); console.log('  ', f); };
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 // The bot, in the page: the game stepped by hand; the hero walked by his keys (set down or up each frame).
 await run(() => {

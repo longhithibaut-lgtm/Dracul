@@ -31,7 +31,7 @@ export const lit = (s: Save) => LIGHTS.slice(0, upgrades(s)).flat();
 
 /** How many times he came back to the refuge and how many he re-formed in his coffin, from the expedition log. */
 export function tally(log: Entry[]) {
-  return { returns: log.filter((e) => e.end === 'retour').length, deaths: log.filter((e) => e.end === 'mort').length };
+  return { returns: log.filter((e) => e.end === 'retour').length, deaths: log.filter((e) => e.end !== 'retour').length }; // given up (the pause menu): as a death
 }
 
 /** What the wardrobe shows: each kind of item in the chest once, at its best rarity, weapons first (items.ts order). */

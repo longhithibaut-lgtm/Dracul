@@ -3,6 +3,7 @@ import { smear, words } from './hud.ts';
 import { label, type Label } from './loot.ts';
 import { loop } from './rats.ts';
 import { BY_ID, type Note } from './notes.ts';
+import { binds, label as keyLabel, type Action } from './keys.ts';
 
 // How the notes show (notes.ts): where one lies, a paper on the floor (the baked ones are in the art) and, until read, a
 // pale wink over it; read, a page over the paused game in the HUD « Chair »'s italic (bone on the dark, a smear of blood
@@ -49,6 +50,8 @@ function wrap(text: string, size: number, max: number) {
   }
   return lines;
 }
+/** Action `a`'s first key as shown (« F », « N »), as the options bind it. */
+const key = (a: Action) => keyLabel(binds[a].flat()[0] ?? '?');
 const caps = (s: string) => s === s.toUpperCase(); // an inscription: larger, spaced
 type Put = (key: string, x: number, y: number) => void;
 
@@ -116,7 +119,7 @@ export function read(scene: Phaser.Scene, n: Note, fresh: boolean): Panel {
     const w = Math.min(440, W - 100), h = page(scene, n, 0, 0, w) + 16, x = Math.round((W - w - 60) / 2), y = Math.round((H - h - 50) / 2);
     card(ctx, x, y, w + 60, h + 50);
     page(scene, n, W / 2, y + 22, w, put);
-    centred(scene, put, words(scene, [`${fresh ? 'Gardé au journal.     ' : ''}F ou Échap : fermer     N : le journal`], 13, DIM), W / 2, y + h + 26);
+    centred(scene, put, words(scene, [`${fresh ? 'Gardé au journal.     ' : ''}${key('bite')} ou Échap : fermer     ${key('journal')} : le journal`], 13, DIM), W / 2, y + h + 26);
   });
   return { journal: false, close: o.close, click: () => false };
 }
@@ -148,7 +151,7 @@ export function journal(scene: Phaser.Scene, found: readonly string[], at = foun
     ctx.fillRect(x + LW + 24, y + 18, 1, bh - 50);
     if (list[cur]) page(scene, list[cur], x + LW + 30 + RW / 2, y + 22, RW, put);
     else centred(scene, put, words(scene, ['Ce que tu lis en chemin reste ici.'], 15, DIM), x + LW + 30 + RW / 2, y + bh / 2 - 10);
-    centred(scene, put, words(scene, ['Flèches : choisir     N ou Échap : fermer'], 13, DIM), W / 2, y + bh - 24);
+    centred(scene, put, words(scene, [`Flèches : choisir     ${key('journal')} ou Échap : fermer`], 13, DIM), W / 2, y + bh - 24);
   }, () => scene.input.keyboard!.off('keydown', keys));
   scene.input.keyboard!.on('keydown', keys);
   return {

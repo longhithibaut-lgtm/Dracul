@@ -29,7 +29,7 @@ const check = (ok, what) => (ok ? console.log(`ok: ${what}`) : (failed.push(what
 const S = `window.game.scene.getScene('room')`;
 const BOSS = `${S}.enemies.getChildren().find((e) => e.body?.enable && e.getData('kind') === 'nourrice')`;
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
 await run(() => localStorage.setItem('dracul.save', JSON.stringify({ v: 5, banked: 900 })));
 await page.reload();

@@ -73,11 +73,11 @@ export function store() {
   try { storage()?.setItem(KEY, JSON.stringify(data)); } catch { /* full or refused: it lives on until the page closes */ }
 }
 
-/** One expedition ended: back at the refuge or dead. deepest: the deepest ring reached; blood: carried at its end;
+/** One expedition ended: back at the refuge, dead, or given up (the pause menu). deepest: the deepest ring reached; blood: carried at its end;
  *  life: health left; s: how long it lasted; loosed, met: the battue's packs his scent loosed, and those he walked into;
  *  boss: the Nourrice fought (« essai ») or killed (« tuée ») on it.
  *  Kept (the last 200) in localStorage and shown in the console. */
-export type Entry = { end: 'retour' | 'mort'; deepest: number; blood: number; life: number; s: number; loosed: number; met: number; boss?: 'essai' | 'tuée'; at: string };
+export type Entry = { end: 'retour' | 'mort' | 'abandon'; deepest: number; blood: number; life: number; s: number; loosed: number; met: number; boss?: 'essai' | 'tuée'; at: string };
 /** The expedition log, oldest first (the last 200; none without storage). */
 export function journal(): Entry[] {
   try { const all = JSON.parse(storage()?.getItem(LOG) ?? '[]'); return Array.isArray(all) ? all : []; } catch { return []; }

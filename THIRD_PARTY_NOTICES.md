@@ -3,6 +3,8 @@
 | Font | Source | Licence |
 |---|---|---|
 | `src/fell-italic.ttf` (IM FELL English Italic, unmodified): the HUD's words and the prompts over the floor | Igino Marini, via [Google Fonts](https://fonts.google.com/specimen/IM+Fell+English) | SIL Open Font License 1.1 — [licence](licenses/im-fell-english.OFL.txt) |
+| `src/fell.ttf` (IM FELL English Roman, unmodified): the menus' words | Igino Marini, via [Google Fonts](https://fonts.google.com/specimen/IM+Fell+English) | SIL Open Font License 1.1 — [licence](licenses/im-fell-english.OFL.txt) |
+| `src/cinzel.ttf` (Cinzel, unmodified): the menus' numbers and column heads; « DRACUL » baked into `src/menu.png` | The Cinzel Project Authors (Natanael Gama), via [Google Fonts](https://fonts.google.com/specimen/Cinzel) | SIL Open Font License 1.1 — [licence](licenses/cinzel.OFL.txt) |
 
 Skills under `.claude/skills/` copied from other projects, unmodified unless stated.
 

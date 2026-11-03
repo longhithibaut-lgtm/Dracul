@@ -29,7 +29,7 @@ const stand = (x, y) => run(([x, y]) => {
   s.hero.body.reset(x, y);
 }, [x, y]);
 
-await page.goto(`http://localhost:${port}/`);
+await page.goto(`http://localhost:${port}/?play`); // past the title
 await arrived('refuge');
 const notes = await run(async () => (await import('/src/notes.ts')).NOTES);
 if (only.includes('lutrin')) {
