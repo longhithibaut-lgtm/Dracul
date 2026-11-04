@@ -17,9 +17,12 @@ type P = { x: number; y: number };
 /** The crypts' look (room.ts CRYPT): their moonlit dark, the braziers guttering; the light is the chunks'. Its baked
  *  light warms what is drawn already lit only a little (`warm`: the Dawn is in it, the men would go flat beige by it). */
 const LOOK: Look = { light: 'necropolis', texel: 2, torches: ZONES.necropolis.TORCHES, flicker: true, amb: '#000000', night: 0.2,
-  lamp: [5, 40, 180], ys: 1 / 0.616, post: [3.3, 0.42, 0.18, 0.02], vig: [1.15, 0.4, 0.02, 0.004], pal: ZONES.necropolis.PALETTE, wY: 1.6, warm: 0.3 };
-/** Each zone's look: the catacombs', the necropolis' own flames and palette. */
-export const LOOKS: Record<ZoneId, Look> = { necropolis: LOOK, catacombs: { ...LOOK, light: 'catacombs', torches: ZONES.catacombs.TORCHES, pal: ZONES.catacombs.PALETTE } };
+  lamp: [5, 40, 180], ys: 1 / 0.616, post: [3.3, 0.42, 0.18, 0.02], vig: [1.15, 0.4, 0.02, 0.004], pal: ZONES.necropolis.PALETTE, wY: 1.6, warm: 0.3,
+  // the night under the vault cold (moonlit shadows, the fires warm against them), dust in the shafts
+  dust: 0.35, grade: [[0.006, 0.012, 0.012], [0.01, 0.006, -0.01]] };
+/** Each zone's look: the catacombs', the necropolis' own flames and palette: warm bone and fire underground. */
+export const LOOKS: Record<ZoneId, Look> = { necropolis: LOOK, catacombs: { ...LOOK, light: 'catacombs', torches: ZONES.catacombs.TORCHES, pal: ZONES.catacombs.PALETTE,
+  grade: [[0.018, 0.009, -0.005], [0.026, 0.014, -0.016]] } };
 
 /** A chunk's images: its albedo, light (two bands), the light's geometry band, its sprites. */
 const files = (z: ZoneId, i: number, j: number) => (['a', 'l', 'g', 'o'] as const).map((k) => [`${KEY[z]}-${i}-${j}-${k}`, URLS[`./${z}/c${i}-${j}-${k}.webp`]] as const);
