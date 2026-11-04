@@ -27,7 +27,7 @@ const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => (m.type() === 'error' || m.type() === 'assert') && errors.push(m.text()));
 const run = (f, a) => page.evaluate(f, a);
-const arrived = (layout) => page.waitForFunction((l) => { const s = window.game.scene.getScene('room'); return s.layout === l && s.sys.isActive() && s.phase === 'play'; }, layout, { timeout: 20000 });
+const arrived = (layout) => page.waitForFunction((l) => { const s = window.game.scene.getScene('room'); return s.layout === l && s.sys.isActive() && s.phase === 'play'; }, layout, { timeout: 180000 });
 
 await page.goto(`http://localhost:${port}/?play`);
 await arrived('refuge');
@@ -43,7 +43,7 @@ for (const [name, [[hx, hy], [cx, cy]]] of Object.entries(VIEWS).filter(([n]) =>
   }, [hx, hy, cx, cy]);
   // its chunks under the view in, then their light read back
   await page.waitForFunction(([cx, cy]) => { const z = window.game.scene.getScene('room').room.zone, sh = z.chunks.shown;
-    for (const x of [cx - 240, cx + 239]) for (const y of [cy - 135, cy + 134]) if (!sh.has(Math.floor(y / 270) * 6 + Math.floor(x / 480))) return false; return true; }, [cx, cy], { timeout: 30000 });
+    for (const x of [cx - 240, cx + 239]) for (const y of [cy - 135, cy + 134]) if (!sh.has(Math.floor(y / 270) * 6 + Math.floor(x / 480))) return false; return true; }, [cx, cy], { timeout: 180000 });
   await page.waitForTimeout(3000);
   await run(() => window.game.loop.sleep());
   await page.screenshot({ path: `${out}/${name}.png` });

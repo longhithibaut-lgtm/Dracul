@@ -340,8 +340,8 @@ function galleryAt(u, v, X, Y, i, dr, laid) {
   const sunk = h(1) < 0.12, tx = (h(2) - 0.5) * (sunk ? 0.5 : 0.12), ty = (h(3) - 0.5) * (sunk ? 0.5 : 0.12);
   let c = mul(mix(mix(C.stA, C.stB, h(4)), C.stC, h(5) * 0.6), (0.52 + 0.44 * h(6)) * (sunk ? 0.75 : 1));
   c = mul(c, 0.82 + 0.36 * fbm(u / 9, v / 9, 2, p.id & 63)); // its own grain
-  if (vn(u / 2.4, v / 2.4, 215) > 0.8) c = mul(c, 0.72); // pitted
-  c = mix(c, mul(C.grime, 0.9), 0.4 * clamp((fbm(u / 16, v / 16, 3, 216) - 0.6) * 5)); // old stains across the stones
+  if (vn(u / 2.4, v / 2.4, 215) > 0.86) c = mul(c, 0.78); // pitted
+  c = mix(c, mul(C.grime, 0.9), 0.35 * clamp((fbm(u / 16, v / 16, 3, 216) - 0.6) * 2.5)); // old stains across the stones, soaked in
   c = mix(c, mul(c, 1.3), tr * 0.45 * clamp(1 - Math.hypot(p.cu, p.cv) / 20)); // worn smooth where they walk
   c = mix(c, C.grime, clamp(1 - (e - 1.3) / 5) * 0.45 + drift * 0.3); // grime toward its edge
   let N = [tx, ty, 1], spec = 0.04 + 0.08 * tr, gloss = 30;
@@ -354,7 +354,7 @@ function galleryAt(u, v, X, Y, i, dr, laid) {
 /** A bed of bones pressed into the floor: long bones jumbled roughly along the gallery (of the bones of the cells round,
  *  the one on top), now and then a skull crown up; grimy, worn flat, dust packed between. */
 function bonePaved(u, v, drift) {
-  const gap = { c: mix(E.joint, E.dustD, 0.25 + 0.5 * clamp(drift)), N: [0, 0, 1] };
+  const gap = { c: mix(E.joint, E.dustD, 0.6 + 0.4 * clamp(drift)), N: [0, 0, 1] }; // dust packed between, not holes
   const flow = (vn(u / 90, v / 90, 220) - 0.5) * 0.8, gx = Math.floor(u / 12), gy = Math.floor(v / 8);
   let best = gap, top = -1;
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
@@ -438,6 +438,18 @@ function waterAt(u, v, X, Y, wd) {
     }
   }
   if (wd > 0.97) c = mix(c, E.scum, clamp((wd - 0.97) * 40) * 0.6 * vn(u / 3, v / 3, 55)); // scum at the edge
+  // the shallows: bones lying on the bottom, dimmed by the water; out on it, what floats: a skull's crown, a skin of scum drifting
+  if (deep < 0.6) { const b = item(u, v, 14, 0.3, 58), bn = b && boneAt(b.dx, b.dy, b.a * 3.14, 2 + 3 * b.b, 1.1);
+    if (bn && !bn.shade) c = mix(c, mul(C.boneD, 0.45 * bn.k), 0.8 * (1 - deep / 0.6)); }
+  else { const f = item(u, v, 46, 0.12, 59);
+    if (f) { const rx2 = 6.5 + 1.5 * f.b, d = Math.hypot(f.dx / rx2, f.dy / (rx2 * 0.8)), sut = Math.abs(f.dx / rx2 - 0.25 * (f.dy / rx2)) < 0.06 && f.dy < 0; // its crown, a suture across
+      const fb = f.b < 0.45 && boneAt(f.dx, f.dy, f.a * 3.14, 4 + 3 * f.a, 1.3); // or a long bone, afloat
+      if (f.b < 0.45) { if (fb && !fb.shade) return { c: mul(mix(C.boneD, C.bone, 0.35), 0.5 * fb.k), N: fb.N, spec: 0.5, gloss: 60 }; }
+      else if (d < 0.85) { const orb = f.dy > 0 && Math.hypot((Math.abs(f.dx) / rx2 - 0.32) / 0.17, (f.dy / rx2 - 0.42) / 0.14) < 1; // its brow, the tops of its orbits at the waterline
+        return { c: orb ? mul(E.water, 2) : mul(mix(C.boneD, C.bone, 0.25 + 0.3 * f.a), (sut ? 0.6 : 1) * 0.5 * (1.1 - 0.6 * d * d)), N: [f.dx / rx2 * 0.7, f.dy / rx2 * 0.7, 1], spec: 0.5, gloss: 60 }; }
+      if (d < 1 && f.b >= 0.45) c = mul(mix(E.scum, C.boneD, 0.3), 0.35); // wet where it breaks the water
+      else if (d < 1.8) { const a = Math.sin(d * 9) * (1.8 - d) * 0.3; nx += f.dx / (d * rx2 + 0.1) * a; ny += f.dy / (d * rx2 * 0.8 + 0.1) * a; } } // its rings
+    const sk = fbm(u / 40, v / 18, 3, 60); if (sk > 0.66) c = mix(c, mul(E.scum, 0.6), clamp((sk - 0.66) * 6) * 0.7 * vn(u / 4, v / 2, 61)); }
   return { c, N: [nx, ny, 1], spec: 0.9, gloss: 120, emi };
 }
 function mudAt(u, v, wd) {
@@ -445,8 +457,8 @@ function mudAt(u, v, wd) {
   const f = (a, b) => fbm(a / 5, b / 5, 2, 56), h = f(u, v);
   N = [-(f(u + 1, v) - h) * 3, -(f(u, v + 1) - h) * 3, 1];
   if (h < 0.42) { c = mul(c, 0.6); spec = 0.8; gloss = 110; N = [0, 0, 1]; } // water in its hollows
-  const st = item(u, v, 12, 0.3, 57), s = st && stoneAt(st.dx, st.dy, 1.8 + 2.2 * st.a, st.b * 3); // stones at the waterline, wet
-  if (s && !s.shade) return { c: mul(TUFF[1], s.k * 0.9), N: s.N, spec: 0.6, gloss: 80 };
+  const st = item(u, v, 14, 0.14, 57), s = st && stoneAt(st.dx, st.dy, 2.6 + 2.2 * st.a, st.b * 3); // stones at the waterline, wet
+  if (s && !s.shade) return { c: mul(TUFF[1], s.k * 0.7), N: s.N, spec: 0.6, gloss: 80 };
   if (s?.shade) c = mul(c, 0.6);
   return { c: mul(c, 1 + 0.4 * clamp((wd - 1.05) * 8)), N, spec, gloss };
 }
@@ -573,9 +585,14 @@ function tuff(u, z, x, y) {
   c = mul(c, 0.82 + 0.3 * h2(bed, 0, 63));
   let N = [0, 1, 0];
   if (zs - bed * 14 < 1.3) { c = mul(c, 0.5); N = [0, 0.7, -0.7]; } // the seams between beds
-  const pk = ((u + z * 0.6 + 40 * h2(bed, 1, 64)) % 7 + 7) % 7; // pick strokes
-  if (pk < 1.1 && vn(u / 5, z / 9, 65) > 0.45) { c = mul(c, 0.68); N = [-0.5, 1, 0.3]; }
+  // pick marks: short scoops, staggered, each at its own slant (the hand that cut this stretch), some faces spalled off
+  const area = Math.floor(u / 90), sl = 0.5 + 0.5 * h2(area, bed, 64), pu = u + z * sl, cu = Math.floor(pu / 6), cz = Math.floor(z / 4.5), ph = (n) => h2(cu, cz + bed * 31, 75 + n);
+  if (ph(0) < 0.6) { const du = pu - (cu + 0.5) * 6 + (ph(1) - 0.5) * 2, dz = z - (cz + 0.5) * 4.5 + (ph(2) - 0.5) * 1.5;
+    if (Math.abs(du) < 0.8 && Math.abs(dz) < 1.6 + ph(3)) { c = mul(c, 0.62 + 0.25 * (du + 0.8)); N = [-0.6 * Math.sign(du), 1, 0.2]; } }
+  if (vn(u / 11, z / 9, 65) > 0.74) { c = mul(c, 1.12); N = [0.2, 1, -0.25]; } // a flake spalled off, fresher under
   c = mix(c, L('#161a12'), clamp((vn3(x * 0.03, 0, z * 0.07, 66) - 0.5) * 3) * 0.55); // damp
+  const salt = clamp((vn(u / 2.6, z / 40, 76) - 0.7) * 5) * clamp((vn(u / 30, 0, 77) - 0.45) * 4) * clamp(1 - z / 80); // saltpetre bloomed in pale streaks
+  if (salt > 0) c = mix(c, E.salt, salt * 0.5);
   return { c, N };
 }
 /** The rock: one height field over the floor's outline (D, Hh), its faces ragged, the niches hollowed out of it. */
@@ -596,9 +613,12 @@ function rockField() {
       }
       const h = bil(Hh, X, Y), xi = Math.floor(X), yi = Math.floor(Y);
       if (nz > 0.7 || z > h - 3 || ramp[Math.max(0, Math.min(RW * RH - 1, yi * RW + xi))] || ramp[Math.max(0, Math.min(RW * RH - 1, (yi + 1) * RW + xi))]) { // its top: the dark it rises into; low by the galleries, scree
-        const n = fbm3(x * 0.05, y * 0.05, z * 0.05, 3, 68), crackL = Math.abs(vn(x / 30, y / 30, 70) - 0.5) < 0.025;
-        const c = mix(L('#2e2922'), L('#0c0a08'), clamp(n * 1.6 - 0.3));
-        return { alb: mul(c, (z > 24 ? 0.2 : 0.38 - z * 0.008) * (crackL ? 0.4 : 1)), spec: 0.02, rim: 0 };
+        // its beds seen from above: bands following the galleries' line (the rock's distance from the floor), each its own
+        // shade, a dark seam between; scree lying on the low ramps
+        const n = fbm3(x * 0.05, y * 0.05, z * 0.05, 3, 68), dd = -bil(D, X, Y) + 5 * (vn(x / 24, y / 24, 70) - 0.5), bed = Math.floor(dd / 13);
+        let c = mul(mix(L('#2e2922'), L('#0c0a08'), clamp(n * 1.6 - 0.3)), (0.8 + 0.4 * h2(bed, 0, 72)) * (dd - bed * 13 < 1.6 ? 0.45 : 1));
+        if (z < 24) { const s = vn(x / 3, y / 3, 73); if (s > 0.66) c = mul(mix(TUFF[0], TUFF[1], vn(x / 7, y / 7, 74)), 0.9 + (s - 0.66) * 2); }
+        return { alb: mul(c, z > 24 ? 0.2 : 0.38 - z * 0.008), spec: 0.02, rim: 0 };
       }
       let c, N;
       if (Math.abs(nx) > Math.abs(ny) * 1.2) { // a flank, battered

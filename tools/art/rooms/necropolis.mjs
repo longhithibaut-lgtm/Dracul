@@ -13,7 +13,7 @@ import { pitBones } from '../maquettes/hub/props.mjs';
 import { cross, stele, burnt, exhumed } from '../maquettes/cloitre/props.mjs';
 import { cam, SN, CS, wx, wy, wz, rx, ry, C, broken, scaled, block, stage, flags, grime, ashlar, ossuary, stain, segDist, stone3, ironMat } from './common.mjs';
 import { ground, pitShadow, PAL as CRYPT_PAL } from './crypts.mjs';
-import { BONE_TOP, heapMat, boneWall, slate, inPointed, archTop, gatehouse, mausoleum, rockColumn, rimMat, charred, stake, banner, pole, lever, sarcophagus, crackOver, vaultOf, shafts } from './zone-kit.mjs';
+import { heap, heapMat, boneWall, slate, inPointed, archTop, gatehouse, mausoleum, rockColumn, rimMat, charred, stake, banner, pole, lever, sarcophagus, crackOver, vaultOf, shafts } from './zone-kit.mjs';
 
 export const RW = 3840, RH = 1350, SW = 480, SH = 270; // the zone; a screen, the chunk the game loads
 export const ABOUT = 'La nécropole';
@@ -34,9 +34,11 @@ const crossing = (Y) => (Y >= BRIDGE.y0 && Y < BRIDGE.y1) || (Y >= CAUSEWAY.y0 &
 // Holes: the pit field (mid-north), opened graves (mid-south, the far side): ellipses x, y, rx, ry.
 export const HOLES = [[2080, 420, 26, 12], [2170, 474, 34, 14], [2292, 430, 22, 10], [2240, 546, 30, 12], [2108, 566, 20, 9], [2364, 520, 18, 9],
   [1622, 1012, 12, 6], [1664, 1064, 12, 6], [1724, 1004, 12, 6], [2282, 1222, 12, 6], [1582, 884, 12, 6], [3452, 806, 12, 6], [3508, 862, 12, 6]];
+/** The chasm's drawn half-width at room px (X, Y): ragged, a few px either side of its collision edge (the lip). */
+const chasmLip = (X, Y) => chasmW(Y) + 2.5 - 7 * fbm(X / 9 + 3, Y / 13, 3, 7) + 1.2 * (vn(X / 3, Y / 3, 5) - 0.5);
 /** A hole in the floor at room px (X, Y) (`edge`: the drawn rim's wobble, none for collisions). */
 export function pit(X, Y, edge = 0) {
-  if (!crossing(Y) && Math.abs(X - chasmX(Y)) < chasmW(Y) + edge * 1.6 * (vn(X / 5, Y / 5, 5) - 0.5)) return true;
+  if (!crossing(Y) && Math.abs(X - chasmX(Y)) < (edge ? chasmLip(X, Y) : chasmW(Y))) return true;
   for (const [x, y, a, b] of HOLES) { const dx = (X - x) / a, dy = (Y - y) / b; if (dx * dx + dy * dy < 1 + edge * 0.3 * (vn(X / 4, Y / 4, 6) - 0.5)) return true; }
   return false;
 }
@@ -386,7 +388,7 @@ const moundAt = (X, Y) => { const x = Math.floor(X), y = Math.floor(Y); return x
 // Each place's own floor: how much moss, bone dust, ash, black wet mud, old flags and bone chips its earth shows.
 const FLAVOR = {
   parvis: [0.8, 0.1, 0, 0, 0.8, 0.3], caveaux: [0.9, 0.15, 0, 0.15, 0.5, 0.4], champ: [1, 0.1, 0, 0.25, 0.15, 0.3], chaussee: [0.2, 0.4, 0, 0, 0.3, 0.6],
-  pont: [0.3, 0.3, 0, 0.2, 0.3, 0.5], fosses: [0.15, 1, 0, 0, 0.15, 1.6], allee: [0.15, 0.45, 0, 0.1, 0.9, 0.6], breche: [0, 0.25, 0.9, 0, 0.3, 0.5],
+  pont: [0.3, 0.3, 0, 0.2, 0.3, 0.5], fosses: [0.15, 1, 0, 0, 0.15, 1.6], allee: [0.15, 0.45, 0, 0.1, 0.9, 0.6], breche: [0, 0.25, 0.5, 0, 0.3, 0.5],
   postes: [0, 0.2, 0.8, 0.3, 0.2, 0.4], camp: [0, 0.1, 0.5, 0.4, 0, 0.3], buchers: [0, 0.1, 1.3, 0.2, 0.1, 0.5], chapelle: [0, 0.25, 0.4, 0, 1, 0.3], puits: [0.1, 0.1, 0.2, 1, 0.2, 0.7],
 };
 const FL0 = [0.6, 0.4, 0.3, 0.2, 0.4, 0.5];
@@ -404,10 +406,12 @@ function flavor0(X, Y) {
   return out;
 }
 function earthAt(x, y, X, Y, i) {
-  const ys = y * SN, [moss, dust, ash, wet, old] = flavor(X, Y);
-  let c = mix(E.earth, E.earthD, clamp(fbm(x / 26, ys / 26, 4, 101) * 1.2 - 0.1) * 0.6), spec = 0.03, gloss = 12;
-  c = mix(c, E.dust, clamp((fbm(x / 60, ys / 60, 3, 102) - 0.55 + dust * 0.4) * 1.4) * (0.45 + 0.4 * dust)); // bone dust, the middle's ossuaries
-  c = mix(c, ash > 1 ? mul(E.ash, 0.45) : E.ash, Math.min(1, ash) * clamp((fbm(x / 40, ys / 40, 3, 103) - 0.45 + 0.15 * ash) * 2)); // ash where the Order burns, charcoal at its pyres
+  const ys = y * SN, [moss, dust, ash, wet, old] = flavor(X, Y), a0 = moundAt(X, Y);
+  let c = mix(E.earth, E.earthD, clamp(fbm(x / 26, ys / 26, 4, 101) * 1.2 - 0.1) * 0.4), spec = 0.03, gloss = 12; // calm: the detail gathers by the graves
+  c = mix(c, E.dust, clamp((fbm(x / 60, ys / 60, 3, 102) - 0.55 + dust * 0.4) * 0.9) * (0.45 + 0.4 * dust)); // bone dust, the middle's ossuaries
+  const ak = Math.min(1, ash) * clamp((fbm(x / 40, ys / 40, 3, 103) - 0.45 + 0.15 * ash) * 1.3); // ash where the Order burns, charcoal at its pyres
+  c = mix(c, mul(ash > 1 ? mul(E.ash, 0.45) : E.ash, 0.85 + 0.3 * vn(x / 5, ys / 5, 105)), ak);
+  if (ak > 0.2) { const ch = item2(x, ys, 9, 0.15 * ak, 106); if (ch && ch.d < 1) c = ch.h < 0.15 ? mix(C.bone, E.ash, 0.5) : mul(L('#14100c'), 0.8 + 0.4 * ch.h); } // charcoal, a burnt bone
   c = mix(c, E.mudD, wet * clamp((fbm(x / 34, ys / 34, 3, 104) - 0.42) * 2.4) * 0.8); // black wet mud
   const m = fbm(x / 30, ys / 30, 4, 33), m0 = 0.72 - 0.1 * moss; if (m > m0) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? E.mossL : E.moss, clamp((m - m0) * 4) * 0.65 * Math.min(1, moss));
   const f = (u, v) => vn(u / 14, v / 14, 21), gx = f(x + 1, ys) - f(x - 1, ys), gy = f(x, ys + 1) - f(x, ys - 1);
@@ -417,26 +421,51 @@ function earthAt(x, y, X, Y, i) {
   if (fl > f0 && fbm(x / 12, ys / 12, 3, 111) < 0.25 + (fl - f0) * 3) { const g = flags(x, y, 46, 34, 17); c = mix(c, mul(g.c, 0.7), 0.85); N = g.N; }
   else {
     const cx = Math.floor(x / 9), cy = Math.floor(ys / 9);
-    if (h2(cx, cy, 120) < 0.04) { // a clod
-      const ox = (cx + 0.2 + 0.6 * h2(cx, cy, 121)) * 9, oy = (cy + 0.2 + 0.6 * h2(cx, cy, 122)) * 9, r = 2 + 2.5 * h2(cx, cy, 123), d = Math.hypot(x - ox, ys - oy) / r;
+    if (h2(cx, cy, 120) < 0.025) { // a clod
+      const ox = (cx + 0.2 + 0.6 * h2(cx, cy, 121)) * 9, oy = (cy + 0.2 + 0.6 * h2(cx, cy, 122)) * 9, r = 2.8 + 2.4 * h2(cx, cy, 123), d = Math.hypot(x - ox, ys - oy) / r;
       if (d < 1) { N = [(x - ox) / r * 0.5, (ys - oy) / r * 0.5, 1]; c = mul(c, 0.85 + 0.25 * (1 - d)); }
     }
-    // a flat stone sunk in the earth, its edge catching the light: forms a few px across that read at a glance
+    // an old grave fallen in, its stone long gone: a sunken plot, its inner walls catching the light, turned earth round it
+    const hx = Math.floor(x / 70), hy = Math.floor(ys / 64);
+    if (!a0 && h2(hx, hy, 150) < 0.13 * Math.min(1, moss + 0.6 * old)) {
+      const du = (x - (hx + 0.3 + 0.4 * h2(hx, hy, 151)) * 70) / (9 + 3 * h2(hx, hy, 153)), dv = (ys - (hy + 0.3 + 0.4 * h2(hx, hy, 152)) * 64) / (17 + 5 * h2(hx, hy, 154));
+      const e = (du ** 4 + dv ** 4) ** 0.25 + 0.22 * (vn(x / 4, ys / 4, 155) - 0.5), side = Math.abs(du) > Math.abs(dv);
+      if (e < 1) { const w = clamp((1 - e) * 4); c = mix(c, mul(E.turned, 0.75), 0.45 + 0.3 * w); N = w < 1 ? (side ? [-Math.sign(du) * 0.7, 0, 1] : [0, -Math.sign(dv) * 0.7, 1]) : N;
+        if (w >= 1) c = mix(c, E.moss, 0.3 * clamp((vn(x / 6, ys / 6, 156) - 0.4) * 2)); }
+      else if (e < 1.35) { c = mix(c, E.turnedL, 0.35); N = side ? [Math.sign(du) * 0.3, 0, 1] : [0, Math.sign(dv) * 0.3, 1]; } // its lip
+    }
+    // a flat stone sunk in the earth, its edge catching the light: forms a few px across that read at a glance, in drifts
     const sx = Math.floor(x / 16), sy = Math.floor(ys / 16);
-    if (h2(sx, sy, 140) < 0.035 + 0.04 * old) {
+    if (h2(sx, sy, 140) < (0.02 + 0.05 * old) * 2.2 * clamp(fbm(x / 90, ys / 90, 2, 148) - 0.25)) {
       const ox = (sx + 0.25 + 0.5 * h2(sx, sy, 141)) * 16, oy = (sy + 0.25 + 0.5 * h2(sx, sy, 142)) * 16, r = 3 + 3 * h2(sx, sy, 143), a = h2(sx, sy, 144) * 3;
       const u = ((x - ox) * Math.cos(a) + (ys - oy) * Math.sin(a)) / r, v = (-(x - ox) * Math.sin(a) + (ys - oy) * Math.cos(a)) / (r * 0.65), d = Math.hypot(u, v) + 0.15 * (vn(x / 2, ys / 2, 145) - 0.5);
       if (d < 1) { c = mul(mix(C.stB, C.stC, h2(sx, sy, 146)), d > 0.8 ? 0.6 : 0.8 + 0.1 * vn(x / 2, ys / 2, 147)); N = d > 0.8 ? [(x - ox) / r, (ys - oy) / r, 1] : [0, 0, 1]; }
     }
-    const p = fbm(x / 36, ys / 36, 3, 121), p0 = 0.8 - 0.1 * wet; if (p > p0) { c = mul(c, 0.6); spec = 0.25 * clamp((p - p0) * 12); gloss = 60; N = [0, 0, 1]; } // a puddle
+    const p = fbm(x / 36, ys / 36, 3, 121), p0 = 0.84 - 0.14 * wet; if (p > p0) { c = mul(c, 0.6); spec = 0.25 * clamp((p - p0) * 12); gloss = 60; N = [0, 0, 1]; } // a puddle
   }
-  const q = h2(x / 4 | 0, ys / 4 | 0, 17); if (q < 0.012) c = mul(c, 0.7); else if (q > 0.996) c = mix(c, E.dust, 0.4); // pebbles
-  const a = moundAt(X, Y);
+  const q = h2(x / 4 | 0, ys / 4 | 0, 17); if (q < 0.012) c = mul(c, 0.7); // pebbles
+  // under the breach the Dawn has baked it: scorched dark, a crust split in plates whose edges curl and catch the light
+  for (const [sx, sy, a] of SUNHOLES) { const d = Math.hypot(X - sx, (Y - sy) * 1.2) / (a * 1.1); if (d > 1.2) continue;
+    const w = clamp((1.15 - d) * 3 + 0.5 * (vn(x / 10, ys / 10, 160) - 0.5)), p = flags(x, ys, 40, 40, 161), cr = p.e < 0.9 && vn(x / 9, ys / 9, 163) > 0.45; // split only here and there
+    c = mix(c, mul(mix(L('#2c1f14'), L('#433020'), 0.5 * h2(p.id, 1, 162) + 0.5 * vn(x / 6, ys / 6, 164)), cr ? 0.4 : 1), 0.75 * w); if (w > 0.3 && cr) N = [0, 0, 1]; else if (w > 0.3 && p.e < 2.5 && vn(x / 9, ys / 9, 163) > 0.45) N = p.N; }
+  // under a crack of moon the damp gets in: darker earth, moss, a wet sheen the moon glints on
+  for (const [mx, my, r] of MOONHOLES) { const d = Math.hypot(X - mx, (Y - my) * 1.3) / r; if (d > 1.4) continue;
+    const w = clamp((1.25 - d) * 2 + 0.6 * (vn(x / 8, ys / 8, 157) - 0.5));
+    c = mix(mul(c, 1 - 0.3 * w), E.moss, 0.25 * w * clamp((fbm(x / 10, ys / 10, 2, 158) - 0.4) * 3));
+    const sh = w * clamp((fbm(x / 7, ys / 7, 2, 159) - 0.45) * 4); if (sh > 0.1) { spec = Math.max(spec, 0.35 * sh); gloss = 70; } }
+  const a = a0;
   if (a) {
     c = mix(c, mix(E.turned, E.turnedL, vn(x / 3, ys / 3, 23)), clamp(a * 1.5) * 0.55);
     N = [N[0] - (moundAt(X + 1, Y) - moundAt(X - 1, Y)) * 0.6, N[1] - (moundAt(X, Y + 1) - moundAt(X, Y - 1)) * 0.6, 1]; // its relief
   }
   return { c, N, spec, gloss };
+}
+/** A stone of the s-texel cell round (u, v) there with chance p: where on it (dx, dy, d < 1 on it), a hash; or null. */
+function item2(u, v, s, p, seed) {
+  const cx = Math.floor(u / s), cy = Math.floor(v / s);
+  if (p <= 0 || h2(cx, cy, seed) >= p) return null;
+  const r = s * (0.2 + 0.2 * h2(cx, cy, seed + 3)), dx = (u - (cx + 0.3 + 0.4 * h2(cx, cy, seed + 1)) * s) / r, dy = (v - (cy + 0.3 + 0.4 * h2(cx, cy, seed + 2)) * s) / r;
+  return { dx, dy, d: Math.hypot(dx, dy) + 0.25 * (vn(u / 2, v / 2, seed + 4) - 0.5), h: h2(cx, cy, seed + 5) };
 }
 function floorAt(x, y) {
   const X = rx(x), Y = ry(y), xi = Math.floor(X), yi = Math.floor(Y);
@@ -444,22 +473,29 @@ function floorAt(x, y) {
   const i = yi * RW + xi, camp = kind[i] === 3 || (edge[i] && inCamp(X, Y) > 0);
   let k = kind[i], c, Nn = [0, 0, 1], spec = 0.03, gloss = 12, scatter = 0;
   if (edge[i] && k !== 2) { const d = gravel(X, Y); k = d < 0 ? 1 : camp ? 3 : 0; scatter = clamp(1 - d / 4); } // the gravel's border per texel
+  let lifted = false; // a forecourt's edge: its flags thinning out into the earth, flag by flag, the hollows of the ones taken
+  if (k === 0 || k === 2) for (const [x0, y0, x1, y1] of PAVED) { if (X < x0 - 12 || X > x1 + 12 || Y < y0 || Y > y1 + 12) continue;
+    const er = Math.min(X - x0, x1 - X, y1 - Y); if (er > 14) break;
+    k = h2(flags(x, y, 46, 34, 11).id, 9, 77) < clamp(0.45 + er / 24) ? 2 : 0; lifted = k === 0 && er > -2; break; }
   if (k === 2) { const f = flags(x, y, 46, 34, 11); c = grime(f.c, x, y, 0.8); Nn = f.N; }
   else if (k === 1) {
+    // pebbles two or three texels across, each its own tone, in grit; its middle trodden firm and dark, its sides loose
+    const firm = clamp((-gravel(X, Y) - 3) / 5), pb = heap(x, y * SN + 0.37 * x, 4.6, 12), ph = h2(pb.id, 1, 13), on = pb.d < 1 && ph > 0.2 + 0.3 * firm;
     c = mix(E.grav, E.gravD, clamp(fbm(x / 9, y / 9, 3, 11) * 1.5 - 0.4));
-    const p = h2(x * 0.5 | 0, y * 0.6 | 0, 12); if (p < 0.14) c = mul(c, 0.6); else if (p > 0.92) c = mul(c, 1.18);
-    c = mix(c, E.earthD, clamp((fbm(x / 30, y / 24, 3, 13) - 0.5) * 2) * 0.6);
-    Nn = [(h2(x | 0, y | 0, 14) - 0.5) * 0.5, (h2(x | 0, y | 0, 15) - 0.5) * 0.5, 1];
+    if (on) { c = mul(mix(c, ph < 0.55 ? E.gravD : mul(E.grav, 1.15), 0.6), 1.05 - 0.3 * pb.d * pb.d); Nn = [pb.du * (0.6 - 0.4 * firm), pb.dv * (0.6 - 0.4 * firm), 1]; }
+    else c = mul(mix(c, E.earthD, 0.5), 0.75);
+    c = mix(c, E.earthD, clamp((fbm(x / 30, y / 24, 3, 13) - 0.5) * 2) * 0.6 + 0.35 * firm);
   } else {
     const e = earthAt(x, y, X, Y, i);
     c = e.c; Nn = e.N; spec = e.spec; gloss = e.gloss;
+    if (lifted) { const f = flags(x, y, 46, 34, 11); c = mul(mix(c, E.turned, 0.3), f.e < 2.5 ? 0.7 : 0.88); Nn = f.e < 2.5 ? f.N.map((v, j) => (j < 2 ? -v : v)) : [0, 0, 1]; } // a flag's hollow
     if (k === 3) { // the camp's mud, trodden, fading out into the earth at its ragged edge
       let u = mix(E.mud, E.mudD, clamp(fbm(x / 14, y / 12, 3, 31) * 1.6 - 0.4));
       if (h2(x | 0, y | 0, 32) > 0.985) u = mix(u, E.straw, 0.5); // straw trodden in
       const t = clamp(inCamp(X, Y) / 50) * (1 - clamp((0.45 - fbm(x / 60, y / 50, 3, 9)) * 4) * 0.7);
       c = mix(c, u, t);
       const w = fbm(x / 24, y / 18, 3, 33); if (w > 0.62 && t > 0.5) { c = mul(c, 0.7); spec = 0.5 * clamp((w - 0.62) * 8); gloss = 70; Nn = [0, 0, 1]; } // puddles
-    } else if (scatter > 0 && h2(x | 0, y * 1.6 | 0, 19) < 0.5 * scatter) c = mix(E.grav, E.gravD, h2(x | 0, y | 0, 18)); // gravel kicked into the earth
+    } else if (scatter > 0) { const pb = heap(x, y * SN + 0.37 * x, 4.6, 12); if (pb.d < 0.85 && h2(pb.id, 2, 13) < 0.7 * scatter) { c = mul(mix(E.grav, E.gravD, h2(pb.id, 1, 13)), 1 - 0.3 * pb.d * pb.d); Nn = [pb.du * 0.6, pb.dv * 0.6, 1]; } } // gravel kicked into the earth
   }
   // a doorway's floor: steps going down into the dark
   for (const d of [...Object.values(DOORS), ...TUNNEL]) if (Math.abs(X - d.x) < d.w / 2 + 1 && Y < d.y + 1 && Y > d.y - RECESS - 40) {
@@ -468,12 +504,15 @@ function floorAt(x, y) {
   }
   // a pit's lip: earth thrown up round it, paler, bones in it, raised toward the drop
   for (const [hx, hy, a, b] of HOLES) { const dx = (X - hx) / a, dy = (Y - hy) / b, d = Math.hypot(dx, dy), out = 1.3 + 0.5 * vn(X / 6, Y / 6, 44); if (d < 1 || d > out) continue;
-    const t = 1 - (d - 1) / (out - 1), n = vn(x / 2.5, y / 2.5, 43);
-    c = mix(c, n > 0.62 ? C.bone : mix(E.turnedL, E.dust, 0.35), clamp(t * 1.4) * (n > 0.62 ? 0.7 : 0.8)); Nn = [dx * 0.5 * t, dy * 0.5 * t, 1]; }
+    const t = 1 - (d - 1) / (out - 1), n = vn(x / 3.5, y / 3.5, 43), cl = vn(x / 2, y * SN / 2, 46), lump = cl > 0.6 ? (cl - 0.6) * 2.5 : 0; // spoil thrown up, in clods; a bone in it
+    c = mix(c, n > 0.8 ? mix(C.bone, C.boneD, 0.3) : mul(mix(E.turned, E.turnedL, cl), 0.85 + 0.4 * lump), clamp(t * 1.6) * 0.9); Nn = [dx * 0.6 * t + lump * 0.4 * (cl - 0.7), dy * 0.6 * t - lump * 0.3, 1]; }
   // the chasm's lip: broken stone, paler, then the drop
-  { const e = Math.abs(X - chasmX(Y)) - chasmW(Y); if (!crossing(Y) && e > -2 && e < 5) { c = mix(mix(C.stB, C.stC, vn(x / 3, y / 3, 41)), C.grime, clamp(e / 5) * 0.6); Nn = [0, 0, 1]; } }
+  { const e = Math.abs(X - chasmX(Y)) - chasmLip(X, Y); if (!crossing(Y) && e > -1 && e < 6 + 3 * vn(X / 6, Y / 6, 42)) { // blocks of it, cracked off
+    const b = flags(x * 1.6, y * 1.6, 20, 14, 41), t = clamp(e / 7);
+    c = mix(mul(mix(C.stB, C.stC, vn(x / 3, y / 3, 41)), b.e < 1.3 ? 0.4 : 0.8 + 0.35 * (1 - t)), C.grime, t * 0.6); Nn = b.e < 1.3 ? [0, 0, 1] : b.N; } }
   // the dark creeps in from the cliffs
-  const dn = Y - north(X), ds = south(X) - Y, dw = Math.min(X - XW, XE - X, dn * 1.4, ds * 2); if (dw < 18) c = mix(c, E.earthD, (1 - Math.max(0, dw) / 18) * 0.6);
+  const dn = Y - north(X), ds = south(X) - Y, dw = Math.min(X - XW, XE - X, dn * 1.4, ds * 2) + 14 * (fbm(X / 16, Y / 16, 2, 45) - 0.5); // ragged, scree at its foot
+  if (dw < 22) { c = mix(c, E.earthD, (1 - Math.max(0, dw) / 22) * 0.7); const sc = item2(x, y * SN, 7, clamp(1 - dw / 12) * 0.5, 46); if (sc && sc.d < 1) { c = mul(mix(C.stC, C.wallD, sc.h), 0.5 + 0.4 * (1 - sc.d)); Nn = [sc.dx * 0.6, sc.dy * 0.6, 1]; } }
   if (blood[i]) { const a = blood[i] / 255; c = mix(c, mix(C.bloodD, C.blood, vn(x / 4, y / 4, 8) * 0.6), a); if (a > 0.3) { spec = 0.4 * a; gloss = 70; Nn = [0, 0, 1]; } }
   // the burnt shadows under the breach (V10): each a figure on its knees burnt into the earth, the iron ring it was chained to before it
   for (const [sx, sy] of SHADOWS) { const dx = X - sx, dy = Y - sy; if (Math.abs(dx) > 9 || Math.abs(dy) > 14) continue;
@@ -481,9 +520,10 @@ function floorAt(x, y) {
     if (rag && (e(0, -9, 2.4, 2.2) || e(0, -3, 3.6, 4.6) || e(0, 3, 4.8, 2.6) || e(-4.5, -3, 1.2, 4) || e(4.5, -2, 1.2, 4.2))) { c = mix(c, L('#100c0a'), 0.85); Nn = [0, 0, 1]; spec = 0.02; }
     if (Math.abs(Math.hypot(dx, (dy - 10) * 1.6) - 2.2) < 0.6) { c = mix(C.iron, C.rust, 0.4); Nn = [0, 0.4, 1]; spec = 0.4; gloss = 40; } }
   // bone splinters and teeth, more in the fields
-  { const cx = Math.floor(x / 7), cy = Math.floor(y / 7);
-    if (h2(cx, cy, 300) < (k === 0 ? 0.003 + 0.007 * flavor(X, Y)[5] : 0.0015)) { const an = h2(cx, cy, 301) * 3.14, lx = x - (cx * 7 + 3.5), ly = y - (cy * 7 + 3.5), u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an);
-      if (Math.abs(v) < 0.6 && Math.abs(u) < 3) { c = mix(c, C.bone, 0.6); Nn = [0, 0, 1]; } } }
+  { const cx = Math.floor(x / 10), cy = Math.floor(y * SN / 10); // two texels thick at the least: no specks
+    if (h2(cx, cy, 300) < (k === 0 ? 0.003 + 0.005 * flavor(X, Y)[5] : 0.002)) { const an = h2(cx, cy, 301) * 3.14, lx = x - (cx * 10 + 5), ly = y * SN - (cy * 10 + 5), u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an), L2 = 2.5 + 1.5 * h2(cx, cy, 302);
+      if (Math.abs(v) < (Math.abs(u) > L2 - 0.8 ? 1.3 : 1) && Math.abs(u) < L2) { c = mix(c, mix(C.bone, C.boneD, 0.3 * h2(cx, cy, 303)), 0.7); Nn = [0, -v * 0.5, 1]; }
+      else if (v > 0 && v < 1.8 && Math.abs(u) < L2) c = mul(c, 0.7); } }
   return { alb: c, N: Nn, spec, gloss };
 }
 
@@ -517,10 +557,11 @@ function facade(f) {
         return { alb: mul(mix(C.stB, C.stC, vn(x / 6, y / 6 + z / 6, 3)), 0.9 * (1 - k * 0.85)), spec: 0.03, ao: 1 - k * 0.6 };
       }
       if (nz > 0.25 && z > Hh - 2 && ny < 0.9) { // the roof: stone slates, mossy (the wall of bones: its ragged top)
-        if (f.kind === 'bones') return { alb: mix(BONE_TOP, C.bone, clamp(vn(x / 3, y / 3, 7) - 0.62) * 1.5), spec: 0.03 };
+        if (f.kind === 'bones') return heapMat(x, y); // heaped skulls, as the walls' crest
         const s = slate(x, y * 0.6 + z, f.x0);
         return { alb: mul(s, 0.9 * (z < Hh + 6 ? 0.55 + 0.45 * clamp((z - Hh) / 6) : 1)), spec: 0.04 }; // its eave in shade
       }
+      if (f.kind === 'bones' && z > Hh - 12) return heapMat(x, y); // its ragged top's steep bits
       let r = f.kind === 'bones' ? ossuary(x, z) : ashlar(x, z, f.kind === 'church' ? 24 : 20, f.kind === 'church' ? 46 : 38, 5 + f.x0 % 7);
       // voussoirs round the door
       if (Math.abs(u) < hw + 12 && z > dz0 - 10 && !inPointed(u, z, hw, dz0, dr) && inPointed(u, z, hw + 10, dz0, dr + 10))
@@ -542,7 +583,8 @@ function cliff() {
   const arch = (x) => ARCHES.reduce((b, a) => (Math.abs(x - wx(a.x)) < Math.abs(x - wx(b.x)) ? a : b));
   return {
     sdf: (x, y, z) => {
-      const X = rx(x), face = wy(north(X)) + 10 * (fbm(x / 22, z / 16, 3, 41) - 0.5) - z * 0.06;
+      const X = rx(x), zs = z + 9 * (vn(x / 60, 0, 54) - 0.5), bed = Math.floor(zs / 11); // its beds of rock, each standing out or back: ledges
+      const face = wy(north(X)) + 7 * (fbm(x / 40, z / 30, 3, 41) - 0.5) + 6 * (vn(x / 45 + bed * 7.3, bed * 3.1, 58) - 0.5) + 2 * (vn(x / 9, z / 7, 59) - 0.5) - z * 0.06;
       let s = (y - face) * 0.55;
       const u = x - wx(arch(x).x), inArch = Math.min(hw - Math.abs(u), archTop(u, hw, 60, R0) - z, y - (YD - 90));
       if (Math.abs(u) < hw + 30) { s = Math.min(s, Math.max(sdBox(u, y, z, 0, YD - 3, 70, hw + 22, 6, 70, 1), -inArch)); s = Math.max(s, inArch); }
@@ -567,6 +609,7 @@ function cliff() {
       if (Math.abs(vn(x / 7, z / 60, 56) - 0.5) < 0.03) { c = mul(c, 0.35); Nn = [0, 1, 0]; } // cracks down the face
       c = mix(c, L('#1a2014'), clamp((vn3(x * 0.02, 0, z * 0.08, 52) - 0.5) * 3) * 0.6); // seeping damp
       if (z < 30) c = mix(c, C.moss, clamp(fbm(x / 14, z / 10, 3, 53) - 0.45) * 2 * (1 - z / 30));
+      if (nz > 0.45) c = mix(mul(c, 0.7), C.grime, 0.4); // grit settled on its ledges
       return { alb: mul(c, clamp(1.1 - z / 220)), N: Nn, spec: 0.06, gloss: 16 };
     },
     bounds: [0, -40, 0, W, wy(110), VAULT + 20], step: 0.7,
@@ -574,7 +617,7 @@ function cliff() {
 }
 /** The rock round the cavern but the north cliff: west, east and south rims, rising low past the floor's edge. */
 function rim(x0, x1, y0, y1, out) {
-  return { sdf: (x, y, z) => (z - Math.min(30, Math.max(-4, out(rx(x), ry(y)) * 3))) * 0.3, mat: rimMat, bounds: [wx(x0), wy(y0), -2, wx(x1), wy(y1), 34], step: 0.9 };
+  return { sdf: (x, y, z) => (z - Math.min(30, Math.max(-4, (out(rx(x), ry(y)) + 8 * fbm(x / 30, y / 30, 2, 62) - 6) * 3))) * 0.3, mat: rimMat, bounds: [wx(x0), wy(y0), -2, wx(x1), wy(y1), 34], step: 0.9 };
 }
 /** A bell tent of the Order: canvas round a pole, its flap open on the dark toward the south, the sun of the Order on it. */
 function tent(seed) {
@@ -761,7 +804,28 @@ for (const o of PROPS.filter((o) => o.kind === 'shrine')) { candles(o.x + 14, o.
 for (const [x, y] of ROT) light({ p: [wx(x), wy(y), 8], c: L('#8a9a4a'), I: 1.3, r0: 20, R: 170, soft: 6, pad: 4, haze: 0.008, hazeR: 4 });
 for (const [x, y] of MOONHOLES) light({ p: [wx(x), wy(y), 30], c: MOONC, I: 0.3, r0: 60, R: 260, noShadow: true, noEnv: true }); // what a moonlit patch throws back
 
-const env = ground(floorAt, (X, Y) => pit(X, Y, 1));
+/** A hole's far side at world (x, z < 0), the necropolis cut through: turned earth with the dead in it (bones, skulls,
+ *  a coffin's end), then beds of rock into the dark; `dim`: how the depth darkens it (as ground() does). */
+function cutAt(x, z, dim) {
+  const soil = 30 + 16 * vn(x / 40, 0, 47), d = -z;
+  let c;
+  if (d < soil) {
+    c = mix(E.turned, E.earthD, clamp(fbm(x / 9, z / 6, 3, 48) * 1.4 - 0.2));
+    if (d < 4 + 2 * vn(x / 5, 0, 49)) c = mix(c, E.moss, 0.4); // the sod
+    const cx = Math.floor(x / 26), cz = Math.floor(d / 22), hc = h2(cx, cz, 50);
+    if (hc < 0.12 && d > 8) { const u = x - (cx + 0.2 + 0.6 * h2(cx, cz, 51)) * 26, v = d - (cz + 0.5) * 22; // a coffin's end, rotten
+      if (Math.abs(u) < 7 && Math.abs(v) < 5) c = Math.abs(u) > 6 || Math.abs(v) > 4 ? mul(C.woodD, 0.6) : mix(C.wood, C.woodD, vn(x / 2, d / 0.8, 52)); }
+    const bx = Math.floor(x / 8), bz = Math.floor(d / 6), hb = h2(bx, bz, 53);
+    if (hb < 0.13 && d > 5) { const u = x - (bx + 0.5) * 8, v = d - (bz + 0.5) * 6;
+      if (hb < 0.035 ? Math.hypot(u / 2.8, v / 2.4) < 1 : Math.abs(v + u * (h2(bx, bz, 54) - 0.5)) < 0.9 && Math.abs(u) < 3.6) c = hb < 0.035 && Math.hypot(Math.abs(u) - 1, v + 0.4) < 0.7 ? C.mortar : mix(C.bone, C.boneD, 0.35 + 0.4 * vn(x, d, 55)); }
+  } else { // the rock's beds
+    const zs = d + 6 * (vn(x / 50, 0, 56) - 0.5);
+    c = mul(mix(L('#3c352c'), L('#14110d'), clamp(fbm(x / 20, d / 10, 3, 57) * 1.7 - 0.35)), (0.8 + 0.35 * h2(Math.floor(zs / 10), 0, 58)) * (zs % 10 < 1.3 ? 0.45 : 1));
+  }
+  return mul(c, dim);
+}
+const ground0 = ground(floorAt, (X, Y) => pit(X, Y, 1));
+const env = (ox, oy, oz) => { const r = ground0(ox, oy, oz); const z = r.P[2]; return z < 0 && r.alb !== C.void ? { ...r, alb: cutAt(r.P[0], z, (0.25 + 0.75 * clamp(1 + z / 140) ** 2) * (z > -6 ? 1.1 : 0.8)) } : r; };
 const SC = { W, H, cam, off: 0, offX: 0, objects: S.objects, lights: S.lights, env, envShadow: pitShadow((X, Y) => pit(X, Y, 1)), ambient: L('#3a4450').map((v) => v * 0.07) };
 export async function scene() { return SC; }
 /** Gate `k` of GATES let down to `d` room px above its sill (d >= its height: raised out of sight). */
@@ -770,7 +834,7 @@ export const GATE_RISE = 44; // room px: a gate's travel up into its gatehouse, 
 
 /** The air of the moon's and the Dawn's shafts, along each pixel's sight line through the cracks; added to a chunk's
  *  render (`x0`, `y0`: its first texel in the zone) before it is baked. */
-export const finish = (img, x0, y0) => shafts(img, x0, y0, [...MOONH.map((o) => [o[0], o[1], o[2], o[2], MOON, MOONC, 0.004]), ...SUNH.map((o) => [...o, SUN, SUNC, 0.02])], VAULT);
+export const finish = (img, x0, y0) => shafts(img, x0, y0, [...MOONH.map((o) => [o[0], o[1], o[2], o[2], MOON, MOONC, 0.006]), ...SUNH.map((o) => [...o, SUN, SUNC, 0.05])], VAULT);
 export const PAL = [...CRYPT_PAL, ...[['#b8a466', '#d8c886', '#ece0a8', '#f8f0cc', '#fffbe8']].flatMap((s) => s.map((c) => hex(c).map((v) => v * 255)))];
 export const POST = { exposure: 3.3, vignette: 0.2, desat: 0.18, grain: 0.012, dither: 0.02 };
 export const GRAVE_COUNT = GRAVES.length;
