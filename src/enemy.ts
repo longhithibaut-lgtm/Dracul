@@ -88,7 +88,8 @@ function bakeGhoul(scene: Scene) {
           if (ch === 'e') put(x0 + x, 3 * SIZE + y, GHOUL_PAL.e);
         } else {
           if ([[-1, 0], [1, 0], [0, -1], [0, 1]].some(([i, j]) => grid[(y + j) * SIZE + x + i] === 'e')) put(x0 + x, 3 * SIZE + y, GHOUL_PAL.e, 80); // their halo
-          if (base !== 'mask' && ((x + 0.5 - 21) / 10) ** 2 + ((y + 0.5 - FEET) / 2.5) ** 2 <= 1) { put(x0 + x, y, SHADOW, 140); put(x0 + x, SIZE + y, SHADOW, 140); }
+          const r = Math.hypot((x + 0.5 - 21) / 10, (y + 0.5 - FEET) / 2.5), a = r < 0.45 ? 158 : r < 0.75 ? 107 : 51; // stepped, as the foes' shade (foes.ts)
+          if (base !== 'mask' && r <= 1) { put(x0 + x, y, SHADOW, a); put(x0 + x, SIZE + y, SHADOW, a); }
         }
       }
     tex.add(name, 0, x0, 0, SIZE, SIZE);
