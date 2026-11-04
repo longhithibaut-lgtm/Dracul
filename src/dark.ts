@@ -67,6 +67,10 @@ uniform sampler2D uLight2;
 uniform sampler2D uLight3;
 uniform sampler2D uLut;
 uniform sampler2D uAlbedo;
+uniform float uTime;
+uniform float uDust;
+uniform vec3 uShade;
+uniform vec3 uHigh;
 uniform vec2 uKeep;
 uniform vec4 uView;
 uniform vec2 uRoom;
@@ -79,6 +83,7 @@ uniform vec4 uOrder1;
 uniform vec4 uOrder2;
 uniform vec4 uOrder3;
 uniform float uTorch;
+uniform float uSteady;
 uniform float uFrame;
 uniform float uZoom;
 uniform float uTexel;
@@ -131,6 +136,7 @@ float bayer(vec2 p) {
   return (4.0 * m1 + m2 + 0.5) / 16.0 - 0.5;
 }
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float cheap(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); } // no sine (Hoskins)
 
 void main() {
   vec2 sp = floor(vec2(outTexCoord.x, 1.0 - outTexCoord.y) * uView.zw); // screen pixel
@@ -148,12 +154,19 @@ void main() {
     vec3 g = floor(baked(qd, vec2(uv.x, 1.0 - (uv.y + 2.0) / 3.0)) * 255.0 + 0.5);
     float ny = (g.b - 128.0) / 127.0;
     vec3 P = vec3(w.x, w.y + g.g - 64.0, g.r - 64.0), n = vec3(0.0, ny, sqrt(max(0.0, 1.0 - ny * ny)));
-    T = s * s * s * 4.0 * uTorch;
+    // The flames gutter (uTorch), their warm light with them; the cold moon holds still (uSteady: unflickered).
+    T = s * s * s * 4.0 * mix(uTorch, uSteady, clamp(1.2 - 4.0 * (s.r / max(s.b, 0.004) - 1.0), 0.0, 1.0));
     Lt = T + uAmb;
     E = e * e;
     Lt += point(P, n, uNight.xyz, uNight.w, 140.0, 420.0, NIGHT);
     Lt += point(P, n, uLamp.xyz, uLamp.w, uLampR.x, uLampR.y, LAMP);
     Lt += order(P, n, w, uOrder0) + order(P, n, w, uOrder1) + order(P, n, w, uOrder2) + order(P, n, w, uOrder3);
+    // Dust motes in the light: one in a few 12 px cells, a texel each, drifting down through it as it fades in and out,
+    // showing only where it is lit (kept to a few operations: the whole screen pays for them).
+    vec2 id = floor(w / 12.0);
+    float h = cheap(id), life = fract(uTime * 0.08 + h);
+    vec2 m = (id + vec2(fract(h * 7.31), fract(h * 3.17 + life * 0.7))) * 12.0 - w;
+    if (h > 0.6 && abs(m.x) < 0.25 && abs(m.y) < 0.25) E += min(T, vec3(1.0)) * uDust * 4.0 * life * (1.0 - life) * step(0.5, T.r);
     // Not the room's own pixel (a character lit with the room's light): what faces us stands with its back to the sun,
     // so it gets at most uKeep.x of it (a rim of sun, the shade's bounce), never the full glare the floor gets.
     if (uKeep.x > 0.0 && distance(texture2D(uAlbedo, vec2(uv.x, 1.0 - uv.y)).rgb, src.rgb) > 0.01) Lt = min(Lt, vec3(uKeep.x));
@@ -171,10 +184,11 @@ void main() {
   c = max(c * uPost.x - uVig.w, 0.0);
   c = pow(c / (1.0 + c), vec3(1.0 / 2.2));
   c += (c * c * (3.0 - 2.0 * c) - c) * uPost.y;
-  // Grade: desaturated but where something glows, shadows pushed green-brown; grain; ordered dither onto the palette.
+  // Grade: desaturated but where something glows, shadows pushed green-brown (or the look's own), the lights tinted;
+  // grain; ordered dither onto the palette.
   float lum = dot(c, vec3(0.3, 0.59, 0.11));
   c = mix(c, vec3(lum), uPost.z * (1.0 - clamp((E.r + E.g + E.b) * 3.0, 0.0, 1.0)));
-  c += vec3(0.012, 0.014, 0.0) * (1.0 - lum) - vec3(0.0, 0.0, 0.004);
+  c += uShade * (1.0 - lum) + uHigh * lum * lum - vec3(0.0, 0.0, 0.004);
   vec2 sq = floor(sp / uZoom * uTexel);
   c += (hash(sq + uFrame) + hash(sq.yx + uFrame * 1.7) - 1.0) * uPost.w * (0.5 + lum);
   vec3 q = min(floor(clamp(c + bayer(tx) * uVig.z, 0.0, 1.0) * 255.0 / 4.0), 63.0);
@@ -186,6 +200,23 @@ void main() {
   gl_FragColor = vec4(pow(mix(src.rgb * pow(vig, 0.45) * (1.0 + uKeep.y * warm) + warm * vec3(0.0625, 0.044, 0.025) * uKeep.y, lit, src.a), vec3(uGamma)), 1.0);
 }`;
 function vec(c: number[]) { return `vec3(${c.map((v) => v.toFixed(5)).join(', ')})`; }
+
+/** The foes whose feet stand on the floor and get a contact shadow (light()): the grand pixel men and beasts. */
+const GROUNDED = new Set(['purifier', 'priest', 'hound', 'penitent', 'ringer', 'inquisitor', 'amas', 'bourreau', 'crossbow', 'gave', 'crocheteur', 'tireur', 'miroitier']);
+/** The contact shadow under a foe's feet, 32 x 10 room px: a stepped dark ellipse like the hero's (hero.ts), its core darker. */
+function shadow(scene: Phaser.Scene) {
+  const key = 'dark-contact';
+  if (scene.textures.exists(key)) return key;
+  const t = scene.textures.createCanvas(key, 32, 10)!;
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 32; x++) {
+    const r = Math.hypot((x + 0.5 - 16) / 16, (y + 0.5 - 5) / 5);
+    if (r >= 1) continue;
+    t.context.fillStyle = `rgba(11,7,16,${r < 0.55 ? 0.6 : r < 0.8 ? 0.42 : 0.22})`;
+    t.context.fillRect(x, y, 1, 1);
+  }
+  t.refresh();
+  return key;
+}
 
 /** The light's inputs, updated every frame (see light()). */
 type Tex = Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
@@ -223,6 +254,7 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
     for (let i = 0; i < 4; i++) pm.setUniform(`uLight${i}`, 1 + i);
     pm.setUniform('uLut', 5);
     pm.setUniform('uAlbedo', 6);
+    pm.setUniform('uTime', (performance.now() / 1000) % 600);
     pm.setUniform('uQuad', c.quad);
     // Where the camera really draws the room: it rounds each image to whole screen pixels (roundPixels), so must the
     // light, or a half-pixel scroll lays each texel's light on its neighbour.
@@ -235,6 +267,7 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
     pm.setUniform('uNight', c.night);
     for (let i = 0; i < 4; i++) pm.setUniform(`uOrder${i}`, c.order[i] ?? [0, 0, 0, 0]);
     pm.setUniform('uTorch', c.torch);
+    pm.setUniform('uSteady', c.look.torch ?? 1);
     pm.setUniform('uFrame', c.frame);
     const k = c.look;
     pm.setUniform('uTexel', k.texel);
@@ -244,6 +277,9 @@ class DarkNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
     pm.setUniform('uPost', [k.post[0], k.post[1], k.post[2], Settings.data.grain ? k.post[3] : 0]); // the grain, unless turned off
     pm.setUniform('uGamma', Settings.gamma(Settings.data.bright));
     pm.setUniform('uVig', k.vig);
+    pm.setUniform('uDust', k.dust ?? 0);
+    pm.setUniform('uShade', k.grade?.[0] ?? [0.012, 0.014, 0]);
+    pm.setUniform('uHigh', k.grade?.[1] ?? [0, 0, 0]);
   }
 }
 
@@ -298,11 +334,14 @@ let registered = false;
  *  strength, near and far radius; `ys`: how much a screen row counts in depth; `post`: exposure, contrast, desaturation,
  *  grain; `vig`: vignette centre and fall, dither, black level (taken off after the exposure); `pal`, `wY`: the palette and its brightness weight;
  *  `albedo`: the texture of the room's own pixels, so `sprites` caps the light on whatever else is drawn (a sun made for
- *  the ground would burn the dark skins white); `warm`: how much the baked light brightens what is drawn already lit. */
+ *  the ground would burn the dark skins white); `warm`: how much the baked light brightens what is drawn already lit;
+ *  `dust`: dust motes in the light, how bright;
+ *  `grade`: what the shadows and the lights are pushed toward (sRGB offsets), green-brown shadows by default. */
 export type Look = {
   light: string; texel: number; torches: [number, number, number][]; flicker: boolean; amb: string; night: number;
   lamp: [number, number, number]; ys: number; post: [number, number, number, number]; vig: [number, number, number, number]; pal: string[]; wY: number;
   albedo?: string; sprites?: number; warm?: number; torch?: number; // torch: its baked light (torches, candles) scaled, 1 when none
+  dust?: number; grade?: [number[], number[]];
 };
 
 /** The baked light of `src` (its first band, `texel` texels a room px), w x h room px, read back once: at each room px the
@@ -350,8 +389,9 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
 
   const flameKey = grids(scene, 'dark-flame', FLAME, FLAME_PAL);
   if (!scene.anims.exists('dark-flame')) scene.anims.create({ key: 'dark-flame', frames: [0, 1, 2].map((n) => ({ key: flameKey, frame: String(n) })), frameRate: 8, repeat: -1 });
-  for (const [x, y, k] of look.torches) scene.add.sprite(x, y, flameKey).setOrigin(0.5, 1).setDepth(DEPTH + 5).setAlpha(0.6 + 0.4 * k).play({ key: 'dark-flame', startFrame: x % 3 });
-  const eyes = new Map<Sprite, Phaser.GameObjects.Image>(), shades = new Map<Sprite, Phaser.GameObjects.Image>();
+  const flames = look.torches.map(([x, y, k]) => scene.add.sprite(x, y, flameKey).setOrigin(0.5, 1).setDepth(DEPTH + 5).setAlpha(0.6 + 0.4 * k).play({ key: 'dark-flame', startFrame: x % 3 }));
+  const eyes = new Map<Sprite, Phaser.GameObjects.Image>(), shades = new Map<Sprite, Phaser.GameObjects.Image>(), soles = new Map<Sprite, Phaser.GameObjects.Image>();
+  const contact = shadow(scene);
   let tick = 0, lamp0 = 1, torch = 1;
 
   const step = (time: number) => {
@@ -379,10 +419,20 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
         .setFlipX(s.flipX).setRotation(Math.atan2(dy, dx) + Math.PI / 2).setScale(s.scaleX, s.scaleY * Math.min(3.2, Math.max(0.8, d / 22)))
         .setAlpha(0.85 * Math.min(1, 2 - d / 75) * s.alpha).setDepth(s.depth - 0.01);
     }
-    for (const [s, e] of eyes) if (!s.active) { e.destroy(); eyes.delete(s); }
-    for (const [s, e] of shades) if (!s.active) { e.destroy(); shades.delete(s); }
+    // Each foe stands on the floor: a dark smudge under its feet (the sheets are rendered without a floor), lit by the
+    // room like the floor it darkens. Not under what flies, perches or digs, nor the bosses' own (crows, Matrice...).
+    for (const s of enemies.getChildren() as Sprite[]) {
+      let c = soles.get(s);
+      if (!c) soles.set(s, (c = scene.add.image(0, 0, contact)));
+      c.setVisible(s.visible && GROUNDED.has(s.getData('kind')) && !s.getData('unshaded') && !((s.getData('z') ?? 0) > 0));
+      if (!c.visible) continue;
+      const k = Math.min(48, Math.max(14, s.body!.width * 1.6)) / 32;
+      c.setPosition(s.x, s.body!.bottom - 1).setScale(k, k * 1.15).setAlpha(s.alpha).setDepth(s.depth - 0.02);
+    }
+    for (const m of [eyes, shades, soles]) for (const [s, e] of m) if (!s.active) { e.destroy(); m.delete(s); }
     if (++tick % 6 === 0) { // ten times a second: the torches gutter, the lamp breathes, the grain moves
       if (look.flicker) torch = Math.random() < 0.12 ? 0.8 + Math.random() * 0.1 : 0.94 + Math.random() * 0.06;
+      flames.forEach((fl, i) => fl.setAlpha((0.6 + 0.4 * look.torches[i][2]) * (0.4 + 0.6 * torch))); // dimmed with the light they cast
       lamp0 = 0.9 + 0.08 * Math.sin(time / 400) + Math.random() * 0.04;
       f.frame = (f.frame + 1) % 97;
     }

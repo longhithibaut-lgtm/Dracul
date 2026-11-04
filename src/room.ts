@@ -44,7 +44,7 @@ export type LayoutId = (typeof LAYOUTS)[number] | 'refuge' | 'necropolis' | 'cat
 // The crypts' look (their mockups' post): their moonlit dark, the braziers and torches guttering (its light, torches and
 // palette: the room's own, baked.ts).
 const CRYPT: Look = { light: '', texel: 2, torches: [], flicker: true, amb: '#000000', night: 0.2,
-  lamp: [5, 40, 180], ys: 1 / 0.616, post: [3.3, 0.42, 0.18, 0.02], vig: [1.15, 0.4, 0.02, 0.004], pal: [], wY: 1.6 };
+  lamp: [5, 40, 180], ys: 1 / 0.616, post: [3.3, 0.42, 0.18, 0.02], vig: [1.15, 0.4, 0.02, 0.004], pal: [], wY: 1.6, dust: 0.3 }; // dust in the moon's shafts, the Dawn's
 const BAKED: Record<(typeof LAYOUTS)[number], { key: string; D: Baked.Plan; look: Look; dawn?: true }> = {
   hall: { key: 'crypt', D: Crypt, look: CRYPT },
   nave: { key: 'nave', D: Nave, look: CRYPT },
