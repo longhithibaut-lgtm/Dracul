@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { T } from './tuning.ts';
-import { ZOOM, prelit } from './dark.ts';
+import { ZOOM, SANG, prelit } from './dark.ts';
 import { BLOOD, bleed, pool, run, stains, wounded } from './enemy.ts';
 import { mark } from './crossbow.ts';
 import { SHEETS, FLOOR } from './foes.data.ts';
@@ -83,6 +83,24 @@ const HEAD: Record<Sheeted, number> = { tireur: 44, miroitier: 44, crossbow: 40,
 // Their feet on the floor, sheet px (half as many room px): a man's like the crossbowman's, the big ones' broader.
 const FEET: Partial<Record<Sheeted, [number, number]>> = { amas: [52, 22], bourreau: [36, 16], enterre: [44, 22], gave: [44, 20], chose: [180, 40] }; // the blood drop of the weak, over the feet; the Enterré's: his mound; the Chose's: its hands along the edge
 
+// The pool of shade each body sits in (the sheets are rendered without a floor: without it they float on the dark
+// floors), screen px across; the big ones broader, la Chose none (it hangs at the chasm's edge).
+const SHADE: Partial<Record<Sheeted, number>> = { hound: 48, amas: 80, bourreau: 60, enterre: 56, gave: 64, chose: 0, crow: 0, crocheteur: 44, ringer: 48, inquisitor: 44 };
+/** A soft oval of shade `w` screen px across, in three steps of darkness (no blur: the grand pixel), baked once per size. */
+export function shade(scene: Scene, w: number) {
+  const key = `shade-${w}`, h = Math.max(5, Math.round(w * 0.32));
+  if (scene.textures.exists(key)) return key;
+  const t = scene.textures.createCanvas(key, w, h)!;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const r = Math.hypot((x + 0.5 - w / 2) / (w / 2), (y + 0.5 - h / 2) / (h / 2));
+    if (r > 1) continue;
+    t.context.fillStyle = `rgba(11,7,16,${r < 0.45 ? 0.78 : r < 0.75 ? 0.52 : 0.24})`;
+    t.context.fillRect(x, y, 1, 1);
+  }
+  t.refresh();
+  return key;
+}
+
 export function preload(scene: Scene) {
   for (const [key, url] of [['purifier', purifierSheet], ['priest', priestSheet], ['hound', houndSheet], ['penitent', penitentSheet], ['ringer', ringerSheet], ['inquisitor', inquisitorSheet], ['amas', amasSheet], ['bourreau', bourreauSheet], ['crossbow', crossbowSheet], ['crow', crowSheet], ['enterre', enterreSheet], ['gave', gaveSheet], ['chose', choseSheet], ['crocheteur', crocheteurSheet], ['tireur', tireurSheet], ['miroitier', miroitierSheet]]) if (!scene.textures.exists(key)) scene.load.image(key, url);
 }
@@ -98,6 +116,16 @@ export function create(scene: Scene, group: Phaser.Physics.Arcade.Group, kind: S
   // The jet of fire is drawn apart from him, turned from its view to his real aim.
   const jet = scene.add.image(0, 0, kind, 'down-idle0').setScale(0.5).setVisible(false).setBlendMode(s.blendMode);
   s.setData({ born: scene.time.now, phase: Math.round(x * 3), walked: 0, at: [x, y], jet, markG: scene.add.graphics().setDepth(7990) });
+  // Its shade under its feet, kept there after physics has moved it (as the hero's, hero.ts); grown with it (an elite, a
+  // Gavé fed), gone when it is put away or not on the floor (a Tireur on his roof).
+  const sw = SHADE[kind] ?? 40;
+  if (sw) {
+    const sh = scene.add.image(x, y, shade(scene, sw)).setScale(0.5);
+    const follow = () => sh.setPosition(s.x, s.y + GROUND - 1).setScale(Math.abs(s.scaleX), s.scaleY).setDepth(s.depth - 0.5)
+      .setVisible(s.visible && !!s.body?.enable && !s.getData('unshaded') && s.getData('state') !== 'buried').setAlpha(s.alpha);
+    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
+    s.once(Phaser.GameObjects.Events.DESTROY, () => { scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow); sh.destroy(); });
+  }
   return s;
 }
 
@@ -321,7 +349,7 @@ export function die(scene: Scene, s: Sprite) {
       body.setFrame('corpse').setDepth(1.5); // on the floor, over its blood, under everyone
       run(scene, 600, (t) => {
         const k = Phaser.Math.Easing.Quadratic.Out(t / 0.6), rt = stains(scene);
-        pool(x, y + GROUND - 6, 4 + 24 * k, 2 + 8 * k, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1), BLOOD.mid, BLOOD.dark);
+        spill(x, y + GROUND - 6, away, k, (c, px, py, w) => rt.fill(c, 1, px, py, w, 1));
         rt.render();
       }, () => { // settled: into the floor's layer of the dead, which keeps them for the fight (or a Gavé eats it: erased)
         const lay = (blendMode?: number) => corpses(scene).stamp(key, 'corpse', x * ZOOM, y * ZOOM, { originY, scaleX: (flipX ? -size : size) * ZOOM, scaleY: size * ZOOM, blendMode }).render();
@@ -331,6 +359,20 @@ export function die(scene: Scene, s: Sprite) {
       });
     });
   });
+}
+
+/** The blood spreading from under a body at floor point (x, y), `k` 0 to 1 grown: not a disc but a pool with lobes
+ *  (seeded by where it lies), run out farther along `away` (the blow's way), its middle dark and thick, a few wet
+ *  glints where the light catches it. */
+export function spill(x: number, y: number, away: number, k: number, fill: (c: number, x: number, y: number, w: number) => void) {
+  const rnd = (i: number) => { const h = Math.sin(x * 12.9898 + y * 78.233 + i * 37.719) * 43758.5453; return h - Math.floor(h); };
+  for (let i = 0; i < 6; i++) { // lobes, the longest down the blow's way
+    const a = away + (rnd(i) - 0.5) * (i ? 3.6 : 0.8), d = (i ? 7 + 11 * rnd(i + 9) : 20) * k, r = (i ? 4 + 6 * rnd(i + 19) : 7) * k;
+    pool(x + Math.cos(a) * d, y + Math.sin(a) * d * SQ, r, r * 0.45, fill, BLOOD.mid, BLOOD.dark);
+  }
+  const ox = Math.cos(away) * 4 * k, oy = Math.sin(away) * 4 * k * SQ; // the body's own pool, drawn off toward the blow's way
+  pool(x + ox, y + oy, 4 + 15 * k, 2 + 6 * k, fill, BLOOD.mid, BLOOD.dark, SANG[1]);
+  for (let i = 0; i < 4 * k; i++) fill(BLOOD.light, Math.round(x - 10 * k + 14 * k * rnd(i + 29)), Math.round(y - 4 * k + 3 * k * rnd(i + 39)), 1 + Math.round(rnd(i + 49))); // wet glints
 }
 
 // The dead of the Order: one layer over the room's floor blood (enemy.ts stains), at its resolution, drawn already lit

@@ -15,7 +15,7 @@ import type { Ctx } from './foes.ts';
 // (farther), his lantern's elsewhere, turning slowly after the hero; props and walls cut it, and the hero in it burns as
 // in any holy light (RoomScene). Aware, he holds the bronze before him: a blow on his front rings off it (guards()), the
 // claws wear it, and worn through it shatters (he reels, bare from then on, and runs). Foes.show draws his body; this
-// file, the glare and the beam. Nothing on the floor but the light itself.
+// file, the glare and the beam (a shaft in the air: nothing is painted or lit on the floor).
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Pt = { x: number; y: number };
 const S = SHEETS.miroitier, SQ = T.lantern.squash;
@@ -40,7 +40,7 @@ export function step(c: Ctx, e: Sprite, time: number) {
       const a = sweepTo(e.getData('beamAim'), floorAngle(from, to), dt), sa = Math.atan2(Math.sin(a) * SQ, Math.cos(a));
       const reach = M.reach[e.getData('dawn') ? 1 : 0], len = Math.min(reach, c.ray(from, sa) * Math.hypot(Math.cos(sa), Math.sin(sa) / SQ)); // floor px
       const burning = inBeam(from, a, len, to) && c.ray(from, toHero) >= Phaser.Math.Distance.BetweenPoints(from, to) - 2;
-      e.setData({ beamAim: a, aim: sa, facing: sa, burning, beamLen: len });
+      e.setData({ beamAim: a, aim: sa, facing: sa, burning });
       beam(fx, e, from, a, len, time);
       glare(fx, e, 1, time);
       if (time >= at) e.setData({ state: 'recover', fireAt: time + M.recoverMs, readyAt: time + M.reloadMs });
@@ -89,16 +89,13 @@ function mirrorAt(e: Sprite) {
   return { x: e.x + ((lx - S.FW / 2) / 2) * (e.flipX ? -1 : 1), y: e.y + (ly - S.SOLE) / 2 + 10 };
 }
 
-/** His lights in the dark rooms (dark.ts): his lantern; the glare swelling on the bronze; the beam's light on the floor. */
+/** His lights in the dark rooms (dark.ts): his lantern; the glare swelling on the bronze (none on the floor down the
+ *  beam: it read as a band painted on the ground, docs/decisions.md 2026-11-03). */
 export function lights(e: Sprite, time: number) {
   const st = e.getData('state'), feet = e.y + 10, out: { x: number; y: number; h: number; lit: boolean; I: number }[] = [];
   if (st === 'lift' || st === 'beam') {
     const m = mirrorAt(e), k = st === 'beam' ? 1 : Phaser.Math.Clamp(1 - (e.getData('fireAt') - time) / T.miroitier.liftMs, 0, 1);
     out.push({ x: m.x, y: feet, h: feet - m.y, lit: true, I: 0.4 + 2.2 * k });
-    if (st === 'beam') { // two thirds of the way down the shaft, on the floor
-      const a: number = e.getData('beamAim'), d = (e.getData('beamLen') ?? 0) * 0.66, c = e.body!.center;
-      out.push({ x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d * SQ, h: 0, lit: true, I: 2.4 });
-    }
   } else out.push({ x: e.x + (e.flipX ? -5 : 5), y: feet, h: 10, lit: true, I: 0.35 }); // his lantern at his hip
   return out;
 }
@@ -114,18 +111,19 @@ function glare(g: Phaser.GameObjects.Graphics, e: Sprite, k: number, time: numbe
   if (k > 0.5) g.fillStyle(0xffffff, (k - 0.5) * 2 * s).fillRect(x - 1, y - 1, 3, 3);
 }
 
-// The shaft from the mirror down onto the floor along floor angle `a`, out to `len`: a wedge of pale gold light, a
-// brighter core, motes turning in it, and its strip on the floor, glazed.
+// The shaft from the mirror down toward the floor along floor angle `a`, out to `len`: a wedge of pale gold light, a
+// brighter core, thinning as it comes down, motes turning in it. Nothing is laid on the floor itself (no strip, no edge:
+// the user found it read as a mark on the ground, docs/decisions.md 2026-11-03).
 function beam(g: Phaser.GameObjects.Graphics, e: Sprite, from: Pt, a: number, len: number, time: number) {
   const M = T.miroitier, m = mirrorAt(e), tan = Math.tan((M.halfDeg * Math.PI) / 180), ca = Math.cos(a), sa = Math.sin(a);
   const at = (d: number, side: number) => { const w = Math.max(M.width, d * tan) * side; return { x: from.x + ca * d - sa * w, y: from.y + (sa * d + ca * w) * SQ }; };
-  const n0 = 10, flick = 0.9 + 0.1 * Math.sin(time / 53);
-  const [nl, nr, fl, fr] = [at(n0, -1), at(n0, 1), at(len, -1), at(len, 1)];
-  poly(g.fillStyle(0xffe6a0, 0.13 * flick), [m, fl, fr]); // the shaft through the air
-  poly(g.fillStyle(0xfff2c8, 0.12 * flick), [m, at(len, -0.4), at(len, 0.4)]);
-  poly(g.fillStyle(0xffe8b0, 0.3 * flick), [nl, fl, fr, nr]); // where it falls
-  poly(g.fillStyle(0xfff6dc, 0.25 * flick), [at(n0, -0.45), at(len, -0.45), at(len, 0.45), at(n0, 0.45)]);
-  g.lineStyle(0.5, 0xfffaf0, 0.5 * flick).lineBetween(fl.x, fl.y, fr.x, fr.y); // its edge where it is cut
+  const n0 = 10, flick = 0.9 + 0.1 * Math.sin(time / 53), fl = at(len, -1), fr = at(len, 1);
+  const on = (p: Pt, k: number) => ({ x: m.x + (p.x - m.x) * k, y: m.y + (p.y - m.y) * k }); // k of the way from the mirror to p
+  for (let i = 0, n = 6; i < n; i++) { // in slices, dimmer toward its end
+    const k0 = i / n, k1 = (i + 1) / n, f = flick * (1 - 0.75 * k0);
+    poly(g.fillStyle(0xffe6a0, 0.16 * f), [on(fl, k0), on(fl, k1), on(fr, k1), on(fr, k0)]);
+    poly(g.fillStyle(0xfff2c8, 0.14 * f), [on(at(len, -0.35), k0), on(at(len, -0.35), k1), on(at(len, 0.35), k1), on(at(len, 0.35), k0)]); // its core
+  }
   for (let i = 0; i < 14; i++) { // motes
     const h = Math.sin(i * 12.9898) * 43758.5453, u = h - Math.floor(h), k = ((u + time / 2600) % 1), p = at(n0 + (len - n0) * k, (u * 7) % 2 - 1);
     g.fillStyle(0xfffaf0, 0.6 * Math.sin(k * Math.PI)).fillRect(Math.round(m.x + (p.x - m.x) * k), Math.round(m.y + (p.y - m.y) * k), 1, 1);

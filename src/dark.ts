@@ -201,23 +201,6 @@ void main() {
 }`;
 function vec(c: number[]) { return `vec3(${c.map((v) => v.toFixed(5)).join(', ')})`; }
 
-/** The foes whose feet stand on the floor and get a contact shadow (light()): the grand pixel men and beasts. */
-const GROUNDED = new Set(['purifier', 'priest', 'hound', 'penitent', 'ringer', 'inquisitor', 'amas', 'bourreau', 'crossbow', 'gave', 'crocheteur', 'tireur', 'miroitier']);
-/** The contact shadow under a foe's feet, 32 x 10 room px: a stepped dark ellipse like the hero's (hero.ts), its core darker. */
-function shadow(scene: Phaser.Scene) {
-  const key = 'dark-contact';
-  if (scene.textures.exists(key)) return key;
-  const t = scene.textures.createCanvas(key, 32, 10)!;
-  for (let y = 0; y < 10; y++) for (let x = 0; x < 32; x++) {
-    const r = Math.hypot((x + 0.5 - 16) / 16, (y + 0.5 - 5) / 5);
-    if (r >= 1) continue;
-    t.context.fillStyle = `rgba(11,7,16,${r < 0.55 ? 0.6 : r < 0.8 ? 0.42 : 0.22})`;
-    t.context.fillRect(x, y, 1, 1);
-  }
-  t.refresh();
-  return key;
-}
-
 /** The light's inputs, updated every frame (see light()). */
 type Tex = Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
 /** A zone's light round the view: the first room px of the 2 x 2 chunks it shows, a chunk's size, their light
@@ -390,8 +373,7 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
   const flameKey = grids(scene, 'dark-flame', FLAME, FLAME_PAL);
   if (!scene.anims.exists('dark-flame')) scene.anims.create({ key: 'dark-flame', frames: [0, 1, 2].map((n) => ({ key: flameKey, frame: String(n) })), frameRate: 8, repeat: -1 });
   const flames = look.torches.map(([x, y, k]) => scene.add.sprite(x, y, flameKey).setOrigin(0.5, 1).setDepth(DEPTH + 5).setAlpha(0.6 + 0.4 * k).play({ key: 'dark-flame', startFrame: x % 3 }));
-  const eyes = new Map<Sprite, Phaser.GameObjects.Image>(), shades = new Map<Sprite, Phaser.GameObjects.Image>(), soles = new Map<Sprite, Phaser.GameObjects.Image>();
-  const contact = shadow(scene);
+  const eyes = new Map<Sprite, Phaser.GameObjects.Image>(), shades = new Map<Sprite, Phaser.GameObjects.Image>();
   let tick = 0, lamp0 = 1, torch = 1;
 
   const step = (time: number) => {
@@ -419,17 +401,8 @@ export function light(scene: Phaser.Scene, hero: Sprite, enemies: Phaser.Physics
         .setFlipX(s.flipX).setRotation(Math.atan2(dy, dx) + Math.PI / 2).setScale(s.scaleX, s.scaleY * Math.min(3.2, Math.max(0.8, d / 22)))
         .setAlpha(0.85 * Math.min(1, 2 - d / 75) * s.alpha).setDepth(s.depth - 0.01);
     }
-    // Each foe stands on the floor: a dark smudge under its feet (the sheets are rendered without a floor), lit by the
-    // room like the floor it darkens. Not under what flies, perches or digs, nor the bosses' own (crows, Matrice...).
-    for (const s of enemies.getChildren() as Sprite[]) {
-      let c = soles.get(s);
-      if (!c) soles.set(s, (c = scene.add.image(0, 0, contact)));
-      c.setVisible(s.visible && GROUNDED.has(s.getData('kind')) && !s.getData('unshaded') && !((s.getData('z') ?? 0) > 0));
-      if (!c.visible) continue;
-      const k = Math.min(48, Math.max(14, s.body!.width * 1.6)) / 32;
-      c.setPosition(s.x, s.body!.bottom - 1).setScale(k, k * 1.15).setAlpha(s.alpha).setDepth(s.depth - 0.02);
-    }
-    for (const m of [eyes, shades, soles]) for (const [s, e] of m) if (!s.active) { e.destroy(); m.delete(s); }
+    for (const [s, e] of eyes) if (!s.active) { e.destroy(); eyes.delete(s); }
+    for (const [s, e] of shades) if (!s.active) { e.destroy(); shades.delete(s); }
     if (++tick % 6 === 0) { // ten times a second: the torches gutter, the lamp breathes, the grain moves
       if (look.flicker) torch = Math.random() < 0.12 ? 0.8 + Math.random() * 0.1 : 0.94 + Math.random() * 0.06;
       flames.forEach((fl, i) => fl.setAlpha((0.6 + 0.4 * look.torches[i][2]) * (0.4 + 0.6 * torch))); // dimmed with the light they cast

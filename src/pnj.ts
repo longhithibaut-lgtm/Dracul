@@ -8,6 +8,7 @@ import * as Carte from './map.ts';
 import * as Sfx from './sfx.ts';
 import { ITEMS, type ItemId } from './items.ts';
 import { prelit } from './dark.ts';
+import { shade } from './foes.ts';
 import { SHEETS } from './pnj.data.ts';
 import mirelleUrl from './pnj-mirelle.png';
 import greffierUrl from './pnj-greffier.png';
@@ -65,11 +66,19 @@ export function setOut() {
 /** The quest log, as the bag shows it. */
 export const log = () => [...(ledger ? ['Tu portes le registre de l\'Ordre. Lourd.'] : []), ...Q.log(Save.data.quests)];
 
-/** One of the four, drawn at floor point `at` from its sheet: show(frame) sets its frame, its depth by its feet. */
-function figure(scene: Phaser.Scene, id: keyof typeof SHEETS, at: P, frame: string) {
+/** One of the four, drawn at floor point `at` from its sheet: show(frame) sets its frame, its depth by its feet. `w`:
+ *  the shade it sits in, screen px across (foes.ts shade(); none for the walled mausoleum), kept under it as it moves. */
+function figure(scene: Phaser.Scene, id: keyof typeof SHEETS, at: P, frame: string, w = 0) {
   const S = SHEETS[id], tex = scene.textures.get(`pnj-${id}`);
   S.FRAMES.forEach((n, i) => tex.has(n) || tex.add(n, 0, i * S.FW, 0, S.FW, S.FH));
-  return scene.add.image(at.x, at.y, `pnj-${id}`, frame).setOrigin(0.5, S.SOLE / S.FH).setScale(0.5).setDepth(at.y).setBlendMode(prelit(scene));
+  const s = scene.add.image(at.x, at.y, `pnj-${id}`, frame).setOrigin(0.5, S.SOLE / S.FH).setScale(0.5).setDepth(at.y).setBlendMode(prelit(scene));
+  if (w) {
+    const sh = scene.add.image(at.x, at.y, shade(scene, w)).setScale(0.5);
+    const follow = () => sh.setPosition(s.x, s.y - 1).setDepth(s.depth - 0.5).setVisible(s.visible);
+    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
+    s.once(Phaser.GameObjects.Events.DESTROY, () => { scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow); sh.destroy(); });
+  }
+  return s;
 }
 
 type Npc = { at: P; s: Phaser.GameObjects.Image; label: Loot.Label; talk(): Dialogue.Talk | string | undefined; show(time: number, near: boolean): void; r?: number; name?(): string; lift?: number };
@@ -127,7 +136,7 @@ export function create(scene: Phaser.Scene, host: Host) {
     }
   }
   if (here === 'refuge' && Q.atRefuge(q, 'mirelle')) {
-    const at = PLACES.refuge.mirelle, s = figure(scene, 'mirelle', at, 'sit0');
+    const at = PLACES.refuge.mirelle, s = figure(scene, 'mirelle', at, 'sit0', 40);
     block(at, 20, 8);
     const lines = ['« Le Rongé ne parle pas. C\'est bien. »', '« Je compte mes dents. Elles sont toutes là. »', '« Ne me regarde pas trop longtemps. »', '« J\'ai encore mon nom. Ne le dis à personne. »'];
     let k = q.night;
@@ -136,7 +145,7 @@ export function create(scene: Phaser.Scene, host: Host) {
 
   // ---------- Le Greffier ----------
   const greffier = (at: P) => {
-    const s = figure(scene, 'greffier', at, 'carve0'), g = q.greffier;
+    const s = figure(scene, 'greffier', at, 'carve0', 64), g = q.greffier;
     block(at, 26, 8);
     add({ at, s, lift: 30, name: () => (g.s === 'new' ? 'Un vieux (F)' : 'Le Greffier (F)'),
       show: (time, close) => s.setFrame(close ? 'look' : `carve${Math.floor(time / 260) % 2}`),
@@ -165,7 +174,7 @@ export function create(scene: Phaser.Scene, host: Host) {
     greffier(PLACES.refuge.greffier);
   }
   if (here === 'necropolis' && Q.ledgerLies(q, ledger)) { // the ledger, on its crate in the camp
-    const at = PLACES.necropolis.ledger, s = figure(scene, 'greffier', at, 'ledger');
+    const at = PLACES.necropolis.ledger, s = figure(scene, 'greffier', at, 'ledger', 30);
     block(at, 22, 8);
     const n = add({ at, s, lift: 22, name: () => 'Le registre de l\'Ordre (F)', show: () => {}, talk: () => {
       ledger = true;
@@ -180,7 +189,7 @@ export function create(scene: Phaser.Scene, host: Host) {
 
   // ---------- Ilse la Fossoyeuse ----------
   if (here === 'necropolis') {
-    const at = PLACES.necropolis.ilse, i = q.ilse, s = figure(scene, 'ilse', at, i.c === 'mordue' ? 'dead' : 'sleep0');
+    const at = PLACES.necropolis.ilse, i = q.ilse, s = figure(scene, 'ilse', at, i.c === 'mordue' ? 'dead' : 'sleep0', 52);
     block(at, 22, 8);
     let up = 0;
     add({ at, s, lift: 34, name: () => (i.s === 'new' ? 'Une humaine endormie (F)' : 'Ilse (F)'),
@@ -218,7 +227,7 @@ export function create(scene: Phaser.Scene, host: Host) {
   // ---------- Maître Odo ----------
   const O = T.quests.odo;
   if (here === 'necropolis' && (q.odo.s === 'new' || (q.odo.s === 'open' && !q.odo.n))) {
-    const at = PLACES.necropolis.odo, s = figure(scene, 'odo', at, 'stake');
+    const at = PLACES.necropolis.odo, s = figure(scene, 'odo', at, 'stake', 34);
     const post = block(at, 12, 6);
     const n = add({ at, s, lift: 54, name: () => (q.odo.s === 'new' ? 'Un homme de l\'Ordre (F)' : 'Maître Odo (F)'),
       show: () => {},
@@ -252,7 +261,7 @@ export function create(scene: Phaser.Scene, host: Host) {
     n.show = () => {};
   };
   if (here === 'refuge' && Q.atRefuge(q, 'odo')) {
-    const at = PLACES.refuge.odo, s = figure(scene, 'odo', at, 'idle0');
+    const at = PLACES.refuge.odo, s = figure(scene, 'odo', at, 'idle0', 34);
     block(at, 14, 6);
     add({ at, s, lift: 54, name: () => 'Maître Odo (F)', show: (time, close) => s.setFrame(close ? 'plead' : `idle${Math.floor(time / 900) % 2}`),
       talk: () => {
