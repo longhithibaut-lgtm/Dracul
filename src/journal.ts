@@ -3,7 +3,7 @@ import { smear, words } from './hud.ts';
 import { label, type Label } from './loot.ts';
 import { loop } from './rats.ts';
 import { BY_ID, type Note } from './notes.ts';
-import { binds, label as keyLabel, type Action } from './keys.ts';
+import { binds, label as keyLabel, once, type Action } from './keys.ts';
 
 // How the notes show (notes.ts): where one lies, a paper on the floor (the baked ones are in the art) and, until read, a
 // pale wink over it; read, a page over the paused game in the HUD « Chair »'s italic (bone on the dark, a smear of blood
@@ -130,7 +130,7 @@ export function journal(scene: Phaser.Scene, found: readonly string[], at = foun
   const list = found.map((id) => BY_ID[id]).filter(Boolean);
   let cur = Math.max(0, Math.min(at, list.length - 1)), rows: { x: number; y: number; w: number; h: number }[] = [];
   const move = (d: number) => { const c = Math.max(0, Math.min(list.length - 1, cur + d)); if (c !== cur) { cur = c; o.draw(); } };
-  const keys = (ev: KeyboardEvent) => move(/^(ArrowUp|KeyW|KeyZ)$/.test(ev.code) ? -1 : /^(ArrowDown|KeyS)$/.test(ev.code) ? 1 : 0);
+  const keys = once((ev: KeyboardEvent) => move(/^(ArrowUp|KeyW|KeyZ)$/.test(ev.code) ? -1 : /^(ArrowDown|KeyS)$/.test(ev.code) ? 1 : 0));
   const o = overlay(scene, (ctx, W, H, put) => {
     const LW = 190, RW = Math.min(400, W - LW - 120), bw = LW + RW + 60, bh = Math.min(H - 60, 400), x = Math.round((W - bw) / 2), y = Math.round((H - bh) / 2), lx = x + 16 + LW / 2;
     card(ctx, x, y, bw, bh);

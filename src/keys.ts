@@ -92,6 +92,14 @@ export const serialize = (b: Binds) => JSON.stringify({ v: 1, binds: b });
 // ---- The live copy, and what is held right now (window events: they are seen even while a scene is paused). ----
 
 const storage = () => { try { return localStorage; } catch { return undefined; } };
+/** `f` called once per key event. Phaser hands its frame's queued key events to the listeners again on each new one
+ *  (KeyboardPlugin.update; its duplicate check only looks at the last), so with three in a frame a press came twice: F
+ *  opened a panel and closed it. Each listener of a scene's keyboard goes through this. */
+export function once<E extends object>(f: (ev: E) => void) {
+  const seen = new WeakSet<E>();
+  return (ev: E) => { if (!seen.has(ev)) { seen.add(ev); f(ev); } };
+}
+
 /** The bindings in use; change them with set(). */
 export const binds: Binds = parse((() => { try { return storage()?.getItem('dracul.keys') ?? null; } catch { return null; } })());
 /** New bindings, in use at once and saved. */

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import * as Font from './font.ts';
 import { ZOOM, prelit } from './dark.ts';
+import { shade as shadeOf } from './foes.ts';
 import { FW, FH, SOLE, FRAMES } from './vesna.data.ts';
 import sheet from './vesna.png';
 import { GIFTS, ICONS, KINDS, SWARM_ICON } from './gifts.ts';
@@ -28,6 +29,7 @@ export function create(scene: Scene, x: number, y: number) {
   const tex = scene.textures.get('vesna');
   FRAMES.forEach((n, i) => tex.has(n) || tex.add(n, 0, i * FW, 0, FW, FH));
   const s = scene.add.image(x, y, 'vesna', 'idle0').setOrigin(0.5, SOLE / FH).setScale(0.5).setDepth(y).setBlendMode(prelit(scene));
+  const sh = scene.add.image(x, y - 1, shadeOf(scene, 30)).setScale(0.5).setDepth(y - 0.5); // the shade she stands in (foes.ts)
   return {
     s,
     show(pose: Pose, now: number) {
@@ -36,6 +38,7 @@ export function create(scene: Scene, x: number, y: number) {
     rise(k: number) {
       const sunk = Math.round((1 - k) * SOLE); // sheet rows still in the chest
       s.setY(y + sunk / 2).setCrop(0, 0, FW, SOLE - sunk + 1);
+      sh.setAlpha(k);
     },
   };
 }

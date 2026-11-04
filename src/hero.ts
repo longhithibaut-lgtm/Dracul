@@ -4,6 +4,7 @@ import * as Grand from './grand.data.ts';
 import * as Gait from './gait.ts';
 import * as Fx from './fx.ts';
 import { T } from './tuning.ts';
+import { shade } from './foes.ts';
 import grandSheet from './grand-hero.png';
 
 // How the hero looks: the validated « grand » vampire rendered from his 3D model (grand-hero.png,
@@ -58,14 +59,8 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
   const s = scene.physics.add.sprite(x, y, 'hero', 'down-idle0').setOrigin(0.5, (Grand.SOLE - 30) / Grand.FH).setScale(0.5);
   s.setSize(16, 12).setOffset(Grand.FW / 2 - 8, Grand.SOLE - 20).setBlendMode(prelit(scene))
     .setData('gait', { squash: Grand.SQUASH, ...Grand.GAIT }); // his walks, turned by the distance walked (gait.ts)
-  // A soft dark smudge on the floor under him; physics moves the sprite after update(), so it follows on POST_UPDATE.
-  if (!scene.textures.exists('hero-shadow')) {
-    const t = scene.textures.createCanvas('hero-shadow', 32, 32)!;
-    t.context.fillStyle = 'rgba(11,7,16,0.55)';
-    ['...xxxxxxxx...', '.xxxxxxxxxxxx.', 'xxxxxxxxxxxxxx', '.xxxxxxxxxxxx.', '...xxxxxxxx...'].forEach((r, j) => [...r].forEach((c, i) => c === 'x' && t.context.fillRect(9 + i, 24 + j, 1, 1)));
-    t.refresh();
-  }
-  const shadow = scene.add.image(x, y, 'hero-shadow');
+  // The shade he stands in, as the foes' (foes.ts shade()); physics moves the sprite after update(), so it follows on POST_UPDATE.
+  const shadow = scene.add.image(x, y, shade(scene, 30)).setScale(0.5);
   // His eyes' embers and the charged claw's, over the dark (dark.ts: unlit from depth 7980): a hot pixel in a dim cross.
   if (!scene.textures.exists('hero-ember')) {
     const t = scene.textures.createCanvas('hero-ember', 3, 3)!;
@@ -78,7 +73,7 @@ export function create(scene: Phaser.Scene, x: number, y: number): Phaser.Physic
   }
   const eyes = [0, 1].map(() => scene.add.image(x, y, 'hero-ember').setScale(0.5).setDepth(EMBERS).setVisible(false));
   const ember = scene.add.image(x, y, 'hero-ember').setDepth(EMBERS).setVisible(false);
-  const follow = () => shadow.setPosition(s.x, s.y).setDepth(s.depth - 0.5);
+  const follow = () => shadow.setPosition(s.x, s.y + 10).setDepth(s.depth - 0.5);
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, follow);
   s.once(Phaser.GameObjects.Events.DESTROY, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, follow));
   s.once(Phaser.GameObjects.Events.DESTROY, () => [...eyes, ember].forEach((e) => e.destroy()));
@@ -161,7 +156,7 @@ export function show(s: Phaser.Physics.Arcade.Sprite, look: HeroLook) {
   else s.clearTint();
   const blink = look.invulnerable && !look.hurt && Math.floor(now / 70) % 2 === 1;
   s.setAlpha(look.swarm ? 0 : look.dashing ? 0.85 : blink ? 0.25 : 1);
-  st.shadow.setAlpha(look.swarm ? 0 : look.dashing ? 0.45 : 1).setScale(look.dashing ? 0.75 : 1);
+  st.shadow.setAlpha(look.swarm ? 0 : look.dashing ? 0.45 : 1).setScale(look.dashing ? 0.375 : 0.5);
 }
 
 // Sheet px of this frame (customData) to room px, as dark.ts hangs his lantern.

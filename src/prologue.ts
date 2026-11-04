@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import * as Save from './save.ts';
+import * as Keys from './keys.ts';
 import * as Rats from './rats.ts';
 import * as Loot from './loot.ts';
 import * as Sfx from './sfx.ts';
@@ -97,13 +98,13 @@ export function play(c: Ctx, beat: Beat) {
 
   // Échap twice: the prologue passed (for those who played it before).
   let escAt = -1e9;
-  scene.input.keyboard!.on('keydown-ESC', () => {
+  scene.input.keyboard!.on('keydown-ESC', Keys.once(() => {
     if (scene.time.now - escAt < 2500) return finish(scene);
     escAt = scene.time.now;
     hud.title(LINES.skip, { ms: 2500 });
-  });
+  }));
   let fDown = () => {}; // what F does now
-  scene.input.keyboard!.on('keydown-F', (ev: KeyboardEvent) => !ev.repeat && fDown());
+  scene.input.keyboard!.on('keydown-F', Keys.once((ev: KeyboardEvent) => !ev.repeat && fDown()));
 
   // ---- the guide rat: it runs on its walk grid to a point, waits for him when he lags, goes on when he comes ----
   type Guide = { s: Phaser.GameObjects.Sprite; way: P[]; then?: () => void; heading: number; alone?: boolean }; // alone: it goes, waiting for no one
