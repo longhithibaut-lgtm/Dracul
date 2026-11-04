@@ -90,8 +90,19 @@ function floorAt(x, y) {
   }
   let f;
   const near = (d) => WALKS.some(([a, b]) => Y >= a - d && Y < b + d);
-  if (roofed(Y)) { const r = slabs(x, y, 44, 30, 3); f = { alb: mul(mix(r.c, G.grav, 0.25), 1.3), N: r.N, spec: 0.05 }; } // the walks' worn slabs
-  else if (near(4)) f = flags(x, y, 17, 12); // the drip course along each arcade
+  if (roofed(Y)) { // the walks' worn slabs: grass and moss in the joints, pitted and chipped, trodden pale down the middle
+    const r = slabs(x, y, 44, 30, 3), [a, b] = WALKS.find(([a, b]) => Y >= a && Y < b);
+    let c = mul(mix(r.c, G.grav, 0.25), 1.3), N = r.N;
+    if (r.e < 1.3) { if (vn(x / 3, y / 3, 52) > 0.42) c = mix(c, mix(G.olive, G.sick, vn(x / 2, y / 2, 53)), 0.45); }
+    else {
+      if (r.e < 2.8 && vn(x / 2.2, y / 2.2, 55 + (r.id & 3)) > 0.68) { c = mix(G.mortar, c, 0.45); N = [N[0] * 0.3, N[1] * 0.3, 1]; }
+      const p = vn(x * 1.3, y * 1.3, 56); if (p > 0.82) c = mul(c, 0.7); else if (p < 0.12) c = mul(c, 1.1);
+      c = mix(c, mul(c, 1.15), clamp(1 - Math.abs(Y - (a + b) / 2) / ((b - a) / 2)) * 0.5);
+      c = mix(c, mul(G.olive, 0.6), clamp((fbm(x / 20, y / 16, 3, 58) - 0.62) * 4) * 0.5); // moss creeping where the rain drips in
+    }
+    f = { alb: c, N, spec: 0.05 };
+  }
+  else if (near(4)) { f = flags(x, y, 17, 12); if (f.alb === G.mortar && vn(x / 3, y / 3, 59) > 0.4) f.alb = mix(G.mortar, G.olive, 0.5); } // the drip course along each arcade, moss in its joints
   else if (path(X, Y)) f = gravel(x, y);
   else if ([[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([i, j]) => path(X + i, Y + j))) f = { alb: mul(G.curb, 0.8 + 0.3 * h2(x / 12 | 0, y / 12 | 0, 3)), N: [0, 0, 1], spec: 0.04 }; // kerb
   else f = lawn(x, y);
