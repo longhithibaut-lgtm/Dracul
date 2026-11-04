@@ -26,13 +26,14 @@ const shot = async (name) => { await page.waitForTimeout(400); await run(() => w
 
 await page.goto(`http://localhost:${port}/?play`);
 await page.waitForFunction(() => window.game?.scene.isActive('room'));
-// The bot, in the page: the game stepped by hand; the hero walked by his keys (set down or up each frame).
+// The bot, in the page: the game stepped by hand; the hero walked by his keys (the arrows, pressed or let go as he turns).
 await run(() => {
   const g = window.game, S = () => g.scene.getScene('room');
   g.loop.sleep();
   window.t = g.loop.now;
   window.S = S;
-  const keys = (dx, dy) => { const k = S().keys; if (!k) return; k.D.isDown = dx > 0; k.A.isDown = dx < 0; k.S.isDown = dy > 0; k.W.isDown = dy < 0; };
+  const down = {}; // the arrows held, as keys.ts sees them (its window listeners): an event only when one changes
+  const keys = (dx, dy) => { for (const [k, on] of [['ArrowRight', dx > 0], ['ArrowLeft', dx < 0], ['ArrowDown', dy > 0], ['ArrowUp', dy < 0]]) if (!!down[k] !== on) { down[k] = on; window.dispatchEvent(new KeyboardEvent(on ? 'keydown' : 'keyup', { key: k, code: k })); } };
   window.keys = keys;
   window.play = (ms, each) => { for (let i = 0; i < Math.round(ms / (1000 / 60)); i++) { if (each?.() === true) break; g.headlessStep((window.t += 1000 / 60), 1000 / 60); S().cameras?.main?.preRender(); } }; // (the camera follows, and the zone streams round it, in its preRender) // (drawn only for a capture: software WebGL at 1080p is slow)
   window.draw = () => g.step((window.t += 1000 / 60), 1000 / 60);

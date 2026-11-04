@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, DEFAULTS, clashes, label, lookup, name, parse, rebind, serialize, slotLabel } from './keys.ts';
+import { ACTIONS, DEFAULTS, clashes, label, lookup, name, once, parse, rebind, serialize, slotLabel } from './keys.ts';
 
 describe('bindings', () => {
   it('defaults: every action, no clash, ZQSD and WASD and the arrows to move', () => {
@@ -48,5 +48,14 @@ describe('bindings', () => {
     expect(back.pause).toEqual(DEFAULTS.pause);
     expect(back.map).toEqual(DEFAULTS.map);
     expect(back.dash).toEqual([['Space'], ['Control']]);
+  });
+});
+
+describe('once', () => {
+  it("a key event handed again (Phaser's frame queue, run anew on each new event) is acted on once", () => {
+    const got: string[] = [], f = once((ev: { key: string }) => got.push(ev.key));
+    const up = { key: 'ArrowLeft' }, down = { key: 'f' }, fup = { key: 'f' };
+    for (const queue of [[up], [up, down], [up, down, fup]]) for (const ev of queue) f(ev); // as KeyboardPlugin.update does
+    expect(got).toEqual(['ArrowLeft', 'f', 'f']); // each event once; a second press of the same key is its own
   });
 });
