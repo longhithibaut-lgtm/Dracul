@@ -1,7 +1,7 @@
 // Scene: the whole refuge complex, in one of three progression states.
 // Env: STATE=debut|rat|milieu|complet (rat: Vesna alone freed, the game's refuge once she is), WIN="x0,row0,W,H" (native px), HERO=hall|crypt, OUT=name.
 // Screen row = 0.616 y - 0.788 z + 130 - row0 ; screen col = x - x0.
-import { post, haze, writePNG, L, hex, clamp, lerp, h2, vn, fbm, mix, mul, mulberry32, PALETTE } from './lib.mjs';
+import { post, haze, writePNG, L, hex, clamp, lerp, h2, vn, fbm, vn3, fbm3, mix, mul, mulberry32, sdRC, sdEll, PALETTE } from './lib.mjs';
 import { cam, C, R, G, ROOMS, makeEnv, envShadow, envAO, HT, OWN, KIND, PROF, PROFILES, NX, heightAt, roomAt, isFloor, floorDist } from './world.mjs';
 import { hero } from '../grand/hero.mjs';
 import { sconce, skull, pitBodies, cage, hangingCorpse, slumped } from '../grand/cast.mjs';
@@ -93,6 +93,47 @@ function station(c, x, y) {
   }
   return [c, glow];
 }
+// Every flag worn its own way (as the run rooms' crypts.mjs floor): pitted, chipped at its edges, some cracked; damp
+// in broad matte patches, salt blooming at the walls' feet.
+const SALT = L('#605a4c');
+function wear(f, x, y, c, N) {
+  if (f.e < 1.3) return [c, N];
+  if (f.e < 2.8 && vn(x / 2.2, y / 2.2, 55 + (f.id & 3)) > 0.68) { c = mix(C.mortar, c, 0.4); N = [N[0] * 0.3, N[1] * 0.3, 1]; } // a chipped edge
+  const p = vn(x * 1.3, y * 1.3, 56); if (p > 0.82) c = mul(c, 0.6); else if (p < 0.12) c = mul(c, 1.14); // pitted, grained
+  if (h2(f.id, 6, 77) < 0.12 && Math.abs(fbm(x / 11, y / 11, 2, 57 + (f.id & 7)) - 0.5) < 0.02) c = mul(C.mortar, 0.9); // a crack across it
+  const damp = fbm(x / 60, y / 46, 4, 51); if (damp > 0.58) c = mix(c, mul(c, 0.55), clamp((damp - 0.58) * 7) * 0.7);
+  const d = floorDist(x, y); if (d < 40 && vn(x / 1.7, y / 1.7, 58) > 0.45 + d / 60 && fbm(x / 30, y / 30, 2, 62) > 0.5) c = mix(c, SALT, 0.35);
+  return [c, N];
+}
+// Le Rongé's bed east of the basin, there from the first night: straw trodden flat, rags, a mangy hide, a dark stain
+// where he lies; and the rug the chest stands on (refuge.ts CHEST). World centres.
+const NEST = [1906, 1568], CHESTRUG = [1646, 1596, 0.08], RAGS = [L('#3c2a20'), L('#4a1a14'), L('#2e2c26'), L('#5a4632')];
+function nest(x, y) {
+  const u = (x - NEST[0]) / 44, v = (y - NEST[1]) / 30, r = Math.hypot(u, v) + (fbm(x / 5, y / 5, 3, 81) - 0.5) * 0.45;
+  if (r > 1) return null;
+  const a = 0.6 + (vn(x / 14, y / 14, 83) - 0.5) * 1.6, su = x * Math.cos(a) + y * Math.sin(a), sv = -x * Math.sin(a) + y * Math.cos(a);
+  let c = mix(mul(C.straw, 1.5), mul(C.straw, 0.45), clamp(vn(su * 0.1, sv * 1.4, 82) * 2 - 0.5)), N = [0, (vn(su * 0.12, sv * 1.1, 84) - 0.5) * 0.6, 1]; // straw strands
+  const rag = fbm(x / 9, y / 9, 3, 85);
+  if (rag > 0.6) { c = mix(RAGS[Math.floor(h2(Math.floor(x / 22), Math.floor(y / 16), 86) * 4)], C.grime, 0.25); if (((x + y) & 1) === 0) c = mul(c, 0.86); N = [(vn(x / 3, y / 6, 87) - 0.5) * 0.9, (vn(x / 6, y / 3, 88) - 0.5) * 0.9, 1]; } // rags
+  const hu = (x - NEST[0] - 8) / 24, hv = (y - NEST[1] + 2) / 15, hr = Math.hypot(hu, hv) + (vn(x / 3, y / 3, 89) - 0.5) * 0.35;
+  if (hr < 1) { c = hr > 0.86 ? L('#5a4a38') : mix(L('#3e3228'), L('#16120e'), clamp(vn(x * 0.7 + y * 0.3, y * 0.15, 90) * 1.6 - 0.3)); N = [(vn(x, y / 4, 91) - 0.5) * 0.8, (vn(x / 4, y, 92) - 0.5) * 0.4, 1]; } // the hide, its fur combed one way
+  if (Math.hypot(u + 0.15, v - 0.05) < 0.45 + (vn(x / 6, y / 6, 93) - 0.5) * 0.3) c = mix(c, C.bloodD, 0.35); // where he lies, and drips
+  return { c: mix(c, C.grime, clamp(r - 0.75) * 2), N };
+}
+/** The chest's rug: dark red wool, a border band and a lozenge, fringed at its ends, worn bald where it is trodden. */
+function chestRug(x, y) {
+  const [cx, cy, a] = CHESTRUG, u = (x - cx) * Math.cos(a) + (y - cy) * Math.sin(a), v = -(x - cx) * Math.sin(a) + (y - cy) * Math.cos(a);
+  const eu = 50 - Math.abs(u), ev = 31 - Math.abs(v);
+  if (ev < 0 || eu < -4 || (eu < 0 && (Math.floor(v) & 1))) return null; // (its fringe)
+  if (eu < 0) return { c: mix(C.rugB, C.grime, 0.5), N: [0, 0, 1] };
+  let c = mix(C.rug, C.rugD, clamp(fbm(x / 5, y / 5, 3, 94) * 1.6 - 0.3));
+  const e = Math.min(eu, ev), dia = Math.abs(u) / 34 + Math.abs(v) / 20;
+  if (e > 3 && e < 6.5) c = mix(c, C.rugB, 0.7); else if (e < 1.2) c = mul(C.rugD, 0.7);
+  if (Math.abs(dia - 0.8) < 0.07 || dia < 0.12) c = mix(c, C.rugB, 0.45);
+  c = mix(c, C.grime, clamp((vn(x / 8, y / 8, 95) - 0.5) * 2.5) * 0.6);
+  if (vn(x / 9, y / 9, 96) > 0.74) c = mix(c, C.stB, 0.4); // worn through
+  return { c, N: [0, 0, 1] };
+}
 function floorMat(x, y, z, room) {
   let c, N = [0, 0, 1], spec = 0.04, gloss = 12, wet = 0, emi = 0;
   const shut = sealed(room);
@@ -124,7 +165,9 @@ function floorMat(x, y, z, room) {
     const sl = slabAt(x, y); if (sl) { c = sl; N = [0, 0, 1]; }
     c = grime(c, x, y);
     const m = fbm(x / 26, y / 22, 4, 33); if (m > 0.66) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? C.mossL : C.moss, clamp((m - 0.66) * 4) * 0.7);
+    [c, N] = wear(f, x, y, c, N);
     [c, N] = litter(c, x, y, N);
+    if (room === R.HALL) { const n = nest(x, y) || chestRug(x, y); if (n) { c = n.c; N = n.N; } }
     let rr = null;
     if (room === R.HALL) rr = runner(x, y, 1800, 1150, 1500, 30) || runner(x, y, 1800, 1630, 2170, 30);
     else if (room === R.COR && x > 1700 && x < 1900) rr = runner(x, y, 1800, 770, 1170, 30);
@@ -352,6 +395,20 @@ if (S > 0) { const bc = [], r2 = mulberry32(3); const n = S === 1 ? 6 : 11; for 
   if (S === 2) for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + 0.6; bc.push([1800 + Math.cos(a) * 42, 1560 + Math.sin(a) * 42, 5, 3 + r2() * 5, 1.0]); } add('candlesB', candles2(bc), [0, 0, 0]);
   L_({ name: 'basin', p: [1810, 1612, 15], c: L('#e09a50'), I: S === 1 ? 3.2 : 5.5, r0: 60, R: 380, soft: 8, haze: 0.02, hazeR: 12, skip: ['candlesB'] });
   L_({ p: [1794, 1498, 42], c: L('#d88a44'), I: S === 1 ? 1.2 : 2.2, r0: 50, R: 260, soft: 8, skip: ['candlesB'] }); }
+// le Rongé's bed, heaped a little over its floor (nest()): straw and rags in a low mound, the hide on top
+add('nestBed', { sdf: (x, y, z) => Math.max(Math.hypot(x / 38, y / 25) - 1 + (fbm(x / 5, y / 5, 3, 81) - 0.5) * 0.4 + clamp(z / 4.5) * 0.35 - 0.12 * vn(x / 4, y / 4, 97), -z, z - 5),
+  mat: (m, x, y, z) => { const n = nest(x + NEST[0], y + NEST[1]); return { alb: n ? n.c : C.straw, n: n?.N, wrap: 0.45, spec: 0.03 }; }, bounds: [-46, -32, -1, 46, 32, 6], step: 0.5 }, [NEST[0], NEST[1], 0]);
+// le Rongé's corner: tallow stubs by his bed, his bowl, what he gnawed; candles burnt down by the chest
+add('candlesR', candles2([[1944, 1536, 0, 6, 1.4, 0.3, 0.1], [1950, 1542, 0, 3, 1.3], [1938, 1544, 0, 9, 1.5, -0.4, 0.2], [1590, 1566, 0, 7, 1.4, 0.2, 0], [1584, 1574, 0, 4, 1.3], [1596, 1576, 0, 11, 1.5, -0.3, 0.3], [1578, 1568, 0, 2, 1.2, 0, 0, 1]]), [0, 0, 0]);
+L_({ p: [1944, 1548, 16], c: WARM, I: 2.6, r0: 42, R: 320, soft: 4, haze: 0.02, hazeR: 5, skip: ['candlesR', 'leavings'] });
+L_({ p: [1588, 1578, 18], c: WARM, I: 2.8, r0: 44, R: 320, soft: 4, haze: 0.02, hazeR: 5, skip: ['candlesR'] });
+add('leavings', { sdf: (x, y, z) => {
+  const r = Math.hypot(x - 8, y - 4); let d = Math.max(Math.abs(Math.hypot(r, (z - 6) * 1.5) - 7) - 0.9, z - 5.5, -z); // his wooden bowl
+  d = Math.min(d, sdRC(x, y, z, [-14, 10, 1.2], [-3, 14, 1.4], 1.3, 1.0), sdEll(x, y, z, -15, 9.5, 1.6, 2.2, 2.2, 1.8), sdEll(x, y, z, -2, 14.5, 1.6, 2, 2, 1.7)); // a long bone gnawed through
+  d = Math.min(d, sdRC(x, y, z, [16, -6, 1], [24, -2, 1], 1, 0.9), sdRC(x, y, z, [20, -10, 1], [18, 0, 1.2], 0.8, 0.8)); // ribs
+  return d; },
+  mat: (m, x, y, z) => Math.hypot(x - 8, y - 4) < 9 && z > 0.3 ? { alb: mix(L('#3a2818'), L('#1c130b'), vn3(x * 0.3, y * 2, z, 4)), spec: 0.15, gloss: 25 } : { alb: mix(L('#a89a7a'), L('#4e4636'), clamp(vn3(x * 0.5, y * 0.5, z * 0.5, 6) * 1.4 - 0.2)), spec: 0.1, gloss: 20 },
+  bounds: [-19, -12, -1, 27, 18, 9], step: 0.6 }, [1880, 1590, 0], 0.2);
 const HBZ = [[1330, 1330, S >= 2], [2270, 1330, S >= 1], [1290, 1900, S >= 2], [2270, 1960, S >= 1]];
 HBZ.forEach(([x, y, lit], k) => { add('brazierH' + k, brazier2(lit), [x, y, 0]); if (lit) L_({ p: [x, y, 40], c: FIRE, I: 4.0, r0: 50, R: 420, pad: 6, soft: 6, haze: 0.035, hazeR: 10, skip: ['brazierH' + k] }); });
 // the path of every night: candle stubs along the runner, the corridor candles, two braziers at the stairs

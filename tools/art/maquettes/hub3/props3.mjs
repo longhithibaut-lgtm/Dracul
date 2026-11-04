@@ -465,6 +465,7 @@ export function basin2(level = 1) { // level 0: dry, black crust; 0.5: a puddle 
     if (z < 9.5 && vn3(x * 0.1, y * 0.1, 0, 41) > 0.5) c = mix(c, C.bloodD, level ? 0.75 : 0.4);
     if (z > 11 && z < 12.2 && r > 29) c = mul(c, 0.45);
     if (!level) c = mix(c, C.dust, 0.3);
+    if (r < 30 && z > 11 && z < 24) { const t = (z + 0.6 * vn(a * 8, 0, 9)) % 3.1; if (t < 0.7) c = mix(c, L('#2a0c0a'), level ? 0.5 : 0.7); } // tide lines of blood dried as it sank
     return { alb: c, spec: 0.06, gloss: 12 };
   };
   return { sdf, mat, bounds: boundsOf(parts, 2), step: 0.7 };

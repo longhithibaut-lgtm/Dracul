@@ -7,7 +7,7 @@ import { pitBones } from '../maquettes/hub/props.mjs';
 import { skull } from '../maquettes/grand/cast.mjs';
 import { sdEll, clamp, vn, vn3, fbm3, h2, mix, mul, mulberry32 } from '../maquettes/hub3/lib.mjs';
 import { wx, wy, wz, rx, ry, C, block, stone3, segDist } from './common.mjs';
-import { CX, CY, FX0, FX1, plan, oculi, floor, ground, pitShadow, shell, furnish, candles, lights, scene as stage, shafts } from './crypts.mjs';
+import { CX, CY, FX0, FX1, plan, oculi, floor, ground, pitShadow, shell, furnish, candles, chains, ledges, lights, scene as stage, shafts } from './crypts.mjs';
 export { PAL, POST } from './crypts.mjs';
 
 const MEDS = [[CY, 0.68]];
@@ -61,6 +61,7 @@ function broken([X, Y], x, y) {
 
 const HOLES = oculi([[CY, 0.68], [356, 0.5]]);
 const env = ground(floor({
+  wax: CANDLES,
   meds: MEDS, under: broken,
   ledgers: [[200, 260, 1], [300, 280, 1], [180, 500, 0], [330, 590, 1]],
   pools: [[98, 236, 10, 5], [372, 432, 9, 4], [222, 196, 4, 3], [330, 150, 3, 2], [236, 420, 4, 3], [120, 300, 3, 2], [330, 590, 4, 3]],
@@ -91,6 +92,8 @@ for (const b of PITS) for (let k = 0; k < 3; k++) {
 for (const [x, y, a] of [[26, 300, 0.4], [30, 410, 2.2], [448, 238, -0.7], [452, 600, 1.4]]) S.add('skull', skull(), [wx(x), wy(y), 0], a); // by the side walls
 S.add('bones', pitBones(6), [wx(26), wy(92), 0], 0.9); S.add('bones', pitBones(10), [wx(452), wy(470), 0], -1.1);
 candles(room, CANDLES);
+chains(room);
+ledges(room, 3);
 lights(room, PROPS, CANDLES);
 
 const SC = stage(S, env, pitShadow(pit));

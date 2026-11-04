@@ -5,18 +5,18 @@
 // the front wall over the stairs, an unseen vault pierced by oculi above the floor's medallions; the refuge's grimy
 // flagstones, medallions, grave slabs, old blood; the props on their footprints (pillars with their dying torches,
 // broken stumps, braziers, coffins on stone biers); the moon, fills, fires and candles; the moon's shafts in the air.
-import { sdBox, clamp, vn, fbm, h2, L, hex, mix, mul, mulberry32, PALETTE } from '../maquettes/hub3/lib.mjs';
-import { pillar, portcullis, sconce } from '../maquettes/grand/cast.mjs';
+import { sdBox, sdRC, clamp, vn, fbm, vn3, fbm3, h2, L, hex, mix, mul, mulberry32, PALETTE } from '../maquettes/hub3/lib.mjs';
+import { pillar, portcullis, sconce, skull } from '../maquettes/grand/cast.mjs';
 import { oldCoffin } from '../maquettes/hub3/props2.mjs';
 import { candles2, brazier2 } from '../maquettes/hub3/props3.mjs';
-import { cam, SN, CS, wx, wy, wz, rx, ry, C, scaled, broken, block, stage, flags, grime, ashlar, ossuary, stain, segDist, stone3 } from './common.mjs';
+import { cam, SN, CS, wx, wy, wz, rx, ry, C, scaled, broken, block, stage, flags, grime, ashlar, ossuary, stain, segDist, stone3, ironMat } from './common.mjs';
 
 export const RW = 480, RH = 638, FX0 = 12, FX1 = 468, FY0 = 64, FY1 = RH - 14, CX = 240, CY = 160;
 export const W = 2 * RW, H = 2 * RH, YW = wy(FY0); // the back wall's face
 /** The two exits' middles (room px x), in the back wall either side of the lancets: the door the hero walks out of
  *  picks the next room's reward (RoomScene). */
 export const EXITS = [CX - 100, CX + 100];
-export const MOONC = L('#9ab0be'), FIRE = L('#e07a30'), CANDLE = L('#d8b070');
+export const MOONC = L('#9ab0be'), FIRE = L('#e8782c'), CANDLE = L('#e6a458'); // the fires warm: amber candles, orange coals
 const BRAZIER_TOP = 36; // z of the bowl's rim, where its flame stands
 const SCONCE_Z = 100; // a dying torch on each whole pillar's face, this high
 const row = (y, z) => Math.round(y * SN / 2 - z * CS / 2); // the screen row (room px) of a world point
@@ -75,10 +75,21 @@ function ledgerAt(ledgers, x, y) { // a grave slab set in the floor: raised edge
   }
   return null;
 }
+// What the floor is strewn with besides blood: wax, the salt damp leaves, straw, rags.
+const WAX = L('#746a58'), WAXD = L('#3e3628'), SALT = L('#605a4c'), STRAW = L('#76663a'), RAG = L('#3c2a20'), RAGL = L('#5a4632');
+/** How worn by feet a floor room px is (0..1): the lane up the middle from the stairs, forking to each exit. */
+function trodden(X, Y) {
+  let d = Math.abs(X - CX);
+  for (const g of EXITS) d = Math.min(d, Math.abs(X - (g + (CX - g) * clamp((Y - FY0) / 150))));
+  return clamp(1 - d / 24) * clamp((Y - FY0) / 8);
+}
 /** A crypt floor: `meds` medallions down the middle ([row, size]), `ledgers` grave slabs (top left room px, broken),
- *  old blood `pools` (room px: x, y, rx, ry) and `drags` (polylines); `under(r, x, y)`: what a room lays on it instead of
- *  the flags ({ c, N, wet }, or nothing), before the blood. */
-export function floor({ meds = [], ledgers = [], pools = [], drags = [], under }) {
+ *  old blood `pools` (room px: x, y, rx, ry) and `drags` (polylines), `wax` the candle clusters' pools of wax ([x, y, n]
+ *  as candles() takes them); `under(r, x, y)`: what a room lays on it instead of the flags ({ c, N, wet }, or nothing),
+ *  before the blood. Every flag worn its own way: pitted, chipped at its edges, some cracked or sunk askew; damp in broad
+ *  patches (darker, wet, water standing in the sunk flags), moss in the damp joints, salt blooming at the walls' feet; the
+ *  lane the feet keep to worn paler and smooth; grit, straw, rags, droppings. */
+export function floor({ meds = [], ledgers = [], pools = [], drags = [], wax = [], under }) {
   return (x, y) => {
     const r = [rx(x), ry(y)];
     if (r[0] < FX0 - 12 || r[0] > FX1 + 12) return { alb: C.void, N: [0, 0, 1], noAO: true };
@@ -87,13 +98,39 @@ export function floor({ meds = [], ledgers = [], pools = [], drags = [], under }
       return { alb: mul(mix(C.stB, C.stC, vn(x / 6, y / 6, 3)), (edge ? 1.2 : 0.8) * Math.max(0.1, 1 - k * 0.3)), N: edge ? [0, 0.4, 1] : [0, 0, 1] };
     }
     const f = flags(x, y, 46, 34, 7);
-    let c = f.c, N = f.N, wet = 0;
+    let c = f.c, N = f.N, wet = 0, spec = 0.04, gloss = 12;
+    const damp = fbm(x / 60, y / 46, 4, 51), sunk = f.e >= 1.3 && h2(f.id, 3, 77) < 0.16;
+    if (f.e < 1.3) { // the joints: moss and black wet in the damp, crumbled lime elsewhere
+      if (damp > 0.6 && vn(x / 3, y / 3, 52) > 0.5) c = mix(C.mortar, mul(C.moss, 0.6), 0.15 + 0.2 * vn(x / 2, y / 2, 53));
+      else if (vn(x / 4, y / 4, 54) > 0.8) c = mix(C.mortar, C.stC, 0.22);
+    } else {
+      if (sunk) N = [N[0] + (h2(f.id, 4, 77) - 0.5) * 0.35, N[1] + (h2(f.id, 5, 77) - 0.5) * 0.35, 1];
+      if (f.e < 2.8 && vn(x / 2.2, y / 2.2, 55 + (f.id & 3)) > 0.68) { c = mix(C.mortar, c, 0.4); N = [N[0] * 0.3, N[1] * 0.3, 1]; } // a chipped edge
+      const p = vn(x * 1.3, y * 1.3, 56); if (p > 0.82) c = mul(c, 0.6); else if (p < 0.12) c = mul(c, 1.14); // pitted, grained
+      if (h2(f.id, 6, 77) < 0.12 && Math.abs(fbm(x / 11, y / 11, 2, 57 + (f.id & 7)) - 0.5) < 0.02) c = mul(C.mortar, 0.9); // a crack across it
+    }
     c = grime(c, x, y);
     const md = meds.map(([my, s]) => medallion(x, y, my, s)).find(Boolean), lg = !md && ledgerAt(ledgers, x, y), u = !md && !lg && under?.(r, x, y);
     if (md) { c = md.c; if (md.N) N = md.N; wet = md.wet; } else if (lg) { c = lg.c; N = lg.N; } else if (u) { c = u.c; N = u.N ?? N; wet = u.wet ?? 0; }
-    const m = fbm(x / 26, y / 22, 4, 33); if (m > 0.68) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? C.mossL : C.moss, clamp((m - 0.68) * 4) * 0.6);
+    else { // worn by the feet: paler, the grime scuffed off, a dull sheen
+      const t = trodden(...r);
+      if (t > 0 && f.e >= 1.3) { c = mix(c, mul(f.c, 1.18), t * 0.55); spec = 0.04 + 0.12 * t; gloss = 22; }
+    }
+    const m = fbm(x / 26, y / 22, 4, 33) + (damp - 0.5) * 0.5; if (m > 0.66) c = mix(c, h2(x | 0, y | 0, 5) < 0.3 ? C.mossL : C.moss, clamp((m - 0.66) * 4) * 0.65);
+    // the damp: darker and wet, black water standing in a sunk flag
+    if (damp > 0.58) { const k = clamp((damp - 0.58) * 7); c = mix(c, mul(c, 0.55), k * 0.75); spec = Math.max(spec, 0.08 * k); gloss = 30; }
+    if (damp > 0.64 && sunk && !md) { c = mix(L('#121410'), c, 0.45); N = [0, 0, 1]; wet = 1; }
     // the dark creeps in from the walls
     const dw = Math.min(r[0] - FX0, FX1 - r[0], (r[1] - FY0) * 1.6); if (dw < 14) c = mix(c, C.grime, (1 - dw / 14) * 0.5);
+    if (dw < 26 && vn(x / 1.7, y / 1.7, 58) > 0.45 + dw / 40 && fbm(x / 30, y / 30, 2, 62) > 0.5) c = mix(c, SALT, 0.35); // salt blooming at the walls' feet
+    // wax run from the candles into pools, spattered round
+    for (const [wx0, wy0, n] of wax) {
+      const dx = r[0] - (wx0 + n * 1.5), dy = r[1] - wy0 - 0.6, d = Math.hypot(dx, dy * 1.5), R = 1.6 + n * 0.7;
+      if (d > R * 2.2) continue;
+      const v = 1 - d / R + (vn(x / 1.6, y / 1.6, 59) - 0.5) * 0.9;
+      if (v > 0) { c = mix(WAXD, WAX, clamp(v * 1.8) * (0.7 + 0.3 * vn(x, y, 60))); N = [0, 0, 1]; spec = 0.05; gloss = 20; wet = 0; }
+      else if (h2(x * 0.8 | 0, y * 0.8 | 0, 61) < 0.06 * (1 - d / (R * 2.2))) c = mix(WAX, c, 0.2);
+    }
     let a = 0;
     for (const [px, py, sx, sy] of pools) a = Math.max(a, stain(r[0], r[1], px, py, sx * 1.3, sy * 1.3, 0.85, px + py));
     for (const d of drags) for (let k = 0; k < d.length - 1; k++) { const t = segDist(r[0], r[1], d[k], d[k + 1]); if (t < 2.4 && vn(x / 2.5, y / 2.5, 36 + k) > 0.3 + t / 6) a = Math.max(a, 0.8); }
@@ -102,7 +139,17 @@ export function floor({ meds = [], ledgers = [], pools = [], drags = [], under }
     { const cx = Math.floor(x / 7), cy = Math.floor(y / 7);
       if (h2(cx, cy, 300) < 0.012) { const an = h2(cx, cy, 301) * 3.14, lx = x - (cx * 7 + 3.5), ly = y - (cy * 7 + 3.5), u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an);
         if (Math.abs(v) < 0.6 && Math.abs(u) < 3) { c = C.bone; N = [0, 0, 1]; } } }
-    return { alb: c, N, spec: wet > 0.2 ? 0.55 * wet : 0.04, gloss: wet > 0.2 ? 70 : 12 };
+    // grit, straw, droppings, off the medallions
+    if (!md) { const cx = Math.floor(x / 6), cy = Math.floor(y / 6), q = h2(cx, cy, 310), lx = x - cx * 6 - 3, ly = (y - cy * 6 - 3) * 0.8;
+      if (q < 0.03) { const rr = 0.9 + h2(cx, cy, 311) * 1.1; if (Math.hypot(lx, ly) < rr) { c = mul(mix(C.stB, C.stC, h2(cx, cy, 312)), 0.8 + h2(cx, cy, 313) * 0.6); N = [lx / rr * 0.7, ly / rr * 0.7, 1]; } } // a pebble
+      else if (q < 0.045) { const an = h2(cx, cy, 314) * 3.14, u = lx * Math.cos(an) + ly * Math.sin(an), v = -lx * Math.sin(an) + ly * Math.cos(an) + Math.sin(u * 0.8) * 0.4; if (Math.abs(v) < 0.45 && Math.abs(u) < 3.5) c = mix(STRAW, mul(STRAW, 0.55), h2(cx, cy, 315)); } // straw
+      else if (q < 0.05 && Math.hypot(lx * 1.6, ly) < 0.8) c = L('#0e0b08'); } // droppings
+    // a few rags rotting where they were dropped
+    { const cx = Math.floor(x / 60), cy = Math.floor(y / 44);
+      if (h2(cx, cy, 320) < 0.1 && !md) { const lx = x - (cx + 0.5) * 60, ly = y - (cy + 0.5) * 44, v = 1 - Math.hypot(lx / 11, ly / 8) + (fbm(x / 4, y / 4, 3, cx * 7 + cy) - 0.5) * 1.2;
+        if (v > 0) { c = mix(mix(RAG, RAGL, vn(x / 3, y / 3, 321)), C.grime, 0.3); if ((x + y) % 2 < 0.5) c = mul(c, 0.85); N = [(vn(x / 3, y / 5, 322) - 0.5) * 0.8, (vn(x / 5, y / 3, 323) - 0.5) * 0.8, 1]; spec = 0.02; } } }
+    if (wet > 0.2) { spec = wet >= 1 ? 0.1 : 0.4 * wet; gloss = wet >= 1 ? 40 : 70; } // (a sharp white glint snaps to the palette's sick green)
+    return { alb: c, N, spec, gloss };
   };
 }
 /** The scene's ground: the floor plane, or (`pit(x, y)`, room px: true in a hole) down a pit's sheer sides into the dark. */
@@ -159,11 +206,21 @@ function wallMat(m, x, y, z, nx, ny, nz) {
   const nearL = LANCETS.some((c) => Math.abs(x - c) < 24) && z > 40;
   if (!nearL && (Math.abs(x - wx(61)) < 30 || Math.abs(x - wx(419)) < 30) && z > 22 && z < 150) r = ossuary(x, z); // the ossuaries
   if (Math.abs(u) < GATE_HW + 12 && z < GATE_Z + 64 && !inPointed(u, z, GATE_HW, GATE_Z, 52)) { const k = inPointed(u, z, GATE_HW + 10, GATE_Z, 62); if (k) r = { c: mul(mix(C.stB, C.wall, 0.4), (Math.floor(Math.atan2(z - GATE_Z, u) * 4) & 1) ? 0.8 : 1.05), N: [0, 1, 0] }; } // voussoirs
-  let c = r.c;
+  let c = r.c, N = r.N, spec = 0.03;
+  const joint = c === C.mortar;
+  if (!joint && !r.ao) { // ashlar: chipped arrises (paler, fresh), a crack running through the courses
+    if (vn(x / 3, z / 3, 64) > 0.8) { c = mix(c, C.stC, 0.5); N = [(vn(x / 2, z / 2, 65) - 0.5) * 0.8, 1, (vn(z / 2, x / 2, 66) - 0.5) * 0.8]; }
+    if (Math.abs(fbm(x / 22, z / 30, 2, 67) - 0.5) < 0.012 && vn(x / 60, 0, 68) > 0.45) c = C.mortar;
+  }
   c = mix(c, C.grime, clamp((vn(x / 9, z / 60, 2) - 0.4) * 2) * 0.6);
+  // damp seeping down from the vault in dark wet runs
+  const run = vn(x / 3.5, z / 140, 61) * 0.75 + vn(x / 1.4, z / 30, 62) * 0.25;
+  if (run > 0.6) { const k = clamp((run - 0.6) * 5); c = mix(c, mul(c, 0.45), k * 0.8); spec = 0.03 + 0.25 * k; }
   if (z < 26) c = mix(c, C.moss, clamp(fbm(x / 14, z / 10, 3, 5) - 0.45) * 2 * (1 - z / 26)); // damp at the foot
+  if (joint && z < 60 && vn(x / 4, z / 4, 69) > 0.45) c = mix(c, C.mossL, 0.35 * (1 - z / 60)); // moss in the low joints
+  if (z < 34 && vn(x / 24, 0, 70) > 0.5 && vn(x / 2.5, z / 2.5, 63) > 0.4 + z / 45) c = mix(c, SALT, 0.4); // salt crusted where the damp dries
   if (z < 40 && vn(x / 5, z / 12, 9) > 0.62 && h2(Math.floor(x / 30), 0, 9) < 0.4) c = mix(c, C.bloodD, 0.7); // smears where something was dragged in
-  return { alb: mul(c, clamp(1.15 - z / 260)), N: r.N, spec: 0.03, gloss: 10, ao: (r.ao || 1) * (0.55 + 0.45 * clamp(z / 22)) };
+  return { alb: mul(c, clamp(1.15 - z / 260)), N, spec, gloss: spec > 0.1 ? 40 : 10, ao: (r.ao || 1) * (0.55 + 0.45 * clamp(z / 22)) };
 }
 function sideSdf(x, y, z) { // the side walls, cut low at the room's edges so their tops catch the light, and the front wall with the stairs' gap
   const side = Math.min(sdBox(x, y, z, wx(FX0 - 6), wy(RH / 2), 30, 12, wy(RH / 2) + 40, 30), sdBox(x, y, z, wx(FX1 + 6), wy(RH / 2), 30, 12, wy(RH / 2) + 40, 30));
@@ -238,19 +295,112 @@ export function furnish({ S, R }, props) {
       const top = wz(o.tall - 10), f = o.flip ? -1 : 1;
       add('stump', broken(pale(pillar(48, 34, top + 30)), (x, y) => top - 10 + f * x * 0.35 + 9 * vn(x / 5, y / 5, o.x)), [X, Y, 0]);
       for (let k = 0; k < 4; k++) add('rubble', block(-5, -4, 0, 5, 4, 6 + R() * 4, (m, x, y, z) => ({ alb: stone3(x + o.x, y, z) }), 1.5), [X + f * (30 + R() * 24), Y + (R() - 0.3) * 30, 0], R() * 3);
+      if (h2(o.x, o.y, 81) < 0.6) stumpCandles(S, o, X, Y, (x, y) => top - 10 + f * x * 0.35 + 9 * vn(x / 5, y / 5, o.x));
     } else if (o.kind === 'brazier') add('brazier', brazier2(true), [X, wy(o.y - 4), 0]);
     else if (o.kind === 'coffin' || o.kind === 'coffinOpen') {
       const open = o.kind === 'coffinOpen', side = o.x < CX ? -1 : 1, cx = open ? X - side * 12 : X;
       add('bier', block(-46, -20, 0, 46, 20, 9, (m, x, y, z) => ({ alb: mul(stone3(x + o.x * 3, y, z, C.stB), 1.4) }), 1.5), [cx, Y, 0]);
       add(open ? 'coffinOpen' : 'coffin', pale(scaled(oldCoffin(3 + o.x % 7, open ? 1 + (o.y > 300 ? 1 : 0) : 0), 0.86, 1.15, 1.1), 1.5), [cx, Y, 9], (R() - 0.5) * 0.06);
+      add('shroud', open ? spilt(o.x) : pall(o.x), [cx + (open ? side * 8 : 0), Y, open ? 0 : 9], open ? 0 : (h2(o.x, o.y, 86) - 0.5) * 0.3); // a pall over the shut one; the open one's shroud dragged out over the bier
       // candles burnt down on the lid, or on the bier's edge by an open one
       const cz = open ? 9 : 9 + 28, cs = [[-20, -4, 7], [-12, 3, 4], [24, -2, 9]].map(([dx, dy, h], k) => [cx + dx * (open ? -side : 1) + (open ? side * 10 : 0), Y + dy + (open ? 14 : 0), cz, h, 1.2, (h2(o.x, k, 7) - 0.5) * 0.6, 0]);
       add('candlesT', candles2(open ? cs.slice(0, 2) : cs), [0, 0, 0]);
-      light({ p: [cx, Y + (open ? 14 : 0), cz + 14], c: CANDLE, I: 1.6, r0: 20, R: 240, soft: 4, pad: 3, haze: 0.012, hazeR: 3, skip: ['candlesT'] });
+      light({ p: [cx, Y + (open ? 14 : 0), cz + 14], c: CANDLE, I: 1.9, r0: 24, R: 240, soft: 4, pad: 3, haze: 0.012, hazeR: 3, skip: ['candlesT'] });
       if (open) add('lid', block(-42, -15, 0, 42, 15, 3, (m, x, y, z) => ({ alb: mix(mix(C.wood, C.woodD, vn(x * 0.08, y * 1.2, 4)), L('#3a3a2a'), clamp(vn(x * 0.2, y * 0.2, 9) - 0.5)) }), 1),
         [X + side * 18, Y + 8, 33], side * 0.3); // pushed aside
     }
   }
+}
+// ---------- what the props are dressed with: cloth, wax, iron ----------
+const LINEN = L('#706a5e'), LINEND = L('#38322a'), MOULD = L('#3a3e2a');
+/** Old linen: yellowed, a coarse weave, mould and old blood soaked up from below. */
+const linen = (seed) => (m, x, y, z) => {
+  let c = mix(LINEN, LINEND, clamp(fbm3(x * 0.15, y * 0.15, z * 0.15, 3, seed) * 1.7 - 0.45));
+  if (((Math.floor(x * 1.6) + Math.floor(z * 1.6 + y * 1.6)) & 1) === 0) c = mul(c, 0.88);
+  c = mix(c, MOULD, clamp((vn3(x * 0.25, y * 0.25, z * 0.25, seed + 1) - 0.62) * 3) * 0.7);
+  c = mix(c, C.bloodD, clamp((vn3(x * 0.12, y * 0.2, z * 0.3, seed + 2) - 0.6) * 3) * clamp(1.2 - z / 30) * 0.8);
+  return { alb: c, wrap: 0.45, spec: 0.02 };
+};
+/** A pall laid over the middle of a shut coffin's lid (coffin local, the bier's top at z 0), hanging down both sides,
+ *  its hem torn. */
+function pall(seed) {
+  const hem = (x, y) => 4 + 5 * vn(x / 4, y, seed) + (vn(x / 1.5, y, seed + 1) > 0.7 ? 3 : 0);
+  return {
+    sdf: (x, y, z) => { const fold = (0.9 * Math.sin(x * 0.9 + 0.3 * Math.sin(z * 0.4)) + 0.4 * Math.sin(x * 2.1)) * clamp((24 - z) / 8) + 0.25 * Math.sin(x * 1.3 + y * 0.8) * clamp((z - 22) / 3);
+      return Math.max(Math.abs(sdBox(x, y, z, 2, 0, 13, 12, 18.2 + fold, 12.4, 1.5)) - 0.6, Math.abs(x - 2 - 1.5 * Math.sin(y * 0.15)) - 11.2 - 1.6 * vn(y / 3, z / 3, seed + 4), hem(x, y) - z); },
+    mat: linen(seed), bounds: [-13, -20.5, 3, 17, 20.5, 27], step: 0.6,
+  };
+}
+/** An open coffin's shroud dragged out over the bier's front edge and fallen in a heap on the floor. */
+function spilt(seed) {
+  return {
+    sdf: (x, y, z) => {
+      const hang = Math.max(Math.abs(y - 21.2 - 0.4 * Math.sin(x * 0.5)) - 0.6, Math.abs(x) - 13 + 3 * vn(z / 3, 0, seed), z - 9.6, -z);
+      const top = Math.max(Math.abs(z - 9.6) - 0.6, Math.abs(x) - 12, Math.abs(y - 14) - 7);
+      const heap = Math.max(Math.hypot(x / 15, (y - 27) / 6) - 1 + 0.25 * vn(x / 3, y / 3, seed), z - 1.6 - 1.2 * vn(x / 4, y / 2, seed + 3), -z);
+      return Math.min(hang, top, heap * 4);
+    },
+    mat: linen(seed + 5), bounds: [-17, 6, -0.5, 17, 34, 11], step: 0.6,
+  };
+}
+/** Candles stuck on a broken stump's top `top(x, y)` (stump local), their wax run down its south face, lit. */
+function stumpCandles(S, o, X, Y, top) {
+  const spots = [[-7, -3, 9], [1, 4, 5], [8, -1, 12], [-2, -6, 4]].slice(0, 2 + (o.x % 3)), cs = [], runs = [];
+  for (const [dx, dy, h] of spots) cs.push([X + dx, Y + dy, top(dx, dy) - 0.4, h, 1.3, (h2(o.x, dx, 5) - 0.5) * 0.6, 0]);
+  for (let k = 0, x = -15 + h2(o.x, 9, 82) * 4; x < 15; k++, x += 3 + h2(o.x, k, 82) * 9) runs.push([x, top(x, 16.5) - 0.5, 2 + h2(o.x, k, 83) ** 2 * 16, 0.8 + h2(o.x, k, 84) * 0.8]); // uneven: a few long, most short
+  S.add('candlesS', candles2(cs), [0, 0, 0]);
+  S.add('waxRuns', { sdf: (x, y, z) => { let d = 1e9; for (const [rx0, z0, l, w] of runs) d = Math.min(d, sdRC(x, y, z, [rx0, 17.2, z0], [rx0 + 0.6, 17.6, z0 - l], 0.6 + w, 0.3 + w * 0.4)); return d; },
+    mat: () => ({ alb: C.wax, sss: 0.6, wrap: 0.5, spec: 0.25, gloss: 35 }), bounds: [-17, 14, 0, 17, 20, top(0, 0) + 14], step: 0.7 }, [X, Y, 0]);
+  S.light({ p: [X, Y + 2, top(0, 0) + 14], c: CANDLE, I: 0.9 + 0.35 * spots.length, r0: 24, R: 240, soft: 4, pad: 3, haze: 0.012, hazeR: 3, skip: ['candlesS', 'waxRuns'] });
+}
+/** An iron chain hung on the back wall from a ring bolt at height z0, ending in an open manacle. */
+function chain(n, z0, seed) {
+  return {
+    sdf: (x, y, z) => {
+      const sway = (z0 - z) * 0.04 * (h2(seed, 0, 84) - 0.5);
+      let d = Math.hypot(Math.hypot(x, z - z0 - 2) - 3, y - 1) - 0.8; // the ring bolt
+      for (let k = 0; k < n; k++) {
+        const cz = z0 - 3 - k * 4.4, lx = x - sway, lz = (z - cz) * 0.72;
+        d = Math.min(d, k & 1 ? Math.hypot(Math.hypot(y - 2, lz) - 1.8, lx) - 0.55 : Math.hypot(Math.hypot(lx, lz) - 1.8, y - 2) - 0.55);
+      }
+      const mz = z0 - 6 - n * 4.4; // the manacle, open
+      return Math.min(d, Math.max(Math.hypot(Math.hypot(x - sway, (z - mz) * 1.1) - 3.4, y - 2) - 0.95, -(z - mz + 1.5) - Math.abs(x - sway) * 0.4));
+    },
+    mat: (m, x, y, z) => ironMat(x, y + seed, z), bounds: [-6, -1, z0 - 14 - n * 4.4, 6, 5, z0 + 6], step: 0.5,
+  };
+}
+/** Chains on the back wall's bare stretches, between the ossuaries, gates, pilasters and lancets (room px x). */
+export function chains({ S }, xs = [28, 104, 178, 302, 376, 452]) {
+  xs.forEach((x, k) => S.add('chain', chain(9 + (k * 5) % 7, 128 + (k % 3) * 10, k + 1), [wx(x), YW + 1, 0]));
+}
+/** A funerary urn of dark clay, `broken`: its neck snapped off, a shard by it. */
+function urn(seed, broken) {
+  const top = broken ? 9 + 4 * h2(seed, 1, 85) : 17;
+  return {
+    sdf: (x, y, z) => {
+      const r = Math.hypot(x, y), prof = z < 13 ? 3.2 + 3.4 * Math.sin(clamp(z / 13) * Math.PI * 0.95) : 2.4 + (z > 16 ? 0.9 : 0);
+      let d = Math.max((r - prof) * 0.8, -z, z - top + (broken ? 1.2 * vn(x, y, seed) : 0));
+      if (broken) d = Math.max(d, -(r - prof + 1.1)); // hollow
+      return broken ? Math.min(d, Math.max(Math.hypot(x - 8, y - 1) - 2.6, -z, z - 1.2)) : d;
+    },
+    mat: (m, x, y, z) => { let c = mix(L('#4e3020'), L('#24160e'), clamp(fbm3(x * 0.3, y * 0.3, z * 0.3, 3, seed) * 1.6 - 0.3));
+      if (Math.abs(z - 9) < 0.7 || Math.abs(z - 11.5) < 0.5) c = mul(c, 0.55); // incised bands
+      return { alb: mix(c, C.grime, clamp((vn3(x * 0.2, y * 0.2, z * 0.4, seed + 3) - 0.5) * 2) * 0.6), spec: 0.12, gloss: 25 }; },
+    bounds: [-8, -8, -0.5, 12, 8, 19], step: 0.6,
+  };
+}
+/** What stands on the low side walls' tops, never in the way: urns whole and broken, skulls, candles burnt down (lit). */
+export function ledges({ S }, seed = 1) {
+  const R = mulberry32(seed * 31 + 5), TOP = 60, list = [];
+  for (const side of [FX0 - 6, FX1 + 6]) for (let y = FY0 + 30; y < FY1 - 20; y += 56 + R() * 40) {
+    const X = wx(side), Y = wy(y), k = R();
+    if (k < 0.4) S.add('urn', urn(Math.floor(R() * 99), R() < 0.5), [X, Y, TOP], R() * 6.28);
+    else if (k < 0.65) S.add('skull', skull(), [X + (R() - 0.5) * 6, Y, TOP], R() * 6.28);
+    if (k > 0.3) list.push([X + (R() - 0.5) * 8, Y + 6, 1 + Math.floor(R() * 3)]);
+  }
+  const cs = list.flatMap(([x, y, n]) => [...Array(n)].map((_, k) => [x + k * 2.6 - n, y + (k % 2) * 3, TOP, 3 + h2(x | 0, k, 3) * 7, 1.1 + h2(y | 0, k, 4) * 0.3, (h2(x | 0, k, 5) - 0.5) * 0.6, 0]));
+  S.add('candlesL', candles2(cs), [0, 0, 0]);
+  for (const [x, y, n] of list) S.light({ p: [x, y + 2, TOP + 14], c: CANDLE, I: 0.9 + 0.4 * n, r0: 26, R: 230, soft: 4, pad: 3, haze: 0.014, hazeR: 3, skip: ['candlesL'] });
 }
 /** Candles in clusters on the floor ([x, y, n], room px). */
 export function candles({ S }, list) {
@@ -270,7 +420,7 @@ export function lights({ S }, props, candleList, fill = 1) {
   for (const g of EXITS) light({ p: [wx(g), YW - 320, stairUp(YW - 320) + 70], c: MOONC, I: 9, r0: 90, R: 700, soft: 12, haze: 0.01, hazeR: 14 }); // up the stairs, beyond each gate
   for (const o of props.filter((o) => o.kind === 'pillar')) { const [fx, fy] = pillarFace(o); light({ p: [fx, fy + 10, SCONCE_Z + 16], c: FIRE, I: 2.2, r0: 36, R: 360, soft: 6, pad: 6, haze: 0.015, hazeR: 5, skip: ['sconce'] }); }
   for (const o of props.filter((o) => o.kind === 'brazier')) light({ p: [wx(o.x), wy(o.y - 4), BRAZIER_TOP + 12], c: FIRE, I: 4, r0: 40, R: 420, soft: 6, pad: 8, haze: 0.02, hazeR: 7, skip: ['brazier'] });
-  for (const [x, y, n] of candleList) light({ p: [wx(x + n * 1.5), wy(y) + 2, 16], c: CANDLE, I: 0.8 + 0.4 * n, r0: 20, R: 220, soft: 4, pad: 3, haze: 0.012, hazeR: 3, skip: ['candles'] });
+  for (const [x, y, n] of candleList) light({ p: [wx(x + n * 1.5), wy(y) + 2, 16], c: CANDLE, I: 1.0 + 0.5 * n, r0: 26, R: 250, soft: 4, pad: 3, haze: 0.016, hazeR: 4, skip: ['candles'] });
 }
 export const scene = (S, env, envShadow) => ({ W, H, cam, off: 0, objects: S.objects, lights: S.lights, env, envShadow, ambient: L('#3a4450').map((v) => v * 0.05) });
 

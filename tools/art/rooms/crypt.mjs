@@ -6,7 +6,7 @@
 import { pitBones } from '../maquettes/hub/props.mjs';
 import { skull } from '../maquettes/grand/cast.mjs';
 import { wx, wy, wz } from './common.mjs';
-import { CX, CY, plan, oculi, floor, ground, shell, furnish, candles, lights, scene as stage, shafts } from './crypts.mjs';
+import { CX, CY, plan, oculi, floor, ground, shell, furnish, candles, chains, ledges, lights, scene as stage, shafts } from './crypts.mjs';
 export { PAL, POST } from './crypts.mjs';
 
 const MEDS = [[CY, 1], [540, 0.62]]; // medallions down the middle: row, size
@@ -34,6 +34,7 @@ export const PLAN = plan({
 
 const HOLES = oculi(MEDS);
 const env = ground(floor({
+  wax: CANDLES,
   meds: MEDS,
   ledgers: [[108, 168, 0], [346, 160, 1], [190, 296, 0], [262, 300, 1], [186, 372, 0], [266, 376, 0], [54, 292, 1], [398, 300, 0], [13, 322, 0], [439, 250, 1]],
   // Old blood: pools by the open coffins, dragged toward the medallions, splashes (room px: x, y, rx, ry).
@@ -44,6 +45,8 @@ const room = shell(HOLES), { S, ports } = room;
 furnish(room, PROPS);
 // candles in clusters on the floor, a skull or two, bones
 candles(room, CANDLES);
+chains(room);
+ledges(room, 1);
 for (const [x, y, a] of [[70, 152, 0.3], [424, 128, -0.6], [120, 250, 1.2], [236, 266, 2.4], [66, 462, 0.4], [422, 572, -1], [420, 420, 0.8], [352, 236, 2], [26, 282, 0.9], [454, 420, -0.4]]) S.add('skull', skull(), [wx(x), wy(y), 0], a);
 S.add('bones', pitBones(5), [wx(70), wy(600), 0], 0.3); S.add('bones', pitBones(9), [wx(410), wy(440), 0], -0.8);
 S.add('bones', pitBones(3), [wx(28), wy(112), 0], 1.1); S.add('bones', pitBones(11), [wx(452), wy(330), 0], -0.3);
